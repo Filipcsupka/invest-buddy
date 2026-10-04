@@ -6,3 +6,4 @@ coverage/
 dist/
 *.tsbuildinfo
 .DS_Store
+scanner/out

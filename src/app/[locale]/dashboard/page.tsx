@@ -6,7 +6,9 @@ import { OperatorDisclosure, SampleStamp } from "@/components/operator-disclosur
 import { StateChip } from "@/components/score-badge";
 import { ScreenTable } from "@/components/screen-table";
 import { byScore, toRow, type ScreenRow } from "@/components/view-model";
-import { scoredUniverse } from "@/data/scored";
+import { latestScores } from "@/data/store";
+import { DataStatus } from "@/components/data-status";
+export const dynamic = "force-dynamic";
 import { fill, formatDate, getMessages, plural } from "@/i18n";
 import { pageMetadata } from "@/i18n/metadata";
 import { stateOrder, type StateKey } from "@/i18n/rules";
@@ -21,10 +23,11 @@ export async function generateMetadata({ params }: LocaleParams): Promise<Metada
 export default async function Dashboard({ params }: LocaleParams) {
   const locale = await resolveLocale(params);
   const m = getMessages(locale);
-  const rows = (await scoredUniverse()).map((row) => toRow(locale, row)).sort(byScore);
+  const data = await latestScores();
+  const rows = data.rows.map((row) => toRow(locale, row)).sort(byScore);
   const groups = new Map<StateKey, ScreenRow[]>(stateOrder.map((key) => [key, rows.filter((row) => row.state === key)]));
   const session = rows.find((row) => row.date)?.date ?? "";
-  const lower = [...(groups.get("wait") ?? []), ...(groups.get("ignore") ?? [])];
+  const lower = [...(groups.get("wait") ?? []), ...(groups.get("ignore") ?? []), ...(groups.get("insufficient") ?? [])];
 
   const section = (key: "setup" | "watch" | "broken", columns: ("sector" | "score" | "state" | "reason")[]) => {
     const list = groups.get(key) ?? [];
@@ -52,9 +55,10 @@ export default async function Dashboard({ params }: LocaleParams) {
       <header className="page-head">
         <div className="page-title-row">
           <h1 className="title">{m.dashboard.title}</h1>
-          <SampleStamp text={m.common.sample} />
+          {data.sample && <SampleStamp text={m.common.sample} />}
         </div>
-        <p className="lede">{fill(m.dashboard.lede, { date: formatDate(locale, session), count: plural(locale, m.plurals.sampleTickers, rows.length) })}</p>
+        <p className="lede">{data.lastUpdated ? fill(m.dashboard.lede, { date: formatDate(locale, session), count: plural(locale, m.plurals.sampleTickers, rows.length) }) : m.common.noDataYet}</p>
+        <DataStatus locale={locale} lastUpdated={data.lastUpdated} stale={data.stale} />
         <OperatorDisclosure text={m.common.operatorDisclosure} />
       </header>
 
@@ -66,7 +70,7 @@ export default async function Dashboard({ params }: LocaleParams) {
               .filter((key) => key !== "insufficient" || (groups.get(key)?.length ?? 0) > 0)
               .map((key) => (
                 <td key={key} data-state={key}>
-                  <a href={key === "wait" || key === "ignore" ? "#lower" : `#state-${key}`} className="tally-cell">
+                  <a href={key === "wait" || key === "ignore" || key === "insufficient" ? "#lower" : `#state-${key}`} className="tally-cell">
                     <span className="tally-label">{m.states[key]}</span>
                     <span className="num tally-count">{groups.get(key)?.length ?? 0}</span>
                   </a>

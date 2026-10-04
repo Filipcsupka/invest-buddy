@@ -1,0 +1,9 @@
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: invest-buddy-public-filter
+  namespace: invest
+spec:
+  replacePathRegex:
+    regex: ^/api/ingest(?:/|$).*
+    replacement: /.ingest-disabled

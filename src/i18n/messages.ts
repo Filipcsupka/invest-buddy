@@ -29,6 +29,10 @@ const en = {
   },
   common: {
     sample: "SAMPLE DATA",
+    noDataYet: "No data yet. The next completed scan will appear here.",
+    lastUpdated: "Last updated {date}",
+    staleData: "The latest data is more than four days old.",
+    unknown: "unknown",
     disclaimer: "Informational screening only. Same rules for every visitor. No personal investment advice.",
     operatorDisclosure: "Operator position disclosure: not yet published (must be completed before launch).",
     skipToContent: "Skip to content",
@@ -64,6 +68,7 @@ const en = {
   },
   footer: {
     note: "InvestBuddy runs informational screening on sample data.",
+    liveNote: "InvestBuddy publishes informational screening from recorded scans.",
     legal: "Legal and method",
     privacy: "Privacy",
     terms: "Terms",
@@ -193,8 +198,8 @@ const en = {
     summaryLabel: "Tickers per rule state",
     empty: "No ticker is in this state today.",
     scannerLink: "Open the scanner",
-    lowerTitle: "Below the watch threshold",
-    lowerBody: "Wait and Ignore, shown for completeness.",
+    lowerTitle: "Other states",
+    lowerBody: "Wait, Ignore and Insufficient data.",
     showLower: "Show {count}",
     stateNotes: {
       setup: "The total is 18 or more and no rejection rule applies.",
@@ -232,6 +237,7 @@ const en = {
     back: "Back to the scanner",
     methodLink: "How each rule is defined",
     inputs: {
+      revenueAccelerating: "Revenue growth accelerating",
       revenueGrowthCurrent: "Revenue growth, this quarter",
       revenueGrowthPrior: "Revenue growth, prior quarter",
       revenueDeclining: "Revenue declining",
@@ -341,6 +347,10 @@ const sk: Messages = {
   },
   common: {
     sample: "UKÁŽKOVÉ DÁTA",
+    noDataYet: "Zatiaľ tu nie sú údaje. Zobrazí sa tu ďalší dokončený sken.",
+    lastUpdated: "Posledná aktualizácia {date}",
+    staleData: "Najnovšie údaje sú staršie ako štyri dni.",
+    unknown: "neznáme",
     disclaimer: "Iba informačný prehľad podľa pravidiel. Rovnaké pravidlá pre každého návštevníka. Nejde o osobné investičné poradenstvo.",
     operatorDisclosure: "Zverejnenie pozícií prevádzkovateľa: zatiaľ nezverejnené (musí byť doplnené pred spustením).",
     skipToContent: "Preskočiť na obsah",
@@ -376,6 +386,7 @@ const sk: Messages = {
   },
   footer: {
     note: "InvestBuddy zobrazuje informačný prehľad akcií na ukážkových dátach.",
+    liveNote: "InvestBuddy zobrazuje informačný prehľad akcií zo zaznamenaných skenov.",
     legal: "Právne informácie a metodika",
     privacy: "Ochrana súkromia",
     terms: "Podmienky používania",
@@ -505,8 +516,8 @@ const sk: Messages = {
     summaryLabel: "Počet tickerov podľa stavu pravidiel",
     empty: "Dnes v tomto stave nie je žiadny ticker.",
     scannerLink: "Otvoriť skener",
-    lowerTitle: "Pod hranicou sledovania",
-    lowerBody: "Čakanie a Mimo výberu, pre úplnosť.",
+    lowerTitle: "Ostatné stavy",
+    lowerBody: "Čakanie, Mimo výberu a Nedostatok údajov.",
     showLower: "Zobraziť {count}",
     stateNotes: {
       setup: "Súčet je 18 alebo viac a neplatí žiadne vylučovacie pravidlo.",
@@ -544,6 +555,7 @@ const sk: Messages = {
     back: "Späť na skener",
     methodLink: "Ako je ktoré pravidlo definované",
     inputs: {
+      revenueAccelerating: "Rast tržieb sa zrýchľuje",
       revenueGrowthCurrent: "Rast tržieb, tento štvrťrok",
       revenueGrowthPrior: "Rast tržieb, minulý štvrťrok",
       revenueDeclining: "Tržby klesajú",

@@ -4,7 +4,10 @@ import { Disclaimer } from "@/components/disclaimer";
 import { OperatorDisclosure, SampleStamp } from "@/components/operator-disclosure";
 import { ScreenTable } from "@/components/screen-table";
 import { toRow, type ScreenRow } from "@/components/view-model";
-import { fixtureBenchmark, fixtureRecord } from "@/data/record";
+import { fixtureBenchmark } from "@/data/record";
+import { scoreHistory } from "@/data/store";
+import { DataStatus } from "@/components/data-status";
+export const dynamic = "force-dynamic";
 import { fill, formatDate, getMessages, plural } from "@/i18n";
 import { pageMetadata } from "@/i18n/metadata";
 import { resolveLocale, type LocaleParams } from "../locale";
@@ -18,7 +21,8 @@ export async function generateMetadata({ params }: LocaleParams): Promise<Metada
 export default async function TrackRecord({ params }: LocaleParams) {
   const locale = await resolveLocale(params);
   const m = getMessages(locale);
-  const rows = fixtureRecord().map((row) => toRow(locale, row));
+  const data = await scoreHistory();
+  const rows = data.rows.map((row) => toRow(locale, row));
   const dates = [...new Set(rows.map((row) => row.date))].sort().reverse();
   const byDate = dates.map((date) => ({ date, rows: rows.filter((row) => row.date === date) as ScreenRow[] }));
 
@@ -27,15 +31,16 @@ export default async function TrackRecord({ params }: LocaleParams) {
       <header className="page-head">
         <div className="page-title-row">
           <h1 className="title">{m.trackRecord.title}</h1>
-          <SampleStamp text={m.common.sample} />
+          {data.sample && <SampleStamp text={m.common.sample} />}
         </div>
         <p className="lede">{m.trackRecord.lede}</p>
+        <DataStatus locale={locale} lastUpdated={data.lastUpdated} stale={data.stale} />
         <OperatorDisclosure text={m.common.operatorDisclosure} />
       </header>
 
       <p className="notice">{m.trackRecord.note}</p>
 
-      <section className="sheet-section" aria-labelledby="benchmark">
+      {data.sample && <section className="sheet-section" aria-labelledby="benchmark">
         <div className="section-head">
           <h2 id="benchmark">{m.trackRecord.benchmarkTitle}</h2>
           <p className="muted small">{m.trackRecord.benchmarkNote}</p>
@@ -46,7 +51,7 @@ export default async function TrackRecord({ params }: LocaleParams) {
           dipZone={false}
           labels={{ name: m.trackRecord.benchmarkName, aria: m.chart.label, close: m.trackRecord.benchmarkName, ma50: m.chart.ma50, ma200: m.chart.ma200, dip: m.chart.dip, last: m.chart.last }}
         />
-      </section>
+      </section>}
 
       <section className="sheet-section" aria-labelledby="log">
         <h2 id="log">{m.trackRecord.logTitle}</h2>

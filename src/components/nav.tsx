@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getMessages, localeCookie, otherLocale, type Locale } from "@/i18n";
 import { LanguageSwitch, NavLinks } from "./nav-links";
 import { ThemeToggle } from "./theme-toggle";
+import { latestScores } from "@/data/store";
 
 export function BrandMark() {
   return (
@@ -43,15 +44,16 @@ export function Nav({ locale }: { locale: Locale }) {
   );
 }
 
-export function Footer({ locale }: { locale: Locale }) {
+export async function Footer({ locale }: { locale: Locale }) {
   const m = getMessages(locale);
+  const data = await latestScores();
   return (
     <footer className="site-footer">
       <div className="frame footer-inner">
         <p className="footer-note">
           <BrandMark />
-          <span>{m.footer.note}</span>
-          <span className="stamp">{m.common.sample}</span>
+          <span>{data.sample ? m.footer.note : m.footer.liveNote}</span>
+          {data.sample && <span className="stamp">{m.common.sample}</span>}
         </p>
         <nav aria-label={m.footer.legal} className="footer-links">
           <Link href={`/${locale}/methodology`}>{m.footer.methodology}</Link>

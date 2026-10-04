@@ -62,8 +62,8 @@ export function ruleDetail(locale: Locale, hit: RuleHit, result: ScoreResult): s
   const d = m.ruleDetails;
   const f = result.inputs.fundamentals;
   const macro = result.inputs.macro;
-  const yesNo = (value: boolean) => (value ? m.common.yes : m.common.no);
-  const pct = (value: number) => formatPercent(locale, value / 100, 0);
+  const yesNo = (value: boolean | null) => value === null ? m.common.unknown : value ? m.common.yes : m.common.no;
+  const pct = (value: number | null) => value === null ? m.common.unknown : formatPercent(locale, value / 100, 0);
   switch (hit.id) {
     case "revenue-acceleration":
       return fill(d.revenue, { prior: pct(f.revenueGrowthPrior), current: pct(f.revenueGrowthCurrent) });

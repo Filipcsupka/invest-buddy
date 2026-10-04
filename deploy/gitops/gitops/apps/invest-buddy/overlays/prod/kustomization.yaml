@@ -6,3 +6,6 @@ images:
   - name: ghcr.io/filipcsupka/invest-buddy
     newName: ghcr.io/filipcsupka/invest-buddy
     newTag: sha-REPLACE_WITH_PUBLISHED_SHA
+  - name: ghcr.io/filipcsupka/invest-buddy-scanner
+    newName: ghcr.io/filipcsupka/invest-buddy-scanner
+    newTag: sha-REPLACE_WITH_PUBLISHED_SHA

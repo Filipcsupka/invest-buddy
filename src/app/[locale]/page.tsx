@@ -3,7 +3,9 @@ import type { Metadata } from "next";
 import { Datasheet } from "@/components/datasheet";
 import { IconArrowRight } from "@/components/icons";
 import { RuleBook, StateScale } from "@/components/method";
-import { scoredUniverse } from "@/data/scored";
+import { latestScores } from "@/data/store";
+import { DataStatus } from "@/components/data-status";
+export const dynamic = "force-dynamic";
 import { getMessages } from "@/i18n";
 import { pageMetadata } from "@/i18n/metadata";
 import { resolveLocale, type LocaleParams } from "./locale";
@@ -16,7 +18,8 @@ export async function generateMetadata({ params }: LocaleParams): Promise<Metada
 export default async function Home({ params }: LocaleParams) {
   const locale = await resolveLocale(params);
   const m = getMessages(locale);
-  const rows = await scoredUniverse();
+  const data = await latestScores();
+  const rows = data.rows;
   const ranked = [...rows].sort((a, b) => Number(b.result.state === "Setup met (>=18)") - Number(a.result.state === "Setup met (>=18)") || b.result.total - a.result.total || a.instrument.ticker.localeCompare(b.instrument.ticker));
   const top = ranked[0];
 
@@ -36,7 +39,7 @@ export default async function Home({ params }: LocaleParams) {
             </Link>
           </div>
         </div>
-        {top ? <Datasheet locale={locale} instrument={top.instrument} result={top.result} /> : null}
+        {top ? <Datasheet locale={locale} instrument={top.instrument} result={top.result} sample={data.sample} /> : <DataStatus locale={locale} lastUpdated={data.lastUpdated} stale={data.stale} />}
       </section>
 
       <section className="frame ledger" aria-labelledby="build">

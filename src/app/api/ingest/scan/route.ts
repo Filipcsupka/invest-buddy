@@ -1,0 +1,49 @@
+import { createHash, timingSafeEqual } from "node:crypto";
+import pg from "pg";
+import { scanSchema } from "../../../../data/scan";
+import { ingestScan } from "../../../../db/scan";
+
+export const runtime = "nodejs";
+const limit = 1_000_000;
+const buckets = new Map<string, { count: number; until: number }>();
+function authorized(header: string | null, token: string) {
+  const supplied = header?.startsWith("Bearer ") ? header.slice(7) : "";
+  const a = createHash("sha256").update(supplied).digest();
+  const b = createHash("sha256").update(token).digest();
+  return timingSafeEqual(a, b) && supplied.length > 0;
+}
+export async function POST(request: Request) {
+  const token = process.env.INGEST_TOKEN;
+  if (!token) return Response.json({ error: "Ingest unavailable" }, { status: 503 });
+  if (!authorized(request.headers.get("authorization"), token)) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  const key = createHash("sha256").update(request.headers.get("x-forwarded-for")?.split(",")[0] ?? "local").digest("hex");
+  const now = Date.now();
+  const bucket = buckets.get(key);
+  if (bucket && bucket.until > now && bucket.count >= 60) return Response.json({ error: "Rate limit exceeded" }, { status: 429 });
+  buckets.set(key, { count: bucket && bucket.until > now ? bucket.count + 1 : 1, until: bucket && bucket.until > now ? bucket.until : now + 60_000 });
+  if (Number(request.headers.get("content-length")) > limit) return Response.json({ error: "Payload too large" }, { status: 413 });
+  const reader = request.body?.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  if (reader) {
+    while (true) {
+      const part = await reader.read();
+      if (part.done) break;
+      size += part.value.byteLength;
+      if (size > limit) { await reader.cancel(); return Response.json({ error: "Payload too large" }, { status: 413 }); }
+      chunks.push(part.value);
+    }
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+  let raw: unknown;
+  try { raw = JSON.parse(new TextDecoder().decode(bytes)); } catch { return Response.json({ error: "Invalid JSON" }, { status: 400 }); }
+  const parsed = scanSchema.safeParse(raw);
+  if (!parsed.success) return Response.json({ error: "Invalid scan", fields: parsed.error.issues.map((issue) => ({ path: issue.path.join("."), reason: issue.message })) }, { status: 400 });
+  if (!process.env.DATABASE_URL) return Response.json({ error: "Database unavailable" }, { status: 503 });
+  const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+  try { return Response.json(await ingestScan(pool, parsed.data)); }
+  catch { return Response.json({ error: "Database unavailable" }, { status: 503 }); }
+  finally { await pool.end(); }
+}

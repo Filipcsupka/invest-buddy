@@ -9,7 +9,9 @@ import { OperatorDisclosure } from "@/components/operator-disclosure";
 import { StateChip } from "@/components/score-badge";
 import { ScoreMark } from "@/components/score-mark";
 import { instruments } from "@/data/fixtures";
-import { scoredUniverse } from "@/data/scored";
+import { latestScores } from "@/data/store";
+import { DataStatus } from "@/components/data-status";
+export const dynamic = "force-dynamic";
 import { fill, formatDate, formatPercent, getMessages, isLocale, locales, type Locale } from "@/i18n";
 import { pageMetadata } from "@/i18n/metadata";
 import { ruleGroups } from "@/i18n/rules";
@@ -24,9 +26,11 @@ export function generateStaticParams() {
 async function load(params: Params["params"]) {
   const { locale, ticker } = await params;
   if (!isLocale(locale)) notFound();
-  const row = (await scoredUniverse()).find(({ instrument }) => instrument.ticker === ticker.toUpperCase());
-  if (!row) notFound();
-  return { locale: locale as Locale, ...row };
+  const instrument = instruments.find((item) => item.ticker === ticker.toUpperCase());
+  if (!instrument) notFound();
+  const data = await latestScores();
+  const row = data.rows.find((item) => item.instrument.ticker === instrument.ticker);
+  return { locale: locale as Locale, instrument, result: row?.result ?? null, data };
 }
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
@@ -36,7 +40,8 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 }
 
 export default async function Company({ params }: Params) {
-  const { locale, instrument, result } = await load(params);
+  const { locale, instrument, result, data } = await load(params);
+  if (!result) return <div className="frame page"><h1 className="title">{instrument.ticker}</h1><DataStatus locale={locale} lastUpdated={data.lastUpdated} stale={data.stale} /></div>;
   const m = getMessages(locale);
   const state = stateKey(result.state);
   const scored = state !== "insufficient";
@@ -45,10 +50,11 @@ export default async function Company({ params }: Params) {
   const matchedCount = result.ruleHits.filter((hit) => hit.matched).length;
   const f = result.inputs.fundamentals;
   const mac = result.inputs.macro;
-  const yesNo = (value: boolean) => (value ? m.common.yes : m.common.no);
+  const yesNo = (value: boolean | null) => value === null ? m.common.unknown : value ? m.common.yes : m.common.no;
   const inputs: [string, string][] = [
-    [m.company.inputs.revenueGrowthCurrent, formatPercent(locale, f.revenueGrowthCurrent / 100, 0)],
-    [m.company.inputs.revenueGrowthPrior, formatPercent(locale, f.revenueGrowthPrior / 100, 0)],
+    [m.company.inputs.revenueAccelerating, f.revenueAccelerating === undefined ? m.common.unknown : yesNo(f.revenueAccelerating)],
+    [m.company.inputs.revenueGrowthCurrent, f.revenueGrowthCurrent === null ? m.common.unknown : formatPercent(locale, f.revenueGrowthCurrent / 100, 0)],
+    [m.company.inputs.revenueGrowthPrior, f.revenueGrowthPrior === null ? m.common.unknown : formatPercent(locale, f.revenueGrowthPrior / 100, 0)],
     [m.company.inputs.revenueDeclining, yesNo(f.revenueDeclining)],
     [m.company.inputs.epsBeat, yesNo(f.epsBeat)],
     [m.company.inputs.guidanceRaised, yesNo(f.guidanceRaised)],
@@ -89,7 +95,7 @@ export default async function Company({ params }: Params) {
           <span className="title-name">{instrument.name}</span>
         </h1>
         <TitleBlock
-          stamp={m.common.sample}
+          stamp={data.sample ? m.common.sample : undefined}
           fields={[
             { label: m.company.sector, value: sectorLabel(locale, instrument.sector) },
             { label: m.company.source, value: instrument.source === "sample extension" ? m.common.extension : m.common.guide },
@@ -98,6 +104,7 @@ export default async function Company({ params }: Params) {
         />
       </header>
 
+      <DataStatus locale={locale} lastUpdated={data.lastUpdated} stale={data.stale} />
       <section className="score-panel" aria-labelledby="score">
         <h2 id="score" className="visually-hidden">
           {m.company.scoreTitle}

@@ -1,23 +1,12 @@
 import type { Metadata } from "next";
 import { SampleStamp } from "@/components/operator-disclosure";
-import { samplePortfolio } from "@/portfolio/fixture";
-import pg from "pg";
-import { PostgresPortfolioRepository } from "@/db/portfolio";
+import { latestPortfolio, stale } from "@/data/store";
+import { DataStatus } from "@/components/data-status";
 import { fill, formatDate, formatNumber, getMessages } from "@/i18n";
 import { pageMetadata } from "@/i18n/metadata";
 import { resolveLocale, type LocaleParams } from "../locale";
 
 export const dynamic = "force-dynamic";
-
-async function publishedPortfolio() {
-  if (!process.env.DATABASE_URL) return samplePortfolio;
-  const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
-  try {
-    return await new PostgresPortfolioRepository(pool).latestPublished(new Date().toISOString().slice(0, 10)) ?? samplePortfolio;
-  } catch {
-    return samplePortfolio;
-  } finally { await pool.end(); }
-}
 
 export async function generateMetadata({ params }: LocaleParams): Promise<Metadata> {
   const locale = await resolveLocale(params);
@@ -28,7 +17,8 @@ export async function generateMetadata({ params }: LocaleParams): Promise<Metada
 export default async function PortfolioPage({ params }: LocaleParams) {
   const locale = await resolveLocale(params);
   const m = getMessages(locale);
-  const snapshot = await publishedPortfolio();
+  const snapshot = await latestPortfolio();
+  if (!snapshot) return <div className="frame page"><h1 className="title">{m.portfolio.title}</h1><DataStatus locale={locale} lastUpdated={null} stale={false} /></div>;
   const series = snapshot.series;
   const all = series.flatMap((point) => [point.nav, point.benchmark]);
   const min = Math.floor(Math.min(...all) - 1);
@@ -40,6 +30,7 @@ export default async function PortfolioPage({ params }: LocaleParams) {
       <p className="lede">{snapshot.sample ? m.portfolio.lede : m.portfolio.liveLede}</p>
       <p className="notice">{snapshot.sample ? m.portfolio.sampleDisclosure : m.portfolio.disclosure}</p>
       <p className="muted">{fill(m.portfolio.asOf, { date: formatDate(locale, snapshot.asOf) })} · {m.portfolio.delay}</p>
+      <DataStatus locale={locale} lastUpdated={snapshot.asOf} stale={stale(snapshot.asOf)} />
     </header>
     <section className="sheet-section" aria-labelledby="portfolio-chart">
       <div className="section-head"><h2 id="portfolio-chart">{m.portfolio.chartTitle}</h2><p className="muted small">{snapshot.sample ? m.portfolio.chartNote : snapshot.benchmarkSample ? m.portfolio.fixtureBenchmarkNote : m.portfolio.liveChartNote}</p></div>

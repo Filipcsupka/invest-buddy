@@ -1,0 +1,51 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: invest-buddy-scan
+  namespace: invest
+spec:
+  schedule: "30 5 * * 1-5"
+  timeZone: Europe/Bratislava
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 3000
+      template:
+        spec:
+          restartPolicy: Never
+          nodeSelector:
+            kubernetes.io/hostname: k8s-worker-01
+          containers:
+            - name: scan
+              image: ghcr.io/filipcsupka/invest-buddy-scanner:latest
+              env:
+                - name: INGEST_URL
+                  value: http://web.invest.svc.cluster.local:3000/api/ingest/scan
+                - name: INGEST_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-secrets
+                      key: INGEST_TOKEN
+                - name: CLAUDE_CODE_OAUTH_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-scanner-secrets
+                      key: CLAUDE_CODE_OAUTH_TOKEN
+                      optional: true
+                - name: ANTHROPIC_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-scanner-secrets
+                      key: ANTHROPIC_API_KEY
+                      optional: true
+              resources:
+                requests:
+                  cpu: 250m
+                  memory: 256Mi
+                limits:
+                  cpu: "2"
+                  memory: 1Gi

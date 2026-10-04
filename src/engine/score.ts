@@ -2,7 +2,7 @@ import { technicalIndicators } from "./indicators";
 import type { Fundamentals, Macro, OHLCV, RuleHit, ScoreInputs, ScoreResult } from "./types";
 
 const finite = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
-const boolean = (value: unknown): value is boolean => typeof value === "boolean";
+const boolean = (value: unknown) => typeof value === "boolean" || value === null;
 
 function validDate(value: unknown): value is string {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -25,7 +25,7 @@ function validate(bars: OHLCV[], fundamentals: Fundamentals, macro: Macro): stri
       reasons.push(`Invalid OHLCV at bar ${index + 1}`);
     }
   }
-  if (!fundamentals || !finite(fundamentals.revenueGrowthCurrent) || !finite(fundamentals.revenueGrowthPrior) || ![
+  if (!fundamentals || !(finite(fundamentals.revenueGrowthCurrent) || fundamentals.revenueGrowthCurrent === null) || !(finite(fundamentals.revenueGrowthPrior) || fundamentals.revenueGrowthPrior === null) || ![
     fundamentals.revenueDeclining, fundamentals.epsBeat, fundamentals.guidanceRaised,
     fundamentals.earningsMissAndGuidanceCut, fundamentals.productCatalyst,
     fundamentals.insiderOrInstitutionalAccumulation, fundamentals.noRevenue, fundamentals.memePump,
@@ -47,25 +47,25 @@ export function score(input: ScoreInputs): ScoreResult {
   const f = normalized.fundamentals;
   const m = normalized.macro;
   const hits: RuleHit[] = [];
-  const add = (id: string, label: string, points: number, matched: boolean, detail: string) => hits.push({ id, label, points, matched, detail });
-  add("revenue-acceleration", "Revenue growth accelerated", 4, f.revenueGrowthCurrent > f.revenueGrowthPrior && !f.revenueDeclining, `${f.revenueGrowthPrior}% → ${f.revenueGrowthCurrent}%`);
-  add("earnings", "EPS beat or guidance raised", 3, f.epsBeat || f.guidanceRaised, `EPS beat: ${f.epsBeat}; guidance raised: ${f.guidanceRaised}`);
-  add("catalyst", "Curated product catalyst", 2, f.productCatalyst, String(f.productCatalyst));
-  add("accumulation", "Insider or institutional accumulation", 1, f.insiderOrInstitutionalAccumulation, String(f.insiderOrInstitutionalAccumulation));
+  const add = (id: string, label: string, points: number, matched: boolean | null, detail: string, unknown = false) => hits.push({ id, label, points, matched: matched === true, detail, unknown });
+  add("revenue-acceleration", "Revenue growth accelerated", 4, (f.revenueAccelerating ?? (f.revenueGrowthCurrent !== null && f.revenueGrowthPrior !== null && f.revenueGrowthCurrent > f.revenueGrowthPrior)) && !f.revenueDeclining, f.revenueAccelerating === null ? "unknown" : `${f.revenueGrowthPrior ?? "unknown"}% → ${f.revenueGrowthCurrent ?? "unknown"}%`, f.revenueAccelerating === null || (f.revenueAccelerating === undefined && (f.revenueGrowthCurrent === null || f.revenueGrowthPrior === null)));
+  add("earnings", "EPS beat or guidance raised", 3, f.epsBeat || f.guidanceRaised, `EPS beat: ${f.epsBeat ?? "unknown"}; guidance raised: ${f.guidanceRaised ?? "unknown"}` , f.epsBeat === null && f.guidanceRaised === null);
+  add("catalyst", "Curated product catalyst", 2, f.productCatalyst, String(f.productCatalyst ?? "unknown"), f.productCatalyst === null);
+  add("accumulation", "Insider or institutional accumulation", 1, f.insiderOrInstitutionalAccumulation, String(f.insiderOrInstitutionalAccumulation ?? "unknown"), f.insiderOrInstitutionalAccumulation === null);
   add("above-ma", "Close above MA50 and MA200", 3, indicator.aboveBoth, `Close ${indicator.close}; MA50 ${indicator.ma50}; MA200 ${indicator.ma200}`);
   add("uptrend", "Uptrend intact", 3, indicator.uptrend, `MA50 ten days ago ${indicator.ma50TenDaysAgo}`);
   add("green-volume", "Higher volume on green days", 2, indicator.volumeOnGreen, `Green ${indicator.greenVolume}; red ${indicator.redVolume}`);
   const pullbackInUptrend = indicator.uptrend && indicator.drawdown20 !== null && indicator.drawdown20 >= 0.05 && indicator.drawdown20 <= 0.1;
   add("dip", "5–10% drawdown from 20-day high in uptrend", 2, pullbackInUptrend, `Drawdown ${indicator.drawdown20 === null ? "unknown" : (indicator.drawdown20 * 100).toFixed(1) + "%"}`);
-  add("rotation", "Growth sector rotation", 2, m.growthSectorRotation, String(m.growthSectorRotation));
-  add("macro-data", "Macro data tailwind", 3, m.dataTailwind, String(m.dataTailwind));
+  add("rotation", "Growth sector rotation", 2, m.growthSectorRotation, String(m.growthSectorRotation ?? "unknown"), m.growthSectorRotation === null);
+  add("macro-data", "Macro data tailwind", 3, m.dataTailwind, String(m.dataTailwind ?? "unknown"), m.dataTailwind === null);
   const sum = (ids: string[]) => hits.filter((hit) => ids.includes(hit.id) && hit.matched).reduce((total, hit) => total + hit.points, 0);
   const fundamentals = sum(["revenue-acceleration", "earnings", "catalyst", "accumulation"]);
   const technical = sum(["above-ma", "uptrend", "green-volume", "dip"]);
   const macro = sum(["rotation", "macro-data"]);
   const total = fundamentals + technical + macro;
   const rejectionReasons = [
-    ...(f.revenueDeclining || f.revenueGrowthCurrent < 0 ? ["Declining revenue"] : []),
+    ...(f.revenueDeclining || (f.revenueGrowthCurrent !== null && f.revenueGrowthCurrent < 0) ? ["Declining revenue"] : []),
     ...(f.earningsMissAndGuidanceCut ? ["Earnings miss and guidance cut"] : []),
     ...(indicator.ma200 !== null && indicator.close !== null && indicator.close < indicator.ma200 ? ["Long-term downtrend: close below MA200"] : []),
     ...(indicator.ma50 !== null && indicator.ma200 !== null && indicator.ma50 < indicator.ma200 ? ["Long-term downtrend: MA50 below MA200"] : []),

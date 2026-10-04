@@ -8,17 +8,20 @@
     "start": "node .next/standalone/server.js",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run src && node --test scanner/test/*.test.mjs",
     "migrate": "tsx scripts/migrate.ts",
     "daily": "tsx src/jobs/daily.ts",
-    "build:jobs": "esbuild src/jobs/daily.ts src/jobs/digest.ts src/jobs/portfolio.ts --bundle --platform=node --format=cjs --target=node22 --packages=external --tsconfig=tsconfig.json --outdir=dist/jobs"
+    "build:jobs": "esbuild src/jobs/daily.ts src/jobs/digest.ts src/jobs/portfolio.ts --bundle --platform=node --format=cjs --target=node22 --packages=external --tsconfig=tsconfig.json --outdir=dist/jobs",
+    "scan:sample": "tsx scripts/post-sample-scan.ts",
+    "seed:local-bars": "tsx scripts/seed-local-bars.ts"
   },
   "dependencies": {
     "fast-xml-parser": "^5.11.2",
     "next": "16.3.8",
     "pg": "^8.23.1",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",

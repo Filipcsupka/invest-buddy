@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "runId": "3f2b8c1e-5a47-4d0e-9b61-2c7e4a9d1f08",
+  "asOf": "2026-10-02",
+  "generatedAt": "2026-10-03T04:30:00Z",
+  "runner": { "name": "claude-code", "model": "claude-sonnet-4-5" },
+  "tickers": [
+    {
+      "symbol": "NVDA",
+      "fundamentals": {
+        "revenueAccelerating": true,
+        "revenueDeclining": false,
+        "epsBeat": true,
+        "guidanceRaised": true,
+        "guidanceCut": false,
+        "productCatalyst": { "present": true, "kind": "new chip", "summary": "The company announced a new data center accelerator platform for shipment next year." },
+        "insiderOrInstitutionalBuying": null,
+        "narrativeChanged": false
+      },
+      "evidence": [
+        { "claim": "fundamentals.revenueAccelerating", "url": "https://example.com/nvda/q2-results", "publishedAt": "2026-08-27" },
+        { "claim": "fundamentals.epsBeat", "url": "https://example.com/nvda/q2-results", "publishedAt": "2026-08-27" },
+        { "claim": "fundamentals.guidanceRaised", "url": "https://example.com/nvda/q2-results", "publishedAt": "2026-08-27" },
+        { "claim": "fundamentals.productCatalyst", "url": "https://example.com/nvda/platform-launch", "publishedAt": "2026-09-16" }
+      ],
+      "confidence": "high"
+    },
+    {
+      "symbol": "AMD",
+      "fundamentals": {
+        "revenueAccelerating": false,
+        "revenueDeclining": false,
+        "epsBeat": true,
+        "guidanceRaised": false,
+        "guidanceCut": false,
+        "productCatalyst": { "present": false, "kind": null, "summary": null },
+        "insiderOrInstitutionalBuying": false,
+        "narrativeChanged": null
+      },
+      "evidence": [
+        { "claim": "fundamentals.epsBeat", "url": "https://example.com/amd/q2-results", "publishedAt": "2026-08-05" }
+      ],
+      "confidence": "medium"
+    },
+    {
+      "symbol": "ROKU",
+      "fundamentals": {
+        "revenueAccelerating": null,
+        "revenueDeclining": null,
+        "epsBeat": null,
+        "guidanceRaised": null,
+        "guidanceCut": null,
+        "productCatalyst": null,
+        "insiderOrInstitutionalBuying": null,
+        "narrativeChanged": null
+      },
+      "evidence": [],
+      "confidence": "low"
+    }
+  ],
+  "macro": {
+    "sectorRotationIntoGrowth": true,
+    "dataTailwind": false,
+    "notes": "Fund flow reports showed growth funds taking in more than value funds this week. The latest CPI release came in above forecast.",
+    "evidence": [
+      { "claim": "macro.sectorRotationIntoGrowth", "url": "https://example.com/markets/fund-flows", "publishedAt": "2026-10-01" }
+    ],
+    "events": [
+      { "date": "2026-10-09", "name": "PPI" },
+      { "date": "2026-10-14", "name": "CPI" },
+      { "date": "2026-10-28", "name": "FOMC decision" }
+    ]
+  }
+}

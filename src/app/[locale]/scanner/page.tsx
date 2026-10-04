@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import { OperatorDisclosure, SampleStamp } from "@/components/operator-disclosure";
 import { ScannerTable } from "@/components/scanner-table";
 import { byScore, toRow } from "@/components/view-model";
-import { scoredUniverse } from "@/data/scored";
+import { latestScores } from "@/data/store";
+import { DataStatus } from "@/components/data-status";
+export const dynamic = "force-dynamic";
 import { fill, getMessages, plural } from "@/i18n";
 import { pageMetadata } from "@/i18n/metadata";
 import { resolveLocale, type LocaleParams } from "../locale";
@@ -16,15 +18,17 @@ export async function generateMetadata({ params }: LocaleParams): Promise<Metada
 export default async function Scanner({ params }: LocaleParams) {
   const locale = await resolveLocale(params);
   const m = getMessages(locale);
-  const rows = (await scoredUniverse()).map((row) => toRow(locale, row)).sort(byScore);
+  const data = await latestScores();
+  const rows = data.rows.map((row) => toRow(locale, row)).sort(byScore);
   return (
     <div className="frame page">
       <header className="page-head">
         <div className="page-title-row">
           <h1 className="title">{m.scanner.title}</h1>
-          <SampleStamp text={m.common.sample} />
+          {data.sample && <SampleStamp text={m.common.sample} />}
         </div>
         <p className="lede">{fill(m.scanner.lede, { count: plural(locale, m.plurals.sampleTickers, rows.length) })}</p>
+        <DataStatus locale={locale} lastUpdated={data.lastUpdated} stale={data.stale} />
         <OperatorDisclosure text={m.common.operatorDisclosure} />
       </header>
       <ScannerTable

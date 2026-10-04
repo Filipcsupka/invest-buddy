@@ -4,7 +4,7 @@ metadata:
   name: invest-buddy-daily
   namespace: invest
 spec:
-  schedule: "30 23 * * 1-5"
+  schedule: "30 6 * * 1-5"
   timeZone: Europe/Bratislava
   concurrencyPolicy: Forbid
   startingDeadlineSeconds: 1800
@@ -28,6 +28,8 @@ spec:
               image: ghcr.io/filipcsupka/invest-buddy:latest
               command: ["node", "dist/jobs/daily.js"]
               env:
+                - name: DATA_MODE
+                  value: db
                 - name: DATABASE_URL
                   valueFrom:
                     secretKeyRef:
@@ -141,6 +143,8 @@ spec:
               image: ghcr.io/filipcsupka/invest-buddy:latest
               command: ["node", "dist/jobs/digest.js"]
               env:
+                - name: DATA_MODE
+                  value: db
                 - name: DATABASE_URL
                   valueFrom:
                     secretKeyRef:

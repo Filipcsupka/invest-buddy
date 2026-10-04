@@ -4,6 +4,8 @@ resources:
   - namespace.yaml
   - web.yaml
   - ingress.yaml
+  - public-ingress-filter.yaml
   - postgres.yaml
+  - scan-cronjob.yaml
   - cronjobs.yaml
   - backup-cronjob.yaml

@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Optional manual backup; the scheduled scan runs as a Kubernetes CronJob. Template. Replace the three placeholders, then follow scanner/README.md.
+    __NODE__       absolute path to node        (run: which node)
+    __REPO__       absolute path to this repo   (the folder that contains scanner/)
+    __PATH__       PATH that includes the folder of your claude (or codex) binary, for example
+                   /opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/Users/you/.local/bin
+  launchd uses the Mac's local time zone. 06:30 means 06:30 on the clock of this Mac.
+  Set the Mac to Europe/Bratislava, or shift the hour yourself.
+  Nothing is loaded by copying this file. You load it with launchctl yourself.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>online.filipcsupka.investbuddy-scan</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>__NODE__</string>
+    <string>__REPO__/scanner/run-scan.mjs</string>
+    <string>--agent</string>
+    <string>claude</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>__REPO__</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>__PATH__</string>
+    <!-- The default URL only resolves inside the cluster. From the Mac use the public one. -->
+    <key>INGEST_URL</key>
+    <string>https://invest.filipcsupka.online/api/ingest/scan</string>
+  </dict>
+
+  <!-- Monday to Friday, 06:30 local time. If the Mac sleeps at that time, launchd runs the job on wake. -->
+  <key>StartCalendarInterval</key>
+  <array>
+    <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>6</integer><key>Minute</key><integer>30</integer></dict>
+    <dict><key>Weekday</key><integer>2</integer><key>Hour</key><integer>6</integer><key>Minute</key><integer>30</integer></dict>
+    <dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>6</integer><key>Minute</key><integer>30</integer></dict>
+    <dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>6</integer><key>Minute</key><integer>30</integer></dict>
+    <dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>6</integer><key>Minute</key><integer>30</integer></dict>
+  </array>
+
+  <key>StandardOutPath</key>
+  <string>__REPO__/scanner/out/launchd.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>__REPO__/scanner/out/launchd.err.log</string>
+
+  <key>RunAtLoad</key>
+  <false/>
+  <key>ProcessType</key>
+  <string>Background</string>
+</dict>
+</plist>

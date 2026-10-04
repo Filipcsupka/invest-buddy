@@ -11,7 +11,7 @@ import { StateChip } from "./score-badge";
 import { ScoreMark } from "./score-mark";
 
 /** Title block: the field grid at the head of every datasheet. */
-export function TitleBlock({ fields, stamp }: { fields: { label: string; value: React.ReactNode; wide?: boolean }[]; stamp: string }) {
+export function TitleBlock({ fields, stamp }: { fields: { label: string; value: React.ReactNode; wide?: boolean }[]; stamp?: string }) {
   return (
     <dl className="title-block">
       {fields.map((field) => (
@@ -20,9 +20,7 @@ export function TitleBlock({ fields, stamp }: { fields: { label: string; value: 
           <dd>{field.value}</dd>
         </div>
       ))}
-      <div className="tb-field tb-stamp">
-        <SampleStamp text={stamp} />
-      </div>
+      {stamp && <div className="tb-field tb-stamp"><SampleStamp text={stamp} /></div>}
     </dl>
   );
 }
@@ -37,7 +35,7 @@ export function groupLabels(locale: Locale, result: Pick<ScoreResult, "fundament
 }
 
 /** Compact datasheet used as the landing specimen. */
-export function Datasheet({ locale, instrument, result }: { locale: Locale; instrument: Instrument; result: ScoreResult }) {
+export function Datasheet({ locale, instrument, result, sample = true }: { locale: Locale; instrument: Instrument; result: ScoreResult; sample?: boolean }) {
   const m = getMessages(locale);
   const state = stateKey(result.state);
   const met = new Set(result.ruleHits.filter((hit) => hit.matched).map((hit) => hit.id));
@@ -45,7 +43,7 @@ export function Datasheet({ locale, instrument, result }: { locale: Locale; inst
   return (
     <figure className="sheet specimen">
       <TitleBlock
-        stamp={m.common.sample}
+        stamp={sample ? m.common.sample : undefined}
         fields={[
           { label: m.table.ticker, value: <span className="tb-ticker">{instrument.ticker}</span> },
           { label: m.table.company, value: instrument.name, wide: true },

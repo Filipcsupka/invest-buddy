@@ -5,6 +5,7 @@ metadata:
   namespace: invest
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/router.middlewares: invest-invest-buddy-public-filter@kubernetescrd
 spec:
   ingressClassName: traefik
   rules:
