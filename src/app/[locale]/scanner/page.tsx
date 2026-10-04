@@ -27,7 +27,7 @@ export default async function Scanner({ params }: LocaleParams) {
           <h1 className="title">{m.scanner.title}</h1>
           {data.sample && <SampleStamp text={m.common.sample} />}
         </div>
-        <p className="lede">{fill(m.scanner.lede, { count: plural(locale, m.plurals.sampleTickers, rows.length) })}</p>
+        <p className="lede">{fill(m.scanner.lede, { count: plural(locale, data.sample ? m.plurals.sampleTickers : m.plurals.tickers, rows.length) })}</p>
         <DataStatus locale={locale} lastUpdated={data.lastUpdated} stale={data.stale} />
         <OperatorDisclosure text={m.common.operatorDisclosure} />
       </header>

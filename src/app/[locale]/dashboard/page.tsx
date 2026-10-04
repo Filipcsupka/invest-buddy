@@ -32,6 +32,7 @@ export default async function Dashboard({ params }: LocaleParams) {
   const section = (key: "setup" | "watch" | "broken", columns: ("sector" | "score" | "state" | "reason")[]) => {
     const list = groups.get(key) ?? [];
     const id = `disclaimer-${key}`;
+    if (!list.length && !data.sample) return null;
     return (
       <section className="board-section" aria-labelledby={`state-${key}`} key={key}>
         <div className="board-head">
@@ -57,7 +58,7 @@ export default async function Dashboard({ params }: LocaleParams) {
           <h1 className="title">{m.dashboard.title}</h1>
           {data.sample && <SampleStamp text={m.common.sample} />}
         </div>
-        <p className="lede">{data.lastUpdated ? fill(m.dashboard.lede, { date: formatDate(locale, session), count: plural(locale, m.plurals.sampleTickers, rows.length) }) : m.common.noDataYet}</p>
+        <p className="lede">{data.lastUpdated ? fill(m.dashboard.lede, { date: formatDate(locale, session), count: plural(locale, data.sample ? m.plurals.sampleTickers : m.plurals.tickers, rows.length) }) : m.common.noDataYet}</p>
         <DataStatus locale={locale} lastUpdated={data.lastUpdated} stale={data.stale} />
         <OperatorDisclosure text={m.common.operatorDisclosure} />
       </header>
