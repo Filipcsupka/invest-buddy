@@ -15,3 +15,13 @@ For a local demonstration, run `docker compose up -d --build db migrate web`, th
 This is informational screening under ADR-001. Scores are rule outputs for all visitors; they do not include position size or personal advice.
 
 Daily scoring requires a price bar dated exactly to the scoring session. Missing or older bars produce `Insufficient/invalid data` with `stale_prices`; no points are awarded. Same-day scores are refreshed when consensus inputs or price bars change.
+
+## Price ingest
+
+`node dist/jobs/prices.js` (or `npm run prices`) loads 260 daily bars for the 35 universe symbols and the SPY benchmark from Twelve Data and upserts them into `daily_bars`. SPY is stored as an instrument with source `benchmark`; it has no scan findings, so it never appears in the universe. Set `TWELVE_DATA_API_KEY` and `DATABASE_URL`. The key is sent in an `Authorization: apikey` header, never in the URL, and the job exits with a clear message when it is missing. Flags: `--only NVDA,SPY`, `--memory` (no database) and `--dry-run` (fetch and validate, store nothing).
+
+The adapter drops a bar dated today until the US session has closed (16:00 New York plus a five minute margin), rejects non-finite or non-positive prices, `high < low` and duplicate dates, and sends at most 7 requests per minute to stay under the Basic plan limit of 8 per minute and 800 per day. It retries 429 and 5xx with backoff, and stops at the first daily-limit error and marks the untouched tickers as failed. Block's current ticker is `XYZ`, so `SQ` is requested as `XYZ` and stored as `SQ`; this mapping is not yet checked against the live API. Symbols the vendor rejects are printed as unmapped.
+
+A ticker is skipped when the fetch has fewer bars than the database already holds for the same date range, so a partial response never shrinks history. Re-running is idempotent: unchanged bars are not rewritten. Each run adds a row to `price_ingest_runs` (migration 006) with requested, succeeded and failed counts, bars written, the failures and any stop reason. The existing `ingest_runs` table keeps one row per scoring date and feeds the digest date, so price runs use their own table. The job exits 1 when more than 10% of tickers fail.
+
+The free tier is for the private beta only. A data licence is required before a paid launch (ADR-002).

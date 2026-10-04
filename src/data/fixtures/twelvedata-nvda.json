@@ -1,0 +1,11 @@
+{
+  "meta": { "symbol": "NVDA", "interval": "1day", "currency": "USD", "exchange_timezone": "America/New_York", "exchange": "NASDAQ", "type": "Common Stock" },
+  "values": [
+    { "datetime": "2025-08-04", "open": "180.00", "high": "183.50", "low": "179.20", "close": "183.16", "volume": "120000000" },
+    { "datetime": "2025-08-05", "open": "183.10", "high": "184.00", "low": "180.50", "close": "181.60", "volume": "98000000" },
+    { "datetime": "2025-08-05", "open": "183.10", "high": "184.00", "low": "180.50", "close": "181.60", "volume": "98000000" },
+    { "datetime": "2025-08-06", "open": "181.70", "high": "182.40", "low": "177.10", "close": "179.42", "volume": "110000000" },
+    { "datetime": "2025-08-07", "open": "179.50", "high": "181.00", "low": "178.00", "close": "180.77", "volume": "70000000" }
+  ],
+  "status": "ok"
+}
