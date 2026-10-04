@@ -1,0 +1,66 @@
+import { XMLParser, XMLValidator } from "fast-xml-parser";
+
+const endpoint = "https://ndcdyn.interactivebrokers.com/AccountManagement/FlexWebService";
+const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "", parseAttributeValue: false });
+const retryCodes = new Set(["1001", "1018", "1019"]);
+
+function parse(xml: string): Record<string, unknown> {
+  if (XMLValidator.validate(xml) !== true) throw new Error("Invalid Flex XML");
+  return parser.parse(xml) as Record<string, unknown>;
+}
+
+function obj(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+export interface FlexTransport { (url: string): Promise<string> }
+const httpTransport: FlexTransport = async (url) => {
+  const response = await fetch(url, { cache: "no-store" });
+  if (!response.ok) throw new Error(`Flex HTTP ${response.status}`);
+  return response.text();
+};
+
+export class FlexService {
+  constructor(private readonly token: string, private readonly queryId: string, private readonly transport: FlexTransport = httpTransport, private readonly pause: (ms: number) => Promise<void> = (ms) => new Promise((resolve) => setTimeout(resolve, ms))) {
+    if (!token || !queryId) throw new Error("Flex credentials are required");
+  }
+
+  async statement(maxAttempts = 8): Promise<string> {
+    let reference = "";
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const url = reference
+        ? `${endpoint}/GetStatement?t=${encodeURIComponent(this.token)}&q=${encodeURIComponent(reference)}&v=3`
+        : `${endpoint}/SendRequest?t=${encodeURIComponent(this.token)}&q=${encodeURIComponent(this.queryId)}&v=3`;
+      const xml = await this.transport(url);
+      const document = parse(xml);
+      const response = obj(document.FlexStatementResponse);
+      const code = String(response.ErrorCode ?? "");
+      if (code) {
+        if (!retryCodes.has(code)) throw new Error(`Flex error ${code}`);
+      } else if (response.Status === "Success" && response.ReferenceCode) {
+        reference = String(response.ReferenceCode);
+      } else if (document.FlexQueryResponse) {
+        return xml;
+      } else {
+        throw new Error("Unexpected Flex response");
+      }
+      await this.pause(Math.min(30_000, 1000 * 2 ** attempt));
+    }
+    throw new Error("Flex statement was not ready");
+  }
+}
+
+export function flexServiceFromEnv(transport?: FlexTransport, pause?: (ms: number) => Promise<void>): FlexService {
+  const token = process.env.FLEX_TOKEN;
+  const queryId = process.env.FLEX_QUERY_ID;
+  if (!token || !queryId) throw new Error("FLEX_TOKEN and FLEX_QUERY_ID are required");
+  return new FlexService(token, queryId, transport, pause);
+}
+
+export function parseFlexStatement(xml: string): { positions: Record<string, unknown>[]; nav: Record<string, unknown>[] } {
+  const root = obj(parse(xml).FlexQueryResponse);
+  const statement = obj(obj(root.FlexStatements).FlexStatement);
+  if (!Object.keys(statement).length) throw new Error("Flex statement missing");
+  const list = (value: unknown): Record<string, unknown>[] => (Array.isArray(value) ? value : value ? [value] : []).map(obj);
+  return { positions: list(obj(statement.OpenPositions).OpenPosition), nav: list(obj(statement.ChangeInNAV).ChangeInNAV) };
+}

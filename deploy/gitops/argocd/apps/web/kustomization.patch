@@ -1,0 +1,8 @@
+--- a/argocd/apps/web/kustomization.yaml
++++ b/argocd/apps/web/kustomization.yaml
+@@ -14,4 +14,5 @@
+   - staging.yaml
+   - memorial.yaml
+   - memorial-secrets.yaml
++  - invest-buddy.yaml
+   - ai-chat.yaml

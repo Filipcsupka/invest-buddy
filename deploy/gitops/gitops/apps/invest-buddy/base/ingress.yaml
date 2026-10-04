@@ -1,0 +1,24 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: invest-buddy
+  namespace: invest
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: invest.filipcsupka.online
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: invest-buddy-web
+                port:
+                  number: 3000
+  tls:
+    - secretName: invest-buddy-tls
+      hosts:
+        - invest.filipcsupka.online

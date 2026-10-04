@@ -1,0 +1,104 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: invest-buddy-backup-script
+  namespace: invest
+data:
+  backup.sh: |
+    #!/bin/sh
+    set -eu
+    export RESTIC_CACHE_DIR=/tmp/restic-cache
+    SSH_COMMAND="ssh -i /keys/ssh_key -o UserKnownHostsFile=/keys/known_hosts -o StrictHostKeyChecking=yes -o ConnectTimeout=15"
+    rc() { restic -o "sftp.command=$SSH_COMMAND" "$@"; }
+    if ! rc snapshots >/dev/null 2>&1; then
+      rc init
+    fi
+    export PGPASSWORD="$POSTGRES_PASSWORD"
+    pg_dump -h postgres -U invest -d invest --no-owner --clean --if-exists > /tmp/invest-postgres.sql
+    rc backup /tmp/invest-postgres.sql --tag postgres --host invest-buddy
+    rc forget --tag postgres --keep-daily 7 --keep-weekly 4 --prune
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: invest-buddy-backup
+  namespace: invest
+spec:
+  schedule: "30 2 * * *"
+  timeZone: Europe/Bratislava
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 3600
+      template:
+        spec:
+          hostNetwork: true
+          dnsPolicy: ClusterFirstWithHostNet
+          restartPolicy: Never
+          nodeSelector:
+            kubernetes.io/hostname: k8s-worker-01
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+          containers:
+            - name: backup
+              image: ghcr.io/filipcsupka/invest-buddy:latest
+              command: ["/bin/sh", "/scripts/backup.sh"]
+              env:
+                - name: POSTGRES_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-secrets
+                      key: POSTGRES_PASSWORD
+                - name: RESTIC_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-backup-secrets
+                      key: RESTIC_PASSWORD
+                - name: RESTIC_REPOSITORY
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-backup-secrets
+                      key: RESTIC_REPOSITORY
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+                - name: script
+                  mountPath: /scripts
+                  readOnly: true
+                - name: keys
+                  mountPath: /keys
+                  readOnly: true
+                - name: tmp
+                  mountPath: /tmp
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 128Mi
+                limits:
+                  cpu: 500m
+                  memory: 512Mi
+          volumes:
+            - name: script
+              configMap:
+                name: invest-buddy-backup-script
+            - name: keys
+              secret:
+                secretName: invest-buddy-backup-secrets
+                defaultMode: 0440
+                items:
+                  - key: ssh_key
+                    path: ssh_key
+                  - key: known_hosts
+                    path: known_hosts
+            - name: tmp
+              emptyDir: {}

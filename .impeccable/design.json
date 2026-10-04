@@ -1,0 +1,155 @@
+{
+ "schemaVersion": 2,
+ "generatedAt": "2026-10-04T15:13:15.468269Z",
+ "title": "Design System: InvestBuddy",
+ "extensions": {
+  "colorMeta": {
+   "signal-light": {
+    "role": "primary",
+    "displayName": "Cobalt signal"
+   },
+   "signal-dark": {
+    "role": "primary",
+    "displayName": "Cobalt signal (dark)"
+   },
+   "ground-light": {
+    "role": "neutral",
+    "displayName": "Drafting film"
+   },
+   "ground-dark": {
+    "role": "neutral",
+    "displayName": "Night desk"
+   },
+   "ink-light": {
+    "role": "neutral",
+    "displayName": "Graphite ink"
+   }
+  },
+  "typographyMeta": {
+   "display": {
+    "displayName": "Display",
+    "purpose": "Landing headline only."
+   },
+   "label": {
+    "displayName": "Title block label",
+    "purpose": "Field labels and table headers; never above a heading."
+   },
+   "prose": {
+    "displayName": "Reading serif",
+    "purpose": "Ledes, methodology prose, rule definitions."
+   }
+  },
+  "shadows": [
+   {
+    "name": "contact",
+    "value": "0 1px 2px rgb(21 25 28 / 0.07)",
+    "purpose": "Landing datasheet only."
+   }
+  ],
+  "motion": [
+   {
+    "name": "ease-out-expo",
+    "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+    "purpose": "All transitions and the chart plot sweep."
+   },
+   {
+    "name": "plot",
+    "value": "clip-path inset sweep, 1600ms, 120ms delay",
+    "purpose": "The one authored moment, company page chart."
+   }
+  ],
+  "breakpoints": [
+   {
+    "name": "stack",
+    "value": "1100px"
+   },
+   {
+    "name": "tablet",
+    "value": "900px"
+   },
+   {
+    "name": "phone",
+    "value": "640px"
+   }
+  ]
+ },
+ "components": [
+  {
+   "name": "Primary Button",
+   "kind": "button",
+   "refersTo": "button-primary",
+   "description": "Main action per section.",
+   "html": "<a class=\"ds-btn\">Open today's dashboard</a>",
+   "css": ".ds-btn{display:inline-flex;align-items:center;min-height:44px;padding:8px 24px;background:#15191c;color:#eceeeb;border:1px solid #15191c;border-radius:2px;font:620 14px Archivo,sans-serif;text-decoration:none}.ds-btn:hover{background:#2340c4;border-color:#2340c4;color:#fff}"
+  },
+  {
+   "name": "Setup met chip",
+   "kind": "chip",
+   "refersTo": "chip-setup",
+   "description": "Rule state at 18 points or more.",
+   "html": "<span class=\"ds-chip\">Setup met ≥18</span>",
+   "css": ".ds-chip{display:inline-flex;padding:2px 8px;border:1px solid #2340c4;background:#2340c4;color:#fff;border-radius:2px;font:620 12px Archivo,sans-serif}"
+  },
+  {
+   "name": "Criteria broken chip",
+   "kind": "chip",
+   "refersTo": "chip-broken",
+   "description": "Any rejection rule; hatched like a section cut.",
+   "html": "<span class=\"ds-chip-broken\">Criteria broken</span>",
+   "css": ".ds-chip-broken{display:inline-flex;padding:2px 8px;border:1px solid #464f56;color:#15191c;border-radius:2px;font:620 12px Archivo,sans-serif;background:repeating-linear-gradient(135deg,rgb(21 25 28/.22) 0 1px,transparent 1px 5px)}"
+  },
+  {
+   "name": "Search field",
+   "kind": "input",
+   "refersTo": "input-search",
+   "description": "Scanner search.",
+   "html": "<input class=\"ds-input\" placeholder=\"Ticker, company or sector\">",
+   "css": ".ds-input{height:40px;padding:0 12px;background:#f7f8f6;border:1px solid #7e878b;border-radius:2px;color:#15191c;font:15px Archivo,sans-serif}.ds-input:focus{outline:2px solid #2340c4;outline-offset:1px;border-color:#2340c4}"
+  },
+  {
+   "name": "Rule strip",
+   "kind": "custom",
+   "refersTo": "rule-strip",
+   "description": "Ten rule blocks sized by points, grouped 10|10|5; filled when met.",
+   "html": "<span class=\"ds-strip\"><span style=\"flex:10\"><i style=\"flex:4\" class=on></i><i style=\"flex:3\" class=on></i><i style=\"flex:2\"></i><i style=\"flex:1\" class=on></i></span><span style=\"flex:10\"><i style=\"flex:3\" class=on></i><i style=\"flex:3\" class=on></i><i style=\"flex:2\"></i><i style=\"flex:2\"></i></span><span style=\"flex:5\"><i style=\"flex:2\" class=on></i><i style=\"flex:3\" class=on></i></span></span>",
+   "css": ".ds-strip{display:flex;gap:5px;width:160px}.ds-strip>span{display:flex;gap:2px;height:10px}.ds-strip i{border:1px solid #7e878b}.ds-strip i.on{background:#2340c4;border-color:#2340c4}"
+  }
+ ],
+ "narrative": {
+  "northStar": "The audited datasheet",
+  "overview": "Each ticker reads as an engineering datasheet: title block, rule strip, the working in a table. Drafting-film ground, graphite ink, one cobalt signal for rule state.",
+  "keyCharacteristics": [
+   "One signal colour mapped to rule state",
+   "Hatching for broken criteria, dashed lines for missing data",
+   "Archivo width axis for titles and labels, Source Serif 4 for reading",
+   "Tabular numerals in every table"
+  ],
+  "rules": [
+   {
+    "name": "One signal",
+    "body": "Cobalt only marks rule state, links on hover, focus and selection.",
+    "section": "colors"
+   },
+   {
+    "name": "Drawing conventions carry state",
+    "body": "Hatching means criteria broken; dashed means insufficient data.",
+    "section": "colors"
+   },
+   {
+    "name": "No text under 12px",
+    "body": "--t-xs is the floor.",
+    "section": "typography"
+   }
+  ],
+  "dos": [
+   "Put the disclaimer beside every score",
+   "Stamp SAMPLE DATA on every page with prices or scores",
+   "Format numbers through Intl helpers"
+  ],
+  "donts": [
+   "No second accent or gain/loss colours",
+   "No eyebrows, section numbers or card grids",
+   "No wide soft shadows, glass or gradient text"
+  ]
+ }
+}

@@ -1,0 +1,15 @@
+<FlexQueryResponse>
+  <FlexStatements>
+    <FlexStatement accountId="PRIVATE-ACCOUNT">
+      <OpenPositions>
+        <OpenPosition symbol="NVDA" weightPercent="60" positionValue="120000" accountId="PRIVATE-ACCOUNT" />
+        <OpenPosition symbol="MSFT" weightPercent="40" positionValue="80000" accountId="PRIVATE-ACCOUNT" />
+        <OpenPosition symbol="CASH" weightPercent="4" positionValue="9000" />
+      </OpenPositions>
+      <ChangeInNAV>
+        <ChangeInNAV reportDate="20250807" twr="0" startingValue="190000" endingValue="190000" deposits="10000" />
+        <ChangeInNAV reportDate="20250808" twr="1.5" startingValue="190000" endingValue="202850" deposits="10000" />
+      </ChangeInNAV>
+    </FlexStatement>
+  </FlexStatements>
+</FlexQueryResponse>

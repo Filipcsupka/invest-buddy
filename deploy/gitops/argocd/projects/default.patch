@@ -1,0 +1,11 @@
+--- a/argocd/projects/default.yaml
++++ b/argocd/projects/default.yaml
+@@ -35,6 +35,8 @@
+       server: https://kubernetes.default.svc
+     - namespace: memorial
+       server: https://kubernetes.default.svc
++    - namespace: invest
++      server: https://kubernetes.default.svc
+   clusterResourceWhitelist:
+     - group: "*"
+       kind: "*"

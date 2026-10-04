@@ -1,0 +1,83 @@
+name: Build
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      enable_infra_pin:
+        description: Manually update the infra image tag after publishing
+        type: boolean
+        default: false
+permissions: {}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          push: false
+
+  publish:
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set image tag
+        id: image
+        run: echo "tag=ghcr.io/filipcsupka/invest-buddy:sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.image.outputs.tag }}
+
+  # Disabled by default. Requires a manual dispatch and owner approval.
+  deploy-gitops:
+    if: github.event_name == 'workflow_dispatch' && inputs.enable_infra_pin == true && github.ref == 'refs/heads/main'
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check infra token
+        env:
+          INFRA_REPO_TOKEN: ${{ secrets.INFRA_REPO_TOKEN }}
+        run: test -n "$INFRA_REPO_TOKEN"
+      - uses: imranismail/setup-kustomize@v2
+        with:
+          kustomize-version: "5.4.3"
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: Filipcsupka/infra
+          token: ${{ secrets.INFRA_REPO_TOKEN }}
+          path: infra
+      - name: Pin image in infra overlay
+        working-directory: infra/gitops/apps/invest-buddy/overlays/prod
+        run: kustomize edit set image ghcr.io/filipcsupka/invest-buddy=ghcr.io/filipcsupka/invest-buddy:sha-${GITHUB_SHA::7}
+      - name: Commit image pin
+        working-directory: infra
+        run: |
+          if git diff --quiet; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add gitops/apps/invest-buddy/overlays/prod/kustomization.yaml
+          git commit -m "Pin invest-buddy sha-${GITHUB_SHA::7}"
+          git push
