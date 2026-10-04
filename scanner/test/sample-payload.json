@@ -107,7 +107,9 @@
       {
         "claim": "macro.sectorRotationIntoGrowth",
         "url": "https://example.com/markets/fund-flows",
-        "publishedAt": "2026-10-01"
+        "publishedAt": "2026-10-01",
+        "fiscalPeriod": "Sep 2026 CPI",
+        "quote": "Sample sentence copied from the cited page."
       }
     ],
     "events": [
