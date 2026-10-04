@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ticker agent output",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "symbol",
+    "fundamentals",
+    "evidence",
+    "confidence"
+  ],
+  "properties": {
+    "symbol": {
+      "type": "string"
+    },
+    "fundamentals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "revenueAccelerating",
+        "revenueDeclining",
+        "epsBeat",
+        "guidanceRaised",
+        "guidanceCut",
+        "productCatalyst",
+        "insiderOrInstitutionalBuying",
+        "narrativeChanged"
+      ],
+      "properties": {
+        "revenueAccelerating": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "revenueDeclining": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "epsBeat": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "guidanceRaised": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "guidanceCut": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "productCatalyst": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "required": [
+            "present",
+            "kind",
+            "summary"
+          ],
+          "properties": {
+            "present": {
+              "type": "boolean"
+            },
+            "kind": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "summary": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        },
+        "insiderOrInstitutionalBuying": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "narrativeChanged": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "claim",
+          "url",
+          "publishedAt",
+          "fiscalPeriod",
+          "quote"
+        ],
+        "properties": {
+          "claim": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "publishedAt": {
+            "type": "string"
+          },
+          "fiscalPeriod": {
+            "type": "string"
+          },
+          "quote": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "confidence": {
+      "enum": [
+        "high",
+        "medium",
+        "low"
+      ]
+    }
+  }
+}

@@ -1,98 +1,280 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://invest.filipcsupka.online/schemas/scan-v1.json",
-  "title": "InvestBuddy scan payload v1",
-  "description": "Mirrors docs/scan-contract.md. Rule not expressible here: a true claim needs an https evidence item whose claim names the field (checked by validate.mjs).",
+  "$id": "https://invest.filipcsupka.online/schemas/scan-v2.json",
+  "title": "InvestBuddy scan payload v2",
+  "description": "Mirrors docs/scan-contract.md (v2). Rule not expressible here: a true claim needs an https evidence item whose claim names the field (checked by validate.mjs). Quote must be copied verbatim from the cited page; the server reconcile job checks that, validate.mjs cannot.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "runId", "asOf", "generatedAt", "runner", "tickers", "macro"],
+  "required": [
+    "schemaVersion",
+    "runId",
+    "asOf",
+    "generatedAt",
+    "runner",
+    "tickers",
+    "macro"
+  ],
   "properties": {
-    "schemaVersion": { "const": 1 },
-    "runId": { "type": "string", "format": "uuid" },
-    "asOf": { "type": "string", "format": "date" },
-    "generatedAt": { "type": "string", "format": "date-time" },
+    "schemaVersion": {
+      "const": 2
+    },
+    "runId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "asOf": {
+      "type": "string",
+      "format": "date"
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
     "runner": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["name", "model"],
+      "required": [
+        "name",
+        "model"
+      ],
       "properties": {
-        "name": { "type": "string", "minLength": 1, "maxLength": 64 },
-        "model": { "type": "string", "minLength": 1, "maxLength": 128 }
+        "name": {
+          "enum": [
+            "claude",
+            "codex"
+          ]
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
       }
     },
-    "tickers": { "type": "array", "items": { "$ref": "#/$defs/ticker" } },
-    "macro": { "$ref": "#/$defs/macro" }
+    "tickers": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ticker"
+      }
+    },
+    "macro": {
+      "$ref": "#/$defs/macro"
+    }
   },
   "$defs": {
-    "nullableBool": { "type": ["boolean", "null"] },
+    "nullableBool": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
     "evidence": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["claim", "url"],
+      "required": [
+        "claim",
+        "url",
+        "publishedAt",
+        "fiscalPeriod",
+        "quote"
+      ],
       "properties": {
-        "claim": { "type": "string", "pattern": "^(fundamentals|macro)\\.[A-Za-z]+$" },
-        "url": { "type": "string", "pattern": "^https://[^\\s]+$", "maxLength": 2048 },
-        "publishedAt": { "type": "string", "format": "date" }
+        "claim": {
+          "type": "string",
+          "pattern": "^(fundamentals|macro)\\.[A-Za-z]+$"
+        },
+        "url": {
+          "type": "string",
+          "pattern": "^https://[^\\s]+$",
+          "maxLength": 2048
+        },
+        "publishedAt": {
+          "type": "string",
+          "format": "date"
+        },
+        "fiscalPeriod": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "quote": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 600
+        }
       }
     },
     "ticker": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["symbol", "fundamentals", "evidence", "confidence"],
+      "required": [
+        "symbol",
+        "fundamentals",
+        "evidence",
+        "confidence"
+      ],
       "properties": {
-        "symbol": { "type": "string", "pattern": "^[A-Z][A-Z0-9.\\-]{0,9}$" },
+        "symbol": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9.\\-]{0,9}$"
+        },
         "fundamentals": {
           "type": "object",
           "additionalProperties": false,
           "required": [
-            "revenueAccelerating", "revenueDeclining", "epsBeat", "guidanceRaised",
-            "guidanceCut", "productCatalyst", "insiderOrInstitutionalBuying", "narrativeChanged"
+            "revenueAccelerating",
+            "revenueDeclining",
+            "epsBeat",
+            "guidanceRaised",
+            "guidanceCut",
+            "productCatalyst",
+            "insiderOrInstitutionalBuying",
+            "narrativeChanged"
           ],
           "properties": {
-            "revenueAccelerating": { "$ref": "#/$defs/nullableBool" },
-            "revenueDeclining": { "$ref": "#/$defs/nullableBool" },
-            "epsBeat": { "$ref": "#/$defs/nullableBool" },
-            "guidanceRaised": { "$ref": "#/$defs/nullableBool" },
-            "guidanceCut": { "$ref": "#/$defs/nullableBool" },
+            "revenueAccelerating": {
+              "$ref": "#/$defs/nullableBool"
+            },
+            "revenueDeclining": {
+              "$ref": "#/$defs/nullableBool"
+            },
+            "epsBeat": {
+              "$ref": "#/$defs/nullableBool"
+            },
+            "guidanceRaised": {
+              "$ref": "#/$defs/nullableBool"
+            },
+            "guidanceCut": {
+              "$ref": "#/$defs/nullableBool"
+            },
             "productCatalyst": {
-              "type": ["object", "null"],
+              "type": [
+                "object",
+                "null"
+              ],
               "additionalProperties": false,
-              "required": ["present", "kind", "summary"],
+              "required": [
+                "present",
+                "kind",
+                "summary"
+              ],
               "properties": {
-                "present": { "type": "boolean" },
-                "kind": { "type": ["string", "null"], "maxLength": 80 },
-                "summary": { "type": ["string", "null"], "maxLength": 300 }
+                "present": {
+                  "type": "boolean"
+                },
+                "kind": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "maxLength": 80
+                },
+                "summary": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "maxLength": 300
+                }
               }
             },
-            "insiderOrInstitutionalBuying": { "$ref": "#/$defs/nullableBool" },
-            "narrativeChanged": { "$ref": "#/$defs/nullableBool" }
+            "insiderOrInstitutionalBuying": {
+              "$ref": "#/$defs/nullableBool"
+            },
+            "narrativeChanged": {
+              "$ref": "#/$defs/nullableBool"
+            }
           }
         },
-        "evidence": { "type": "array", "maxItems": 20, "items": { "$ref": "#/$defs/evidence" } },
-        "confidence": { "enum": ["high", "medium", "low"] }
+        "evidence": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "$ref": "#/$defs/evidence"
+          }
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        }
       }
     },
     "macro": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["sectorRotationIntoGrowth", "dataTailwind", "notes", "evidence", "events"],
+      "required": [
+        "sectorRotationIntoGrowth",
+        "dataTailwind",
+        "notes",
+        "evidence",
+        "events"
+      ],
       "properties": {
-        "sectorRotationIntoGrowth": { "$ref": "#/$defs/nullableBool" },
-        "dataTailwind": { "$ref": "#/$defs/nullableBool" },
-        "notes": { "type": "string", "maxLength": 500 },
-        "evidence": { "type": "array", "maxItems": 20, "items": { "$ref": "#/$defs/evidence" } },
+        "sectorRotationIntoGrowth": {
+          "$ref": "#/$defs/nullableBool"
+        },
+        "dataTailwind": {
+          "$ref": "#/$defs/nullableBool"
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "evidence": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "$ref": "#/$defs/macroEvidence"
+          }
+        },
         "events": {
           "type": "array",
           "maxItems": 30,
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["date", "name"],
+            "required": [
+              "date",
+              "name"
+            ],
             "properties": {
-              "date": { "type": "string", "format": "date" },
-              "name": { "type": "string", "minLength": 1, "maxLength": 120 }
+              "date": {
+                "type": "string",
+                "format": "date"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 120
+              }
             }
           }
+        }
+      }
+    },
+    "macroEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "claim",
+        "url"
+      ],
+      "properties": {
+        "claim": {
+          "type": "string",
+          "pattern": "^(fundamentals|macro)\\.[A-Za-z]+$"
+        },
+        "url": {
+          "type": "string",
+          "pattern": "^https://[^\\s]+$",
+          "maxLength": 2048
+        },
+        "publishedAt": {
+          "type": "string",
+          "format": "date"
         }
       }
     }

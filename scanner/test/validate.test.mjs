@@ -47,3 +47,20 @@ test("duplicate symbol is rejected", () => {
   p.tickers.push(structuredClone(p.tickers[2]));
   assert.match(validatePayload(p).join("\n"), /duplicate/);
 });
+
+test("v1 payload and unknown runner name are rejected", () => {
+  const p = sample();
+  p.schemaVersion = 1; p.runner.name = "claude-code";
+  const e = validatePayload(p).join("\n");
+  assert.match(e, /schemaVersion/);
+  assert.match(e, /runner\.name/);
+});
+
+test("evidence without quote or fiscalPeriod is rejected", () => {
+  const p = sample();
+  delete p.tickers[0].evidence[0].quote;
+  delete p.tickers[0].evidence[1].fiscalPeriod;
+  const e = validatePayload(p).join("\n");
+  assert.match(e, /quote: required/);
+  assert.match(e, /fiscalPeriod: required/);
+});

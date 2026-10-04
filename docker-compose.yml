@@ -44,5 +44,16 @@ services:
       migrate: { condition: service_completed_successfully }
     profiles: ["jobs"]
 
+  reconcile:
+    build: { context: ., target: runtime }
+    command: ["node", "dist/jobs/reconcile.js"]
+    environment:
+      DATABASE_URL: postgresql://investbuddy:local-only@db:5432/investbuddy
+      RECONCILE_VERIFY: ${RECONCILE_VERIFY:-live}
+      SEC_USER_AGENT: ${SEC_USER_AGENT:-}
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    profiles: ["jobs"]
+
 volumes:
   pgdata:

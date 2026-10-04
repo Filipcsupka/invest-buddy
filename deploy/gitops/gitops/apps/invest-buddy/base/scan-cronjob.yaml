@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: invest-buddy-scan
+  name: invest-buddy-scan-claude
   namespace: invest
 spec:
   schedule: "30 5 * * 1-5"
@@ -13,7 +13,7 @@ spec:
   jobTemplate:
     spec:
       backoffLimit: 1
-      activeDeadlineSeconds: 3000
+      activeDeadlineSeconds: 2400
       template:
         spec:
           restartPolicy: Never
@@ -22,6 +22,7 @@ spec:
           containers:
             - name: scan
               image: ghcr.io/filipcsupka/invest-buddy-scanner:latest
+              args: ["--agent", "claude"]
               env:
                 - name: INGEST_URL
                   value: http://web.invest.svc.cluster.local:3000/api/ingest/scan
@@ -35,13 +36,6 @@ spec:
                     secretKeyRef:
                       name: invest-buddy-scanner-secrets
                       key: CLAUDE_CODE_OAUTH_TOKEN
-                      optional: true
-                - name: ANTHROPIC_API_KEY
-                  valueFrom:
-                    secretKeyRef:
-                      name: invest-buddy-scanner-secrets
-                      key: ANTHROPIC_API_KEY
-                      optional: true
               resources:
                 requests:
                   cpu: 250m
@@ -49,3 +43,87 @@ spec:
                 limits:
                   cpu: "2"
                   memory: 1Gi
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: invest-buddy-scan-codex
+  namespace: invest
+spec:
+  schedule: "30 5 * * 1-5"
+  timeZone: Europe/Bratislava
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 2400
+      template:
+        spec:
+          restartPolicy: Never
+          nodeSelector:
+            kubernetes.io/hostname: k8s-worker-01
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            fsGroup: 10001
+          initContainers:
+            - name: seed-codex-auth
+              image: busybox:1.37
+              command:
+                - /bin/sh
+                - -ec
+                - |
+                  if [ -z "$(ls -A /codex-home)" ]; then
+                    cp /seed/auth.json /codex-home/auth.json
+                    chmod 0600 /codex-home/auth.json
+                  fi
+                  test -s /codex-home/auth.json
+              volumeMounts:
+                - name: codex-home
+                  mountPath: /codex-home
+                - name: auth-seed
+                  mountPath: /seed
+                  readOnly: true
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
+          containers:
+            - name: scan
+              image: ghcr.io/filipcsupka/invest-buddy-scanner:latest
+              args: ["--agent", "codex"]
+              env:
+                - name: CODEX_HOME
+                  value: /codex-home
+                - name: INGEST_URL
+                  value: http://web.invest.svc.cluster.local:3000/api/ingest/scan
+                - name: INGEST_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-secrets
+                      key: INGEST_TOKEN
+              volumeMounts:
+                - name: codex-home
+                  mountPath: /codex-home
+              resources:
+                requests:
+                  cpu: 250m
+                  memory: 256Mi
+                limits:
+                  cpu: "2"
+                  memory: 1Gi
+          volumes:
+            - name: codex-home
+              persistentVolumeClaim:
+                claimName: invest-buddy-codex-home
+            - name: auth-seed
+              secret:
+                secretName: invest-buddy-codex-auth-seed
+                defaultMode: 0440
+                items:
+                  - key: auth.json
+                    path: auth.json

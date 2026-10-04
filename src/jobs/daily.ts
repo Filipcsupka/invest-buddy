@@ -26,7 +26,7 @@ export async function runDaily(provider: UniverseProvider, repository: ScoreRepo
     if (!(provider instanceof DatabaseUniverseProvider) && throughDate.at(-1)?.date !== date) throw new Error(`${instrument.ticker} has no bar on ${date}`);
     const result = score({ ticker: instrument.ticker, bars: throughDate, fundamentals, macro });
     const origin = provider instanceof DatabaseUniverseProvider ? provider.provenance.get(instrument.ticker) : undefined;
-    return { instrument, result: { ...result, asOf: date, ...(origin ? { scanRunId: origin.runId, evidenceUrls: origin.evidenceUrls } : {}) } };
+    return { instrument, result: { ...result, asOf: date, ...(origin ? { scanRunId: Object.values(origin.runIds)[0], scanRunIds: origin.runIds, agreement: origin.agreement, consensusValues: origin.consensusValues, evidenceUrls: origin.evidenceUrls } : {}) } };
   });
   return repository.saveDaily(date, providerName, records);
 }

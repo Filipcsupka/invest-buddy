@@ -1,59 +1,113 @@
 # Scan runner
 
-A script that runs as a Kubernetes CronJob (image `ghcr.io/filipcsupka/invest-buddy-scanner`) and also works on a Mac. It does the daily research pass for InvestBuddy. For each tracked ticker it asks a headless Claude Code or Codex CLI to search the web and report a fixed set of facts as JSON. It checks the JSON against the scan contract and posts one payload to the ingest API. The scoring happens on the server. The runner never sees prices, scores or the database. The contract is in `docs/scan-contract.md` and is the source of truth.
+The scan runs the same research job with either Claude Code (`claude -p`) or Codex (`codex exec`), each on its own existing subscription. No paid API key is required. It runs as a Kubernetes CronJob (image `ghcr.io/filipcsupka/invest-buddy-scanner`) and also on a Mac. For each tracked ticker the agent searches the web and reports a fixed set of facts as JSON. The runner checks the JSON against the scan contract and posts one payload to the ingest API. Scoring happens on the server. The runner never sees prices, scores or the database. The contract is `docs/scan-contract.md` (v2) and is the source of truth.
+
+Two agents on two subscriptions need no extra paid account. Each agent runs as its own run with its own `runId`, never sees the other's output, and sets `runner.name` to `claude` or `codex`. The server compares the two (the reconcile job in the contract). Until that exists, `compare.mjs` lets you compare two dry-run files by hand.
 
 ## What is in here
 
 | Path | Purpose |
 | --- | --- |
-| `run-scan.mjs` | The runner. Node 20 or newer, no npm install needed. |
-| `validate.mjs` | Schema validator, also usable on its own. |
-| `schema/scan.schema.json` | JSON Schema (draft 2020-12) for the payload. |
+| `run-scan.mjs` | The runner. Node 20 or newer, no npm install needed. `--agent claude` or `--agent codex`. |
+| `validate.mjs` | Validator for the payload schema and the evidence rules. Also usable on its own. |
+| `compare.mjs` | Prints agreement and disagreement per field for two payloads. With `--verify-quotes` it fetches each cited page and checks the quote. |
+| `schema/scan.schema.json` | JSON Schema (draft 2020-12) for the v2 payload. |
+| `schema/ticker-output.schema.json`, `schema/macro-output.schema.json` | Strict output shapes handed to `codex exec --output-schema`. |
 | `prompts/ticker-scan.md` | Prompt for one ticker: earnings, guidance, catalyst, insider and institutional activity, narrative. |
 | `prompts/macro-scan.md` | Prompt for the macro object: sector rotation, data tailwind, upcoming events. |
 | `universe.json` | The 35 tickers, taken from guide sections 3 and 9 and `src/data/fixtures.ts`. Edit by hand when the app's instruments change. |
-| `Dockerfile` | Scanner image: node 22 slim, the `claude` CLI, runner, prompts, schema. Runs as user 10001. |
+| `Dockerfile` | Image with node 22 slim, both CLIs, runner, prompts, schemas. Runs as user 10001. |
 | `launchd/` | Optional manual backup: weekday 06:30 schedule on the Mac. The scheduled scan is the CronJob. |
-| `test/` | Sample payload and a test for the validator. |
-| `out/` | Run logs and payload copies. Git ignores everything in it. |
+| `test/` | Sample payload and tests for the validator. |
+| `out/` | Run logs and payload copies. Git ignores everything in it. `SCAN_OUT_DIR` moves it. |
+
+## What the prompts demand
+
+- Prefer primary sources: the SEC filing, the company earnings release, the investor relations page. Wire services only when nothing primary covers the fact.
+- Every `true` needs evidence with an https URL the agent opened, `publishedAt`, `fiscalPeriod`, and a `quote` copied character for character from the page. If the agent cannot copy a supporting sentence exactly, it must answer null.
+- Null is a correct answer. The prompts say a wrong true or false is worse than null.
+- Revenue acceleration means year over year growth in the latest quarter is greater than year over year growth in the prior quarter. Sequential growth does not count. Equal counts as false.
+- The guide's rejection criteria feed `revenueDeclining` and `guidanceCut`. Declining revenue, or a miss with a guidance cut, makes the server reject the stock. The agent only reports the two facts.
+- No prices, price targets, valuation, advice or position wording. Scores are computed on the server.
 
 ## How a run works
 
 1. Pick the tickers (all, or `--only`). Work out `asOf`, the last US trading day.
 2. Run one macro call and one call per ticker, at most 3 at the same time. Each call has a timeout (300 seconds by default) and one retry.
 3. Pull the JSON object out of the reply and check it against the schema. A `true` without an https evidence item that names the field counts as a failure and gets the retry.
-4. Assemble the payload with a new `runId`, validate it again, write a copy to `out/`.
+4. Assemble the payload with a new `runId` and `schemaVersion` 2, validate it again, write a copy to `out/` (the file name includes the agent).
 5. Post it, unless `--dry-run`. Tickers the server rejects are logged with the reason.
 6. Exit 0 if at most 20 percent of the calls (macro included) failed, otherwise exit 1. Exit 2 means a setup problem such as a missing token. Exit 3 means the POST failed.
 
-If the macro call fails, the payload carries a macro object with all values null, which the server scores as zero. Failed tickers are left out of the payload and listed in the log. Valid tickers are still posted.
+If the macro call fails, the payload carries a macro object with all values null, which the server scores as zero. Failed tickers are left out of the payload and listed in the log.
+
+The validator cannot check that a quote is verbatim, since it does not fetch pages. The server reconcile job does that. For a manual check use `compare.mjs --verify-quotes`.
 
 `asOf` skips weekends but does not know US market holidays. Pass `--as-of YYYY-MM-DD` on a holiday.
 
+## How each agent is called
+
+Claude: `claude -p --output-format json --no-session-persistence --permission-mode dontAsk --tools WebSearch,WebFetch --allowedTools WebSearch,WebFetch`. Only the two web tools are available.
+
+Codex: `codex --search -a never exec --sandbox read-only --skip-git-repo-check --ephemeral --ignore-user-config --ignore-rules --output-schema <schema> -C <empty dir> -o <file>`. These flags were checked against `codex exec --help` and `codex --help` of codex-cli 0.160.0. `--search` and `-a` are top-level flags and go before `exec`. `--ignore-user-config` keeps your `~/.codex/config.toml` (MCP servers, profiles) out of the run while auth still comes from `CODEX_HOME`. The reply is the last message, read from the `-o` file.
+
+Both run in an empty temporary folder, so they cannot read the repo. Set `SCAN_KEEP_WORK=1` to leave that folder in place instead of removing it at the end.
+
+## Local result, NVDA dry run, 2026-10-04
+
+I ran `--dry-run --only NVDA --as-of 2026-10-02` for both agents on this Mac at the same time, each with its local login. Both finished with no failed calls and valid v2 payloads.
+
+| | Claude (`claude-sonnet-5-5`) | Codex (default model, not reported by the CLI) |
+| --- | --- | --- |
+| Macro call | 41 s | 63 s |
+| NVDA call | 68 s | 132 s |
+| Evidence items | 4 | 5 |
+| Sources | NVIDIA press releases, Yahoo Finance | SEC exhibits (CFO commentary, press release), NVIDIA press release, MarketScreener |
+
+`compare.mjs --verify-quotes` showed 8 fields in agreement (confidence included) and 3 fields where one agent said null and the other gave a value (`guidanceCut`, `narrativeChanged`, `dataTailwind`; Claude gave false, Codex null). No field was a direct true versus false conflict. Both gave `revenueAccelerating` true with the same figures: 106 percent year over year in the latest quarter against 85 percent in the prior one.
+
+Quotes: 8 of 9 were found verbatim in the fetched page. The ninth, a Yahoo Finance sentence cited by Claude for `epsBeat`, could not be fetched, so it is unchecked, not wrong. The Claude quote for `productCatalyst` is a verbatim but weak sentence ("Vera Rubin, now in full production, was built to power exactly this moment."). Codex cited the SEC filings and a named catalyst. Both agents set `guidanceRaised` to null. The macro `events` lists did not overlap (4 and 5 dates, none identical), and the two macro notes disagree on the tone of the data, so macro is the weaker half. One run each says little about quality. Run a few more tickers before drawing conclusions.
+
 ## Auth in a container
 
-The container has no browser, so it cannot use `claude /login`. Pass one of these as an environment variable (in Kubernetes, from a Secret):
+The container has no browser. Claude and Codex handle this differently.
 
-| Variable | What it is | Billing |
-| --- | --- | --- |
-| `ANTHROPIC_API_KEY` | Key from the Claude Console. | API, per token. |
-| `CLAUDE_CODE_OAUTH_TOKEN` | One-year token from `claude setup-token`, run once on your Mac. | Your Pro or Max subscription. |
-| `INGEST_TOKEN` | Bearer token for the ingest endpoint. Required unless `--dry-run`. | none |
+Claude. Pass `CLAUDE_CODE_OAUTH_TOKEN`, a one-year token from `claude setup-token` that you generate once on your Mac, or `ANTHROPIC_API_KEY`. In Kubernetes, put it in a Secret and read it as an environment variable. If both are set the API key wins. `--bare` does not read the OAuth token and the runner does not use it. Verified in an earlier session against the Claude Code docs and by running the image: with no variable `claude -p` exits 1 with `Not logged in`, with a bogus token it exits 1 with a 401. A successful in-container Claude scan is not verified, because no real `setup-token` value was available.
 
-Verified against the Claude Code docs (code.claude.com, authentication and legal-and-compliance pages) and by running the image:
+Codex. A ChatGPT login cannot be a plain read-only secret, because Codex writes into its home directory while it runs. In the container test it created `auth.json` neighbours (`state_5.sqlite`, `models_cache.json`, `installation_id`, logs and more) in `CODEX_HOME`, and the docs say sessions refresh their tokens in place. So the design is a small PVC mounted at `/home/scanner/.codex`, seeded once from a sealed secret by an init step:
 
-- `claude setup-token` prints a one-year token, does not store it, and needs a Pro, Max, Team or Enterprise plan. Set it as `CLAUDE_CODE_OAUTH_TOKEN` "for CI pipelines and scripts where browser login isn't available".
-- If both variables are set, `ANTHROPIC_API_KEY` wins. In `-p` mode a present key is always used. The runner logs which one is in play.
-- `--bare` does not read `CLAUDE_CODE_OAUTH_TOKEN`. The runner does not use `--bare`.
-- In the built image with no variables, `claude -p` exits 1 with `Not logged in · Please run /login`. With `CLAUDE_CODE_OAUTH_TOKEN=bogus` it exits 1 with `Failed to authenticate. API Error: 401 Invalid bearer token`. So the env var is read and sent. That is the only auth path proven in the container.
+1. On the Mac run `codex login` (or `codex login --device-auth` on a machine without a browser) and keep the resulting `~/.codex/auth.json`.
+2. Seal that file as a Secret that holds one key, `auth.json`. Treat it like a password.
+3. An init container with the same image copies it into the PVC only if `auth.json` is not already there: `[ -f /home/scanner/.codex/auth.json ] || cp /seed/auth.json /home/scanner/.codex/auth.json`. The seed is mounted read-only at `/seed`, the PVC read-write at `/home/scanner/.codex`. The PVC must be writable by uid 10001 (`fsGroup: 10001` or an init `chown`).
+4. The scan container mounts the same PVC. Only one scanner pod should use it at a time (`concurrencyPolicy: Forbid`, ReadWriteOnce), since two processes refreshing one `auth.json` could clobber each other.
+5. When the refresh token eventually dies, repeat steps 1 to 3 and replace the file on the PVC by hand. Do not reseed on every run, or you throw away refreshed tokens.
 
-Not verified: a successful scan inside the container. I had no real `setup-token` value or API key available in this session, so the container never made a model call that succeeded. The same prompts did run headless on the Mac with a local login earlier. Test it yourself with the commands below before relying on the CronJob.
+Verified from the official Codex docs (developers.openai.com/codex/auth, now at learn.chatgpt.com/docs/auth):
 
-Codex: the docs say to use API key auth for CI (`printenv OPENAI_API_KEY | codex login --with-api-key`), or to copy `~/.codex/auth.json` to the machine and treat it as a password. They say a ChatGPT sign-in refreshes its tokens during normal use. They do not say what happens when `auth.json` sits on a read-only mounted secret, and refresh needs to write the file, so assume it breaks and do not rely on it. The image does not install Codex. Use Claude in the cluster, Codex on the Mac.
+- Credentials are cached at `~/.codex/auth.json`, and `CODEX_HOME` sets the base directory.
+- `cli_auth_credentials_store` can be `file`, `keyring`, `auto` or `ephemeral`. For a container use `file`.
+- Device code login exists for setups where the browser flow does not work, and copying cached credentials is the documented fallback.
+- ChatGPT sessions refresh tokens automatically during use.
+- `auth.json` holds access tokens and must be treated like a password. For automation the docs recommend API keys as the default.
 
-### Terms caveat for the subscription token
+Verified here by running it (codex-cli 0.160.0, image built from this Dockerfile, Docker on colima):
 
-Anthropic's legal page says OAuth authentication "is intended exclusively for purchasers of Claude Free, Pro, Max, Team, and Enterprise subscription plans and is designed to support ordinary use of Claude Code". It says developers building products or services should use API key authentication through Claude Console, and that advertised Pro and Max limits "assume ordinary, individual usage". A scheduled CronJob that feeds a paid product on a subscription token is not clearly ordinary individual use. This pack does not decide that for you. If InvestBuddy is sold to others, use `ANTHROPIC_API_KEY`, or ask Anthropic sales. The subscription token is fine for trying this out on your own account.
+- A copy of `auth.json` in a new directory mounted at `/home/scanner/.codex` gave `codex login status` = "Logged in using ChatGPT" for the non-root user 10001, and `codex exec` answered a test prompt.
+- A full `run-scan.mjs --dry-run --only NVDA --agent codex` inside the container finished with no failures (macro 72 s, NVDA 96 s).
+- `codex login --device-auth`, `--with-api-key` and `--with-access-token` exist in the local help output.
+- The mount has to be writable. With a root-owned empty mount Codex failed with "Permission denied".
+
+Not verified:
+
+- That the refresh actually rewrites `auth.json` in a long-lived pod. The file hash was unchanged after my short runs, so no refresh happened.
+- How long the ChatGPT refresh token lives when unused, and what happens if it is invalidated when you log in on another machine. Plan for a manual reseed now and then.
+- That device auth works headless inside the cluster. I did not try it. The seed-from-Mac route is the one tested.
+- Whether Codex works with a read-only `auth.json`. I did not test it. Assume it does not.
+- That running on a ChatGPT login from a cluster IP is accepted by OpenAI.
+
+### Terms caveat for the subscription tokens
+
+Anthropic's and OpenAI's subscription terms are written for ordinary individual use, and a scheduled job that feeds a product on subscription logins may not count, so use API keys if InvestBuddy is sold to others. Anthropic's legal page says OAuth authentication "is intended exclusively for purchasers of Claude Free, Pro, Max, Team, and Enterprise subscription plans and is designed to support ordinary use of Claude Code" and that developers building products should use API key authentication. I did not look up OpenAI's wording for this task, so check it before relying on it. Switching between subscription and API key needs no code change, only the environment.
 
 ### Mac only: ingest token
 
@@ -96,7 +150,7 @@ docker run --rm \
 
 ## Run in Kubernetes
 
-The CronJob manifest lives under `deploy/`, outside this pack. It needs: the image above, `args` such as `["--concurrency", "3"]`, a weekday schedule, env from a Secret (`INGEST_TOKEN` plus one of `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN`), no `INGEST_URL` (the default is the in-cluster service), and a `restartPolicy` of `Never`. The container writes logs and payload copies to `/app/scanner/out`, so use an `emptyDir` there if the root filesystem is read-only, plus an `emptyDir` on `/tmp` and on `/home/scanner/.claude`. Exit code 1 means too many calls failed, 2 means a missing token, 3 means the POST failed.
+The CronJob manifest lives under `deploy/`, outside this pack. It needs: the image above, `args` such as `["--concurrency", "3"]`, a weekday schedule, env from a Secret (`INGEST_TOKEN` plus one of `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN`), no `INGEST_URL` (the default is the in-cluster service), and a `restartPolicy` of `Never`. The container writes logs and payload copies to `/app/scanner/out`, so use an `emptyDir` there if the root filesystem is read-only, plus an `emptyDir` on `/tmp` and on `/home/scanner/.claude`. For Codex add the PVC at `/home/scanner/.codex` described above, and run one CronJob per agent (`args: ["--agent", "codex"]`) so each posts its own run. Give the two jobs different start times if both use a ChatGPT or Claude plan, to spread the usage window. Exit code 1 means too many calls failed, 2 means a missing token, 3 means the POST failed.
 
 ## Usage
 
@@ -104,8 +158,9 @@ The CronJob manifest lives under `deploy/`, outside this pack. It needs: the ima
 # Try one ticker without posting. Writes scanner/out/payload-<asOf>-<id>.json
 node scanner/run-scan.mjs --dry-run --only NVDA
 
-# A few tickers with Codex instead of Claude
-node scanner/run-scan.mjs --dry-run --only NVDA,AMD --agent codex
+# Same with Codex, then compare the two files
+node scanner/run-scan.mjs --dry-run --only NVDA --agent codex
+node scanner/compare.mjs scanner/out/payload-<date>-claude-<id>.json scanner/out/payload-<date>-codex-<id>.json --verify-quotes
 
 # Full run and post
 node scanner/run-scan.mjs
@@ -113,12 +168,10 @@ node scanner/run-scan.mjs
 
 Options: `--agent claude|codex`, `--model NAME`, `--concurrency 1-3`, `--timeout-s N`, `--as-of YYYY-MM-DD`, `--url URL`.
 
-Claude runs as `claude -p --output-format json` with only `WebSearch` and `WebFetch` allowed, no session saved. Codex runs as `codex --search exec --sandbox read-only --ephemeral`. Both run in an empty temporary folder, so they cannot read the repo.
-
 Check a payload file at any time:
 
 ```sh
-node scanner/validate.mjs scanner/out/payload-2026-10-02-6a0ad3c8.json
+node scanner/validate.mjs scanner/out/payload-<date>-<agent>-<id>.json
 node --test scanner/test/validate.test.mjs   # node 25 needs the file path; a directory fails
 ```
 
@@ -154,11 +207,11 @@ Run the command from the repo root. The Keychain item is readable from a login s
 
 ## Cost and limits
 
-A run is about 36 agent calls (35 tickers plus macro). In a dry run with one ticker on Claude, the macro call took 35 seconds and the NVDA call 49 seconds, so a full run at concurrency 3 should take roughly 10 to 15 minutes. These calls count against your subscription usage window. If you hit the limit, calls fail, get listed in the log, and the exit code turns non-zero once more than 20 percent fail. Lower `--concurrency` or run a subset with `--only`. Payloads stay well under the 1 MB limit.
+A run is about 36 agent calls (35 tickers plus macro). In the NVDA dry run above, Claude needed about 68 seconds and Codex about 132 seconds for the ticker call, so a full run at concurrency 3 should take roughly 15 to 30 minutes with the stricter v2 prompts. These calls count against your subscription usage window. If you hit the limit, calls fail, get listed in the log, and the exit code turns non-zero once more than 20 percent fail. Lower `--concurrency` or run a subset with `--only`. Payloads stay well under the 1 MB limit.
 
 ## Terms of service
 
-See the caveat under Auth in a container. Moving between subscription token and API key needs no code change, only the environment variable.
+See the caveat under Auth in a container.
 
 ## Troubleshooting
 

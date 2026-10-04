@@ -1,0 +1,14 @@
+# PROPOSAL TEMPLATE ONLY. Seal auth.json for the invest namespace.
+# Do not add this placeholder to Kustomize or copy it to infra.
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  name: invest-buddy-codex-auth-seed
+  namespace: invest
+spec:
+  encryptedData:
+    auth.json: REPLACE_WITH_KUBESEAL_OUTPUT
+  template:
+    metadata:
+      name: invest-buddy-codex-auth-seed
+      namespace: invest

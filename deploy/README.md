@@ -1,6 +1,6 @@
 # InvestBuddy deployment proposal
 
-PROPOSAL. `deploy/gitops/` contains files for review. Filip owns the live rollout in `~/moje/infra`. Copying files there, committing, pushing, and syncing Argo CD each need owner approval. The app serves informational screening only.
+This is a proposal for `~/moje/infra`, which Filip owns. No file in `deploy/gitops/` is live. Copying the proposal, committing it, pushing it, and syncing Argo CD each require owner approval. The app serves informational screening only.
 
 ## File map
 
@@ -12,110 +12,74 @@ PROPOSAL. `deploy/gitops/` contains files for review. Filip owns the live rollou
 | `gitops/argocd/projects/default.patch` | Patch for `argocd/projects/default.yaml` |
 | `gitops/gitops/sealed-secrets/invest/*.placeholder.yaml` | Templates only; never copy or render |
 
-The production overlay starts with placeholder tags for both the web and scanner images. The owner must replace both with published GHCR tags before the first infra commit. The `apps` AppProject also needs the proposed `invest` destination. PostgreSQL uses a 5 Gi `local-path` volume pinned to `k8s-worker-01`. A node failure can make that volume unavailable, so test an offsite restore before launch.
+The production overlay has placeholder tags for the web and scanner images. Replace both with published GHCR tags before the first infra commit. The `apps` AppProject also needs the proposed `invest` destination. PostgreSQL uses a 5 Gi `local-path` volume on `k8s-worker-01`. Codex authentication uses a separate 1 Gi `local-path` volume on that node. Loss of the node can make both volumes unavailable, so test an offsite database restore and keep a recoverable Codex login before launch.
 
-## Image and schedule
+## Schedule and data path
 
-The runtime image contains the web server, compiled daily, digest, and portfolio jobs, the compiled migration runner, and SQL migrations including `003_scan_findings.sql`. The web init container runs `npm run migrate` before each new web pod starts. It retries while PostgreSQL is unavailable. Migrations are recorded in `schema_migrations` and guarded by an advisory lock. Keep the published image, database schema, and rollback image compatible before approving rollout.
+Both scan CronJobs run at 05:30 on weekdays in `Europe/Bratislava`. Each uses `concurrencyPolicy: Forbid`, one retry, and a 40 minute job deadline so it should finish before reconciliation. `invest-buddy-scan-claude` passes `--agent claude`; `invest-buddy-scan-codex` passes `--agent codex`. Both post to `http://web.invest.svc.cluster.local:3000/api/ingest/scan` with `INGEST_TOKEN` from `invest-buddy-secrets`. The Claude job reads `CLAUDE_CODE_OAUTH_TOKEN` from `invest-buddy-scanner-secrets`. The Codex job mounts `invest-buddy-codex-home` at `CODEX_HOME=/codex-home`. Its init container copies `auth.json` from `invest-buddy-codex-auth-seed` only when the volume is empty. A nonempty volume without `auth.json` fails the job instead of overwriting existing data. Run only one Codex job or auth rotation writer against that PVC at a time. Do not start a manual Codex job while a scheduled one is active.
 
-The scanner CronJob starts at 05:30 Europe/Bratislava on weekdays, the score CronJob runs at 06:30, and the digest runs at 07:00. Kubernetes 1.34 supports the `timeZone` field, so daylight saving changes stay tied to Bratislava time. The scanner gets one scheduled run with `concurrencyPolicy: Forbid`, a 50 minute deadline, and one retry after failure. There is no second catch-up schedule. The daily job reads stored findings with `DATA_MODE=db`; if the scan does not finish before scoring, the owner must inspect the jobs and decide how to recover. The digest needs `DIGEST_TO`. The portfolio CronJob remains suspended. Its 06:00 UTC Tuesday through Saturday schedule, Flex Query fields, token egress restriction, SPY provider, market holidays, and IBKR publication terms need review before it is enabled. A failed fetch keeps the prior snapshot and its date.
+Reconciliation runs at 06:15 with `node dist/jobs/reconcile.js`, scoring at 06:30, and digest at 07:00, all on weekdays in Bratislava time. Kubernetes 1.34 supports the `timeZone` field, including daylight saving changes. Replace the `SEC_USER_AGENT` email placeholder in the ConfigMap with a monitored contact address before rollout. The verifier needs outbound HTTPS to cited public pages and `data.sec.gov`; test that egress from a job on `k8s-worker-01`. The current infra repository has no NetworkPolicy resources, so this proposal does not add one. If a scan fails or is missing, reconciliation marks that agent missing. Fields then remain single source or unknown unless a deterministic source confirms them; the job never guesses. The engine scores only reconciled findings. Check that both scans and reconciliation have completed before trusting the 06:30 result.
 
-The scanner posts to `http://web.invest.svc.cluster.local:3000/api/ingest/scan` through an internal Service. The public host serves the web, while its Traefik middleware rewrites `/api/ingest` requests to an absent path before they reach the app. Verify a public ingest request returns 404 after sync. Only in-cluster callers can reach the ingest handler; it still checks the bearer token and 1 MB body limit from `docs/scan-contract.md`. The public Ingress requests a certificate from the existing `letsencrypt-prod` ClusterIssuer. The current infra repo has no NetworkPolicy resources, so this proposal adds none.
+The digest needs `DIGEST_TO`. The portfolio CronJob stays suspended. Its 06:00 UTC Tuesday through Saturday schedule, Flex Query fields, token egress, SPY provider, market holidays, and IBKR publication terms need review before it is enabled. A failed fetch keeps the prior snapshot and date.
 
-## Before the first rollout
+The public host routes to the web, while its Traefik middleware rewrites `/api/ingest` to an absent path. Verify that a public ingest request returns 404 after sync. The internal handler still checks its bearer token and 1 MB body limit. The Ingress requests a certificate from the existing `letsencrypt-prod` ClusterIssuer.
 
-1. Owner: create an A record for `invest.filipcsupka.online` pointing to the khtz public ingress address. Confirm the address against the current cluster before changing DNS.
-2. Owner: create repository secret `INFRA_REPO_TOKEN`, a fine-grained token with Contents read/write access to `Filipcsupka/infra`. The CI workflow builds and tests PRs, publishes web and scanner images tagged `sha-<short>` on main, and pins both infra overlay tags only when repository variable `INFRA_BUMP=true`. The scanner build uses `scanner/Dockerfile` with `scanner/` as its context; CI logs a notice and skips that image until the file exists. Leave the variable unset until both images exist and the first infra rollout is approved. This matches the cv-web and memorial image-pin mechanism.
-3. Owner: provide the database password, URL, ingest token, scanner authentication token or API key, digest address, and backup credentials. Set the same password in `POSTGRES_PASSWORD` and `DATABASE_URL`; URL-encode special characters in the URL password. Keep plaintext out of Git and shell history. Restrict the scan token to the runner and rotate it after exposure or operator turnover.
-4. Owner: confirm the offsite SFTP restic repository, verified SSH host key, and restore procedure. The backup CronJob needs `invest-buddy-backup-secrets` and connectivity from `k8s-worker-01`.
+## Prepare the rollout
 
-## Seal secrets
+1. Confirm the public ingress address, then have the owner create the A record for `invest.filipcsupka.online`.
+2. Confirm the scanner image contains both CLI agents and that the web image contains `dist/jobs/reconcile.js`, the other jobs, the migration runner, and SQL migrations. CI tests the repository and builds both images. On a main push it publishes both under `sha-<short>`. The `INFRA_BUMP=true` repository variable remains the gate for pinning both tags in infra. Keep it unset until both published images and the infra proposal are approved. `INFRA_REPO_TOKEN` needs Contents read/write on `Filipcsupka/infra` for that gate.
+3. Create the database password, URL, ingest token, digest address, and backup credentials in a secret manager. Use the same password in `POSTGRES_PASSWORD` and `DATABASE_URL`, and URL-encode special characters in the URL password. Keep plaintext out of Git and shell history.
+4. Confirm the offsite SFTP restic repository, verified SSH host key, and restore procedure. The backup job needs `invest-buddy-backup-secrets` and connectivity from `k8s-worker-01`.
+5. Seal the application, backup, Claude, and Codex seed secrets for namespace `invest`. The placeholder files are examples only. Add the sealed output files to the approved app base Kustomization.
 
-Fetching the cluster certificate is read-only. Review the certificate identity before sealing. These commands create only local sealed YAML in `/tmp`; they do not apply a Secret to the cluster. Use the infra kubeconfig and check the actual Sealed Secrets controller name and namespace first.
+The web init container runs `npm run migrate` before each new web pod starts. It retries while PostgreSQL is unavailable. Migrations are recorded in `schema_migrations` and guarded by an advisory lock. Check schema compatibility with the rollback image before rollout.
+
+## Seal the authentication secrets
+
+Run `claude setup-token` on the Mac while signed in. Store the token in the secret manager. Fetch and inspect the cluster Sealed Secrets certificate using the infra kubeconfig and the actual controller name and namespace. `kubeseal --fetch-cert` is read only. Seal locally for `invest`; never commit an unsealed Secret, paste the token in chat, or place it in a command argument. This example reads the value without showing it in shell history:
 
 ```sh
 kubeseal --fetch-cert --kubeconfig "$HOME/.kube/khtz" \
   --controller-name sealed-secrets --controller-namespace kube-system \
   > /tmp/invest-buddy-sealed-secrets.crt
-read -rs POSTGRES_PASSWORD
-read -rs DATABASE_URL
-read -rs INGEST_TOKEN
-read -r DIGEST_TO
-read -rs RESTIC_PASSWORD
-read -r RESTIC_REPOSITORY
-kubectl create secret generic invest-buddy-secrets -n invest \
-  --from-literal=POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
-  --from-literal=DATABASE_URL="$DATABASE_URL" \
-  --from-literal=INGEST_TOKEN="$INGEST_TOKEN" \
-  --from-literal=DIGEST_TO="$DIGEST_TO" --dry-run=client -o yaml \
-  | kubeseal --cert /tmp/invest-buddy-sealed-secrets.crt --format yaml \
-  > /tmp/invest-buddy-secrets.sealed.yaml
-kubectl create secret generic invest-buddy-backup-secrets -n invest \
-  --from-literal=RESTIC_PASSWORD="$RESTIC_PASSWORD" \
-  --from-literal=RESTIC_REPOSITORY="$RESTIC_REPOSITORY" \
-  --from-file=ssh_key=/path/to/backup-ssh-private-key \
-  --from-file=known_hosts=/path/to/verified-known-hosts \
-  --dry-run=client -o yaml \
-  | kubeseal --cert /tmp/invest-buddy-sealed-secrets.crt --format yaml \
-  > /tmp/invest-buddy-backup-secrets.sealed.yaml
-unset POSTGRES_PASSWORD DATABASE_URL INGEST_TOKEN DIGEST_TO RESTIC_PASSWORD RESTIC_REPOSITORY
-```
-
-After owner approval, place the sealed outputs in `gitops/apps/invest-buddy/base/` and list them in its Kustomization. The scanner needs `invest-buddy-scanner-secrets` containing one of `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY`. Do not copy the placeholders. The suspended portfolio job also needs a separately sealed `invest-buddy-flex-secrets` with `FLEX_TOKEN` and `FLEX_QUERY_ID` before enabling it.
-
-## Scanner authentication
-
-For subscription authentication, run `claude setup-token` once on the Mac while signed in. Put the resulting token in a secret manager, enter it interactively for sealing, and avoid placing it in a command argument or Git file. The scanner image must use `CLAUDE_CODE_OAUTH_TOKEN` for its headless Claude session. Seal it for the `invest` namespace:
-
-```sh
 read -rs CLAUDE_CODE_OAUTH_TOKEN
-kubectl create secret generic invest-buddy-scanner-secrets -n invest \
-  --from-literal=CLAUDE_CODE_OAUTH_TOKEN="$CLAUDE_CODE_OAUTH_TOKEN" \
+printf %s "$CLAUDE_CODE_OAUTH_TOKEN" \
+  | kubectl create secret generic invest-buddy-scanner-secrets -n invest \
+  --from-file=CLAUDE_CODE_OAUTH_TOKEN=/dev/stdin \
   --dry-run=client -o yaml \
   | kubeseal --cert /tmp/invest-buddy-sealed-secrets.crt --format yaml \
   > /tmp/invest-buddy-scanner-secrets.sealed.yaml
 unset CLAUDE_CODE_OAUTH_TOKEN
 ```
 
-To switch to API billing, create an Anthropic API key through the owner's Anthropic account, seal it under `ANTHROPIC_API_KEY` in the same Secret name, and omit the OAuth key from the replacement Secret. Confirm the scanner image supports API key authentication before approving that change. Update the sealed Secret in infra, sync it through Argo, and verify a scan job can authenticate before revoking the old token. The CronJob references both keys as optional so either Secret shape works.
+For Codex, sign in with `codex login` on a trusted machine and locate its `auth.json` in the active `CODEX_HOME` (usually `~/.codex/auth.json`). Treat it as a credential. Seal the file without printing it:
 
 ```sh
-read -rs ANTHROPIC_API_KEY
-kubectl create secret generic invest-buddy-scanner-secrets -n invest \
-  --from-literal=ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" \
+kubectl create secret generic invest-buddy-codex-auth-seed -n invest \
+  --from-file=auth.json=/path/to/private/auth.json \
   --dry-run=client -o yaml \
   | kubeseal --cert /tmp/invest-buddy-sealed-secrets.crt --format yaml \
-  > /tmp/invest-buddy-scanner-secrets.sealed.yaml
-unset ANTHROPIC_API_KEY
+  > /tmp/invest-buddy-codex-auth-seed.sealed.yaml
 ```
 
-## Copy and review in infra
-
-Run this sequence only after the owner approves the infra diff, sealed secrets, DNS change, and initial image tag. `git apply --check`, `kustomize build`, and `git diff` are local checks; copying and patching the infra repo are the approval boundary.
+The Codex seed is used only on an empty PVC. After a successful first login, token refresh writes back to that PVC. A subscription login can expire or be revoked. Treat a failed scan job as an authentication alert and check it without dumping credentials:
 
 ```sh
-cd /Users/filipcsupka/orca/workspaces/InvestBuddy/petrel
-git -C /Users/filipcsupka/moje/infra apply --check "$PWD/deploy/gitops/argocd/apps/web/kustomization.patch"
-git -C /Users/filipcsupka/moje/infra apply --check "$PWD/deploy/gitops/argocd/projects/default.patch"
-cp -R deploy/gitops/gitops/apps/invest-buddy /Users/filipcsupka/moje/infra/gitops/apps/
-cp deploy/gitops/argocd/apps/web/invest-buddy.yaml /Users/filipcsupka/moje/infra/argocd/apps/web/
-git -C /Users/filipcsupka/moje/infra apply "$PWD/deploy/gitops/argocd/apps/web/kustomization.patch"
-git -C /Users/filipcsupka/moje/infra apply "$PWD/deploy/gitops/argocd/projects/default.patch"
+kubectl --kubeconfig "$HOME/.kube/khtz" -n invest get cronjob,job,pod
+kubectl --kubeconfig "$HOME/.kube/khtz" -n invest describe job <failed-job-name>
+kubectl --kubeconfig "$HOME/.kube/khtz" -n invest logs job/<failed-job-name> --tail=100
 ```
 
-Add the three sealed files to the app base and replace both overlay tags. Then run:
+For Claude rotation, obtain a new setup token, seal it under the same key, sync through the approved GitOps flow, and start a new scan job after the old one ends. For Codex rotation, sign in again on the trusted machine and seal a new `auth.json`. Updating the seed Secret alone does not replace a populated PVC. Stop the Codex schedule, confirm no Codex job is running, and use an owner-approved one-off GitOps Job to copy the new sealed file to the PVC with mode `0600`; then resume the schedule and verify one scan. Keep the old credential available until the new run succeeds, then revoke it. Rotate `INGEST_TOKEN` by sealing the replacement and changing the web pod template in the same approved infra change, then verify one accepted and one rejected internal request.
 
-```sh
-kustomize build /Users/filipcsupka/moje/infra/gitops/apps/invest-buddy/overlays/prod
-kustomize build /Users/filipcsupka/moje/infra/argocd/apps/web
-git -C /Users/filipcsupka/moje/infra diff --check
-git -C /Users/filipcsupka/moje/infra diff
-```
+The database, digest, and backup secret placeholders document the remaining keys. Use `kubectl create secret --dry-run=client -o yaml | kubeseal` with the fetched certificate, following the same local sealing pattern. The suspended portfolio job needs `invest-buddy-flex-secrets` before it is enabled.
 
-After the owner approves the infra commit and push, Argo CD can sync the application. Do not apply these manifests directly with kubectl.
+## Copy and verify in infra
+
+After owner approval, check both patches with `git -C ~/moje/infra apply --check`, copy `deploy/gitops/gitops/apps/invest-buddy/` to `~/moje/infra/gitops/apps/`, copy the Argo application manifest, and apply the two patches. Add the sealed outputs to the base Kustomization and replace both overlay tags. Render the app and Argo directories with `kustomize build`, then inspect `git diff --check` and `git diff` in infra. Commit and push only after a separate owner approval. Argo CD owns the live sync; do not apply the manifests directly with kubectl.
 
 ## Verify and roll back
 
-After the approved sync, check `argocd app get invest-buddy`, `kubectl -n invest get deploy,pods,svc,ingress,cronjob,pvc`, the certificate, and the migration init container logs. Check `GET https://invest.filipcsupka.online/api/health` and confirm the public `/api/ingest/scan` path returns 404. Run a small scan through the internal Service from an approved in-cluster job, then confirm the scan, score, and digest jobs in order. Test a restic restore in an isolated database before relying on backups. Keep the scan token out of command output and logs.
+After the approved sync, check `argocd app get invest-buddy`, `kubectl -n invest get deploy,pods,svc,ingress,cronjob,pvc`, the certificate, migration init container logs, and `GET https://invest.filipcsupka.online/api/health`. Confirm public `/api/ingest/scan` returns 404. Check the Claude and Codex jobs, reconciliation, scoring, and digest in that order. Test an isolated restic restore before relying on backups. Keep tokens and `auth.json` out of logs and command output.
 
-To rotate `INGEST_TOKEN`, seal a replacement value under the same Secret name and include a web pod-template annotation change in the approved infra commit so Argo replaces the pod. Sync that change, update the scanner Secret or job environment, then check one authenticated ingest request and one rejected request with the old token through the internal Service. Roll back an application release by reverting its approved infra commit and pushing the revert after owner approval. Preserve the PostgreSQL PVC and offsite backup repository; deleting either needs a separate decision. A schema migration may need an application-compatible forward fix rather than a database rollback.
+Rollback is an owner-approved revert of the infra commit and push of that revert. Preserve the PostgreSQL and Codex PVCs and the offsite backup repository. A schema migration may need an application-compatible forward fix before an older image can run.

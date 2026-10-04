@@ -22,6 +22,7 @@ export type ScreenRow = {
   matched: string[] | null;
   markLabel: string;
   reasons: string[];
+  agreementLabel: string | null;
 };
 
 export function toRow(locale: Locale, { instrument, result }: { instrument: Instrument; result: ScoreResult }): ScreenRow {
@@ -45,6 +46,7 @@ export function toRow(locale: Locale, { instrument, result }: { instrument: Inst
     matched: scored ? result.ruleHits.filter((hit) => hit.matched).map((hit) => hit.id) : null,
     markLabel: scored ? fill(m.mark.label, { total: result.total, fundamentals: result.fundamentals, technical: result.technical, macro: result.macro }) : m.mark.none,
     reasons: reasonsFor(locale, result),
+    agreementLabel: result.agreement ? Object.values(result.agreement).some((value) => value === "disputed") ? m.agreement.disputed : Object.values(result.agreement).some((value) => value === "single") ? m.agreement.single : Object.values(result.agreement).some((value) => value === "xbrl_override") ? m.agreement.xbrl_override : m.agreement.agree : null,
   };
 }
 

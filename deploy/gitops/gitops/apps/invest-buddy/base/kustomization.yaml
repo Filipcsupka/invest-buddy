@@ -6,6 +6,7 @@ resources:
   - ingress.yaml
   - public-ingress-filter.yaml
   - postgres.yaml
+  - codex-home-pvc.yaml
   - scan-cronjob.yaml
   - cronjobs.yaml
   - backup-cronjob.yaml

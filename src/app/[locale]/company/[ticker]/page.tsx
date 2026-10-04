@@ -51,20 +51,22 @@ export default async function Company({ params }: Params) {
   const f = result.inputs.fundamentals;
   const mac = result.inputs.macro;
   const yesNo = (value: boolean | null) => value === null ? m.common.unknown : value ? m.common.yes : m.common.no;
-  const inputs: [string, string][] = [
-    [m.company.inputs.revenueAccelerating, f.revenueAccelerating === undefined ? m.common.unknown : yesNo(f.revenueAccelerating)],
+  const inputs: [string, string, string?][] = [
+    [m.company.inputs.revenueAccelerating, f.revenueAccelerating === undefined ? m.common.unknown : yesNo(f.revenueAccelerating), "revenueAccelerating"],
     [m.company.inputs.revenueGrowthCurrent, f.revenueGrowthCurrent === null ? m.common.unknown : formatPercent(locale, f.revenueGrowthCurrent / 100, 0)],
     [m.company.inputs.revenueGrowthPrior, f.revenueGrowthPrior === null ? m.common.unknown : formatPercent(locale, f.revenueGrowthPrior / 100, 0)],
-    [m.company.inputs.revenueDeclining, yesNo(f.revenueDeclining)],
-    [m.company.inputs.epsBeat, yesNo(f.epsBeat)],
-    [m.company.inputs.guidanceRaised, yesNo(f.guidanceRaised)],
+    [m.company.inputs.revenueDeclining, yesNo(f.revenueDeclining), "revenueDeclining"],
+    [m.company.inputs.epsBeat, yesNo(f.epsBeat), "epsBeat"],
+    [m.company.inputs.guidanceRaised, yesNo(f.guidanceRaised), "guidanceRaised"],
     [m.company.inputs.earningsMissAndGuidanceCut, yesNo(f.earningsMissAndGuidanceCut)],
-    [m.company.inputs.productCatalyst, yesNo(f.productCatalyst)],
-    [m.company.inputs.insiderOrInstitutionalAccumulation, yesNo(f.insiderOrInstitutionalAccumulation)],
+    [m.company.inputs.guidanceCut, yesNo(result.consensusValues?.guidanceCut ?? null), "guidanceCut"],
+    [m.company.inputs.narrativeChanged, yesNo(result.consensusValues?.narrativeChanged ?? null), "narrativeChanged"],
+    [m.company.inputs.productCatalyst, yesNo(f.productCatalyst), "productCatalyst"],
+    [m.company.inputs.insiderOrInstitutionalAccumulation, yesNo(f.insiderOrInstitutionalAccumulation), "insiderOrInstitutionalBuying"],
     [m.company.inputs.noRevenue, yesNo(f.noRevenue)],
     [m.company.inputs.memePump, yesNo(f.memePump)],
-    [m.company.inputs.growthSectorRotation, yesNo(mac.growthSectorRotation)],
-    [m.company.inputs.dataTailwind, yesNo(mac.dataTailwind)],
+    [m.company.inputs.growthSectorRotation, yesNo(mac.growthSectorRotation), "sectorRotationIntoGrowth"],
+    [m.company.inputs.dataTailwind, yesNo(mac.dataTailwind), "dataTailwind"],
   ];
   const index = instruments.findIndex((item) => item.ticker === instrument.ticker);
   const prev = instruments[(index - 1 + instruments.length) % instruments.length];
@@ -204,10 +206,10 @@ export default async function Company({ params }: Params) {
           <section className="sheet-section" aria-labelledby="inputs">
             <h2 id="inputs">{m.company.inputsTitle}</h2>
             <dl className="input-list">
-              {inputs.map(([label, value]) => (
+              {inputs.map(([label, value, field]) => (
                 <div key={label}>
                   <dt>{label}</dt>
-                  <dd className="num">{value}</dd>
+                  <dd className="num">{value}{field && result.agreement?.[field] ? <small className="muted"> · {m.agreement[result.agreement[field] as keyof typeof m.agreement]}</small> : null}</dd>
                 </div>
               ))}
             </dl>

@@ -21,8 +21,9 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
-      - run: node --test scanner/test/validate.test.mjs
       - run: npm run build
+      - run: npm run build:jobs
+      - run: test -f dist/jobs/reconcile.js
 
   image:
     needs: quality
@@ -53,16 +54,12 @@ jobs:
           push: ${{ github.event_name == 'push' }}
           tags: ${{ steps.image.outputs.tag }}
       - name: Build and publish scanner
-        if: hashFiles('scanner/Dockerfile') != ''
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
-          context: scanner/
+          context: .
           file: scanner/Dockerfile
           push: ${{ github.event_name == 'push' }}
           tags: ${{ steps.image.outputs.scanner_tag }}
-      - name: Scanner image unavailable
-        if: hashFiles('scanner/Dockerfile') == ''
-        run: echo '::notice::scanner/Dockerfile is missing; scanner image build was skipped.'
 
   deploy-gitops:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.INFRA_BUMP == 'true'

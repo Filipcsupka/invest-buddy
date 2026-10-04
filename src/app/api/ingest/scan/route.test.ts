@@ -4,9 +4,9 @@ vi.mock("pg", () => ({ default: { Pool: class { async end() {} } } }));
 import { POST } from "./route";
 
 const payload = {
-  schemaVersion: 1, runId: "3f2b8c1e-5a47-4d0e-9b61-2c7e4a9d1f08", asOf: "2026-10-03", generatedAt: "2026-10-04T05:30:00Z",
-  runner: { name: "test", model: "test" },
-  tickers: [{ symbol: "NVDA", fundamentals: { revenueAccelerating: true, revenueDeclining: false, epsBeat: true, guidanceRaised: false, guidanceCut: false, productCatalyst: null, insiderOrInstitutionalBuying: null, narrativeChanged: null }, evidence: [{ claim: "fundamentals.revenueAccelerating", url: "https://example.com/results" }, { claim: "fundamentals.epsBeat", url: "https://example.com/results" }], confidence: "high" }],
+  schemaVersion: 2, runId: "3f2b8c1e-5a47-4d0e-9b61-2c7e4a9d1f08", asOf: "2026-10-03", generatedAt: "2026-10-04T05:30:00Z",
+  runner: { name: "claude", model: "test" },
+  tickers: [{ symbol: "NVDA", fundamentals: { revenueAccelerating: true, revenueDeclining: false, epsBeat: true, guidanceRaised: false, guidanceCut: false, productCatalyst: null, insiderOrInstitutionalBuying: null, narrativeChanged: null }, evidence: [{ claim: "fundamentals.revenueAccelerating", url: "https://example.com/results", publishedAt: "2026-10-03", fiscalPeriod: "Q2 FY2027", quote: "Revenue rose." }, { claim: "fundamentals.epsBeat", url: "https://example.com/results", publishedAt: "2026-10-03", fiscalPeriod: "Q2 FY2027", quote: "Revenue rose." }], confidence: "high" }],
   macro: { sectorRotationIntoGrowth: null, dataTailwind: null, notes: "No confirmed macro signals.", evidence: [], events: [] },
 };
 const request = (body: string, token = "Bearer secret", ip = crypto.randomUUID(), headers: Record<string, string> = {}) => new Request("http://localhost/api/ingest/scan", { method: "POST", headers: { authorization: token, "x-forwarded-for": ip, ...headers }, body });

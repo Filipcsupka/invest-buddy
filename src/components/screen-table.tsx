@@ -39,6 +39,7 @@ export function ScreenTable({ locale, rows, columns, caption, disclaimerId }: { 
                 </Link>
                 <span className="company-name">
                   {row.name}
+                  {row.agreementLabel ? <span className="tag" title={m.agreement.title}>{row.agreementLabel}</span> : null}
                   {row.extension ? <span className="tag">{m.common.extension}</span> : null}
                 </span>
               </th>

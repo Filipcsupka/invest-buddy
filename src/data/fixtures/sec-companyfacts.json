@@ -1,0 +1,9 @@
+{
+  "facts": { "us-gaap": { "RevenueFromContractWithCustomerExcludingAssessedTax": { "units": { "USD": [
+    {"start":"2024-01-01","end":"2024-03-31","val":100,"accn":"1","fy":2025,"fp":"Q1","form":"10-Q","filed":"2024-05-01"},
+    {"start":"2024-04-01","end":"2024-06-30","val":100,"accn":"2","fy":2025,"fp":"Q2","form":"10-Q","filed":"2024-08-01"},
+    {"start":"2025-01-01","end":"2025-03-31","val":120,"accn":"3","fy":2026,"fp":"Q1","form":"10-Q","filed":"2025-05-01"},
+    {"start":"2025-04-01","end":"2025-06-30","val":150,"accn":"4","fy":2026,"fp":"Q2","form":"10-Q","filed":"2025-08-01"},
+    {"start":"2025-01-01","end":"2025-06-30","val":270,"accn":"4","fy":2026,"fp":"Q2","form":"10-Q","filed":"2025-08-01","frame":"CY2025Q2"}
+  ] } } } }
+}

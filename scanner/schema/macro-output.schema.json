@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "macro agent output",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "sectorRotationIntoGrowth",
+    "dataTailwind",
+    "notes",
+    "evidence",
+    "events"
+  ],
+  "properties": {
+    "sectorRotationIntoGrowth": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "dataTailwind": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "notes": {
+      "type": "string"
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "claim",
+          "url",
+          "publishedAt"
+        ],
+        "properties": {
+          "claim": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "publishedAt": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "date",
+          "name"
+        ],
+        "properties": {
+          "date": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

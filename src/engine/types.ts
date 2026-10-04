@@ -30,5 +30,8 @@ export interface ScoreResult {
   ruleHits: RuleHit[];
   rejectionReasons: string[];
   scanRunId?: string;
+  scanRunIds?: Record<string, string>;
+  agreement?: Record<string, string>;
+  consensusValues?: Record<string, boolean | null>;
   evidenceUrls?: string[];
 }

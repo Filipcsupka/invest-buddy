@@ -4,7 +4,7 @@
 // Usage: node scanner/run-scan.mjs [--dry-run] [--only NVDA,AMD] [--agent claude|codex]
 //        [--model NAME] [--concurrency 1..3] [--timeout-s 300] [--as-of YYYY-MM-DD] [--url URL]
 import { spawn, execFileSync } from "node:child_process";
-import { readFileSync, writeFileSync, appendFileSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { readFileSync, writeFileSync, appendFileSync, mkdirSync, mkdtempSync, rmSync, existsSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { tmpdir, userInfo } from "node:os";
 import { dirname, join } from "node:path";
@@ -12,7 +12,7 @@ import { fileURLToPath } from "node:url";
 import { validateTicker, validateMacro, validatePayload } from "./validate.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const OUT = join(here, "out");
+const OUT = process.env.SCAN_OUT_DIR || join(here, "out");
 const KEYCHAIN_SERVICE = "investbuddy-ingest";
 const MAX_FAIL_RATIO = 0.2;
 
@@ -24,7 +24,7 @@ function parseArgs(argv) {
     const val = () => { if (i + 1 >= argv.length) usage(`missing value for ${a}`); return argv[++i]; };
     if (a === "--dry-run") o.dryRun = true;
     else if (a === "--only") o.only = val().split(",").map((s) => s.trim().toUpperCase()).filter(Boolean);
-    else if (a === "--agent") o.agent = val();
+    else if (a === "--agent") { o.agent = val(); if (!["claude", "codex"].includes(o.agent)) usage("--agent must be claude or codex"); }
     else if (a === "--model") o.model = val();
     else if (a === "--concurrency") o.concurrency = Number(val());
     else if (a === "--timeout-s") o.timeoutS = Number(val());
@@ -94,7 +94,12 @@ function fill(template, vars) {
 // claude: CLAUDE_CODE_OAUTH_TOKEN (subscription, from `claude setup-token`) or ANTHROPIC_API_KEY, or a local /login.
 // With both set, the CLI prefers ANTHROPIC_API_KEY (Anthropic docs, auth precedence). Warn so it is not a surprise.
 function checkAuth(opts, log) {
-  if (opts.agent !== "claude") return;
+  if (opts.agent === "codex") {
+    const home = process.env.CODEX_HOME || join(process.env.HOME || "~", ".codex");
+    const hasKey = !!process.env.OPENAI_API_KEY || !!process.env.CODEX_API_KEY;
+    log(`codex auth: CODEX_HOME=${home} auth.json ${existsSync(join(home, "auth.json")) ? "present" : "missing"}${hasKey ? "; an API key env var is set" : ""}`);
+    return;
+  }
   const key = !!process.env.ANTHROPIC_API_KEY, oauth = !!process.env.CLAUDE_CODE_OAUTH_TOKEN;
   if (key && oauth) log("both ANTHROPIC_API_KEY and CLAUDE_CODE_OAUTH_TOKEN set; the CLI uses the API key");
   else if (key) log("claude auth: ANTHROPIC_API_KEY (API billing)");
@@ -127,7 +132,7 @@ function runCli(cmd, args, input, { timeoutMs, cwd }) {
   });
 }
 
-async function callAgent(opts, prompt, work) {
+async function callAgent(opts, prompt, work, kind) {
   const timeoutMs = opts.timeoutS * 1000;
   if (opts.agent === "claude") {
     const args = ["-p", "--output-format", "json", "--no-session-persistence", "--permission-mode", "dontAsk", "--tools", "WebSearch,WebFetch", "--allowedTools", "WebSearch,WebFetch"];
@@ -140,7 +145,11 @@ async function callAgent(opts, prompt, work) {
     return { text: env.result, model };
   }
   const last = join(work, `last-${randomUUID()}.txt`);
-  const args = ["--search", "exec", "--sandbox", "read-only", "--skip-git-repo-check", "--ephemeral", "-C", work, "-o", last];
+  // Flags checked against codex-cli 0.160.0 `codex --help` / `codex exec --help`:
+  // --search and -a are top-level flags (before `exec`); --output-schema, --ephemeral, --ignore-user-config are exec flags.
+  // --ignore-user-config keeps ~/.codex/config.toml (MCP servers, profiles) out of the run; auth still comes from CODEX_HOME.
+  const schemaFile = join(here, "schema", kind === "macro" ? "macro-output.schema.json" : "ticker-output.schema.json");
+  const args = ["--search", "-a", "never", "exec", "--sandbox", "read-only", "--skip-git-repo-check", "--ephemeral", "--ignore-user-config", "--ignore-rules", "--output-schema", schemaFile, "-C", work, "-o", last];
   if (opts.model) args.push("-m", opts.model);
   args.push("-");
   await runCli("codex", args, prompt, { timeoutMs, cwd: work });
@@ -205,7 +214,7 @@ async function main() {
         const prompt = job.kind === "macro"
           ? fill(macroPrompt, { AS_OF: asOf, TODAY: today })
           : fill(tickerPrompt, { SYMBOL: job.u.symbol, NAME: job.u.name, SECTOR: job.u.sector, AS_OF: asOf });
-        const r = await callAgent(opts, prompt, work);
+        const r = await callAgent(opts, prompt, work, job.kind);
         if (r.model && r.model !== "default") model = r.model;
         const obj = extractJson(r.text);
         if (job.kind === "ticker" && obj.symbol !== job.u.symbol) throw new Error(`symbol mismatch: got ${obj.symbol}`);
@@ -221,7 +230,7 @@ async function main() {
     }
   });
 
-  rmSync(work, { recursive: true, force: true });
+  if (!process.env.SCAN_KEEP_WORK) rmSync(work, { recursive: true, force: true });
 
   let macro = null;
   const tickers = [];
@@ -236,14 +245,14 @@ async function main() {
   }
 
   const payload = {
-    schemaVersion: 1, runId, asOf, generatedAt: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
-    runner: { name: opts.agent === "claude" ? "claude-code" : "codex-cli", model },
+    schemaVersion: 2, runId, asOf, generatedAt: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
+    runner: { name: opts.agent, model },
     tickers, macro,
   };
   const errs = validatePayload(payload);
   if (errs.length) { log(`assembled payload invalid: ${errs.join("; ")}`); process.exit(1); }
 
-  const payloadFile = join(OUT, `payload-${asOf}-${runId.slice(0, 8)}.json`);
+  const payloadFile = join(OUT, `payload-${asOf}-${opts.agent}-${runId.slice(0, 8)}.json`);
   writeFileSync(payloadFile, JSON.stringify(payload, null, 2) + "\n");
   log(`payload written ${payloadFile} (${tickers.length} tickers)`);
 
