@@ -25,12 +25,15 @@ spec:
       template:
         spec:
           restartPolicy: Never
+          automountServiceAccountToken: false
           nodeSelector:
             kubernetes.io/hostname: k8s-worker-01
           securityContext:
             runAsNonRoot: true
             runAsUser: 1000
             runAsGroup: 1000
+            seccompProfile:
+              type: RuntimeDefault
           containers:
             - name: reconcile
               image: ghcr.io/filipcsupka/invest-buddy:latest
@@ -84,12 +87,15 @@ spec:
       template:
         spec:
           restartPolicy: Never
+          automountServiceAccountToken: false
           nodeSelector:
             kubernetes.io/hostname: k8s-worker-01
           securityContext:
             runAsNonRoot: true
             runAsUser: 1000
             runAsGroup: 1000
+            seccompProfile:
+              type: RuntimeDefault
           containers:
             - name: daily
               image: ghcr.io/filipcsupka/invest-buddy:latest
@@ -141,12 +147,15 @@ spec:
       template:
         spec:
           restartPolicy: Never
+          automountServiceAccountToken: false
           nodeSelector:
             kubernetes.io/hostname: k8s-worker-01
           securityContext:
             runAsNonRoot: true
             runAsUser: 1000
             runAsGroup: 1000
+            seccompProfile:
+              type: RuntimeDefault
           containers:
             - name: portfolio
               image: ghcr.io/filipcsupka/invest-buddy:latest
@@ -199,12 +208,15 @@ spec:
       template:
         spec:
           restartPolicy: Never
+          automountServiceAccountToken: false
           nodeSelector:
             kubernetes.io/hostname: k8s-worker-01
           securityContext:
             runAsNonRoot: true
             runAsUser: 1000
             runAsGroup: 1000
+            seccompProfile:
+              type: RuntimeDefault
           containers:
             - name: digest
               image: ghcr.io/filipcsupka/invest-buddy:latest

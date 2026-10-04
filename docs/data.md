@@ -13,3 +13,5 @@ For a local demonstration, run `docker compose up -d --build db migrate web`, th
 `DATA_MODE=fixture` serves the sample universe for local development. `npm run daily -- --memory` scores that universe in memory. Database mode needs at least 200 bars per symbol; it has no fixture price fallback.
 
 This is informational screening under ADR-001. Scores are rule outputs for all visitors; they do not include position size or personal advice.
+
+Daily scoring requires a price bar dated exactly to the scoring session. Missing or older bars produce `Insufficient/invalid data` with `stale_prices`; no points are awarded. Same-day scores are refreshed when consensus inputs or price bars change.

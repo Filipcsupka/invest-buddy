@@ -17,12 +17,24 @@ spec:
       template:
         spec:
           restartPolicy: Never
+          automountServiceAccountToken: false
           nodeSelector:
             kubernetes.io/hostname: k8s-worker-01
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            fsGroup: 10001
+            seccompProfile:
+              type: RuntimeDefault
           containers:
             - name: scan
               image: ghcr.io/filipcsupka/invest-buddy-scanner:latest
               args: ["--agent", "claude"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
               env:
                 - name: INGEST_URL
                   value: http://web.invest.svc.cluster.local:3000/api/ingest/scan
@@ -36,6 +48,13 @@ spec:
                     secretKeyRef:
                       name: invest-buddy-scanner-secrets
                       key: CLAUDE_CODE_OAUTH_TOKEN
+              volumeMounts:
+                - name: tmp
+                  mountPath: /tmp
+                - name: scanner-home
+                  mountPath: /home/scanner
+                - name: scan-out
+                  mountPath: /app/scanner/out
               resources:
                 requests:
                   cpu: 250m
@@ -43,6 +62,13 @@ spec:
                 limits:
                   cpu: "2"
                   memory: 1Gi
+          volumes:
+            - name: tmp
+              emptyDir: {}
+            - name: scanner-home
+              emptyDir: {}
+            - name: scan-out
+              emptyDir: {}
 ---
 apiVersion: batch/v1
 kind: CronJob
@@ -63,6 +89,7 @@ spec:
       template:
         spec:
           restartPolicy: Never
+          automountServiceAccountToken: false
           nodeSelector:
             kubernetes.io/hostname: k8s-worker-01
           securityContext:
@@ -70,6 +97,8 @@ spec:
             runAsUser: 10001
             runAsGroup: 10001
             fsGroup: 10001
+            seccompProfile:
+              type: RuntimeDefault
           initContainers:
             - name: seed-codex-auth
               image: busybox:1.37
@@ -96,6 +125,10 @@ spec:
             - name: scan
               image: ghcr.io/filipcsupka/invest-buddy-scanner:latest
               args: ["--agent", "codex"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
               env:
                 - name: CODEX_HOME
                   value: /codex-home
@@ -109,6 +142,12 @@ spec:
               volumeMounts:
                 - name: codex-home
                   mountPath: /codex-home
+                - name: tmp
+                  mountPath: /tmp
+                - name: scanner-home
+                  mountPath: /home/scanner
+                - name: scan-out
+                  mountPath: /app/scanner/out
               resources:
                 requests:
                   cpu: 250m
@@ -117,6 +156,12 @@ spec:
                   cpu: "2"
                   memory: 1Gi
           volumes:
+            - name: tmp
+              emptyDir: {}
+            - name: scanner-home
+              emptyDir: {}
+            - name: scan-out
+              emptyDir: {}
             - name: codex-home
               persistentVolumeClaim:
                 claimName: invest-buddy-codex-home

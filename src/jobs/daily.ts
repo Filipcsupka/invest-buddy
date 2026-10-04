@@ -1,4 +1,5 @@
 import pg from "pg";
+import { createHash } from "node:crypto";
 import { score } from "../engine";
 import type { UniverseProvider } from "../data/providers";
 import { fixtureProvider } from "../data/fixtures";
@@ -14,19 +15,26 @@ function validDate(value: string) {
 export async function runDaily(provider: UniverseProvider, repository: ScoreRepository, asOf?: string, providerName = "fixture"): Promise<SaveOutcome> {
   if (asOf && !validDate(asOf)) throw new Error("Date must be YYYY-MM-DD");
   const instruments = await provider.instruments();
-  const inputs = await Promise.all(instruments.map(async (instrument) => ({ instrument,
-    bars: await provider.bars(instrument.ticker),
-    fundamentals: await provider.fundamentals(instrument.ticker),
-    macro: await provider.macro(instrument.ticker),
-  })));
+  const inputs = await Promise.all(instruments.map(async (instrument) => {
+    const bars = await provider.bars(instrument.ticker);
+    const fundamentals = await provider.fundamentals(instrument.ticker);
+    const macro = await provider.macro(instrument.ticker);
+    return { instrument, bars, fundamentals, macro };
+  }));
   const date = asOf ?? (provider instanceof DatabaseUniverseProvider ? await provider.latestScanDate() : inputs[0]?.bars.at(-1)?.date);
   if (!date || !validDate(date)) throw new Error("No valid data date available");
   const records: ScoredInstrument[] = inputs.map(({ instrument, bars, fundamentals, macro }) => {
     const throughDate = bars.filter((bar) => bar.date <= date);
-    if (!(provider instanceof DatabaseUniverseProvider) && throughDate.at(-1)?.date !== date) throw new Error(`${instrument.ticker} has no bar on ${date}`);
     const result = score({ ticker: instrument.ticker, bars: throughDate, fundamentals, macro });
+    if (throughDate.at(-1)?.date !== date) {
+      result.state = "Insufficient/invalid data";
+      result.invalidReasons = [...result.invalidReasons, "stale_prices"];
+      result.technical = 0; result.fundamentals = 0; result.macro = 0; result.total = 0;
+      result.ruleHits = []; result.rejectionReasons = []; result.pullbackInUptrend = false;
+    }
     const origin = provider instanceof DatabaseUniverseProvider ? provider.provenance.get(instrument.ticker) : undefined;
-    return { instrument, result: { ...result, asOf: date, ...(origin ? { scanRunId: Object.values(origin.runIds)[0], scanRunIds: origin.runIds, agreement: origin.agreement, consensusValues: origin.consensusValues, evidenceUrls: origin.evidenceUrls } : {}) } };
+    const fingerprint = createHash("sha256").update(JSON.stringify({ consensus: origin?.fingerprintRows ?? { fundamentals, macro }, latestBarDate: throughDate.at(-1)?.date ?? null, bars: throughDate })).digest("hex");
+    return { instrument, fingerprint, result: { ...result, asOf: date, ...(origin ? { scanRunId: Object.values(origin.runIds)[0], scanRunIds: origin.runIds, agreement: origin.agreement, consensusValues: origin.consensusValues, evidenceUrls: origin.evidenceUrls } : {}) } };
   });
   return repository.saveDaily(date, providerName, records);
 }
@@ -43,8 +51,9 @@ async function main() {
   const pool = memory ? null : new pg.Pool({ connectionString: url });
   try {
     const fixtureMode = process.env.DATA_MODE === "fixture" || memory;
-    const provider = fixtureMode ? fixtureProvider : new DatabaseUniverseProvider(pool!, date);
-    const result = await runDaily(provider, pool ? new PostgresScoreRepository(pool) : new MemoryScoreRepository(), date, fixtureMode ? "fixture" : "scan");
+    const scoreDate = date ?? (fixtureMode ? undefined : await new DatabaseUniverseProvider(pool!).latestScanDate());
+    const provider = fixtureMode ? fixtureProvider : new DatabaseUniverseProvider(pool!, scoreDate ?? undefined);
+    const result = await runDaily(provider, pool ? new PostgresScoreRepository(pool) : new MemoryScoreRepository(), scoreDate ?? undefined, fixtureMode ? "fixture" : "scan");
     process.stdout.write(`${result.inserted ? "Stored" : "Already stored"}: ${result.instrumentCount} instruments, ${result.alerts.length} state changes\n`);
   } finally { await pool?.end(); }
 }

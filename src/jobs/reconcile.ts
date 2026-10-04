@@ -27,7 +27,7 @@ export async function reconcileField(symbol: string, field: string, asOf: string
       const refs = item.evidence.items.filter((entry) => entry.claim === `${field === "sectorRotationIntoGrowth" || field === "dataTailwind" ? "macro" : "fundamentals"}.${field}`);
       return (await Promise.all(refs.map((entry) => verify(entry, asOf)))).some(Boolean);
     }));
-    if (checks.every(Boolean)) { agreement = "agree"; value = values[0]; verified = true; reason = "Both agents agree and supporting evidence passed"; }
+    if (checks.every(Boolean)) { agreement = "agree"; value = values[0]; verified = true; reason = value === false ? "Both agents independently report false" : "Both agents agree and supporting evidence passed"; }
     else reason = "Agreement lacks verified, fresh evidence";
   }
   const deterministic = field === "revenueAccelerating" ? sec?.revenueAccelerating : field === "revenueDeclining" ? sec?.revenueDeclining : undefined;

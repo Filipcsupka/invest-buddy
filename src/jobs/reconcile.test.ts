@@ -14,3 +14,9 @@ it("lets SEC revenue facts override a conflicting agent claim", async () => {
   const result = await reconcileField("NVDA","revenueAccelerating","2026-10-04", [{ ...finding("claude",false), fundamentals: { revenueAccelerating: false } }],async () => false,{ currentGrowth: 50, priorGrowth: 20, revenueAccelerating: true, revenueDeclining: false, period: "Q2 FY2026", source: "https://data.sec.gov/facts" });
   expect(result).toMatchObject({ agreement: "xbrl_override", value: true, verified: true });
 });
+
+it("accepts two confident false claims without fetching a page", async () => {
+  const both = [finding("claude",false), finding("codex",false)].map((item) => ({ ...item, evidence: { items: [] } }));
+  const verify = async () => { throw new Error("false must not fetch evidence"); };
+  expect(await reconcileField("NVDA","epsBeat","2026-10-04",both,verify)).toMatchObject({ agreement: "agree", value: false, verified: true });
+});

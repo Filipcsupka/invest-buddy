@@ -27,6 +27,7 @@ spec:
       labels:
         app: invest-buddy-postgres
     spec:
+      automountServiceAccountToken: false
       nodeSelector:
         kubernetes.io/hostname: k8s-worker-01
       securityContext:
@@ -34,6 +35,8 @@ spec:
         runAsUser: 70
         runAsGroup: 70
         fsGroup: 70
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: postgres
           image: postgres:16-alpine

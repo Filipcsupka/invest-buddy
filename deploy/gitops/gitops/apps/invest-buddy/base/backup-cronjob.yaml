@@ -39,6 +39,7 @@ spec:
           hostNetwork: true
           dnsPolicy: ClusterFirstWithHostNet
           restartPolicy: Never
+          automountServiceAccountToken: false
           nodeSelector:
             kubernetes.io/hostname: k8s-worker-01
           securityContext:
@@ -46,6 +47,8 @@ spec:
             runAsUser: 1000
             runAsGroup: 1000
             fsGroup: 1000
+            seccompProfile:
+              type: RuntimeDefault
           containers:
             - name: backup
               image: ghcr.io/filipcsupka/invest-buddy:latest

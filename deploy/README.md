@@ -22,6 +22,8 @@ Reconciliation runs at 06:15 with `node dist/jobs/reconcile.js`, scoring at 06:3
 
 The digest needs `DIGEST_TO`. The portfolio CronJob stays suspended. Its 06:00 UTC Tuesday through Saturday schedule, Flex Query fields, token egress, SPY provider, market holidays, and IBKR publication terms need review before it is enabled. A failed fetch keeps the prior snapshot and date.
 
+The scan jobs use plain HTTP for the in-cluster ingest hop. This accepts the risk of token and payload exposure to an observer with access to cluster traffic. Keep the scanner and web in the single `invest` namespace, expose the ingest service as ClusterIP only, rotate `INGEST_TOKEN` through the approved sealed-secret flow, and block the public ingest route.
+
 The public host routes to the web, while its Traefik middleware rewrites `/api/ingest` to an absent path. Verify that a public ingest request returns 404 after sync. The internal handler still checks its bearer token and 1 MB body limit. The Ingress requests a certificate from the existing `letsencrypt-prod` ClusterIssuer.
 
 ## Prepare the rollout

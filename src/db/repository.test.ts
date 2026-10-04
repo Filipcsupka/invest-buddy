@@ -31,3 +31,16 @@ describe("state change alerts", () => {
     expect(await repository.scores(second.asOf)).toHaveLength(1);
   });
 });
+
+it("replaces a changed daily score and updates its alert without duplication", async () => {
+  const repository = new MemoryScoreRepository();
+  const first = result("2025-08-08", "Watch");
+  const next = result("2025-08-09", "Wait");
+  await repository.saveDaily(first.asOf, "fixture", [{ instrument, result: first, fingerprint: "a" }]);
+  await repository.saveDaily(next.asOf, "fixture", [{ instrument, result: next, fingerprint: "b" }]);
+  expect((await repository.saveDaily(next.asOf, "fixture", [{ instrument, result: next, fingerprint: "b" }])).inserted).toBe(false);
+  const changed = { ...next, state: "Setup met (>=18)" as const };
+  expect((await repository.saveDaily(next.asOf, "fixture", [{ instrument, result: changed, fingerprint: "c" }])).inserted).toBe(true);
+  expect(await repository.alerts(next.asOf)).toMatchObject([{ previousState: "Watch", currentState: "Setup met (>=18)" }]);
+  expect(await repository.scores(next.asOf)).toMatchObject([{ state: "Setup met (>=18)" }]);
+});

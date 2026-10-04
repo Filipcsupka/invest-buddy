@@ -58,8 +58,9 @@ The runner never gets database credentials. It holds only a bearer token for the
 - Every evidence item for a `true` claim needs `publishedAt`, `fiscalPeriod` and `quote`, where `quote` is a sentence copied verbatim from the cited page.
 - Agents must not read each other's output. Neither posts consensus; the server computes it.
 - A reconcile job (not an agent) produces one consensus finding per symbol and field:
-  - both agents give the same value, and the cited page was fetched and contains the quote (whitespace-normalised) -> accepted, `agreement: "agree"`;
-  - values differ, or one agent gave null -> consensus null, `agreement: "disputed"`, both outputs kept;
+  - both agents report `true`, and each cited page was fetched and contains its quote (whitespace-normalised) -> accepted, `agreement: "agree"`;
+  - both agents report `false` with confidence above low -> accepted without a cited page, `agreement: "agree"`. False is the absence of a positive claim and adds no points;
+  - values differ, or either agent gave null -> consensus null, `agreement: "disputed"`, both outputs kept. Null is unknown, adds no points, and needs no page fetch;
   - only one agent ran -> consensus null, `agreement: "single"`, unless a deterministic source confirms it;
   - SEC XBRL (data.sec.gov companyfacts) can confirm or override numeric facts (revenue growth, EPS); a conflict marks the field `xbrl_override`.
 - The engine reads only consensus. Unknown scores 0. The web shows agreement per field ("both agree", "disputed", "one source").

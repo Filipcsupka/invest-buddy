@@ -3,28 +3,36 @@ import type { AlertChange, SaveOutcome, ScoreRepository, ScoredInstrument } from
 import { stateChange } from "./types";
 
 export class MemoryScoreRepository implements ScoreRepository {
-  private readonly completed = new Set<string>();
+  private readonly fingerprints = new Map<string, Map<string, string>>();
   private readonly results = new Map<string, Map<string, ScoreResult>>();
   private readonly changes = new Map<string, AlertChange[]>();
 
   async saveDaily(asOf: string, _provider: string, records: ScoredInstrument[]): Promise<SaveOutcome> {
-    if (this.completed.has(asOf)) return { inserted: false, instrumentCount: 0, alerts: [] };
+    const current = new Map(this.results.get(asOf) ?? []);
+    const fingerprints = new Map(this.fingerprints.get(asOf) ?? []);
     const tickers = new Set<string>();
-    const alerts: AlertChange[] = [];
-    const current = new Map<string, ScoreResult>();
-    for (const { instrument, result } of records) {
+    let changed = false;
+    for (const { instrument, result, fingerprint } of records) {
       if (instrument.ticker !== result.ticker || result.asOf !== asOf || tickers.has(result.ticker)) throw new Error("Invalid daily score batch");
       tickers.add(result.ticker);
+      const key = fingerprint ?? JSON.stringify(result);
+      if (fingerprints.get(result.ticker) === key) continue;
+      current.set(result.ticker, structuredClone(result));
+      fingerprints.set(result.ticker, key);
+      changed = true;
+    }
+    if (!changed) return { inserted: false, instrumentCount: 0, alerts: [] };
+    const alerts: AlertChange[] = [];
+    for (const result of current.values()) {
       const prior = [...this.results.entries()]
         .filter(([date]) => date < asOf).sort(([a], [b]) => b.localeCompare(a))
         .map(([, scores]) => scores.get(result.ticker)).find((score) => score !== undefined) ?? null;
       const change = stateChange(prior, result);
       if (change) alerts.push(change);
-      current.set(result.ticker, structuredClone(result));
     }
     this.results.set(asOf, current);
+    this.fingerprints.set(asOf, fingerprints);
     this.changes.set(asOf, alerts);
-    this.completed.add(asOf);
     return { inserted: true, instrumentCount: records.length, alerts: structuredClone(alerts) };
   }
 

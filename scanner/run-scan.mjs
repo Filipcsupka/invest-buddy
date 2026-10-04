@@ -113,9 +113,14 @@ function envelopeMessage(out) {
 }
 
 // ---------- agent call ----------
+export function agentEnv(source = process.env) {
+  const allowed = new Set(["PATH", "HOME", "CODEX_HOME", "CLAUDE_CONFIG_DIR", "CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "CODEX_API_KEY", "LANG", "LANGUAGE", "LC_ALL", "TZ", "TMPDIR", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "all_proxy", "no_proxy"]);
+  return Object.fromEntries(Object.entries(source).filter(([key, value]) => value !== undefined && (allowed.has(key) || /^LC_[A-Z_]+$/.test(key))));
+}
+
 function runCli(cmd, args, input, { timeoutMs, cwd }) {
   return new Promise((resolve, reject) => {
-    const child = spawn(cmd, args, { cwd, stdio: ["pipe", "pipe", "pipe"] });
+    const child = spawn(cmd, args, { cwd, env: agentEnv(), stdio: ["pipe", "pipe", "pipe"] });
     let out = "", err = "", timedOut = false;
     const timer = setTimeout(() => { timedOut = true; child.kill("SIGTERM"); setTimeout(() => child.kill("SIGKILL"), 5000).unref(); }, timeoutMs);
     child.stdout.on("data", (d) => { out += d; });
@@ -203,7 +208,7 @@ async function main() {
   const work = mkdtempSync(join(tmpdir(), "investbuddy-scan-"));
   let model = opts.model || "default";
 
-  const accepted = [], failed = [];
+  const failed = [];
   const jobs = [{ kind: "macro" }, ...selected.map((u) => ({ kind: "ticker", u }))];
 
   const results = await pool(jobs, opts.concurrency, async (job) => {
@@ -279,4 +284,4 @@ async function main() {
   if (ratio > MAX_FAIL_RATIO) { log(`failure ratio ${(ratio * 100).toFixed(0)}% exceeds ${MAX_FAIL_RATIO * 100}%`); process.exit(1); }
 }
 
-main().catch((e) => { console.error(`fatal: ${e.stack || e.message}`); process.exit(1); });
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main().catch((e) => { console.error(`fatal: ${e.stack || e.message}`); process.exit(1); });

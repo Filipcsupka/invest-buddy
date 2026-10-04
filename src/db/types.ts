@@ -1,7 +1,7 @@
 import type { ScoreResult } from "../engine";
 import type { Instrument } from "../data/providers";
 
-export interface ScoredInstrument { instrument: Instrument; result: ScoreResult }
+export interface ScoredInstrument { instrument: Instrument; result: ScoreResult; fingerprint?: string }
 export interface AlertChange {
   ticker: string;
   asOf: string;

@@ -12,6 +12,9 @@ export const freshnessDays: Record<string, number> = {
 export interface EvidenceRef { claim: string; url: string; publishedAt?: string; fiscalPeriod?: string; quote?: string }
 export type EvidenceVerifier = (entry: EvidenceRef, asOf: string) => Promise<boolean>;
 const cache = new Map<string, string>();
+export const MAX_PAGE_CACHE = 200;
+export const MAX_EVIDENCE_BODY = 2_000_000;
+export const EVIDENCE_DEADLINE_MS = 12_000;
 let lastFetch = 0;
 const normalize = (s: string) => s.replace(/\s+/g, " ").trim().toLocaleLowerCase("en");
 function blocked(address: string): boolean {
@@ -24,34 +27,45 @@ function blocked(address: string): boolean {
   if (isIP(address) === 6) return /^(::|::1$|f[cd]|fe[89ab]|2001:db8)/i.test(address) || (address.toLowerCase().startsWith("::ffff:") && blocked(address.slice(7)));
   return true;
 }
-async function safeUrl(raw: string) {
+function withinDeadline<T>(task: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(new Error("Evidence timeout"));
+  return new Promise((resolve, reject) => {
+    const abort = () => reject(new Error("Evidence timeout"));
+    signal.addEventListener("abort", abort, { once: true });
+    task.then(resolve, reject).finally(() => signal.removeEventListener("abort", abort));
+  });
+}
+async function safeUrl(raw: string, lookup = dns.lookup) {
   const url = new URL(raw);
   if (url.protocol !== "https:" || url.username || url.password || url.port) throw new Error("Unsafe evidence URL");
-  const addresses = await dns.lookup(url.hostname, { all: true });
+  const addresses = await lookup(url.hostname, { all: true });
   if (!addresses.length || addresses.some((item) => blocked(item.address))) throw new Error("Unsafe evidence address");
   return { url, address: addresses[0].address };
 }
-async function fetchPage(raw: string): Promise<string> {
+export async function fetchPage(raw: string, deps: { lookup?: typeof dns.lookup; get?: typeof get; deadlineMs?: number } = {}): Promise<string> {
+  const signal = AbortSignal.timeout(deps.deadlineMs ?? EVIDENCE_DEADLINE_MS);
   let target = raw;
   for (let redirects = 0; redirects <= 3; redirects++) {
-    const { url, address } = await safeUrl(target);
+    if (signal.aborted) throw new Error("Evidence timeout");
+    const { url, address } = await withinDeadline(safeUrl(target, deps.lookup), signal);
     const wait = Math.max(0, 250 - (Date.now() - lastFetch));
-    if (wait) await new Promise((resolve) => setTimeout(resolve, wait));
+    if (wait) await withinDeadline(new Promise<void>((resolve) => setTimeout(resolve, wait)), signal);
     lastFetch = Date.now();
     const response = await new Promise<{ status: number; location?: string; body?: string }>((resolve, reject) => {
-      const request = get(url, {
+      const request = (deps.get ?? get)(url, {
+        signal,
         lookup: (_host, _options, callback) => callback(null, address, isIP(address)),
         headers: { "user-agent": "InvestBuddy-evidence/1.0 contact: research@filipcsupka.online", accept: "text/html,text/plain;q=0.9" },
       }, (incoming) => {
         const status = incoming.statusCode ?? 0;
         if ([301,302,303,307,308].includes(status)) { incoming.resume(); resolve({ status, location: incoming.headers.location }); return; }
         if (status < 200 || status >= 300) { incoming.resume(); reject(new Error(`Evidence HTTP ${status}`)); return; }
-        if (Number(incoming.headers["content-length"] ?? 0) > 2_000_000) { incoming.destroy(); reject(new Error("Evidence too large")); return; }
+        if (Number(incoming.headers["content-length"] ?? 0) > MAX_EVIDENCE_BODY) { incoming.destroy(); reject(new Error("Evidence too large")); return; }
         const chunks: Buffer[] = [];
         let size = 0;
         incoming.on("data", (chunk: Buffer) => {
           size += chunk.length;
-          if (size > 2_000_000) { incoming.destroy(); reject(new Error("Evidence too large")); return; }
+          if (size > MAX_EVIDENCE_BODY) { incoming.destroy(); reject(new Error("Evidence too large")); return; }
           chunks.push(chunk);
         });
         incoming.on("end", () => resolve({ status, body: Buffer.concat(chunks).toString("utf8") }));
@@ -69,6 +83,14 @@ async function fetchPage(raw: string): Promise<string> {
   }
   throw new Error("Evidence redirect limit");
 }
+export function rememberPage(key: string, page: string) {
+  cache.delete(key);
+  cache.set(key, page);
+  const evicted = cache.size > MAX_PAGE_CACHE ? cache.keys().next().value as string : null;
+  if (evicted) cache.delete(evicted);
+  return { size: cache.size, evicted };
+}
+
 export const liveVerifier: EvidenceVerifier = async (entry, asOf) => {
   const field = entry.claim.split(".").at(-1) ?? "";
   const days = freshnessDays[field] ?? 30;
@@ -78,7 +100,8 @@ export const liveVerifier: EvidenceVerifier = async (entry, asOf) => {
   try {
     const key = `${asOf}:${createHash("sha256").update(entry.url).digest("hex")}`;
     let page = cache.get(key);
-    if (!page) { page = await fetchPage(entry.url); cache.set(key, page); }
+    if (!page) { page = await fetchPage(entry.url); rememberPage(key, page); }
+    else rememberPage(key, page);
     return normalize(page.replace(/<[^>]*>/g, " ").replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&")).includes(normalize(entry.quote));
   } catch { return false; }
 };
