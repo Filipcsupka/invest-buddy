@@ -19,10 +19,10 @@ Output rules:
   "sectorRotationIntoGrowth": true|false|null,
   "dataTailwind": true|false|null,
   "notes": "one or two sentences",
-  "evidence": [ { "claim": "macro.sectorRotationIntoGrowth", "url": "https://...", "publishedAt": "YYYY-MM-DD" } ],
+  "evidence": [ { "claim": "macro.sectorRotationIntoGrowth", "url": "https://...", "publishedAt": "YYYY-MM-DD", "fiscalPeriod": "Sep 2026 CPI", "quote": "exact sentence copied from the page" } ],
   "events": [ { "date": "YYYY-MM-DD", "name": "CPI" } ]
 }
 - Use null whenever you could not verify a fact. Never guess. Null is a correct answer.
-- Every field you set to true needs at least one evidence item whose claim is "macro.<fieldName>" and whose url is an https page you opened. publishedAt is the page date as YYYY-MM-DD.
+- Every field you set to true needs at least one evidence item whose claim is "macro.<fieldName>" and whose url is an https page you opened. publishedAt is the page date as YYYY-MM-DD. fiscalPeriod is the period the data refers to (for example "Sep 2026 CPI" or "Oct 2026 FOMC"). quote is one sentence copied verbatim from the page that supports the claim. Evidence without all five fields is rejected by the server.
 - No buy, sell, or hold wording, no advice, no sizing. Plain neutral sentences, 400 characters or fewer in notes.
 - Do not invent URLs or dates. Leave events empty if you cannot find any.

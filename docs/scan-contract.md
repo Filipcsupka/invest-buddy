@@ -36,7 +36,7 @@ The runner never gets database credentials. It holds only a bearer token for the
     "sectorRotationIntoGrowth": true,
     "dataTailwind": false,
     "notes": "one or two plain sentences",
-    "evidence": [ { "claim": "macro.dataTailwind", "url": "https://..." } ],
+    "evidence": [ { "claim": "macro.dataTailwind", "url": "https://...", "publishedAt": "2026-10-02", "fiscalPeriod": "Sep 2026 CPI", "quote": "exact sentence copied from the page" } ],
     "events": [ { "date": "2026-10-10", "name": "CPI" } ]
   }
 }
@@ -63,3 +63,5 @@ The runner never gets database credentials. It holds only a bearer token for the
   - only one agent ran -> consensus null, `agreement: "single"`, unless a deterministic source confirms it;
   - SEC XBRL (data.sec.gov companyfacts) can confirm or override numeric facts (revenue growth, EPS); a conflict marks the field `xbrl_override`.
 - The engine reads only consensus. Unknown scores 0. The web shows agreement per field ("both agree", "disputed", "one source").
+
+For macro evidence, `fiscalPeriod` is the period the data refers to (for example "Sep 2026 CPI").

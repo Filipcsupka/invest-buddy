@@ -34,7 +34,9 @@
         "required": [
           "claim",
           "url",
-          "publishedAt"
+          "publishedAt",
+          "fiscalPeriod",
+          "quote"
         ],
         "properties": {
           "claim": {
@@ -45,6 +47,16 @@
           },
           "publishedAt": {
             "type": "string"
+          },
+          "fiscalPeriod": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60
+          },
+          "quote": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 600
           }
         }
       }
