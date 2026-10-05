@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { promises as dns } from "node:dns";
 import { isIP } from "node:net";
 import { get } from "node:https";
+import { requireSecUserAgent } from "../collectors/sec-user-agent";
 
 export const freshnessDays: Record<string, number> = {
   revenueAccelerating: 100, revenueDeclining: 100, epsBeat: 100,
@@ -44,12 +45,19 @@ async function safeUrl(raw: string, lookup = dns.lookup) {
   if (!addresses.length || addresses.some((item) => blocked(item.address))) throw new Error("Unsafe evidence address");
   return { url, address: addresses[0].address };
 }
+const OTHER_USER_AGENT = "InvestBuddy-evidence/1.0 contact: research@filipcsupka.online";
+const isSecHost = (host: string) => host === "sec.gov" || host.endsWith(".sec.gov");
+/** sec.gov hosts (www, data) need the configured SEC_USER_AGENT; every other host keeps the evidence agent. */
+export function evidenceUserAgent(host: string, env: NodeJS.ProcessEnv = process.env): string {
+  return isSecHost(host.toLowerCase()) ? requireSecUserAgent(env.SEC_USER_AGENT) : OTHER_USER_AGENT;
+}
 export async function fetchPage(raw: string, deps: { lookup?: typeof dns.lookup; get?: typeof get; deadlineMs?: number } = {}): Promise<string> {
   const signal = AbortSignal.timeout(deps.deadlineMs ?? EVIDENCE_DEADLINE_MS);
   let target = raw;
   for (let redirects = 0; redirects <= 3; redirects++) {
     if (signal.aborted) throw new Error("Evidence timeout");
     const { url, address } = await withinDeadline(safeUrl(target, deps.lookup), signal);
+    const userAgent = evidenceUserAgent(url.hostname);
     const wait = Math.max(0, 250 - (Date.now() - lastFetch));
     if (wait) await withinDeadline(new Promise<void>((resolve) => setTimeout(resolve, wait)), signal);
     lastFetch = Date.now();
@@ -57,7 +65,7 @@ export async function fetchPage(raw: string, deps: { lookup?: typeof dns.lookup;
       const request = (deps.get ?? get)(url, {
         signal,
         lookup: (_host, _options, callback) => callback(null, address, isIP(address)),
-        headers: { "user-agent": "InvestBuddy-evidence/1.0 contact: research@filipcsupka.online", accept: "text/html,text/plain;q=0.9" },
+        headers: { "user-agent": userAgent, accept: "text/html,text/plain;q=0.9" },
       }, (incoming) => {
         const status = incoming.statusCode ?? 0;
         if ([301,302,303,307,308].includes(status)) { incoming.resume(); resolve({ status, location: incoming.headers.location }); return; }

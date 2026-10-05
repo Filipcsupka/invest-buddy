@@ -8,29 +8,30 @@ import { IconArrowLeft, IconArrowRight, IconCheck, IconCross } from "@/component
 import { OperatorDisclosure } from "@/components/operator-disclosure";
 import { StateChip } from "@/components/score-badge";
 import { ScoreMark } from "@/components/score-mark";
-import { instruments } from "@/data/fixtures";
-import { latestScores } from "@/data/store";
+import { instrumentUniverse, latestScores } from "@/data/store";
 import { DataStatus } from "@/components/data-status";
 export const dynamic = "force-dynamic";
-import { fill, formatDate, formatPercent, getMessages, isLocale, locales, type Locale } from "@/i18n";
+import { fill, formatDate, formatPercent, getMessages, isLocale, type Locale } from "@/i18n";
 import { pageMetadata } from "@/i18n/metadata";
 import { ruleGroups } from "@/i18n/rules";
 import { reasonsFor, ruleDetail, sectorLabel, stateKey } from "@/i18n/score-text";
 
 type Params = { params: Promise<{ locale: string; ticker: string }> };
 
-export function generateStaticParams() {
-  return locales.flatMap((locale) => instruments.map(({ ticker }) => ({ locale, ticker })));
-}
+// Rendered per request (force-dynamic): the ticker universe is read from the database at run time, so nothing
+// is prebuilt and unknown tickers are resolved by load() below. No generateStaticParams: it would need the
+// database at build time.
+export const dynamicParams = true;
 
 async function load(params: Params["params"]) {
   const { locale, ticker } = await params;
   if (!isLocale(locale)) notFound();
+  const instruments = await instrumentUniverse();
   const instrument = instruments.find((item) => item.ticker === ticker.toUpperCase());
   if (!instrument) notFound();
   const data = await latestScores();
   const row = data.rows.find((item) => item.instrument.ticker === instrument.ticker);
-  return { locale: locale as Locale, instrument, result: row?.result ?? null, data };
+  return { locale: locale as Locale, instrument, instruments, result: row?.result ?? null, data };
 }
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
@@ -40,7 +41,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 }
 
 export default async function Company({ params }: Params) {
-  const { locale, instrument, result, data } = await load(params);
+  const { locale, instrument, instruments, result, data } = await load(params);
   if (!result) return <div className="frame page"><h1 className="title">{instrument.ticker}</h1><DataStatus locale={locale} lastUpdated={data.lastUpdated} stale={data.stale} /></div>;
   const m = getMessages(locale);
   const state = stateKey(result.state);

@@ -100,6 +100,22 @@ test("figures: input numbers and common rule windows pass, others are rejected",
   assert.deepEqual(inventedFigures(["target 150 and 33.1"], inp), [150, 33.1]);
 });
 
+test("figures: digits in urls, dates, ids and accession numbers are not allowed figures", () => {
+  const inp = { evidence: [{ url: "https://www.sec.gov/Archives/edgar/data/1045810/000104581026000123/nvda-8k.htm", publishedAt: "2026-10-01", accession: "0001045810-26-000123", id: 777 .toString() }], close: 120.5 };
+  assert.deepEqual(inventedFigures(["close 120.5"], inp), []);
+  assert.deepEqual(inventedFigures(["filing 1045810 and 123 and 777"], inp), [1045810, 123, 777]);
+  assert.deepEqual(inventedFigures(["see 2026-10-01"], inp), []);
+  assert.deepEqual(inventedFigures(["see 2026-10-02"], inp), [2026, 10, 2]);
+});
+
+test("figures: the sign matters, ranges and windows are not signs", () => {
+  const inp = { change: -5.2, up: 3.1, range: "EUR 60-90" };
+  assert.deepEqual(inventedFigures(["fell -5.2 percent", "rose 3.1"], inp), []);
+  assert.deepEqual(inventedFigures(["rose 5.2 percent"], inp), [5.2]);
+  assert.deepEqual(inventedFigures(["fell -3.1 percent"], inp), [-3.1]);
+  assert.deepEqual(inventedFigures(["EUR 60-90 and the 20-day high"], inp), []);
+});
+
 test("each idea can cite only its own figures and URLs", () => {
   assert.throws(() => merge([words("NVDA", { whatHappened: ["AMD held EUR 0.", "The price was 999."] }), words("AMD", { evidence: [] })]), /figures not in the input/);
   assert.throws(() => merge([words("NVDA", { evidence: [{ url: U1, label: "own" }, { url: U3, label: "other symbol" }] }), words("AMD", { evidence: [] })]), /evidence url not in the input/);

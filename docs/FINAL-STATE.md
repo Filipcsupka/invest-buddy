@@ -6,7 +6,7 @@ The extractor reads bounded keyword windows from stored text, checks cited quote
 
 ## Run locally
 
-Use `npm run migrate` before jobs that write to Postgres. Set `DATABASE_URL` for database jobs and `SEC_USER_AGENT` with a real contact address for SEC requests. Set `FRED_API_KEY` to collect FRED data, and `TWELVE_DATA_API_KEY` for prices. The scanner needs `INGEST_BASE_URL`, `INGEST_TOKEN`, and a working Claude CLI login or `CLAUDE_CODE_OAUTH_TOKEN`. Set `IDEAS_PAGE=on` at build and run time when testing the ideas page.
+Use `npm run migrate` before jobs that write to Postgres. Set `DATABASE_URL` for database jobs and `SEC_USER_AGENT` with a real contact address for SEC requests. Set `FRED_API_KEY` to collect FRED data, and `TWELVE_DATA_API_KEY` for prices. The scanner needs `INGEST_BASE_URL`, `INGEST_TOKEN`, and a working Claude CLI login or `CLAUDE_CODE_OAUTH_TOKEN`. Set `IDEAS_PAGE=on` at run time to serve the ideas page; it is read per request. Set it at build time as well only if the nav link should show on statically generated pages (methodology, legal).
 
 ```sh
 npm run collect:ping

@@ -106,6 +106,21 @@ async function loadBundle(opts, symbol, token, asOf) {
   return res.json();
 }
 
+/** Posts one ticker as its own scan (macro=skip: no macro result here, so the daily macro finding stays). Returns true when stored. */
+export async function postTicker(opts, token, { asOf, model, output }, log) {
+  const payload = {
+    schemaVersion: 2, runId: randomUUID(), asOf, generatedAt: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"), runner: { name: opts.agent, model }, tickers: [output],
+    macro: { sectorRotationIntoGrowth: null, dataTailwind: null, notes: "Macro not extracted in this script-first run; values unknown.", evidence: [], events: [] },
+  };
+  try {
+    const res = await fetch(`${opts.baseUrl}/api/ingest/scan?macro=skip`, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(payload), signal: AbortSignal.timeout(60_000) });
+    const text = await res.text();
+    if (!res.ok) { log(`${output.symbol}: POST failed: HTTP ${res.status} ${text.slice(0, 300)}`); return false; }
+    log(`${output.symbol}: POST ok: HTTP ${res.status} ${text.slice(0, 200)}`);
+    return true;
+  } catch (e) { log(`${output.symbol}: POST error: ${e.message}`); return false; }
+}
+
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
   const universe = JSON.parse(readFileSync(join(here, "universe.json"), "utf8")).instruments;
@@ -128,7 +143,7 @@ async function main() {
   const prompt = readFileSync(join(here, "prompts", "ticker-extract.md"), "utf8");
   const work = mkdtempSync(join(tmpdir(), "investbuddy-extract-"));
   let model = opts.model || "default";
-  const failed = [], tickers = [], droppedAll = {}, pending = new Map(), skippedSymbols = [];
+  const failed = [], tickers = [], droppedAll = {}, skippedSymbols = [], postFailed = [];
   let totals = emptyUsage(), totalCost = 0, calls = 0, inputChars = 0;
   await pool(selected, opts.concurrency, async (u) => {
     const t0 = Date.now();
@@ -161,7 +176,14 @@ async function main() {
       totals = addUsage(totals, spent);
       log(`${u.symbol}: ok in ${Math.round((Date.now() - t0) / 1000)}s, input ${value.chars} chars, tokens in/out ${spent.inputTokens ?? "?"}/${spent.outputTokens ?? "?"} (cache read ${spent.cacheReadTokens ?? "?"}, created ${spent.cacheCreationTokens ?? "?"}), turns ${spent.turns ?? "?"}${droppedAll[u.symbol] ? `, ${droppedAll[u.symbol].length} claims downgraded` : ""}`);
       tickers.push(value.output);
-      pending.set(u.symbol, { symbol: u.symbol, asOf, agent: opts.agent, model: tickerModel, inputHash: hash, usage: spent, output: value.output });
+      if (!opts.dryRun) {
+        // Each result is stored as soon as it is ready, so a killed run keeps its progress and the skip key makes the rerun cheap.
+        const run = { symbol: u.symbol, asOf, agent: opts.agent, model: tickerModel, inputHash: hash, usage: spent, output: value.output };
+        const posted = await postTicker(opts, token, { asOf, model: tickerModel, output: value.output }, log);
+        // ok is recorded only after the scan is stored, so an unapplied result is never skipped on the next run.
+        await recordRun(opts.baseUrl, token, posted ? { ...run, status: "ok", applied: true } : { ...run, output: undefined, status: "failed", error: "POST /api/ingest/scan failed; result not applied", applied: false }, log);
+        if (!posted) postFailed.push(u.symbol);
+      }
     } catch (e) {
       totals = addUsage(totals, spent);
       log(`${u.symbol}: ${e.skip ? "SKIPPED" : "FAILED"} ${e.message}`);
@@ -184,17 +206,7 @@ async function main() {
   const logTotals = () => log(`totals: ${calls} model calls, ${inputChars} input chars, tokens in ${totals.inputTokens ?? "?"} out ${totals.outputTokens ?? "?"} cache read ${totals.cacheReadTokens ?? "?"} cache created ${totals.cacheCreationTokens ?? "?"}, turns ${totals.turns ?? "?"}${totalCost ? `, cost $${totalCost.toFixed(4)}` : ""}; ok ${tickers.length}, skipped ${skippedSymbols.length}, failed ${failed.length}`);
   if (!opts.dryRun) {
     if (!tickers.length) { logTotals(); log("no valid tickers; not posting"); process.exit(failed.length ? 1 : 0); }
-    let posted = false;
-    try {
-      // macro=skip: this run has no macro result, so it must not supersede the macro finding of the daily scan.
-      const res = await fetch(`${opts.baseUrl}/api/ingest/scan?macro=skip`, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(payload), signal: AbortSignal.timeout(60_000) });
-      const text = await res.text();
-      if (!res.ok) log(`POST failed: HTTP ${res.status} ${text.slice(0, 300)}`);
-      else { posted = true; log(`POST ok: HTTP ${res.status} ${text.slice(0, 200)}`); }
-    } catch (e) { log(`POST error: ${e.message}`); }
-    // ok is recorded only after the scan is stored, so an unapplied result is never skipped on the next run.
-    for (const run of pending.values()) await recordRun(opts.baseUrl, token, posted ? { ...run, status: "ok", applied: true } : { ...run, output: undefined, status: "failed", error: "POST /api/ingest/scan failed; result not applied", applied: false }, log);
-    if (!posted) { logTotals(); process.exit(3); }
+    if (postFailed.length) { logTotals(); log(`not stored: ${postFailed.join(", ")}`); process.exit(3); }
   } else log("dry run: nothing posted, nothing recorded");
   logTotals();
   if (failed.length / selected.length > MAX_FAIL_RATIO) { log(`failure ratio exceeds ${MAX_FAIL_RATIO * 100}%: ${failed.map((f) => f.symbol).join(", ")}`); process.exit(1); }
