@@ -24,7 +24,7 @@ The 05:30 Claude scan ran 36 `claude -p` sessions (35 tickers plus macro, 2 sche
 A fix writer was stopped part way through. On 2026-10-05 a second writer went through the list in the tree. None of it has had a separate review yet.
 
 1. Done. Scanner helper exports and the `USER` env fix are committed and the scanner tests pass.
-2. Done in code. `requireSecUserAgent` refuses the `REPLACE_WITH_CONTACT_EMAIL` placeholder at the start of collect and live reconcile, and in the SEC clients. The ConfigMap still holds the placeholder (see setup change 1).
+2. Done in code. `requireSecUserAgent` refuses the `REPLACE_WITH_CONTACT_EMAIL` placeholder at the start of collect and live reconcile, and in the SEC clients. The ConfigMap now holds a real contact.
 3. Done. A document now expires after the evidence window of its type (100, 60 or 30 days from `freshnessDays`) and the window restarts on every fetch. Facts still expire after 30 days and restart only when their value changes. Tests are in `src/jobs/collect-fixes.test.ts` and `src/jobs/retention.test.ts`.
 4. Done. Retention keeps expired documents cited by any unexpired finding, idea or extraction run. The tests that run against Postgres are skipped without `TEST_DATABASE_URL`, so the SQL itself has only been checked as text.
 5. Done in the manifests. Order is collect 05:35, detect 06:10, extract 06:25, reconcile 07:00, daily 07:15, judge 07:45, Tuesday to Saturday. Extract and judge CronJobs were added. Every new job, reconcile, daily and both web-search scan jobs are suspended: reconcile and daily stay off until `SEC_USER_AGENT` has a real contact and extract has run. Collect, detect, extract and judge cap `startingDeadlineSeconds` at 300 and the container root filesystems of extract and judge are read-only. `kustomize build` and `kubeconform` pass. `src/jobs/cronjob-order.test.ts` checks the order.
@@ -40,7 +40,7 @@ A fix writer was stopped part way through. On 2026-10-05 a second writer went th
 
 ## Setup changes needed before continuing
 
-1. Set a monitored contact in `SEC_USER_AGENT` (ConfigMap still has `REPLACE_WITH_CONTACT_EMAIL`). SEC blocks placeholder agents.
+1. Done: `SEC_USER_AGENT` holds a real contact in the ConfigMap.
 2. Decide the next scan path: the Claude scan stays suspended; Codex needs the account token.
 3. Decide whether the ideas page may be public (ADR-001 forbids EUR sizing in the public product).
 4. Review the point tables and band percentages in `SIGNAL_RULES` (`src/engine/signals.ts`); they are a first reading of your rules.

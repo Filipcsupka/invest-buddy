@@ -4,7 +4,7 @@ metadata:
   name: invest-buddy-reconcile-config
   namespace: invest
 data:
-  SEC_USER_AGENT: "InvestBuddy operator REPLACE_WITH_CONTACT_EMAIL"
+  SEC_USER_AGENT: "InvestBuddy Filip Csupka devopssro@gmail.com"
 ---
 apiVersion: batch/v1
 kind: CronJob
