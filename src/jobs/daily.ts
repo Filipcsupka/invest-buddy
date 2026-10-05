@@ -34,7 +34,7 @@ export async function runDaily(provider: UniverseProvider, repository: ScoreRepo
     }
     const origin = provider instanceof DatabaseUniverseProvider ? provider.provenance.get(instrument.ticker) : undefined;
     const fingerprint = createHash("sha256").update(JSON.stringify({ consensus: origin?.fingerprintRows ?? { fundamentals, macro }, latestBarDate: throughDate.at(-1)?.date ?? null, bars: throughDate })).digest("hex");
-    return { instrument, fingerprint, result: { ...result, asOf: date, ...(origin ? { scanRunId: Object.values(origin.runIds)[0], scanRunIds: origin.runIds, agreement: origin.agreement, consensusValues: origin.consensusValues, evidenceUrls: origin.evidenceUrls } : {}) } };
+    return { instrument, fingerprint, result: { ...result, asOf: date, ...(origin ? { scanRunId: Object.values(origin.runIds)[0], scanRunIds: origin.runIds, agreement: origin.agreement, consensusValues: origin.consensusValues, evidenceUrls: origin.evidenceUrls, ...(origin.carriedFrom ? { carriedFrom: origin.carriedFrom, expiredFields: origin.expiredFields ?? [] } : {}) } : {}) } };
   });
   return repository.saveDaily(date, providerName, records);
 }

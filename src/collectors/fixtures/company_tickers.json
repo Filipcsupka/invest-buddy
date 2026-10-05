@@ -1,0 +1,142 @@
+{
+  "0": {
+    "ticker": "NVDA",
+    "cik_str": 1045810
+  },
+  "1": {
+    "ticker": "AMD",
+    "cik_str": 9000001
+  },
+  "2": {
+    "ticker": "AVGO",
+    "cik_str": 9000002
+  },
+  "3": {
+    "ticker": "SMCI",
+    "cik_str": 9000003
+  },
+  "4": {
+    "ticker": "PLTR",
+    "cik_str": 9000004
+  },
+  "5": {
+    "ticker": "GOOGL",
+    "cik_str": 9000005
+  },
+  "6": {
+    "ticker": "AMZN",
+    "cik_str": 9000006
+  },
+  "7": {
+    "ticker": "MSFT",
+    "cik_str": 9000007
+  },
+  "8": {
+    "ticker": "SNOW",
+    "cik_str": 9000008
+  },
+  "9": {
+    "ticker": "NET",
+    "cik_str": 9000009
+  },
+  "10": {
+    "ticker": "DDOG",
+    "cik_str": 9000010
+  },
+  "11": {
+    "ticker": "CRM",
+    "cik_str": 9000011
+  },
+  "12": {
+    "ticker": "CRWD",
+    "cik_str": 9000012
+  },
+  "13": {
+    "ticker": "PANW",
+    "cik_str": 9000013
+  },
+  "14": {
+    "ticker": "ZS",
+    "cik_str": 9000014
+  },
+  "15": {
+    "ticker": "OKTA",
+    "cik_str": 9000015
+  },
+  "16": {
+    "ticker": "SQ",
+    "cik_str": 9000016
+  },
+  "17": {
+    "ticker": "AFRM",
+    "cik_str": 9000017
+  },
+  "18": {
+    "ticker": "PYPL",
+    "cik_str": 9000018
+  },
+  "19": {
+    "ticker": "VRTX",
+    "cik_str": 9000019
+  },
+  "20": {
+    "ticker": "CRSP",
+    "cik_str": 9000020
+  },
+  "21": {
+    "ticker": "REGN",
+    "cik_str": 9000021
+  },
+  "22": {
+    "ticker": "TSLA",
+    "cik_str": 9000022
+  },
+  "23": {
+    "ticker": "ENPH",
+    "cik_str": 9000023
+  },
+  "24": {
+    "ticker": "ROKU",
+    "cik_str": 9000024
+  },
+  "25": {
+    "ticker": "SHOP",
+    "cik_str": 9000025
+  },
+  "26": {
+    "ticker": "SE",
+    "cik_str": 1703399
+  },
+  "27": {
+    "ticker": "MELI",
+    "cik_str": 1099590
+  },
+  "28": {
+    "ticker": "META",
+    "cik_str": 9000028
+  },
+  "29": {
+    "ticker": "AAPL",
+    "cik_str": 9000029
+  },
+  "30": {
+    "ticker": "UBER",
+    "cik_str": 9000030
+  },
+  "31": {
+    "ticker": "ASML",
+    "cik_str": 937966
+  },
+  "32": {
+    "ticker": "ORCL",
+    "cik_str": 9000032
+  },
+  "33": {
+    "ticker": "NOW",
+    "cik_str": 9000033
+  },
+  "34": {
+    "ticker": "MDB",
+    "cik_str": 9000034
+  }
+}

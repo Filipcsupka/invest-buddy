@@ -1,0 +1,254 @@
+{
+ "meta": {
+  "disclaimer": "Do not rely on openFDA to make decisions regarding medical care. While we make every effort to ensure that data is accurate, you should assume all results are unvalidated. We may limit or otherwise restrict your access to the API in line with our Terms of Service.",
+  "terms": "https://open.fda.gov/terms/",
+  "license": "https://open.fda.gov/license/",
+  "last_updated": "2026-10-02",
+  "results": {
+   "skip": 0,
+   "limit": 3,
+   "total": 81
+  }
+ },
+ "results": [
+  {
+   "submissions": [
+    {
+     "submission_type": "SUPPL",
+     "submission_number": "1",
+     "submission_status": "AP",
+     "submission_status_date": "20220901",
+     "review_priority": "STANDARD",
+     "submission_class_code": "EFFICACY",
+     "submission_class_code_description": "Efficacy",
+     "application_docs": [
+      {
+       "id": "71995",
+       "url": "https://www.accessdata.fda.gov/drugsatfda_docs/appletter/2022/215341Orig1s001ltr.pdf",
+       "date": "20220902",
+       "type": "Letter"
+      },
+      {
+       "id": "72002",
+       "url": "http://www.accessdata.fda.gov/drugsatfda_docs/label/2022/215341s001lbl.pdf",
+       "date": "20220902",
+       "type": "Label"
+      }
+     ]
+    },
+    {
+     "submission_type": "SUPPL",
+     "submission_number": "11",
+     "submission_status": "AP",
+     "submission_status_date": "20260916",
+     "review_priority": "PRIORITY",
+     "submission_class_code": "EFFICACY",
+     "submission_class_code_description": "Efficacy",
+     "application_docs": [
+      {
+       "id": "87213",
+       "url": "https://www.accessdata.fda.gov/drugsatfda_docs/appletter/2026/215341Orig1s011ltr.pdf",
+       "date": "20260921",
+       "type": "Letter"
+      },
+      {
+       "id": "87232",
+       "url": "https://www.accessdata.fda.gov/drugsatfda_docs/label/2026/215341s011lbl.pdf",
+       "date": "20260922",
+       "type": "Label"
+      }
+     ]
+    }
+   ],
+   "application_number": "NDA215341",
+   "sponsor_name": "BAYER HLTHCARE",
+   "products": [
+    {
+     "product_number": "002",
+     "reference_drug": "Yes",
+     "brand_name": "KERENDIA",
+     "active_ingredients": [
+      {
+       "name": "FINERENONE",
+       "strength": "20MG"
+      }
+     ],
+     "reference_standard": "No",
+     "dosage_form": "TABLET",
+     "route": "ORAL",
+     "marketing_status": "Prescription"
+    }
+   ]
+  },
+  {
+   "submissions": [
+    {
+     "submission_type": "ORIG",
+     "submission_number": "1",
+     "submission_status": "AP",
+     "submission_status_date": "20211122",
+     "review_priority": "PRIORITY",
+     "submission_class_code": "TYPE 5",
+     "submission_class_code_description": "Type 5 - New Formulation or New Manufacturer",
+     "submission_property_type": [
+      {
+       "code": "Orphan"
+      }
+     ],
+     "application_docs": [
+      {
+       "id": "69383",
+       "url": "http://www.accessdata.fda.gov/drugsatfda_docs/label/2021/213312Orig1s000Corrected_lbl.pdf",
+       "date": "20211210",
+       "type": "Label"
+      },
+      {
+       "id": "69408",
+       "url": "https://www.accessdata.fda.gov/drugsatfda_docs/appletter/2021/213312Orig1s000Corrected_ltr.pdf",
+       "date": "20211124",
+       "type": "Letter"
+      },
+      {
+       "id": "71970",
+       "url": "https://www.accessdata.fda.gov/drugsatfda_docs/nda/2022/213312Orig1s000TOC.html",
+       "date": "20220830",
+       "type": "Review"
+      }
+     ]
+    },
+    {
+     "submission_type": "SUPPL",
+     "submission_number": "14",
+     "submission_status": "AP",
+     "submission_status_date": "20260902",
+     "review_priority": "STANDARD",
+     "submission_class_code": "LABELING",
+     "submission_class_code_description": "Labeling",
+     "submission_property_type": [
+      {
+       "code": "Orphan"
+      }
+     ],
+     "application_docs": [
+      {
+       "id": "87148",
+       "url": "https://www.accessdata.fda.gov/drugsatfda_docs/appletter/2026/213312Orig1s014ltr.pdf",
+       "date": "20260904",
+       "type": "Letter"
+      },
+      {
+       "id": "87181",
+       "url": "https://www.accessdata.fda.gov/drugsatfda_docs/label/2026/213312s014lbl.pdf",
+       "date": "20260911",
+       "type": "Label"
+      }
+     ]
+    }
+   ],
+   "application_number": "NDA213312",
+   "sponsor_name": "AADI",
+   "products": [
+    {
+     "product_number": "001",
+     "reference_drug": "Yes",
+     "brand_name": "FYARRO",
+     "active_ingredients": [
+      {
+       "name": "SIROLIMUS",
+       "strength": "100MG/VIAL"
+      }
+     ],
+     "reference_standard": "Yes",
+     "dosage_form": "POWDER",
+     "route": "INTRAVENOUS",
+     "marketing_status": "Prescription"
+    }
+   ]
+  },
+  {
+   "submissions": [
+    {
+     "submission_type": "SUPPL",
+     "submission_number": "4",
+     "submission_status": "AP",
+     "submission_status_date": "20260916",
+     "review_priority": "STANDARD",
+     "submission_class_code": "EFFICACY",
+     "submission_class_code_description": "Efficacy",
+     "submission_property_type": [
+      {
+       "code": "Orphan"
+      }
+     ],
+     "application_docs": [
+      {
+       "id": "87216",
+       "url": "https://www.accessdata.fda.gov/drugsatfda_docs/appletter/2026/219713Orig1s004ltr.pdf",
+       "date": "20260921",
+       "type": "Letter"
+      },
+      {
+       "id": "87238",
+       "url": "https://www.accessdata.fda.gov/drugsatfda_docs/label/2026/219713s004lbl.pdf",
+       "date": "20260922",
+       "type": "Label"
+      }
+     ]
+    },
+    {
+     "submission_type": "ORIG",
+     "submission_number": "1",
+     "submission_status": "AP",
+     "submission_status_date": "20250611",
+     "review_priority": "PRIORITY",
+     "submission_class_code": "TYPE 1",
+     "submission_class_code_description": "Type 1 - New Molecular Entity",
+     "submission_property_type": [
+      {
+       "code": "Orphan"
+      }
+     ],
+     "application_docs": [
+      {
+       "id": "82556",
+       "url": "https://www.accessdata.fda.gov/drugsatfda_docs/appletter/2025/219713Orig1s000ltr.pdf",
+       "date": "20250612",
+       "type": "Letter"
+      },
+      {
+       "id": "82557",
+       "url": "http://www.accessdata.fda.gov/drugsatfda_docs/label/2025/219713s000lbl.pdf",
+       "date": "20250612",
+       "type": "Label"
+      },
+      {
+       "id": "82724",
+       "url": "https://www.accessdata.fda.gov/drugsatfda_docs/nda/2025/219713Orig1s000TOC.html",
+       "date": "20250702",
+       "type": "Review"
+      }
+     ]
+    }
+   ],
+   "application_number": "NDA219713",
+   "sponsor_name": "NUVATION",
+   "products": [
+    {
+     "product_number": "001",
+     "reference_drug": "Yes",
+     "brand_name": "IBTROZI",
+     "active_ingredients": [
+      {
+       "name": "TALETRECTINIB ADIPATE",
+       "strength": "EQ 200MG BASE"
+      }
+     ],
+     "reference_standard": "Yes",
+     "dosage_form": "CAPSULE",
+     "route": "ORAL",
+     "marketing_status": "Prescription"
+    }
+   ]
+  }
+ ]
+}

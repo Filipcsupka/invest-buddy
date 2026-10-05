@@ -1,0 +1,34 @@
+{
+ "articles": [
+  {
+   "url": "https://www.example-news.test/nvidia-supplier-outlook",
+   "url_mobile": "",
+   "title": "Nvidia supplier lifts outlook on AI demand",
+   "seendate": "20261005T093000Z",
+   "socialimage": "",
+   "domain": "example-news.test",
+   "language": "English",
+   "sourcecountry": "United States"
+  },
+  {
+   "url": "http://insecure.example.test/nvidia-note",
+   "url_mobile": "",
+   "title": "Nvidia analyst note",
+   "seendate": "20261005T081500Z",
+   "socialimage": "",
+   "domain": "insecure.example.test",
+   "language": "English",
+   "sourcecountry": "United States"
+  },
+  {
+   "url": "https://www.example-wire.test/chips-rally",
+   "url_mobile": "",
+   "title": "Chip stocks rally,   Nvidia leads",
+   "seendate": "20260920T120000Z",
+   "socialimage": "",
+   "domain": "example-wire.test",
+   "language": "English",
+   "sourcecountry": "United States"
+  }
+ ]
+}

@@ -17,7 +17,7 @@ export class MemoryScanRepository {
   readonly findings: StoredFinding[] = [];
   readonly macroFindings: { runId: string; asOf: string; data: ScanPayload["macro"] & { runnerName: string }; evidence: { items: ScanPayload["macro"]["evidence"]; flags: Record<string, boolean> }; supersededBy: string | null }[] = [];
   constructor(private readonly instruments: Set<string>) {}
-  ingest(payload: ScanPayload): IngestResult {
+  ingest(payload: ScanPayload, options: { skipMacro?: boolean } = {}): IngestResult {
     if (this.runs.has(payload.runId)) return { accepted: 0, rejected: [], replayed: true };
     this.runs.set(payload.runId, structuredClone(payload));
     const rejected = payload.tickers.filter((item) => !this.instruments.has(item.symbol)).map((item) => ({ symbol: item.symbol, reason: "Unknown instrument" }));
@@ -25,8 +25,10 @@ export class MemoryScanRepository {
       for (const prior of this.findings) if (prior.symbol === item.symbol && prior.asOf === payload.asOf && prior.runner.name === payload.runner.name && prior.supersededBy === null) prior.supersededBy = payload.runId;
       this.findings.push({ runId: payload.runId, asOf: payload.asOf, symbol: item.symbol, fundamentals: structuredClone(item.fundamentals), evidence: { items: structuredClone(item.evidence), flags: tickerEvidenceFlags(item) }, confidence: item.confidence, runner: structuredClone(payload.runner), receivedAt: new Date().toISOString(), supersededBy: null });
     }
-    for (const prior of this.macroFindings) if (prior.asOf === payload.asOf && prior.data.runnerName === payload.runner.name && prior.supersededBy === null) prior.supersededBy = payload.runId;
-    this.macroFindings.push({ runId: payload.runId, asOf: payload.asOf, data: { ...structuredClone(payload.macro), runnerName: payload.runner.name }, evidence: { items: structuredClone(payload.macro.evidence), flags: macroEvidenceFlags(payload.macro) }, supersededBy: null });
+    if (!options.skipMacro) {
+      for (const prior of this.macroFindings) if (prior.asOf === payload.asOf && prior.data.runnerName === payload.runner.name && prior.supersededBy === null) prior.supersededBy = payload.runId;
+      this.macroFindings.push({ runId: payload.runId, asOf: payload.asOf, data: { ...structuredClone(payload.macro), runnerName: payload.runner.name }, evidence: { items: structuredClone(payload.macro.evidence), flags: macroEvidenceFlags(payload.macro) }, supersededBy: null });
+    }
     return { accepted: payload.tickers.length - rejected.length, rejected, replayed: false };
   }
   async reconcile(asOf: string, verify: EvidenceVerifier, secLookup: (symbol: string) => Promise<RevenueResult | null> = async () => null) {

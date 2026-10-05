@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "judge output (wording only; action, amount and ratings come from the rules)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["ideas"],
+  "properties": {
+    "ideas": { "type": "array", "maxItems": 40, "items": { "$ref": "#/$defs/idea" } },
+    "notes": { "type": "string", "maxLength": 600 }
+  },
+  "$defs": {
+    "reason": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reason", "evidenceUrl"],
+      "properties": {
+        "reason": { "type": "string", "minLength": 1, "maxLength": 300 },
+        "evidenceUrl": { "type": "string", "pattern": "^https://[^\\s]+$", "maxLength": 500 }
+      }
+    },
+    "idea": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["symbol", "verdict", "whatHappened", "whyItMatters", "numbers", "plan", "evidence", "unconfirmed"],
+      "properties": {
+        "symbol": { "type": "string", "pattern": "^[A-Z0-9.]{1,10}$" },
+        "verdict": { "type": "string", "minLength": 1, "maxLength": 240 },
+        "whatHappened": { "type": "array", "minItems": 2, "maxItems": 3, "items": { "type": "string", "minLength": 1, "maxLength": 300 } },
+        "whyItMatters": { "type": "array", "minItems": 1, "maxItems": 2, "items": { "type": "string", "minLength": 1, "maxLength": 300 } },
+        "numbers": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 5,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["label", "value"],
+            "properties": {
+              "label": { "type": "string", "minLength": 1, "maxLength": 60 },
+              "value": { "type": "string", "minLength": 1, "maxLength": 80 }
+            }
+          }
+        },
+        "plan": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["trigger", "invalidation", "opportunityCost"],
+          "properties": {
+            "trigger": { "type": "string", "minLength": 1, "maxLength": 300 },
+            "invalidation": { "type": "string", "minLength": 1, "maxLength": 300 },
+            "opportunityCost": { "type": "string", "minLength": 1, "maxLength": 300 }
+          }
+        },
+        "evidence": {
+          "type": "array",
+          "maxItems": 4,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["url", "label"],
+            "properties": {
+              "url": { "type": "string", "pattern": "^https://[^\\s]+$", "maxLength": 500 },
+              "label": { "type": "string", "minLength": 1, "maxLength": 120 }
+            }
+          }
+        },
+        "unconfirmed": { "type": "boolean" },
+        "downgrade": { "$ref": "#/$defs/reason" },
+        "conflict": { "$ref": "#/$defs/reason" }
+      }
+    }
+  }
+}

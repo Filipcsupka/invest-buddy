@@ -1,0 +1,64 @@
+{
+ "studies": [
+  {
+   "protocolSection": {
+    "identificationModule": {
+     "nctId": "NCT07857473",
+     "briefTitle": "A Study to Investigate the Safety and Efficacy of TE-8105 in Overweight or Obesity Participants"
+    },
+    "statusModule": {
+     "overallStatus": "NOT_YET_RECRUITING",
+     "startDateStruct": {
+      "date": "2026-10"
+     },
+     "primaryCompletionDateStruct": {
+      "date": "2028-02"
+     },
+     "lastUpdatePostDateStruct": {
+      "date": "2026-10-05"
+     }
+    },
+    "sponsorCollaboratorsModule": {
+     "leadSponsor": {
+      "name": "Immunwork, Inc."
+     }
+    },
+    "designModule": {
+     "phases": [
+      "PHASE2"
+     ]
+    }
+   }
+  },
+  {
+   "protocolSection": {
+    "identificationModule": {
+     "nctId": "NCT07684235",
+     "briefTitle": "Extension Trial to Evaluate the Long-term Efficacy, Safety, and Tolerability of Maridebart Cafraglutide (MARITIME-1-EXTENSION)"
+    },
+    "statusModule": {
+     "overallStatus": "RECRUITING",
+     "startDateStruct": {
+      "date": "2026-07-23"
+     },
+     "primaryCompletionDateStruct": {
+      "date": "2027-12-26"
+     },
+     "lastUpdatePostDateStruct": {
+      "date": "2026-10-05"
+     }
+    },
+    "sponsorCollaboratorsModule": {
+     "leadSponsor": {
+      "name": "Amgen"
+     }
+    },
+    "designModule": {
+     "phases": [
+      "PHASE3"
+     ]
+    }
+   }
+  }
+ ]
+}

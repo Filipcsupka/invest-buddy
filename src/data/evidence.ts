@@ -16,7 +16,9 @@ export const MAX_PAGE_CACHE = 200;
 export const MAX_EVIDENCE_BODY = 2_000_000;
 export const EVIDENCE_DEADLINE_MS = 12_000;
 let lastFetch = 0;
-const normalize = (s: string) => s.replace(/\s+/g, " ").trim().toLocaleLowerCase("en");
+export const normalize = (s: string) => s.replace(/\s+/g, " ").trim().toLocaleLowerCase("en");
+/** Page text as the live verifier compares it: tags removed, two entities decoded. Stored bodies go through the same step. */
+export const stripMarkup = (page: string) => page.replace(/<[^>]*>/g, " ").replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&");
 function blocked(address: string): boolean {
   if (isIP(address) === 4) {
     const [a,b] = address.split(".").map(Number);
@@ -102,7 +104,7 @@ export const liveVerifier: EvidenceVerifier = async (entry, asOf) => {
     let page = cache.get(key);
     if (!page) { page = await fetchPage(entry.url); rememberPage(key, page); }
     else rememberPage(key, page);
-    return normalize(page.replace(/<[^>]*>/g, " ").replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&")).includes(normalize(entry.quote));
+    return normalize(stripMarkup(page)).includes(normalize(entry.quote));
   } catch { return false; }
 };
 export const offVerifier: EvidenceVerifier = async (entry, asOf) => {

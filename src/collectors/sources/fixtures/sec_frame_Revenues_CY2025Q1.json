@@ -1,0 +1,59 @@
+{
+ "taxonomy": "us-gaap",
+ "tag": "Revenues",
+ "ccp": "CY2025Q1",
+ "uom": "USD",
+ "label": "Revenues",
+ "description": "Synthetic sample in the SEC frames format.",
+ "pts": 6,
+ "data": [
+  {
+   "accn": "0000000000-26-000001",
+   "cik": 1045810,
+   "entityName": "NVIDIA CORP",
+   "loc": "US-CA",
+   "end": "2025-03-31",
+   "val": 26000000000.0
+  },
+  {
+   "accn": "0000000000-26-000002",
+   "cik": 1321655,
+   "entityName": "Palantir Technologies Inc.",
+   "loc": "US-CA",
+   "end": "2025-03-31",
+   "val": 630000000.0
+  },
+  {
+   "accn": "0000000000-26-000003",
+   "cik": 1512673,
+   "entityName": "Block, Inc.",
+   "loc": "US-CA",
+   "end": "2025-03-31",
+   "val": 5600000000.0
+  },
+  {
+   "accn": "0000000000-26-000004",
+   "cik": 9100001,
+   "entityName": "Acme Cloud Inc",
+   "loc": "US-CA",
+   "end": "2025-03-31",
+   "val": 140000000.0
+  },
+  {
+   "accn": "0000000000-26-000005",
+   "cik": 9100003,
+   "entityName": "Tiny Labs Inc",
+   "loc": "US-CA",
+   "end": "2025-03-31",
+   "val": 5000000.0
+  },
+  {
+   "accn": "0000000000-26-000006",
+   "cik": 9100004,
+   "entityName": "Drop Fast Inc",
+   "loc": "US-CA",
+   "end": "2025-03-31",
+   "val": 95000000.0
+  }
+ ]
+}

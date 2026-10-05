@@ -1,0 +1,175 @@
+{
+ "meta": {
+  "disclaimer": "Do not rely on openFDA to make decisions regarding medical care. While we make every effort to ensure that data is accurate, you should assume all results are unvalidated. We may limit or otherwise restrict your access to the API in line with our Terms of Service.",
+  "terms": "https://open.fda.gov/terms/",
+  "license": "https://open.fda.gov/license/",
+  "last_updated": "2026-10-02",
+  "results": {
+   "skip": 0,
+   "limit": 2,
+   "total": 6
+  }
+ },
+ "results": [
+  {
+   "submissions": [
+    {
+     "submission_type": "SUPPL",
+     "submission_number": "5",
+     "submission_status": "AP",
+     "submission_status_date": "20260402",
+     "review_priority": "STANDARD",
+     "submission_class_code": "EFFICACY",
+     "submission_class_code_description": "Efficacy",
+     "application_docs": [
+      {
+       "id": "85639",
+       "url": "https://www.accessdata.fda.gov/drugsatfda_docs/label/2026/761355s005lbl.pdf",
+       "date": "20260406",
+       "type": "Label"
+      },
+      {
+       "id": "85640",
+       "url": "https://www.accessdata.fda.gov/drugsatfda_docs/appletter/2026/761355Orig1s005ltr.pdf",
+       "date": "20260406",
+       "type": "Letter"
+      }
+     ]
+    },
+    {
+     "submission_type": "SUPPL",
+     "submission_number": "10",
+     "submission_status": "AP",
+     "submission_status_date": "20251119",
+     "review_priority": "PRIORITY",
+     "submission_class_code": "EFFICACY",
+     "submission_class_code_description": "Efficacy",
+     "application_docs": [
+      {
+       "id": "84240",
+       "url": "http://www.accessdata.fda.gov/drugsatfda_docs/label/2025/761355s010lbl.pdf",
+       "date": "20251120",
+       "type": "Label"
+      },
+      {
+       "id": "84251",
+       "url": "https://www.accessdata.fda.gov/drugsatfda_docs/appletter/2025/761355Orig1s010ltr.pdf",
+       "date": "20251121",
+       "type": "Letter"
+      }
+     ]
+    }
+   ],
+   "application_number": "BLA761355",
+   "sponsor_name": "REGENERON PHARMACEUTICALS",
+   "products": [
+    {
+     "product_number": "001",
+     "reference_drug": "No",
+     "brand_name": "EYLEA HD",
+     "active_ingredients": [
+      {
+       "name": "AFLIBERCEPT",
+       "strength": "8MG(0.07ML"
+      }
+     ],
+     "reference_standard": "No",
+     "dosage_form": "INJECTABLE",
+     "route": "INJECTION",
+     "marketing_status": "Prescription"
+    }
+   ]
+  },
+  {
+   "submissions": [
+    {
+     "submission_type": "SUPPL",
+     "submission_number": "51",
+     "submission_status": "AP",
+     "submission_status_date": "20250417",
+     "review_priority": "STANDARD",
+     "submission_class_code": "EFFICACY",
+     "submission_class_code_description": "Efficacy",
+     "application_docs": [
+      {
+       "id": "81962",
+       "url": "http://www.accessdata.fda.gov/drugsatfda_docs/label/2025/761055s051lbl.pdf",
+       "date": "20250424",
+       "type": "Label"
+      },
+      {
+       "id": "82026",
+       "url": "http://www.accessdata.fda.gov/drugsatfda_docs/appletter/2025/761055Orig1s051correctedltr.pdf",
+       "date": "20250428",
+       "type": "Letter"
+      }
+     ]
+    },
+    {
+     "submission_type": "SUPPL",
+     "submission_number": "76",
+     "submission_status": "AP",
+     "submission_status_date": "20260715",
+     "review_priority": "STANDARD",
+     "submission_class_code": "LABELING",
+     "submission_class_code_description": "Labeling",
+     "application_docs": [
+      {
+       "id": "87125",
+       "url": "https://www.accessdata.fda.gov/drugsatfda_docs/label/2026/761055Orig1s076lbl.pdf",
+       "date": "20260902",
+       "type": "Label"
+      },
+      {
+       "id": "87143",
+       "url": "https://www.accessdata.fda.gov/drugsatfda_docs/appletter/2026/761055Orig1s076ltr.pdf",
+       "date": "20260903",
+       "type": "Letter"
+      }
+     ]
+    },
+    {
+     "submission_type": "SUPPL",
+     "submission_number": "82",
+     "submission_status": "AP",
+     "submission_status_date": "20260416",
+     "review_priority": "STANDARD",
+     "submission_class_code": "LABELING",
+     "submission_class_code_description": "Labeling",
+     "application_docs": [
+      {
+       "id": "85715",
+       "url": "https://www.accessdata.fda.gov/drugsatfda_docs/appletter/2026/761055Orig1s082ltr.pdf",
+       "date": "20260420",
+       "type": "Letter"
+      },
+      {
+       "id": "85728",
+       "url": "https://www.accessdata.fda.gov/drugsatfda_docs/label/2026/761055s082lbl.pdf",
+       "date": "20260421",
+       "type": "Label"
+      }
+     ]
+    }
+   ],
+   "application_number": "BLA761055",
+   "sponsor_name": "REGENERON PHARMACEUTICALS",
+   "products": [
+    {
+     "product_number": "001",
+     "reference_drug": "No",
+     "brand_name": "DUPIXENT",
+     "active_ingredients": [
+      {
+       "name": "DUPILUMAB",
+       "strength": "150MG/ML"
+      }
+     ],
+     "dosage_form": "INJECTABLE",
+     "route": "INJECTION",
+     "marketing_status": "Prescription"
+    }
+   ]
+  }
+ ]
+}

@@ -26,3 +26,16 @@ it("keeps both agents and reconciles their conflicting fields", async () => {
   await repo.reconcile("2026-10-03", async () => true);
   expect(repo.consensus.find((item) => item.field === "epsBeat")).toMatchObject({ agreement: "disputed", value: null });
 });
+it("keeps an existing macro finding when a ticker-only run skips macro", () => {
+  const repo = new MemoryScanRepository(new Set(["NVDA"]));
+  const withMacro = scanSchema.parse({ ...base, macro: { ...base.macro, sectorRotationIntoGrowth: false, notes: "daily macro scan" } });
+  repo.ingest(withMacro);
+  const tickerOnly = scanSchema.parse({ ...base, runId: "6f2b8c1e-5a47-4d0e-9b61-2c7e4a9d1f08" });
+  repo.ingest(tickerOnly, { skipMacro: true });
+  expect(repo.macroFindings).toHaveLength(1);
+  expect(repo.macroFindings[0]).toMatchObject({ runId: withMacro.runId, supersededBy: null });
+  expect(repo.findings.filter((item) => item.supersededBy === null).map((item) => item.runId)).toEqual([tickerOnly.runId]);
+  const normal = scanSchema.parse({ ...base, runId: "7f2b8c1e-5a47-4d0e-9b61-2c7e4a9d1f08" });
+  repo.ingest(normal);
+  expect(repo.macroFindings.map((item) => item.supersededBy)).toEqual([normal.runId, null]);
+});

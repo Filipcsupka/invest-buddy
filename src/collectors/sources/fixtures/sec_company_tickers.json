@@ -1,0 +1,42 @@
+{
+ "0": {
+  "cik_str": 1045810,
+  "ticker": "NVDA",
+  "title": "NVIDIA CORP"
+ },
+ "1": {
+  "cik_str": 1321655,
+  "ticker": "PLTR",
+  "title": "Palantir Technologies Inc."
+ },
+ "2": {
+  "cik_str": 1512673,
+  "ticker": "XYZ",
+  "title": "Block, Inc."
+ },
+ "3": {
+  "cik_str": 1652044,
+  "ticker": "GOOGL",
+  "title": "Alphabet Inc."
+ },
+ "4": {
+  "cik_str": 9100001,
+  "ticker": "ACME",
+  "title": "Acme Cloud Inc"
+ },
+ "5": {
+  "cik_str": 9100002,
+  "ticker": "BETA",
+  "title": "Beta Systems Corp"
+ },
+ "6": {
+  "cik_str": 9100003,
+  "ticker": "TINY",
+  "title": "Tiny Labs Inc"
+ },
+ "7": {
+  "cik_str": 9100004,
+  "ticker": "DROP",
+  "title": "Drop Fast Inc"
+ }
+}

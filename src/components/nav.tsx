@@ -3,6 +3,7 @@ import { getMessages, localeCookie, otherLocale, type Locale } from "@/i18n";
 import { LanguageSwitch, NavLinks } from "./nav-links";
 import { ThemeToggle } from "./theme-toggle";
 import { latestScores } from "@/data/store";
+import { ideasEnabled } from "@/data/ideas-store";
 
 export function BrandMark() {
   return (
@@ -30,6 +31,7 @@ export function Nav({ locale }: { locale: Locale }) {
           items={[
             { href: "/dashboard", text: m.nav.dashboard },
             { href: "/scanner", text: m.nav.scanner },
+            ...(ideasEnabled() ? [{ href: "/ideas", text: m.nav.ideas }] : []),
             { href: "/track-record", text: m.nav.trackRecord },
             { href: "/portfolio", text: m.nav.portfolio },
             { href: "/methodology", text: m.nav.methodology },

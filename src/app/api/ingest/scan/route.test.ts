@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("../../../../db/scan", () => ({ ingestScan: vi.fn(async () => ({ accepted: 1, rejected: [], replayed: false })) }));
 vi.mock("pg", () => ({ default: { Pool: class { async end() {} } } }));
+import { ingestScan } from "../../../../db/scan";
 import { POST } from "./route";
 
 const payload = {
@@ -19,6 +20,13 @@ describe("scan ingest responses", () => {
   it("returns 413 above one megabyte", async () => { expect((await POST(request("x".repeat(1_000_001)))).status).toBe(413); });
   it("returns 400 with field paths", async () => { const response = await POST(request(JSON.stringify({ ...payload, asOf: "bad" }))); expect(response.status).toBe(400); expect(await response.json()).toMatchObject({ fields: [{ path: "asOf" }] }); });
   it("returns 200 for valid input", async () => { const response = await POST(request(JSON.stringify(payload))); expect(response.status).toBe(200); expect(await response.json()).toEqual({ accepted: 1, rejected: [], replayed: false }); });
+  it("passes skipMacro only for ?macro=skip", async () => {
+    const mocked = vi.mocked(ingestScan); mocked.mockClear();
+    await POST(request(JSON.stringify(payload)));
+    expect(mocked.mock.calls[0][2]).toEqual({ skipMacro: false });
+    await POST(new Request("http://localhost/api/ingest/scan?macro=skip", { method: "POST", headers: { authorization: "Bearer secret", "x-forwarded-for": crypto.randomUUID() }, body: JSON.stringify(payload) }));
+    expect(mocked.mock.calls[1][2]).toEqual({ skipMacro: true });
+  });
   it("returns 429 after the per-minute limit", async () => { const ip = crypto.randomUUID(); for (let i = 0; i < 60; i++) await POST(request(JSON.stringify(payload), "Bearer secret", ip)); expect((await POST(request(JSON.stringify(payload), "Bearer secret", ip))).status).toBe(429); });
   it("returns 503 without database configuration", async () => { delete process.env.DATABASE_URL; expect((await POST(request(JSON.stringify(payload)))).status).toBe(503); });
 });

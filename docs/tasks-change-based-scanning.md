@@ -25,12 +25,12 @@ Goal: both agents keep collecting facts, but only for tickers that changed, with
 - [ ] Weekly full sweep of all 35 tickers on one weekday, to catch news-only catalysts.
 
 ## 4. Carry-forward in reconcile and daily
-- [ ] Today `reconcile.ts` and `daily.ts` expect findings for every ticker per `as_of`. A partial scan leaves the rest missing.
-- [ ] Reuse the latest `consensus_findings` row for unscanned tickers, tagged with its origin date.
-- [ ] Per-field expiry (examples: earnings facts until next report, `productCatalyst` about 90 days, insider buying about 30 days). Expired fields become unknown (`null`).
-- [ ] Show carried-over data as carried in the UI and the score fingerprint, never as fresh.
-- [ ] Check whether existing tables are enough or a migration is needed.
-- [ ] Update `reconcile.test.ts` and `daily.test.ts`.
+- [x] Today `reconcile.ts` and `daily.ts` expect findings for every ticker per `as_of`. A partial scan leaves the rest missing. (`CARRY_FORWARD=on`, default off)
+- [x] Reuse the latest `consensus_findings` row for unscanned tickers, tagged with its origin date. (`carried_from`)
+- [x] Per-field expiry. Uses the evidence windows in `freshnessDays` (100, 60, 30 days), not the examples listed here. Expired fields become unknown (`null`).
+- [x] Show carried-over data as carried in the UI and the score fingerprint, never as fresh.
+- [x] Check whether existing tables are enough or a migration is needed. Migration 009 adds `consensus_findings.carried_from`.
+- [x] Update `reconcile.test.ts` and `daily.test.ts`. New cases are in `src/jobs/carry-forward.test.ts` and `src/data/carry-forward.test.ts`; the old files are unchanged.
 
 ## 5. Two agents, split roles
 - [ ] Codex (Luna) as second collector once the account token is ready: set `--model gpt-6-luna` on `invest-buddy-scan-codex` and un-suspend. Needs a populated `invest-buddy-codex-auth-seed`.
@@ -38,10 +38,17 @@ Goal: both agents keep collecting facts, but only for tickers that changed, with
 - [ ] Local Codex Luna dry run on NVDA passed on 2026-10-05 (macro 65s, NVDA 48s, schema ok). Run a larger sample before the cron.
 
 ## 6. Judgement step
-- [ ] One call, no web tools, small input: reconciled facts plus portfolio baseline in, trade ideas out, using the alert format from the ChatGPT task prompt.
-- [ ] Pick the model for this step (Claude Sonnet/Opus vs Codex).
-- [ ] Only notify on actionable changes; no routine HOLD output.
+- [x] One call, no web tools, small input: reconciled facts plus portfolio baseline in, trade ideas out. `scanner/run-judge.mjs`, `scanner/prompts/judge.md`, `docs/data.md` (Judge).
+- [x] Pick the model for this step: Claude Sonnet on the subscription CLI, set with `--model` or `JUDGE_MODEL`. Codex adapter not built.
+- [x] Only notify on actionable changes; no routine HOLD output. Only ideas whose deterministic signature changed are stored.
+- [x] Code decides action, amount band and ratings (`src/engine/signals.ts`); the AI writes wording and may only downgrade to WATCH EUR 0.
+- [x] Chart numbers from stored bars (`src/data/technicals.ts`), no raw series sent to the model or the page.
+- [x] Portfolio baseline shape and routes (`portfolio_baseline`, `/api/ingest/portfolio-baseline`).
+- [x] Web page `/ideas` with nav link, behind `IDEAS_PAGE=on` (ADR-001).
+- [ ] Hook `purgeIdeas` into `src/jobs/retention.ts` (one line, not done in this change).
+- [ ] Run the judge as a CronJob after reconcile and daily.
+- [ ] Decide whether the ideas page may be public (ADR-001 says no EUR sizing in the public product).
 
 ## 7. Billing safety
 - [ ] Decide whether the cron stays on the subscription token or moves to its own key, so it stops sharing the 5h pool with interactive work.
-- [ ] Log token usage per run (CLI `usage` / `modelUsage`) in the run log so the next surprise shows up in the job output.
+- [ ] Log token usage per run (CLI `usage` / `modelUsage`) in the run log so the next surprise shows up in the job output. Table `extraction_runs`, its route and `scanner/extraction-log.mjs` exist; `run-extract.mjs` does not call them yet. The judge already logs and stores its tokens, turns and cost in `judge_runs`.

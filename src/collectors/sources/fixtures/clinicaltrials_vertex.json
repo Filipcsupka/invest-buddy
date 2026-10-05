@@ -1,0 +1,94 @@
+{
+ "studies": [
+  {
+   "protocolSection": {
+    "identificationModule": {
+     "nctId": "NCT07792408",
+     "briefTitle": "Effects of VX-407 on the Pharmacokinetics of Combined Oral Contraceptives"
+    },
+    "statusModule": {
+     "overallStatus": "RECRUITING",
+     "startDateStruct": {
+      "date": "2026-09-01"
+     },
+     "primaryCompletionDateStruct": {
+      "date": "2027-03-11"
+     },
+     "lastUpdatePostDateStruct": {
+      "date": "2026-09-30"
+     }
+    },
+    "sponsorCollaboratorsModule": {
+     "leadSponsor": {
+      "name": "Vertex Pharmaceuticals Incorporated"
+     }
+    },
+    "designModule": {
+     "phases": [
+      "PHASE1"
+     ]
+    }
+   }
+  },
+  {
+   "protocolSection": {
+    "identificationModule": {
+     "nctId": "NCT07437105",
+     "briefTitle": "Dose Escalation Study Evaluating the Safety and Pharmacokinetics of VX-272 in Healthy Participants"
+    },
+    "statusModule": {
+     "overallStatus": "RECRUITING",
+     "startDateStruct": {
+      "date": "2026-02-25"
+     },
+     "primaryCompletionDateStruct": {
+      "date": "2027-06-26"
+     },
+     "lastUpdatePostDateStruct": {
+      "date": "2026-09-23"
+     }
+    },
+    "sponsorCollaboratorsModule": {
+     "leadSponsor": {
+      "name": "Vertex Pharmaceuticals Incorporated"
+     }
+    },
+    "designModule": {
+     "phases": [
+      "PHASE1"
+     ]
+    }
+   }
+  },
+  {
+   "protocolSection": {
+    "identificationModule": {
+     "nctId": "NCT07161037",
+     "briefTitle": "Phase 2a Study of VX-407 in Participants With ADPKD Who Have a Subset of PKD1 Gene Variants (AGLOW)"
+    },
+    "statusModule": {
+     "overallStatus": "ACTIVE_NOT_RECRUITING",
+     "startDateStruct": {
+      "date": "2025-11-19"
+     },
+     "primaryCompletionDateStruct": {
+      "date": "2027-07-22"
+     },
+     "lastUpdatePostDateStruct": {
+      "date": "2026-09-21"
+     }
+    },
+    "sponsorCollaboratorsModule": {
+     "leadSponsor": {
+      "name": "Vertex Pharmaceuticals Incorporated"
+     }
+    },
+    "designModule": {
+     "phases": [
+      "PHASE2"
+     ]
+    }
+   }
+  }
+ ]
+}

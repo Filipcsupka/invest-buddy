@@ -1,3 +1,5 @@
+import { requireSecUserAgent } from "../collectors/sec-user-agent";
+
 /** SEC companyfacts revenue calculations. Only comparable filed fiscal quarters are used. */
 export interface SecFact { start?: string; end: string; val: number; accn: string; fy: number; fp: string; form: string; filed: string; frame?: string }
 export interface CompanyFacts { facts: { "us-gaap"?: Record<string, { units: Record<string, SecFact[]> }> } }
@@ -45,8 +47,7 @@ async function secJson<T>(url: string): Promise<T> {
   const day = new Date().toISOString().slice(0,10);
   const saved = cache.get(url);
   if (saved?.day === day) return saved.value as T;
-  const userAgent = process.env.SEC_USER_AGENT;
-  if (!userAgent) throw new Error("SEC_USER_AGENT is required");
+  const userAgent = requireSecUserAgent(process.env.SEC_USER_AGENT);
   const wait = Math.max(0, 250 - (Date.now() - previousRequest));
   if (wait) await new Promise((resolve) => setTimeout(resolve, wait));
   previousRequest = Date.now();
