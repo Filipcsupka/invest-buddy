@@ -1,0 +1,27 @@
+{
+ "taxonomy": "us-gaap",
+ "tag": "RevenueFromContractWithCustomerExcludingAssessedTax",
+ "ccp": "CY2025Q2",
+ "uom": "USD",
+ "label": "RevenueFromContractWithCustomerExcludingAssessedTax",
+ "description": "Synthetic sample in the SEC frames format.",
+ "pts": 2,
+ "data": [
+  {
+   "accn": "0000000000-26-000001",
+   "cik": 9100002,
+   "entityName": "Beta Systems Corp",
+   "loc": "US-CA",
+   "end": "2025-06-30",
+   "val": 300000000.0
+  },
+  {
+   "accn": "0000000000-26-000002",
+   "cik": 1652044,
+   "entityName": "Alphabet Inc.",
+   "loc": "US-CA",
+   "end": "2025-06-30",
+   "val": 84000000000.0
+  }
+ ]
+}

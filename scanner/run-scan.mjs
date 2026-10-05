@@ -47,7 +47,7 @@ function usage(msg) {
 }
 
 // ---------- helpers ----------
-function lastUsTradingDay(now = new Date()) {
+export function lastUsTradingDay(now = new Date()) {
   // Last completed weekday session in New York. US market holidays are not modelled; use --as-of to override.
   const parts = Object.fromEntries(new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(now).map((p) => [p.type, p.value]));
   const d = new Date(Date.UTC(+parts.year, +parts.month - 1, +parts.day));
@@ -58,7 +58,7 @@ function lastUsTradingDay(now = new Date()) {
   return d.toISOString().slice(0, 10);
 }
 
-function getToken() {
+export function getToken() {
   if (process.env.INGEST_TOKEN) return process.env.INGEST_TOKEN.trim();
   if (process.platform === "darwin") {
     try {
@@ -69,7 +69,7 @@ function getToken() {
 }
 
 // Extract the first balanced JSON object from model text (tolerates fences or stray prose).
-function extractJson(text) {
+export function extractJson(text) {
   const s = String(text ?? "");
   for (let start = s.indexOf("{"); start !== -1; start = s.indexOf("{", start + 1)) {
     let depth = 0, inStr = false, esc = false;
@@ -86,7 +86,7 @@ function extractJson(text) {
   throw new Error("no JSON object in model output");
 }
 
-function fill(template, vars) {
+export function fill(template, vars) {
   return template.replace(/\{\{(\w+)\}\}/g, (_, k) => (k in vars ? vars[k] : `{{${k}}}`));
 }
 
@@ -114,11 +114,11 @@ function envelopeMessage(out) {
 
 // ---------- agent call ----------
 export function agentEnv(source = process.env) {
-  const allowed = new Set(["PATH", "HOME", "CODEX_HOME", "CLAUDE_CONFIG_DIR", "CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "CODEX_API_KEY", "LANG", "LANGUAGE", "LC_ALL", "TZ", "TMPDIR", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "all_proxy", "no_proxy"]);
+  const allowed = new Set(["PATH", "HOME", "CODEX_HOME", "CLAUDE_CONFIG_DIR", "CLAUDE_CODE_OAUTH_TOKEN", "USER", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "CODEX_API_KEY", "LANG", "LANGUAGE", "LC_ALL", "TZ", "TMPDIR", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "all_proxy", "no_proxy"]);
   return Object.fromEntries(Object.entries(source).filter(([key, value]) => value !== undefined && (allowed.has(key) || /^LC_[A-Z_]+$/.test(key))));
 }
 
-function runCli(cmd, args, input, { timeoutMs, cwd }) {
+export function runCli(cmd, args, input, { timeoutMs, cwd }) {
   return new Promise((resolve, reject) => {
     const child = spawn(cmd, args, { cwd, env: agentEnv(), stdio: ["pipe", "pipe", "pipe"] });
     let out = "", err = "", timedOut = false;
@@ -161,14 +161,14 @@ async function callAgent(opts, prompt, work, kind) {
   return { text: readFileSync(last, "utf8"), model: opts.model || "default" };
 }
 
-async function withRetry(fn, log, label) {
+export async function withRetry(fn, log, label) {
   try { return await fn(); } catch (e1) {
     log(`${label}: attempt 1 failed: ${e1.message}`);
     try { return await fn(); } catch (e2) { log(`${label}: attempt 2 failed: ${e2.message}`); throw e2; }
   }
 }
 
-async function pool(items, limit, worker) {
+export async function pool(items, limit, worker) {
   const results = new Array(items.length);
   let next = 0;
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {

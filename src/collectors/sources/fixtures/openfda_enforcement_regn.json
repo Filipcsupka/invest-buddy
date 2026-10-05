@@ -1,0 +1,114 @@
+{
+ "meta": {
+  "disclaimer": "Do not rely on openFDA to make decisions regarding medical care. While we make every effort to ensure that data is accurate, you should assume all results are unvalidated. We may limit or otherwise restrict your access to the API in line with our Terms of Service.",
+  "terms": "https://open.fda.gov/terms/",
+  "license": "https://open.fda.gov/license/",
+  "last_updated": "2026-09-23",
+  "results": {
+   "skip": 0,
+   "limit": 1,
+   "total": 3
+  }
+ },
+ "results": [
+  {
+   "status": "Terminated",
+   "city": "Tarrytown",
+   "state": "NY",
+   "country": "United States",
+   "classification": "Class II",
+   "openfda": {
+    "application_number": [
+     "BLA125387"
+    ],
+    "brand_name": [
+     "EYLEA"
+    ],
+    "generic_name": [
+     "AFLIBERCEPT"
+    ],
+    "manufacturer_name": [
+     "Regeneron Pharmaceuticals, Inc."
+    ],
+    "product_ndc": [
+     "61755-005"
+    ],
+    "product_type": [
+     "HUMAN PRESCRIPTION DRUG"
+    ],
+    "route": [
+     "INTRAVITREAL"
+    ],
+    "substance_name": [
+     "AFLIBERCEPT"
+    ],
+    "rxcui": [
+     "1232154",
+     "1232159",
+     "2693564",
+     "2693567"
+    ],
+    "spl_id": [
+     "9e18f393-aea5-48ef-8ac9-7d523f0badc0"
+    ],
+    "spl_set_id": [
+     "f96cfd69-da34-41ee-90a9-610a4655cd1c"
+    ],
+    "package_ndc": [
+     "61755-005-02",
+     "61755-005-55",
+     "61755-005-01",
+     "61755-005-54",
+     "8231500321",
+     "8231500335",
+     "8231500333",
+     "8231500334",
+     "8231500339",
+     "8231500347",
+     "8231500336",
+     "8231500337",
+     "8231500340",
+     "8268700014"
+    ],
+    "is_original_packager": [
+     true
+    ],
+    "nui": [
+     "N0000193543",
+     "N0000193542"
+    ],
+    "pharm_class_epc": [
+     "Vascular Endothelial Growth Factor Inhibitor [EPC]"
+    ],
+    "pharm_class_moa": [
+     "Vascular Endothelial Growth Factor Inhibitors [MoA]"
+    ],
+    "unii": [
+     "15C2VL427D"
+    ],
+    "upc": [
+     "258231500336"
+    ]
+   },
+   "product_type": "Drugs",
+   "event_id": "94646",
+   "recalling_firm": "Regeneron Pharmaceuticals Inc",
+   "address_1": "777 Old Saw Mill River Rd",
+   "address_2": "",
+   "postal_code": "10591-6717",
+   "voluntary_mandated": "Voluntary: Firm initiated",
+   "initial_firm_notification": "Letter",
+   "distribution_pattern": "USA nationwide.",
+   "recall_number": "D-0531-2024",
+   "product_description": "EYLEA, (aflibercept) Injection, For Intravitreal injection, 2 mg (0.05mL of a 40mg/mL solution), Single-dose Pre-filled Glass Syringe, Rx only, Manufactured by: Regeneron Pharmaceuticals, Inc., 777 Old Saw Mill River Road, Tarrytown, NY 10591, NDC 61755-005-01, NDC (sample lot)  61755-005-54",
+   "product_quantity": "405,725 Prefilled syringes",
+   "reason_for_recall": "Lack of Assurance of Sterility: Complaints of syringe breakage",
+   "recall_initiation_date": "20240515",
+   "center_classification_date": "20240530",
+   "termination_date": "20250925",
+   "report_date": "20240605",
+   "code_info": "Lot #  8231500321, Exp. date Oct-24 8231500335, Exp. date Jan-25 8231500333, Exp. date Jan-25 8231500334, Exp. date Jan-25 8231500339, Exp. date Jan-25 8231500347, Exp. date Jan-25 8231500336, Exp. date Jan-25 8231500337, Exp. date Jan-25 8231500340, Exp. date Jan-25 8268700014 (sample lot) exp. date Jan-25",
+   "more_code_info": ""
+  }
+ ]
+}

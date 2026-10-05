@@ -43,7 +43,7 @@ export async function POST(request: Request) {
   if (!parsed.success) return Response.json({ error: "Invalid scan", fields: parsed.error.issues.map((issue) => ({ path: issue.path.join("."), reason: issue.message })) }, { status: 400 });
   if (!process.env.DATABASE_URL) return Response.json({ error: "Database unavailable" }, { status: 503 });
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
-  try { return Response.json(await ingestScan(pool, parsed.data)); }
+  try { return Response.json(await ingestScan(pool, parsed.data, { skipMacro: new URL(request.url).searchParams.get("macro") === "skip" })); }
   catch { return Response.json({ error: "Database unavailable" }, { status: 503 }); }
   finally { await pool.end(); }
 }

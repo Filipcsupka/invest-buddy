@@ -34,4 +34,7 @@ export interface ScoreResult {
   agreement?: Record<string, string>;
   consensusValues?: Record<string, boolean | null>;
   evidenceUrls?: string[];
+  /** Only with CARRY_FORWARD=on: field to the scan date its value was carried from, and fields that expired to unknown. */
+  carriedFrom?: Record<string, string>;
+  expiredFields?: string[];
 }

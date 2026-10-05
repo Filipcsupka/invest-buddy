@@ -1,6 +1,9 @@
 import pg from "pg";
 import { liveVerifier, offVerifier, fixtureVerifier, type EvidenceRef, type EvidenceVerifier } from "../data/evidence";
+import { pgDocumentLookup, storedFirstVerifier } from "../data/stored-evidence";
 import { secRevenue, type RevenueResult } from "../data/sec";
+import { requireSecUserAgent } from "../collectors/sec-user-agent";
+import { carryField, carryForwardEnabled, type CarriedField, type ConsensusRow } from "../data/carry-forward";
 
 type Agent = "claude" | "codex";
 export type Agreement = "agree" | "disputed" | "single" | "xbrl_override";
@@ -42,6 +45,14 @@ export async function reconcileField(symbol: string, field: string, asOf: string
   }
   return { symbol, field, asOf, value, agreement, agentValues, evidenceRefs, verified, reason };
 }
+const upsertLegacy = `INSERT INTO consensus_findings (symbol,field,as_of,value,agreement,agent_values,evidence_refs,verified,reason)
+      VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8,$9)
+      ON CONFLICT (symbol,field,as_of) DO UPDATE SET value=EXCLUDED.value,agreement=EXCLUDED.agreement,agent_values=EXCLUDED.agent_values,evidence_refs=EXCLUDED.evidence_refs,verified=EXCLUDED.verified,reason=EXCLUDED.reason,reconciled_at=now()`;
+// Same as the legacy upsert, and clears a carried tag when a real finding replaces a carried row. Used only with CARRY_FORWARD=on.
+const upsertFresh = upsertLegacy.replace("reconciled_at=now()", "carried_from=NULL,reconciled_at=now()");
+const upsertCarried = `INSERT INTO consensus_findings (symbol,field,as_of,value,agreement,agent_values,evidence_refs,verified,reason,carried_from)
+      VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8,$9,$10)
+      ON CONFLICT (symbol,field,as_of) DO UPDATE SET value=EXCLUDED.value,agreement=EXCLUDED.agreement,agent_values=EXCLUDED.agent_values,evidence_refs=EXCLUDED.evidence_refs,verified=EXCLUDED.verified,reason=EXCLUDED.reason,carried_from=EXCLUDED.carried_from,reconciled_at=now()`;
 export async function runReconcile(pool: pg.Pool, asOf: string, verify: EvidenceVerifier, secLookup: (symbol: string, asOf: string) => Promise<RevenueResult | null> = secRevenue) {
   const result = await pool.query<{ symbol: string; run_id: string; runner: { name: Agent }; fundamentals: Record<string, unknown>; evidence: { items: EvidenceRef[] }; confidence: string }>("SELECT symbol,run_id,runner,fundamentals,evidence,confidence FROM scan_findings WHERE as_of=$1 AND superseded_by IS NULL AND runner->>'name' IN ('claude','codex') ORDER BY symbol,received_at DESC", [asOf]);
   const grouped = new Map<string, AgentFinding[]>();
@@ -56,18 +67,29 @@ export async function runReconcile(pool: pg.Pool, asOf: string, verify: Evidence
       pending.push(item);
     }
   }
+  // CARRY_FORWARD=on: a symbol with no findings on this date keeps its latest consensus per field while the field's window allows, tagged with its origin date.
+  const carry = carryForwardEnabled();
+  const carried: CarriedField[] = [];
+  if (carry) {
+    const latest = await pool.query<ConsensusRow & { symbol: string }>("SELECT DISTINCT ON (symbol,field) symbol,field,as_of::text AS as_of,value,agreement,agent_values,evidence_refs,verified,reason,carried_from::text AS carried_from FROM consensus_findings WHERE as_of < $1 ORDER BY symbol,field,as_of DESC", [asOf]);
+    for (const row of latest.rows) if (!grouped.has(row.symbol) && (fields as readonly string[]).includes(row.field)) carried.push(carryField(row, asOf));
+  }
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    for (const item of pending) await client.query(`INSERT INTO consensus_findings (symbol,field,as_of,value,agreement,agent_values,evidence_refs,verified,reason)
-      VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8,$9)
-      ON CONFLICT (symbol,field,as_of) DO UPDATE SET value=EXCLUDED.value,agreement=EXCLUDED.agreement,agent_values=EXCLUDED.agent_values,evidence_refs=EXCLUDED.evidence_refs,verified=EXCLUDED.verified,reason=EXCLUDED.reason,reconciled_at=now()`,
+    for (const item of pending) await client.query(carry ? upsertFresh : upsertLegacy,
       [item.symbol,item.field,item.asOf,item.value,item.agreement,JSON.stringify(item.agentValues),JSON.stringify(item.evidenceRefs),item.verified,item.reason]);
-    await client.query("INSERT INTO reconcile_runs (as_of,field_count) VALUES ($1,$2) ON CONFLICT (as_of) DO UPDATE SET completed_at=now(),field_count=EXCLUDED.field_count", [asOf,pending.length]);
+    for (const item of carried) await client.query(upsertCarried,
+      [item.symbol,item.field,item.asOf,item.value,item.agreement,JSON.stringify(item.agentValues),JSON.stringify(item.evidenceRefs),item.verified,item.reason,item.carriedFrom]);
+    await client.query("INSERT INTO reconcile_runs (as_of,field_count) VALUES ($1,$2) ON CONFLICT (as_of) DO UPDATE SET completed_at=now(),field_count=EXCLUDED.field_count", [asOf,pending.length + carried.length]);
     await client.query("COMMIT");
   } catch (error) { await client.query("ROLLBACK"); throw error; }
   finally { client.release(); }
-  return pending.length;
+  return pending.length + carried.length;
+}
+/** RECONCILE_VERIFY=live checks citations against stored source_documents first and fetches the live page only for urls that are not stored. */
+export function selectVerifier(mode: string, pool: pg.Pool): EvidenceVerifier {
+  return mode === "live" ? storedFirstVerifier(pgDocumentLookup(pool), liveVerifier) : mode === "fixture" ? fixtureVerifier : offVerifier;
 }
 async function main() {
   const args = process.argv.slice(2);
@@ -79,7 +101,8 @@ async function main() {
     if (!asOf || !/^\d{4}-\d{2}-\d{2}$/.test(asOf)) throw new Error("No valid scan date");
     const mode = process.env.RECONCILE_VERIFY ?? "live";
     if (!["live","off","fixture"].includes(mode)) throw new Error("Invalid RECONCILE_VERIFY");
-    const verifier = mode === "live" ? liveVerifier : mode === "fixture" ? fixtureVerifier : offVerifier;
+    if (mode === "live") requireSecUserAgent(process.env.SEC_USER_AGENT);
+    const verifier = selectVerifier(mode, pool);
     const secLookup = mode === "live" ? secRevenue : async () => null;
     const count = await runReconcile(pool,asOf,verifier,secLookup);
     process.stdout.write(`Reconciled ${count} fields for ${asOf} (${mode} evidence mode)\n`);

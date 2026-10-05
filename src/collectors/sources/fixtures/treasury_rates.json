@@ -1,0 +1,34 @@
+{
+ "data": [
+  {
+   "record_date": "2026-08-31",
+   "security_desc": "Treasury Bills",
+   "avg_interest_rate_amt": "3.788"
+  },
+  {
+   "record_date": "2026-08-31",
+   "security_desc": "Treasury Notes",
+   "avg_interest_rate_amt": "3.345"
+  },
+  {
+   "record_date": "2026-08-31",
+   "security_desc": "Treasury Bonds",
+   "avg_interest_rate_amt": "3.453"
+  },
+  {
+   "record_date": "2026-07-31",
+   "security_desc": "Treasury Bills",
+   "avg_interest_rate_amt": "3.758"
+  },
+  {
+   "record_date": "2026-07-31",
+   "security_desc": "Treasury Notes",
+   "avg_interest_rate_amt": "3.309"
+  },
+  {
+   "record_date": "2026-07-31",
+   "security_desc": "Treasury Bonds",
+   "avg_interest_rate_amt": "3.442"
+  }
+ ]
+}

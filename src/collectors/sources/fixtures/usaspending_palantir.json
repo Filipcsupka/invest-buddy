@@ -1,0 +1,41 @@
+{
+ "spending_level": "awards",
+ "limit": 2,
+ "results": [
+  {
+   "internal_id": 362751939,
+   "Award ID": "12314426F0479",
+   "Recipient Name": "PALANTIR TECHNOLOGIES INC.",
+   "Award Amount": 856668.56,
+   "Start Date": "2026-09-30",
+   "End Date": "2027-09-29",
+   "Awarding Agency": "Department of Agriculture",
+   "Description": "THE PURPOSE OF THIS PROJECT IS TO CONTINUE DESIGN, CONFIGURATION, DEPLOYMENT AND MANAGEMENT OF A SECURE, USER- FRIENDLY TOOL TO ENABLE THE UNITED STATES DEPARTMENT OF AGRICULTURE FINANCIAL REVIEW WORKFLOW (AUTOMATED CONTRACT INGESTION, REVIEW AND DIS",
+   "awarding_agency_id": 95,
+   "agency_slug": "department-of-agriculture",
+   "generated_internal_id": "CONT_AWD_12314426F0479_1205_47QTCA24D004L_4732"
+  },
+  {
+   "internal_id": 361742763,
+   "Award ID": "19AQMM26F7166",
+   "Recipient Name": "PALANTIR USG INC",
+   "Award Amount": 20439958.0,
+   "Start Date": "2026-09-30",
+   "End Date": "2027-09-29",
+   "Awarding Agency": "Department of State",
+   "Description": "BPA CALL FOR ELECTRONIC HEALTH RECORD AND AXIOM",
+   "awarding_agency_id": 315,
+   "agency_slug": "department-of-state",
+   "generated_internal_id": "CONT_AWD_19AQMM26F7166_1900_19AQMM25A1228_1900"
+  }
+ ],
+ "page_metadata": {
+  "page": 1,
+  "hasNext": true,
+  "last_record_unique_id": 361742763,
+  "last_record_sort_value": "1790726400000"
+ },
+ "messages": [
+  "For searches, time period start and end dates are currently limited to an earliest date of 2007-10-01.  For data going back to 2000-10-01, use either the Custom Award Download feature on the website or one of our download or bulk_download API endpoints as listed on https://api.usaspending.gov/docs/endpoints. "
+ ]
+}

@@ -1,0 +1,305 @@
+#!/usr/bin/env node
+// Judge step (phase C). Fixed rules in code (src/engine/signals.ts, served by the web's judge-input route) decide the action,
+// the amount band and the three setup ratings. This script sends only the symbols whose decision changed to ONE `claude -p`
+// call on the subscription CLI login (no API key). The model writes the wording and may only downgrade a buy to WATCH or flag
+// a conflict, each with an evidence url from the input. The script validates the JSON against scanner/schema/judge-output.schema.json,
+// rejects figures that are not in the input, merges the fixed decision with the wording and posts it to /api/ingest/ideas.
+// The model never writes to the database or the web. No database credentials here.
+// Usage: node scanner/run-judge.mjs [--dry-run] [--force] [--model sonnet] [--budget-usd 0.5] [--as-of YYYY-MM-DD]
+//        [--max-symbols 12] [--agent-mode] [--max-turns 8] [--base-url URL] [--timeout-s 300] [--input-file judge-input.json]
+//   --dry-run     call the model and write the result file, post nothing, record nothing
+//   --force       ignore the one-run-per-day and unchanged-input skips
+//   --agent-mode  the model may read the prepared input files with Read, Grep and Glob (read-only, no web, no shell), within --max-turns and the budget
+//   --input-file  offline: read the judge input from a file instead of the web
+// Model default: $JUDGE_MODEL, else sonnet. In a container: command ["node", "/app/scanner/run-judge.mjs"] (the image entrypoint is run-scan.mjs).
+import { readFileSync, writeFileSync, appendFileSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { createHash, randomUUID } from "node:crypto";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { extractJson, fill, getToken, lastUsTradingDay, runCli } from "./run-scan.mjs";
+import { callAgentNoTools, addUsage } from "./run-extract.mjs";
+import { canonical, usageFromEnvelope } from "./extraction-log.mjs";
+
+const here = dirname(fileURLToPath(import.meta.url));
+const OUT = process.env.SCAN_OUT_DIR || join(here, "out");
+export const BUY_ACTIONS = ["START_POSITION", "ADD", "HIGH_CONVICTION_ADD", "CSPX_ALLOCATION"];
+const DOWNGRADABLE = ["START_POSITION", "ADD", "HIGH_CONVICTION_ADD", "CSPX_ALLOCATION"];
+const NO_EVIDENCE_OK = ["WATCH", "CSPX_ALLOCATION", "HOLD", "THESIS_BROKEN", "REDUCE"];
+const RATE_LIMIT = /rate.?limit|usage limit|too many requests|\b429\b|overloaded|quota/i;
+const MIN_ATTEMPT_USD = 0.01;
+
+function usage(msg) {
+  if (msg) console.error(`error: ${msg}`);
+  console.error("usage: run-judge.mjs [--dry-run] [--force] [--model NAME] [--budget-usd 0.5] [--as-of YYYY-MM-DD] [--max-symbols 12] [--agent-mode] [--max-turns 8] [--base-url URL] [--timeout-s 300] [--input-file FILE]");
+  process.exit(msg ? 2 : 0);
+}
+export function parseArgs(argv, env = process.env) {
+  const o = { dryRun: false, force: false, model: env.JUDGE_MODEL || "sonnet", budgetUsd: 0.5, asOf: null, baseUrl: env.INGEST_BASE_URL || "http://web.invest.svc.cluster.local:3000", timeoutS: 300, inputFile: null, agent: "claude", maxSymbols: 12, agentMode: false, maxTurns: 8 };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    const val = () => { if (i + 1 >= argv.length) usage(`missing value for ${a}`); return argv[++i]; };
+    if (a === "--dry-run") o.dryRun = true;
+    else if (a === "--force") o.force = true;
+    else if (a === "--agent-mode") o.agentMode = true;
+    else if (a === "--model") o.model = val();
+    else if (a === "--budget-usd") o.budgetUsd = Number(val());
+    else if (a === "--as-of") o.asOf = val();
+    else if (a === "--base-url") o.baseUrl = val().replace(/\/$/, "");
+    else if (a === "--timeout-s") o.timeoutS = Number(val());
+    else if (a === "--max-symbols") o.maxSymbols = Number(val());
+    else if (a === "--max-turns") o.maxTurns = Number(val());
+    else if (a === "--input-file") o.inputFile = val();
+    else if (a === "-h" || a === "--help") usage();
+    else usage(`unknown argument ${a}`);
+  }
+  if (!(o.budgetUsd > 0)) usage("--budget-usd must be positive");
+  if (!(o.timeoutS > 0)) usage("--timeout-s must be positive");
+  if (!Number.isInteger(o.maxSymbols) || o.maxSymbols < 1 || o.maxSymbols > 40) usage("--max-symbols must be 1 to 40");
+  if (!Number.isInteger(o.maxTurns) || o.maxTurns < 1 || o.maxTurns > 30) usage("--max-turns must be 1 to 30");
+  if (!o.model) usage("--model must not be empty");
+  if (o.asOf && !/^\d{4}-\d{2}-\d{2}$/.test(o.asOf)) usage("--as-of must be YYYY-MM-DD");
+  return o;
+}
+
+// ---------- schema check (the draft 2020-12 subset used by judge-output.schema.json) ----------
+export const judgeSchema = JSON.parse(readFileSync(join(here, "schema", "judge-output.schema.json"), "utf8"));
+const typeOf = (v) => (v === null ? "null" : Array.isArray(v) ? "array" : typeof v);
+function walk(s, v, path, errs, root) {
+  if (s.$ref) return walk(s.$ref.slice(2).split("/").reduce((n, k) => n[k], root), v, path, errs, root);
+  if (s.enum && !s.enum.includes(v)) errs.push(`${path}: must be one of ${s.enum.join(", ")}`);
+  if (s.type) {
+    const t = typeOf(v);
+    if (!(s.type === t || (s.type === "integer" && Number.isInteger(v)))) { errs.push(`${path}: expected ${s.type}, got ${t}`); return; }
+  }
+  if (typeof v === "number" && !Number.isFinite(v)) errs.push(`${path}: not finite`);
+  if (typeof v === "string") {
+    if (s.minLength != null && v.length < s.minLength) errs.push(`${path}: shorter than ${s.minLength}`);
+    if (s.maxLength != null && v.length > s.maxLength) errs.push(`${path}: longer than ${s.maxLength}`);
+    if (s.pattern && !new RegExp(s.pattern).test(v)) errs.push(`${path}: does not match ${s.pattern}`);
+  }
+  if (Array.isArray(v)) {
+    if (s.minItems != null && v.length < s.minItems) errs.push(`${path}: fewer than ${s.minItems} items`);
+    if (s.maxItems != null && v.length > s.maxItems) errs.push(`${path}: more than ${s.maxItems} items`);
+    if (s.items) v.forEach((x, i) => walk(s.items, x, `${path}[${i}]`, errs, root));
+  }
+  if (v && typeof v === "object" && !Array.isArray(v)) {
+    for (const k of s.required ?? []) if (!(k in v)) errs.push(`${path}.${k}: required`);
+    const props = s.properties ?? {};
+    for (const [k, x] of Object.entries(v)) {
+      if (k in props) walk(props[k], x, `${path}.${k}`, errs, root);
+      else if (s.additionalProperties === false) errs.push(`${path}.${k}: unknown field`);
+    }
+  }
+}
+/** Models often send `"downgrade": null` for "not used". Treat null as absent; every other deviation stays a schema error. */
+export function normalizeOutput(obj) {
+  if (obj && Array.isArray(obj.ideas)) for (const i of obj.ideas) if (i && typeof i === "object") for (const k of ["downgrade", "conflict"]) if (i[k] === null) delete i[k];
+  return obj;
+}
+/** Errors against the judge output schema. An empty list means the shape is valid. */
+export function validateJudgeOutput(obj) {
+  const errs = [];
+  walk(judgeSchema, obj, "output", errs, judgeSchema);
+  return errs;
+}
+
+// ---------- no invented figures ----------
+const FIGURE = /\d[\d,]*(?:\.\d+)?/g;
+const norm = (t) => Number(t.replace(/,/g, ""));
+/** Only named rule windows and the score denominator may appear without an input figure. */
+const ruleFigure = (text, value) => (value === 14 && /\bRSI\s*14\b/i.test(text)) || (value === 20 && /\b20[- ]day\b/i.test(text)) || (value === 25 && /\bof 25\b/i.test(text));
+export const figuresIn = (text) => [...String(text).matchAll(FIGURE)].map((m) => norm(m[0]));
+/** Every figure in the model's wording must occur in the input it was given. Returns the offending figures. */
+export function inventedFigures(texts, inputValue) {
+  const allowed = new Set(figuresIn(typeof inputValue === "string" ? inputValue : JSON.stringify(inputValue)));
+  const bad = [];
+  for (const t of texts) for (const n of figuresIn(t)) if (!allowed.has(n) && !ruleFigure(t, n)) bad.push(n);
+  return [...new Set(bad)];
+}
+const wording = (i) => [i.verdict, ...i.whatHappened, ...i.whyItMatters, ...i.numbers.flatMap((n) => [n.label, n.value]), i.plan.trigger, i.plan.invalidation, i.plan.opportunityCost, i.downgrade?.reason, i.conflict?.reason].filter(Boolean);
+
+// ---------- fixed decisions plus wording ----------
+const money = (n) => (Number.isInteger(n) ? String(n) : n.toFixed(2));
+export const amountText = (action, min, max) => (action === "WATCH" || max === 0 ? "EUR 0" : `EUR ${money(min)}-${money(max)}`);
+
+/** The signals that are news: a different signature than the last stored idea, or a new symbol with an action other than HOLD. */
+export function changedSignals(signals, previous) {
+  const prev = new Map((previous ?? []).map((p) => [p.symbol, p.signature]));
+  return signals.filter((s) => { const before = prev.get(s.symbol); return before === undefined ? s.action !== "HOLD" : before !== s.signature; });
+}
+
+/** What the model sees: the changed signals with their context, and the portfolio, with no timestamps. Cost basis is not in it. */
+export function buildModelInput(input, news) {
+  const ctx = new Map(input.symbols.map((s) => [s.symbol, s]));
+  const p = input.portfolio;
+  return {
+    asOf: input.asOf, ruleConfigVersion: input.ruleConfigVersion, benchmark: input.benchmark,
+    portfolio: p ? { cashEur: p.cashEur, investedEur: p.investedEur, monthlyContributionEur: p.monthlyContributionEur ?? null, positions: p.positions.map((x) => ({ symbol: x.symbol, valueEur: x.valueEur })) } : null,
+    items: news.map((s) => ({ signal: { action: s.action, amountMinEur: s.amountMinEur, amountMaxEur: s.amountMaxEur, ratings: s.ratings, unconfirmed: s.unconfirmed, carriedFrom: s.carriedFrom, reasons: s.reasons, symbol: s.symbol }, context: ctx.get(s.symbol) ?? null })),
+  };
+}
+
+/**
+ * Checks the model's wording against the input and merges it with the fixed decision. A problem that cannot be repaired (a missing or extra symbol,
+ * an evidence url outside the input, an invented figure) throws, so the call is tried again. Nothing the model writes can change the action upward,
+ * the amounts or the ratings: an unknown field is a schema error, and a downgrade only moves a buy to WATCH EUR 0.
+ */
+export function mergeIdeas(output, news, modelInput) {
+  const bySymbol = new Map(news.map((s) => [s.symbol, s]));
+  const seen = new Set(), ideas = [], notes = [];
+  for (const idea of output.ideas) {
+    const sig = bySymbol.get(idea.symbol);
+    if (!sig) throw new Error(`idea for ${idea.symbol}, which is not an item`);
+    if (seen.has(idea.symbol)) throw new Error(`second idea for ${idea.symbol}`);
+    seen.add(idea.symbol);
+    const item = modelInput.items.find((i) => i.signal.symbol === idea.symbol);
+    const urls = new Set((item?.context?.evidence ?? []).map((e) => e.url));
+    const bad = idea.evidence.filter((e) => !urls.has(e.url));
+    if (bad.length) throw new Error(`${idea.symbol}: evidence url not in the input: ${bad[0].url}`);
+    if (new Set(idea.evidence.map((e) => e.url)).size !== idea.evidence.length) throw new Error(`${idea.symbol}: duplicate evidence url`);
+    if (idea.evidence.length < 2 && !NO_EVIDENCE_OK.includes(sig.action)) throw new Error(`${idea.symbol}: fewer than two evidence links for ${sig.action}`);
+    for (const k of ["downgrade", "conflict"]) if (idea[k] && !urls.has(idea[k].evidenceUrl)) throw new Error(`${idea.symbol}: ${k} cites a url not in the input`);
+    const portfolio = modelInput.portfolio;
+    const figures = inventedFigures(wording(idea), { item, portfolio: portfolio ? { cashEur: portfolio.cashEur, investedEur: portfolio.investedEur, monthlyContributionEur: portfolio.monthlyContributionEur, position: portfolio.positions.find((p) => p.symbol === idea.symbol) ?? null } : null });
+    if (figures.length) throw new Error(`${idea.symbol}: figures not in the input: ${figures.slice(0, 5).join(", ")}`);
+    let { action, amountMinEur: min, amountMaxEur: max } = sig;
+    let downgradedFrom = null;
+    if (idea.downgrade) {
+      if (DOWNGRADABLE.includes(action)) { downgradedFrom = action; action = "WATCH"; min = 0; max = 0; }
+      else notes.push(`${idea.symbol}: downgrade ignored, ${action} is not a buy`);
+    }
+    ideas.push({
+      symbol: idea.symbol, action, amountMinEur: min, amountMaxEur: max, verdict: idea.verdict, whatHappened: idea.whatHappened, whyItMatters: idea.whyItMatters,
+      setup: sig.ratings, numbers: idea.numbers, plan: { amountNow: amountText(action, min, max), ...idea.plan }, evidence: idea.evidence,
+      unconfirmed: sig.unconfirmed || idea.unconfirmed || downgradedFrom !== null, carriedFrom: sig.carriedFrom ?? null, signature: sig.signature, ruleConfigVersion: sig.ruleConfigVersion,
+      conflictNote: idea.conflict?.reason ?? null, downgradedFrom,
+    });
+  }
+  const missing = news.filter((s) => !seen.has(s.symbol)).map((s) => s.symbol);
+  if (missing.length) throw new Error(`no idea for ${missing.join(", ")}`);
+  return { ideas, notes };
+}
+
+/** Hash of what the model decides from: the input without generatedAt and previousIdeas (the rule version is inside it), plus prompt, schema, agent, model and mode. Same hash, same stored result, so the run is skipped. */
+export function judgeHash({ input, prompt, model, agent = "claude", agentMode = false }) {
+  const rest = { ...input };
+  delete rest.generatedAt;
+  delete rest.previousIdeas;
+  const sha = (s) => createHash("sha256").update(s).digest("hex");
+  return sha(canonical({ input: rest, prompt: sha(prompt), schema: sha(canonical(judgeSchema)), agent, model: model || "default", agentMode }));
+}
+
+// ---------- agent mode: read-only file tools over a prepared directory ----------
+export const READ_ONLY_TOOLS = "Read,Grep,Glob";
+export function parseAgentEnvelope(out, requested, maxTurns) {
+  let env;
+  try { env = JSON.parse(out); } catch { throw new Error("claude output is not JSON"); }
+  if (env.is_error) throw new Error(`claude error: ${String(env.result ?? env.subtype ?? "unknown").slice(0, 200)}`);
+  if (Number.isInteger(env.num_turns) && env.num_turns > maxTurns) throw new Error(`claude used ${env.num_turns} turns; the cap is ${maxTurns}`);
+  if (Array.isArray(env.permission_denials) && env.permission_denials.length) throw new Error("claude attempted a tool that is not allowed");
+  return { text: env.result, model: Object.keys(env.modelUsage ?? {})[0] || requested || "default", usage: usageFromEnvelope(env), costUsd: typeof env.total_cost_usd === "number" ? env.total_cost_usd : null };
+}
+export function agentModeArgs(o, budgetUsd) {
+  return ["-p", "--output-format", "json", "--no-session-persistence", "--permission-mode", "dontAsk", "--tools", READ_ONLY_TOOLS, "--allowedTools", READ_ONLY_TOOLS, "--disallowedTools", "Bash,Edit,Write,NotebookEdit,WebFetch,WebSearch", "--max-budget-usd", String(budgetUsd), "--model", o.model];
+}
+/** Writes the input files the agent may read: facts, technicals, portfolio, ideas history, signals. Returns the file names. */
+export function writeAgentFiles(dir, input, modelInput) {
+  const items = modelInput.items;
+  const files = {
+    "facts.json": items.map((i) => ({ symbol: i.signal.symbol, score: i.context?.score, fields: i.context?.fields, expiredFields: i.context?.expiredFields, evidence: i.context?.evidence })),
+    "technicals.json": items.map((i) => ({ symbol: i.signal.symbol, technicals: i.context?.technicals ?? null })),
+    "portfolio.json": modelInput.portfolio,
+    "ideas-history.json": input.previousIdeas ?? [],
+    "signals.json": items.map((i) => i.signal),
+  };
+  for (const [name, value] of Object.entries(files)) writeFileSync(join(dir, name), JSON.stringify(value, null, 1));
+  return Object.keys(files);
+}
+async function callAgentReadOnly(o, prompt, work, budgetUsd) {
+  const { out } = await runCli("claude", agentModeArgs(o, budgetUsd), prompt, { timeoutMs: o.timeoutS * 1000, cwd: work });
+  return parseAgentEnvelope(out, o.model, o.maxTurns);
+}
+
+// ---------- web calls ----------
+async function web(baseUrl, token, path, init = {}) {
+  const res = await fetch(`${baseUrl}/api/ingest/${path}`, { ...init, headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, signal: AbortSignal.timeout(30_000) });
+  if (!res.ok) throw new Error(`${path.split("?")[0]} HTTP ${res.status}`);
+  return res.json();
+}
+const loadInput = (o, token, asOf) => (o.inputFile ? JSON.parse(readFileSync(o.inputFile, "utf8")) : web(o.baseUrl, token, `judge-input?${new URLSearchParams({ asOf, maxSymbols: String(o.maxSymbols) })}`));
+const checkSkip = async (o, token, params) => { try { return (await web(o.baseUrl, token, `ideas?${new URLSearchParams({ agent: o.agent, ...params })}`)).skip === true; } catch { return false; } };
+const postRun = (o, token, body) => web(o.baseUrl, token, "ideas", { method: "POST", body: JSON.stringify(body) });
+
+async function main() {
+  const o = parseArgs(process.argv.slice(2));
+  const asOf = o.asOf || lastUsTradingDay();
+  const runId = randomUUID();
+  mkdirSync(OUT, { recursive: true });
+  const logFile = join(OUT, `judge-${asOf}-${runId.slice(0, 8)}.log`);
+  const log = (m) => { const line = `${new Date().toISOString()} ${m}`; console.error(line); appendFileSync(logFile, line + "\n"); };
+  log(`judge ${runId} asOf=${asOf} model=${o.model} budget=$${o.budgetUsd} mode=${o.agentMode ? `agent(max ${o.maxTurns} turns)` : "single call, no tools"} maxSymbols=${o.maxSymbols} dryRun=${o.dryRun} force=${o.force} offline=${Boolean(o.inputFile)}`);
+  const offline = Boolean(o.inputFile) && o.dryRun;
+  const token = offline ? null : getToken();
+  if (!token && !offline) { log("no INGEST_TOKEN; aborting"); process.exit(2); }
+  const record = Boolean(token) && !o.dryRun;
+
+  if (record && !o.force && await checkSkip(o, token, { asOf })) { log("SKIPPED one run per day: a judge run for this date is already stored; use --force to rerun"); return; }
+  const input = await loadInput(o, token, asOf);
+  if (!input.portfolio) { log("no portfolio baseline; enter one with POST /api/ingest/portfolio-baseline first"); if (!o.dryRun) process.exit(2); }
+  const news = changedSignals(input.signals ?? [], input.previousIdeas);
+  log(`signals ${input.signals?.length ?? 0} (rules ${input.ruleConfigVersion}), changed ${news.length}${news.length ? `: ${news.map((s) => `${s.symbol} ${s.action} ${amountText(s.action, s.amountMinEur, s.amountMaxEur)}`).join(", ")}` : ""}`);
+  if (!news.length) { log("no signal changed since the last stored idea; no model call"); return; }
+  const prompt = readFileSync(join(here, "prompts", "judge.md"), "utf8");
+  const hash = judgeHash({ input, prompt, model: o.model, agent: o.agent, agentMode: o.agentMode });
+  if (record && !o.force && await checkSkip(o, token, { asOf, inputHash: hash })) { log(`SKIPPED same input already judged and stored (input ${hash.slice(0, 12)}); use --force to rerun`); return; }
+
+  const modelInput = buildModelInput(input, news);
+  const work = mkdtempSync(join(tmpdir(), "investbuddy-judge-"));
+  let promptInput = modelInput;
+  if (o.agentMode) {
+    const files = writeAgentFiles(work, input, modelInput);
+    promptInput = { asOf: modelInput.asOf, ruleConfigVersion: modelInput.ruleConfigVersion, benchmark: modelInput.benchmark, files, signals: modelInput.items.map((i) => i.signal), note: "Read the files in the current directory for the facts, technicals, portfolio and history." };
+  }
+  const text = fill(prompt, { AS_OF: asOf, INPUT: JSON.stringify(promptInput) });
+  let spent = addUsage({}, {}), cost = 0, calls = 0, model = o.model, rawOutput = null, error = null, result = null;
+  const t0 = Date.now();
+  for (let attempt = 1; attempt <= 2 && !result; attempt++) {
+    const remaining = o.budgetUsd - cost;
+    if (remaining < MIN_ATTEMPT_USD) { error = `${error ?? "no result"}; cost cap $${o.budgetUsd} reached after $${cost.toFixed(4)}`; log(`cost cap reached (spent $${cost.toFixed(4)} of $${o.budgetUsd}); no further call`); break; }
+    try {
+      const budget = Number(remaining.toFixed(4));
+      const r = o.agentMode ? await callAgentReadOnly(o, text, work, budget) : await callAgentNoTools({ agent: "claude", model: o.model, timeoutS: o.timeoutS, budgetUsd: budget }, text, work);
+      calls++; spent = addUsage(spent, r.usage); cost += r.costUsd ?? 0; if (r.model) model = r.model;
+      rawOutput = normalizeOutput(extractJson(r.text));
+      const errs = validateJudgeOutput(rawOutput);
+      if (errs.length) throw new Error(`schema: ${errs.slice(0, 5).join("; ")}`);
+      result = mergeIdeas(rawOutput, news, modelInput);
+    } catch (e) {
+      error = e.message;
+      log(`attempt ${attempt} failed: ${e.message}`);
+      if (RATE_LIMIT.test(e.message)) { log("rate limit; stopping without retry"); break; }
+    }
+  }
+  if (!process.env.SCAN_KEEP_WORK) rmSync(work, { recursive: true, force: true });
+  const secs = Math.round((Date.now() - t0) / 1000);
+  const totals = `${calls} model call(s), ${text.length} input chars, tokens in ${spent.inputTokens ?? "?"} out ${spent.outputTokens ?? "?"} cache read ${spent.cacheReadTokens ?? "?"} cache created ${spent.cacheCreationTokens ?? "?"}, turns ${spent.turns ?? "?"}${cost ? `, cost $${cost.toFixed(4)}` : ""}, ${secs}s`;
+  const runBase = { asOf, agent: o.agent, model, inputHash: hash, usage: spent, costUsd: cost || null, ruleConfigVersion: input.ruleConfigVersion };
+  if (!result) {
+    log(`FAILED ${error}; ${totals}`);
+    if (record) await postRun(o, token, { run: { ...runBase, status: "failed", error: String(error).slice(0, 2000), ideaCount: 0 }, ideas: [] }).catch((e) => log(`could not record run: ${e.message}`));
+    process.exit(1);
+  }
+  for (const n of result.notes) log(n);
+  const downgraded = result.ideas.filter((i) => i.downgradedFrom).length, conflicts = result.ideas.filter((i) => i.conflictNote).length;
+  log(`ideas: ${result.ideas.length} from ${news.length} changed signals, ${downgraded} downgraded, ${conflicts} conflict flags`);
+  const file = join(OUT, `judge-payload-${asOf}-${runId.slice(0, 8)}.json`);
+  writeFileSync(file, JSON.stringify({ run: { ...runBase, status: "ok", ideaCount: result.ideas.length }, ideas: result.ideas, notes: rawOutput.notes ?? null }, null, 2) + "\n");
+  log(`payload written ${file}`);
+  if (o.dryRun) { log(`dry run: nothing posted, nothing recorded; ${totals}`); return; }
+  try {
+    const res = await postRun(o, token, { run: { ...runBase, status: "ok", ideaCount: result.ideas.length, output: rawOutput }, ideas: result.ideas });
+    log(`POST ok: ${JSON.stringify(res)}; ${totals}`);
+  } catch (e) { log(`POST failed: ${e.message}; ${totals}`); process.exit(3); }
+}
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main().catch((e) => { console.error(`fatal: ${e.stack || e.message}`); process.exit(1); });

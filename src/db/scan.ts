@@ -3,7 +3,11 @@ import type { ScanPayload } from "../data/scan";
 import { macroEvidenceFlags, tickerEvidenceFlags } from "../data/scan";
 
 export interface IngestResult { accepted: number; rejected: { symbol: string; reason: string }[]; replayed: boolean }
-export async function ingestScan(pool: pg.Pool, payload: ScanPayload): Promise<IngestResult> {
+export interface IngestOptions {
+  /** Leave macro_findings alone. A ticker-only run (script-first extract) has no macro result, so it must not supersede one that another run stored for the same date and agent. */
+  skipMacro?: boolean;
+}
+export async function ingestScan(pool: pg.Pool, payload: ScanPayload, options: IngestOptions = {}): Promise<IngestResult> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -18,8 +22,10 @@ export async function ingestScan(pool: pg.Pool, payload: ScanPayload): Promise<I
       await client.query(`INSERT INTO scan_findings (run_id,as_of,symbol,fundamentals,evidence,confidence,runner)
         VALUES ($1,$2,$3,$4::jsonb,$5::jsonb,$6,$7::jsonb)`, [payload.runId, payload.asOf, item.symbol, JSON.stringify(item.fundamentals), JSON.stringify({ items: item.evidence, flags: tickerEvidenceFlags(item) }), item.confidence, JSON.stringify(payload.runner)]);
     }
-    await client.query("UPDATE macro_findings SET superseded_by=$1 WHERE as_of=$2 AND data->>'runnerName'=$3 AND superseded_by IS NULL", [payload.runId, payload.asOf, payload.runner.name]);
-    await client.query("INSERT INTO macro_findings (run_id,as_of,data,evidence) VALUES ($1,$2,$3::jsonb,$4::jsonb)", [payload.runId, payload.asOf, JSON.stringify({ ...payload.macro, runnerName: payload.runner.name }), JSON.stringify({ items: payload.macro.evidence, flags: macroEvidenceFlags(payload.macro) })]);
+    if (!options.skipMacro) {
+      await client.query("UPDATE macro_findings SET superseded_by=$1 WHERE as_of=$2 AND data->>'runnerName'=$3 AND superseded_by IS NULL", [payload.runId, payload.asOf, payload.runner.name]);
+      await client.query("INSERT INTO macro_findings (run_id,as_of,data,evidence) VALUES ($1,$2,$3::jsonb,$4::jsonb)", [payload.runId, payload.asOf, JSON.stringify({ ...payload.macro, runnerName: payload.runner.name }), JSON.stringify({ items: payload.macro.evidence, flags: macroEvidenceFlags(payload.macro) })]);
+    }
     await client.query("COMMIT");
     return { accepted: payload.tickers.length - rejected.length, rejected, replayed: false };
   } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }

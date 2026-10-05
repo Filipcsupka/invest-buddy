@@ -23,7 +23,7 @@ jobs:
       - run: npm test
       - run: npm run build
       - run: npm run build:jobs
-      - run: test -f dist/jobs/reconcile.js
+      - run: test -f dist/jobs/reconcile.js && test -f dist/jobs/collect.js && test -f dist/jobs/detect.js && test -f dist/jobs/retention.js
 
   image:
     needs: quality
