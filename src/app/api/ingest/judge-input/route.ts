@@ -1,5 +1,6 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import pg from "pg";
+import { isIsoDate } from "../../../../db/iso-date";
 import { buildJudgeInput, DEFAULT_MAX_SYMBOLS } from "../../../../db/judge-input";
 
 export const runtime = "nodejs";
@@ -16,7 +17,7 @@ export async function GET(request: Request) {
   if (!authorized(request.headers.get("authorization"), token)) return Response.json({ error: "Unauthorized" }, { status: 401 });
   if (!process.env.DATABASE_URL) return Response.json({ error: "Database unavailable" }, { status: 503 });
   const asOf = new URL(request.url).searchParams.get("asOf") ?? new Date().toISOString().slice(0, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(asOf) || Number.isNaN(Date.parse(`${asOf}T00:00:00Z`)) || new Date(`${asOf}T00:00:00Z`).toISOString().slice(0, 10) !== asOf) return Response.json({ error: "asOf must be YYYY-MM-DD" }, { status: 400 });
+  if (!isIsoDate(asOf)) return Response.json({ error: "asOf must be YYYY-MM-DD" }, { status: 400 });
   const max = Number(new URL(request.url).searchParams.get("maxSymbols") ?? DEFAULT_MAX_SYMBOLS);
   if (!Number.isInteger(max) || max < 1 || max > 40) return Response.json({ error: "maxSymbols must be 1-40" }, { status: 400 });
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });

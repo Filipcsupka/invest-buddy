@@ -1,6 +1,6 @@
 # Script-first pipeline
 
-Scripts collect and store source documents and numbers. AI reads stored text only, with no web tools, and writes structured output. A script applies that output through the existing scan ingest and reconcile path. Raw data is kept for 30 days.
+Scripts collect and store source documents and numbers. AI reads stored text only, with no web tools, and writes structured output. A script applies that output through the existing scan ingest and reconcile path. Raw data is kept for the evidence window of its type, 30 to 100 days.
 
 ## Why
 
@@ -13,7 +13,7 @@ The daily Claude scan ran 36 agent sessions that each searched and fetched pages
 3. **Extract** (phase B, AI, no tools). For each detected ticker, build an input bundle from stored documents (excerpts, not whole filings). The model returns the existing ticker scan JSON, with every positive claim carrying a stored-document URL and a quote. Output goes through the existing `POST /api/ingest/scan`, so reconcile and scoring stay unchanged.
 4. **Reconcile and score** (existing jobs). Quotes are checked against the stored document text.
 5. **Judge** (phase C, AI, no tools). Reads reconciled facts plus the portfolio baseline and writes trade ideas as structured JSON. A script stores it and the web reads it.
-6. **Retention** (`retention` job, no AI). Delete `source_documents` and `collected_facts` older than 30 days, except rows still cited by a current `consensus_findings` evidence reference.
+6. **Retention** (`retention` job, no AI). Delete expired `source_documents` and `collected_facts`. A document expires after the evidence window of its type (100, 60 or 30 days) counted from its last fetch. Documents still cited by an unexpired finding, idea or extraction run are kept.
 
 ## Sources
 

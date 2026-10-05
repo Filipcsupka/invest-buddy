@@ -5,6 +5,8 @@ import { collectEdgar, filingRows, filingUrl, parseForm4 } from "../collectors/e
 import { ALLOWED_HOSTS, MAX_RESPONSE_BYTES, RateLimitLockout, getText, resetSecLimiter } from "../collectors/http";
 import { plainText, document } from "../collectors/types";
 import { MemoryCollectorRepository, PostgresCollectorRepository, documentRetentionDays } from "../db/collectors";
+import { windowDaysFor } from "../db/bundle";
+import { freshnessDays } from "../data/evidence";
 import { collectExitCode, deriveFacts, runCollect } from "./collect";
 
 const dir = join(process.cwd(), "src/collectors/fixtures");
@@ -58,6 +60,14 @@ describe("M4 document evidence windows", () => {
   it("keeps SEC filings for their evidence windows", () => {
     expect(documentRetentionDays("4")).toBe(60);
     expect(documentRetentionDays("8-K EX-99.1")).toBe(100);
+  });
+  it("takes the retention days from freshnessDays and never drops a document before the bundle stops serving it", () => {
+    expect(documentRetentionDays("10-Q")).toBe(Math.max(freshnessDays.revenueAccelerating, freshnessDays.epsBeat, freshnessDays.guidanceRaised));
+    expect(documentRetentionDays("4")).toBe(freshnessDays.insiderOrInstitutionalBuying);
+    expect(documentRetentionDays("rss")).toBe(Math.max(freshnessDays.productCatalyst, freshnessDays.narrativeChanged));
+    for (const docType of ["8-K", "8-K EX-99.1", "10-Q", "10-K", "20-F", "6-K", "4", "13F-HR", "rss", "gdelt", "XBRL revenue frame"]) {
+      expect(documentRetentionDays(docType), docType).toBeGreaterThanOrEqual(windowDaysFor(docType));
+    }
   });
   it("refreshes expiry on unchanged refetch without counting a content write", async () => {
     const calls: { sql: string; params: unknown[] }[] = [];

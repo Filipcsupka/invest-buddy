@@ -2,6 +2,7 @@ import type { AlertChange } from "../db/types";
 import pg from "pg";
 import { MemoryScoreRepository } from "../db/memory";
 import { PostgresScoreRepository } from "../db/postgres";
+import { isIsoDate } from "../db/iso-date";
 
 export type DigestLocale = "en" | "sk";
 export interface MailMessage { to: string; subject: string; text: string }
@@ -40,7 +41,7 @@ async function main() {
   const memory = args.includes("--memory");
   const dateIndex = args.indexOf("--date");
   const date = dateIndex >= 0 ? args[dateIndex + 1] : undefined;
-  if (dateIndex >= 0 && !/^\d{4}-\d{2}-\d{2}$/.test(date ?? "")) throw new Error("--date requires YYYY-MM-DD");
+  if (dateIndex >= 0 && !isIsoDate(date ?? "")) throw new Error("--date requires YYYY-MM-DD");
   if (args.some((arg, index) => arg !== "--memory" && arg !== "--date" && index !== dateIndex + 1)) throw new Error("Usage: digest [--date YYYY-MM-DD] [--memory]");
   const url = process.env.DATABASE_URL;
   if (!memory && !url) throw new Error("DATABASE_URL is required; use --memory for a fixture-only run");

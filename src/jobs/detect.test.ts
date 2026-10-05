@@ -34,3 +34,8 @@ it("rejects an unknown flag even when --since is absent", () => {
   expect(validDetectArgs(["--since", "2026-10-01"])).toBe(true);
   expect(validDetectArgs([])).toBe(true);
 });
+
+it("rejects impossible calendar dates in --since", () => {
+  expect(validDetectArgs(["--since", "2026-02-30"])).toBe(false);
+  expect(validDetectArgs(["--since", "2026-13-01"])).toBe(false);
+});

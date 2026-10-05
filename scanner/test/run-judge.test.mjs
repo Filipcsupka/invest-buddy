@@ -106,6 +106,16 @@ test("each idea can cite only its own figures and URLs", () => {
   assert.deepEqual(inventedFigures(["generic 25, 50 and 100 percent"], { score: 19 }), [25, 50, 100]);
 });
 
+test("a figure that belongs to another item's context is rejected for this item", () => {
+  const amd = ctx("AMD", [U3]);
+  amd.technicals = { ...amd.technicals, close: 77.7, rsi14: 31.9 };
+  const i = input({ symbols: [ctx("NVDA", [U1, U2]), amd] });
+  const own = (symbol, text, over = {}) => words(symbol, { whatHappened: [text, "EPS beat stated in the release."], ...over });
+  assert.throws(() => merge([own("NVDA", "Price closed at 77.7."), words("AMD", { evidence: [] })], i), /NVDA: figures not in the input: 77.7/);
+  assert.throws(() => merge([words("NVDA"), own("AMD", "RSI was 48.2 and 7.4 percent under the high.", { evidence: [] })], i), /AMD: figures not in the input/);
+  assert.doesNotThrow(() => merge([words("NVDA"), own("AMD", "Price closed at 77.7, RSI 31.9.", { evidence: [], numbers: [{ label: "Score", value: "19 of 25" }, { label: "Close", value: "77.7" }, { label: "RSI", value: "31.9" }] })], i));
+});
+
 test("a downgrade only moves a buy to WATCH EUR 0 and keeps the signature; a conflict adds a note", () => {
   const down = { reason: "The cited 8-K reports a guidance cut.", evidenceUrl: U1 };
   const { ideas } = merge([words("NVDA", { downgrade: down, conflict: { reason: "Rules and the 10-Q disagree.", evidenceUrl: U2 } }), words("AMD", { evidence: [] })]);

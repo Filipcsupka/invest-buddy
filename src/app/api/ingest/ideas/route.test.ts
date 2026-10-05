@@ -28,6 +28,7 @@ describe("ideas route", () => {
     store.skip = true;
     expect(await (await GET(get(url()))).json()).toEqual({ skip: true });
     expect((await GET(get(url({ inputHash: "x" })))).status).toBe(400);
+    expect((await GET(get(url({ asOf: "2026-02-30" })))).status).toBe(400);
   });
   it("records a run with its ideas and rejects bad bodies", async () => {
     const res = await POST(post(body));
@@ -37,6 +38,8 @@ describe("ideas route", () => {
     expect((await POST(post({ ...body, ideas: [{ ...idea, action: "BUY" }] }))).status).toBe(400);
     expect((await POST(post({ ...body, ideas: [{ ...idea, symbol: "nvda" }] }))).status).toBe(400);
     expect((await POST(post("{"))).status).toBe(400);
+    expect((await POST(post({ ...body, run: { ...body.run, asOf: "2026-02-30" } }))).status).toBe(400);
+    expect((await POST(post({ ...body, ideas: [{ ...idea, carriedFrom: "2026-02-30" }] }))).status).toBe(400);
     expect((await POST(post("x".repeat(400_001)))).status).toBe(413);
     const stream = new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(new TextEncoder().encode("x".repeat(400_001))); controller.close(); } });
     const oversized = new Request("http://localhost/api/ingest/ideas", { method: "POST", headers: { authorization: "Bearer secret" }, body: stream, duplex: "half" } as RequestInit);

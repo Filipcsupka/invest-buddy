@@ -21,12 +21,12 @@ function gate(request: Request) {
   return null;
 }
 
-/** Skip check: `?symbol=NVDA&asOf=2026-10-05&agent=claude&inputHash=<64 hex>` returns `{ skip: true }` when an ok run with that input exists. */
+/** Skip check: `?symbol=NVDA&agent=claude&inputHash=<64 hex>` returns `{ skip: true }` when an ok run with that input exists. */
 export async function GET(request: Request) {
   const denied = gate(request);
   if (denied) return denied;
   const q = new URL(request.url).searchParams;
-  const parsed = extractionRunSchema.pick({ symbol: true, asOf: true, agent: true, inputHash: true }).safeParse({ symbol: q.get("symbol")?.toUpperCase(), asOf: q.get("asOf"), agent: q.get("agent"), inputHash: q.get("inputHash") });
+  const parsed = extractionRunSchema.pick({ symbol: true, agent: true, inputHash: true }).safeParse({ symbol: q.get("symbol")?.toUpperCase(), agent: q.get("agent"), inputHash: q.get("inputHash") });
   if (!parsed.success || !known(parsed.data.symbol)) return Response.json({ error: "Invalid query" }, { status: 400 });
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
   try { return Response.json({ skip: await hasOkExtraction(pool, parsed.data) }); }

@@ -1,5 +1,6 @@
 import pg from "pg";
 import universe from "../../scanner/universe.json";
+import { isIsoDate } from "../db/iso-date";
 
 export interface ChangedRow { symbol: string; reason: string; fact_key?: string | null; value?: unknown }
 /** A price move or volume spike worth a new look. Daily facts under these are noise: collect writes a new row for every ticker every trading day. */
@@ -27,7 +28,7 @@ export function validDetectArgs(args: string[]): boolean {
   const sinceIndex = args.indexOf("--since"), maxIndex = args.indexOf("--max");
   const since = sinceIndex < 0 ? undefined : args[sinceIndex + 1];
   const max = maxIndex < 0 ? undefined : Number(args[maxIndex + 1]);
-  if (sinceIndex >= 0 && (!since || !/^\d{4}-\d{2}-\d{2}$/.test(since))) return false;
+  if (sinceIndex >= 0 && (!since || !isIsoDate(since))) return false;
   if (maxIndex >= 0 && (!Number.isInteger(max) || max! < 1)) return false;
   const values = new Set([sinceIndex >= 0 ? sinceIndex + 1 : -1, maxIndex >= 0 ? maxIndex + 1 : -1]);
   return args.every((arg, i) => values.has(i) || ["--since", "--max", "--force-all"].includes(arg));

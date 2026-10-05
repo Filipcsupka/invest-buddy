@@ -1,5 +1,6 @@
 import type pg from "pg";
 import { z } from "zod";
+import { isoDate } from "./iso-date";
 
 export const ACTIONS = ["WATCH", "START_POSITION", "ADD", "HIGH_CONVICTION_ADD", "HOLD", "REDUCE", "THESIS_BROKEN", "CSPX_ALLOCATION"] as const;
 export type IdeaAction = (typeof ACTIONS)[number];
@@ -31,7 +32,7 @@ export const ideaSignature = (i: { action: string; setup: Idea["setup"]; amountM
 
 const count = z.number().int().nonnegative().nullable().optional();
 export const judgeRunSchema = z.object({
-  asOf: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  asOf: isoDate(),
   agent: z.enum(["claude", "codex"]),
   model: z.string().min(1).max(100),
   inputHash: z.string().regex(/^[0-9a-f]{64}$/),
@@ -49,7 +50,7 @@ export type JudgeRun = z.infer<typeof judgeRunSchema>;
 export const ideasPostSchema = z.object({
   run: judgeRunSchema,
   ideas: z.array(ideaObject.extend({
-    carriedFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+    carriedFrom: isoDate().nullable().optional(),
     /** Signature of the deterministic signal, not of the final action: a downgraded idea must not look new again tomorrow. */
     signature: z.string().min(1).max(160),
     ruleConfigVersion: z.string().min(1).max(40),

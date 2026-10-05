@@ -1,0 +1,152 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: invest-buddy-extract
+  namespace: invest
+spec:
+  suspend: true
+  # After detect (06:10, 10 min deadline) and before reconcile (07:00). Reads every universe symbol's stored bundle and skips the ones whose input hash was already extracted, so no symbol list has to pass from detect. Ends by 06:55 at the latest.
+  schedule: "25 6 * * 2-6"
+  timeZone: Europe/Bratislava
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      # A quota or auth failure must not retry at once; the next scheduled run is the retry.
+      backoffLimit: 0
+      activeDeadlineSeconds: 1800
+      template:
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          nodeSelector:
+            kubernetes.io/hostname: k8s-worker-01
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            fsGroup: 10001
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: extract
+              image: ghcr.io/filipcsupka/invest-buddy-scanner:latest
+              command: ["node", "/app/scanner/run-extract.mjs"]
+              args: ["--agent", "claude", "--model", "haiku"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              env:
+                - name: INGEST_BASE_URL
+                  value: http://web.invest.svc.cluster.local:3000
+                - name: INGEST_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-secrets
+                      key: INGEST_TOKEN
+                - name: CLAUDE_CODE_OAUTH_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-scanner-secrets
+                      key: CLAUDE_CODE_OAUTH_TOKEN
+              volumeMounts:
+                - name: tmp
+                  mountPath: /tmp
+                - name: scanner-home
+                  mountPath: /home/scanner
+                - name: scan-out
+                  mountPath: /app/scanner/out
+              resources:
+                requests:
+                  cpu: 250m
+                  memory: 256Mi
+                limits:
+                  cpu: "2"
+                  memory: 1Gi
+          volumes:
+            - name: tmp
+              emptyDir: {}
+            - name: scanner-home
+              emptyDir: {}
+            - name: scan-out
+              emptyDir: {}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: invest-buddy-judge
+  namespace: invest
+spec:
+  suspend: true
+  # Last in the chain: after daily (07:15). One model call for the symbols whose decision changed; the script skips an unchanged day.
+  schedule: "45 7 * * 2-6"
+  timeZone: Europe/Bratislava
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 900
+      template:
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          nodeSelector:
+            kubernetes.io/hostname: k8s-worker-01
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            fsGroup: 10001
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: judge
+              image: ghcr.io/filipcsupka/invest-buddy-scanner:latest
+              command: ["node", "/app/scanner/run-judge.mjs"]
+              args: ["--model", "sonnet"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              env:
+                - name: INGEST_BASE_URL
+                  value: http://web.invest.svc.cluster.local:3000
+                - name: INGEST_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-secrets
+                      key: INGEST_TOKEN
+                - name: CLAUDE_CODE_OAUTH_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-scanner-secrets
+                      key: CLAUDE_CODE_OAUTH_TOKEN
+              volumeMounts:
+                - name: tmp
+                  mountPath: /tmp
+                - name: scanner-home
+                  mountPath: /home/scanner
+                - name: scan-out
+                  mountPath: /app/scanner/out
+              resources:
+                requests:
+                  cpu: 250m
+                  memory: 256Mi
+                limits:
+                  cpu: "2"
+                  memory: 1Gi
+          volumes:
+            - name: tmp
+              emptyDir: {}
+            - name: scanner-home
+              emptyDir: {}
+            - name: scan-out
+              emptyDir: {}

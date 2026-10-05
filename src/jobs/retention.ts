@@ -1,10 +1,13 @@
 import pg from "pg";
+import { freshnessDays } from "../data/evidence";
 import { purgeIdeas } from "./retention-ideas";
+
+/** SQL CASE giving the evidence window per consensus field, built from `freshnessDays` so it cannot drift from the verifier. */
+export const windowCase = `CASE c.field ${Object.entries(freshnessDays).map(([field, days]) => `WHEN '${field}' THEN ${days}`).join(" ")} ELSE 30 END`;
 
 export const expiredDocuments = `FROM source_documents d WHERE d.expires_at < now()
   AND NOT EXISTS (SELECT 1 FROM consensus_findings c
-    WHERE c.as_of + CASE WHEN c.field IN ('revenueAccelerating','revenueDeclining','epsBeat','guidanceRaised','guidanceCut') THEN 100
-      WHEN c.field = 'insiderOrInstitutionalBuying' THEN 60 ELSE 30 END >= current_date
+    WHERE c.as_of + ${windowCase} >= current_date
       AND EXISTS (SELECT 1 FROM jsonb_array_elements(c.evidence_refs) ref WHERE ref->>'url'=d.url))
   AND NOT EXISTS (SELECT 1 FROM trade_ideas i WHERE i.expires_at > now()
     AND EXISTS (SELECT 1 FROM jsonb_array_elements(i.evidence_urls) ref WHERE ref->>'url'=d.url))

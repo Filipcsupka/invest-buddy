@@ -5,7 +5,7 @@ Context: the 05:30 Claude CronJob ran 36 `claude -p` sessions (35 tickers + macr
 Goal: both agents keep collecting facts, but only for tickers that changed, with a cheaper model and a turn cap. A separate judgement step turns reconciled facts into trade ideas.
 
 ## 0. Stop the drain (blocked on infra repo)
-- [ ] Set `suspend: true` on `invest-buddy-scan-claude` in `Filipcsupka/infra` (`gitops/apps/invest-buddy/overlays/prod`). A live patch is reverted by Argo (`selfHeal: true`).
+- [x] Set `suspend: true` on `invest-buddy-scan-claude` in `Filipcsupka/infra` (`gitops/apps/invest-buddy/overlays/prod`). A live patch is reverted by Argo (`selfHeal: true`). Done through infra PR #14.
 - [ ] Verify with `kubectl -n invest get cronjob` after sync.
 
 ## 1. Measure before changing
@@ -45,10 +45,10 @@ Goal: both agents keep collecting facts, but only for tickers that changed, with
 - [x] Chart numbers from stored bars (`src/data/technicals.ts`), no raw series sent to the model or the page.
 - [x] Portfolio baseline shape and routes (`portfolio_baseline`, `/api/ingest/portfolio-baseline`).
 - [x] Web page `/ideas` with nav link, behind `IDEAS_PAGE=on` (ADR-001).
-- [ ] Hook `purgeIdeas` into `src/jobs/retention.ts` (one line, not done in this change).
-- [ ] Run the judge as a CronJob after reconcile and daily.
+- [x] Hook `purgeIdeas` into `src/jobs/retention.ts`.
+- [ ] Run the judge as a CronJob after reconcile and daily. The manifest `invest-buddy-judge` exists (07:45, suspended); it has not run on a cluster.
 - [ ] Decide whether the ideas page may be public (ADR-001 says no EUR sizing in the public product).
 
 ## 7. Billing safety
 - [ ] Decide whether the cron stays on the subscription token or moves to its own key, so it stops sharing the 5h pool with interactive work.
-- [ ] Log token usage per run (CLI `usage` / `modelUsage`) in the run log so the next surprise shows up in the job output. Table `extraction_runs`, its route and `scanner/extraction-log.mjs` exist; `run-extract.mjs` does not call them yet. The judge already logs and stores its tokens, turns and cost in `judge_runs`.
+- [x] Log token usage per run (CLI `usage` / `modelUsage`) in the run log so the next surprise shows up in the job output. Table `extraction_runs`, its route and `scanner/extraction-log.mjs` exist, and `run-extract.mjs` records each ticker's tokens and prints the run totals. The judge logs and stores its tokens, turns and cost in `judge_runs`.
