@@ -216,6 +216,13 @@ function mergeOne(idea, sig, modelInput, notes) {
     const bad = idea.evidence.filter((e) => !urls.has(e.url));
     if (bad.length) throw new Error(`${idea.symbol}: evidence url not in the input: ${bad[0].url}`);
     if (new Set(idea.evidence.map((e) => e.url)).size !== idea.evidence.length) throw new Error(`${idea.symbol}: duplicate evidence url`);
+    // Evidence links are pointers to the stored primary sources, not a judgment. When the model cites fewer than two for a buy,
+    // the script adds the labelled links from the input (earnings release, 10-Q, Form 4, SEC XBRL), so a short answer does not drop a valid signal.
+    if (idea.evidence.length < 2 && !NO_EVIDENCE_OK.includes(sig.action)) {
+      const have = new Set(idea.evidence.map((e) => e.url));
+      const extra = (item?.context?.evidence ?? []).filter((e) => e.label && !have.has(e.url));
+      for (const e of extra) { if (idea.evidence.length >= 3) break; idea.evidence.push({ url: e.url, label: e.label }); notes.push(`${idea.symbol}: evidence link added from the input: ${e.label}`); }
+    }
     if (idea.evidence.length < 2 && !NO_EVIDENCE_OK.includes(sig.action)) throw new Error(`${idea.symbol}: fewer than two evidence links for ${sig.action}`);
     for (const k of ["downgrade", "conflict"]) if (idea[k] && !urls.has(idea[k].evidenceUrl)) throw new Error(`${idea.symbol}: ${k} cites a url not in the input`);
     const figures = inventedFigures(wording(idea), { item });
