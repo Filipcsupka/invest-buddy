@@ -128,7 +128,8 @@ const COLUMNS = "id,as_of::text,symbol,action,size_tier,amount_min_eur,amount_ma
 export async function listIdeas(pool: Pick<pg.Pool, "query">, limit = 50): Promise<StoredIdea[]> {
   const r = await pool.query<IdeaRow>(`SELECT ${COLUMNS} FROM trade_ideas i WHERE i.expires_at > now()
     AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(i.evidence_urls) ref
-      WHERE NOT EXISTS (SELECT 1 FROM source_documents d WHERE d.url = ref->>'url' AND d.meta->>'display_allowed' = 'true'))
+      WHERE ref->>'url' NOT LIKE 'https://data.sec.gov/api/xbrl/%'
+        AND NOT EXISTS (SELECT 1 FROM source_documents d WHERE d.url = ref->>'url' AND d.meta->>'display_allowed' = 'true'))
     ORDER BY i.as_of DESC, i.id DESC LIMIT $1`, [limit]);
   return r.rows.map(mapIdea);
 }
