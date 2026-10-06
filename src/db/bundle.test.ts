@@ -50,6 +50,8 @@ describe("freshness windows", () => {
     expect(windowDaysFor("10-Q")).toBe(100);
     expect(windowDaysFor("4")).toBe(freshnessDays.insiderOrInstitutionalBuying);
     expect(windowDaysFor("press release")).toBe(30);
+    expect(windowDaysFor("XBRL revenue growth")).toBe(freshnessDays.revenueAccelerating);
+    expect(withinWindow({ docType: "XBRL revenue growth", publishedAt: "2026-07-26T00:00:00Z" }, "2026-10-05")).toBe(true);
   });
   it("drops documents after the as-of day and older than the window", () => {
     expect(withinWindow({ docType: "press release", publishedAt: "2026-10-05T15:00:00.000Z" }, "2026-10-05")).toBe(true);
@@ -108,6 +110,19 @@ describe("focusExcerpt", () => {
     for (const piece of focusExcerpt(body, 6000).split("\n[...]\n")) expect(body.includes(piece)).toBe(true);
   });
   it("falls back to the head when no keyword matches", () => { expect(focusExcerpt("x".repeat(10000), 6000)).toHaveLength(6000); });
+  it("skips the emerging growth company cover text and keeps the 8-K item text", () => {
+    const cover = "Indicate by check mark whether the registrant is an emerging growth company as defined in Rule 405. Emerging Growth Company ☐ If an emerging growth company, indicate by check mark. ";
+    const event = "Item 5.02 Departure of Directors or Certain Officers. On September 2, 2026, the Board appointed a new Chief Financial Officer, effective October 1, 2026.";
+    const body = `${"x ".repeat(4000)}${cover}${"y ".repeat(1000)}${event}${" z".repeat(1000)}`;
+    const out = focusExcerpt(body, 6000);
+    expect(out).toContain(event);
+    expect(out).not.toContain("emerging growth company as defined");
+    for (const piece of out.split("\n[...]\n")) expect(body.includes(piece)).toBe(true);
+  });
+  it("falls back to the head when only cover boilerplate matches", () => {
+    const body = `Item text without keywords. ${"a ".repeat(4000)}an emerging growth company ${"b ".repeat(2000)}`;
+    expect(focusExcerpt(body, 6000)).toBe(body.slice(0, 6000));
+  });
   it("finds a revenue table beyond the cover text despite repeated policy mentions", async () => {
     const body = await readFile("src/collectors/fixtures/nvda_10q_deep.txt", "utf8");
     const [excerpt] = selectExcerpts([doc(9, "10-Q", "2026-09-01T00:00:00Z", body)]);
