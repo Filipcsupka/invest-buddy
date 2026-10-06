@@ -10,7 +10,11 @@ function authorized(header: string | null, token: string) {
   const b = createHash("sha256").update(token).digest();
   return timingSafeEqual(a, b) && supplied.length > 0;
 }
-/** Read-only: scores, consensus facts, chart technicals, deterministic signals, portfolio baseline and earlier ideas for the judge. Lives under /api/ingest so the public ingress filter hides it. */
+/**
+ * Read-only: scores, consensus facts, chart technicals, data-only signals (action, size tier, ratings), the private portfolio baseline and earlier ideas
+ * for the judge. The baseline marks held names and fills the owner's EUR band; it never decides a buy action or a tier, and the script does not pass it
+ * to the model. Lives under /api/ingest so the public ingress filter hides it.
+ */
 export async function GET(request: Request) {
   const token = process.env.INGEST_TOKEN;
   if (!token) return Response.json({ error: "Ingest unavailable" }, { status: 503 });

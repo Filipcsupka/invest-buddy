@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Judge step (phase C). Fixed rules in code (src/engine/signals.ts, served by the web's judge-input route) decide the action,
-// the amount band and the three setup ratings. This script sends only the symbols whose decision changed to ONE `claude -p`
+// the size tier and the three setup ratings from data alone. The owner's portfolio baseline is optional: it only fills the private
+// EUR band, and the model never sees it. This script sends only the symbols whose decision changed to ONE `claude -p`
 // call on the subscription CLI login (no API key). The model writes the wording and may only downgrade a buy to WATCH or flag
 // a conflict, each with an evidence url from the input. The script validates the JSON against scanner/schema/judge-output.schema.json,
 // rejects figures that are not in the input, merges the fixed decision with the wording and posts it to /api/ingest/ideas.
@@ -23,8 +24,8 @@ import { canonical, usageFromEnvelope } from "./extraction-log.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const OUT = process.env.SCAN_OUT_DIR || join(here, "out");
-export const BUY_ACTIONS = ["START_POSITION", "ADD", "HIGH_CONVICTION_ADD", "CSPX_ALLOCATION"];
-const DOWNGRADABLE = ["START_POSITION", "ADD", "HIGH_CONVICTION_ADD", "CSPX_ALLOCATION"];
+export const BUY_ACTIONS = ["START_POSITION", "ADD", "HIGH_CONVICTION_ADD"];
+const DOWNGRADABLE = BUY_ACTIONS;
 const NO_EVIDENCE_OK = ["WATCH", "CSPX_ALLOCATION", "HOLD", "THESIS_BROKEN", "REDUCE"];
 const RATE_LIMIT = /rate.?limit|usage limit|too many requests|\b429\b|overloaded|quota/i;
 const MIN_ATTEMPT_USD = 0.01;
@@ -143,7 +144,13 @@ const wording = (i) => [i.verdict, ...i.whatHappened, ...i.whyItMatters, ...i.nu
 
 // ---------- fixed decisions plus wording ----------
 const money = (n) => (Number.isInteger(n) ? String(n) : n.toFixed(2));
+/** Owner view only: the private EUR band as text. "EUR 0" when there is no band (no baseline, below the minimum, or not a buy). */
 export const amountText = (action, min, max) => (action === "WATCH" || max === 0 ? "EUR 0" : `EUR ${money(min)}-${money(max)}`);
+/** Public size wording for the model and the log: a share of a full position, never money. */
+export const TIER_TEXT = {
+  NONE: "no new money", STARTER: "starter, about 1/3 of a full position", STANDARD: "standard, about 2/3 of a full position", FULL: "full position",
+  ADD_THIRD: "add about 1/3 of a full position", ADD_HALF: "add about 1/2 of a full position",
+};
 
 /** The signals that are news: a different signature than the last stored idea, or a new symbol with an action other than HOLD. */
 export function changedSignals(signals, previous) {
@@ -151,21 +158,23 @@ export function changedSignals(signals, previous) {
   return signals.filter((s) => { const before = prev.get(s.symbol); return before === undefined ? s.action !== "HOLD" : before !== s.signature; });
 }
 
-/** What the model sees: the changed signals with their context, and the portfolio, with no timestamps. Cost basis is not in it. */
+/**
+ * What the model sees: the changed signals with their context, with no timestamps. Data only: no portfolio, no EUR band, no held value,
+ * because the public wording must fit every reader. Cost basis is not in it.
+ */
 export function buildModelInput(input, news) {
   const ctx = new Map(input.symbols.map((s) => [s.symbol, s]));
-  const p = input.portfolio;
+  const context = (symbol) => { const c = ctx.get(symbol); if (!c) return null; const rest = { ...c }; delete rest.held; return rest; };
   return {
     asOf: input.asOf, ruleConfigVersion: input.ruleConfigVersion, benchmark: input.benchmark,
-    portfolio: p ? { cashEur: p.cashEur, investedEur: p.investedEur, monthlyContributionEur: p.monthlyContributionEur ?? null, positions: p.positions.map((x) => ({ symbol: x.symbol, valueEur: x.valueEur })) } : null,
-    items: news.map((s) => ({ signal: { action: s.action, amountMinEur: s.amountMinEur, amountMaxEur: s.amountMaxEur, ratings: s.ratings, unconfirmed: s.unconfirmed, carriedFrom: s.carriedFrom, reasons: s.reasons, symbol: s.symbol }, context: ctx.get(s.symbol) ?? null })),
+    items: news.map((s) => ({ signal: { action: s.action, sizeTier: s.sizeTier, size: TIER_TEXT[s.sizeTier] ?? null, ratings: s.ratings, unconfirmed: s.unconfirmed, carriedFrom: s.carriedFrom, reasons: s.reasons, symbol: s.symbol }, context: context(s.symbol) })),
   };
 }
 
 /**
  * Checks the model's wording against the input and merges it with the fixed decision. A problem that cannot be repaired (a missing or extra symbol,
  * an evidence url outside the input, an invented figure) throws, so the call is tried again. Nothing the model writes can change the action upward,
- * the amounts or the ratings: an unknown field is a schema error, and a downgrade only moves a buy to WATCH EUR 0.
+ * the tier, the amounts or the ratings: an unknown field is a schema error, and a downgrade only moves a buy to WATCH with tier NONE and EUR 0.
  */
 export function mergeIdeas(output, news, modelInput) {
   const bySymbol = new Map(news.map((s) => [s.symbol, s]));
@@ -182,17 +191,16 @@ export function mergeIdeas(output, news, modelInput) {
     if (new Set(idea.evidence.map((e) => e.url)).size !== idea.evidence.length) throw new Error(`${idea.symbol}: duplicate evidence url`);
     if (idea.evidence.length < 2 && !NO_EVIDENCE_OK.includes(sig.action)) throw new Error(`${idea.symbol}: fewer than two evidence links for ${sig.action}`);
     for (const k of ["downgrade", "conflict"]) if (idea[k] && !urls.has(idea[k].evidenceUrl)) throw new Error(`${idea.symbol}: ${k} cites a url not in the input`);
-    const portfolio = modelInput.portfolio;
-    const figures = inventedFigures(wording(idea), { item, portfolio: portfolio ? { cashEur: portfolio.cashEur, investedEur: portfolio.investedEur, monthlyContributionEur: portfolio.monthlyContributionEur, position: portfolio.positions.find((p) => p.symbol === idea.symbol) ?? null } : null });
+    const figures = inventedFigures(wording(idea), { item });
     if (figures.length) throw new Error(`${idea.symbol}: figures not in the input: ${figures.slice(0, 5).join(", ")}`);
-    let { action, amountMinEur: min, amountMaxEur: max } = sig;
+    let { action, sizeTier, amountMinEur: min, amountMaxEur: max } = sig;
     let downgradedFrom = null;
     if (idea.downgrade) {
-      if (DOWNGRADABLE.includes(action)) { downgradedFrom = action; action = "WATCH"; min = 0; max = 0; }
+      if (DOWNGRADABLE.includes(action)) { downgradedFrom = action; action = "WATCH"; sizeTier = "NONE"; min = 0; max = 0; }
       else notes.push(`${idea.symbol}: downgrade ignored, ${action} is not a buy`);
     }
     ideas.push({
-      symbol: idea.symbol, action, amountMinEur: min, amountMaxEur: max, verdict: idea.verdict, whatHappened: idea.whatHappened, whyItMatters: idea.whyItMatters,
+      symbol: idea.symbol, action, sizeTier, amountMinEur: min, amountMaxEur: max, verdict: idea.verdict, whatHappened: idea.whatHappened, whyItMatters: idea.whyItMatters,
       setup: sig.ratings, numbers: idea.numbers, plan: { amountNow: amountText(action, min, max), ...idea.plan }, evidence: idea.evidence,
       unconfirmed: sig.unconfirmed || idea.unconfirmed || downgradedFrom !== null, carriedFrom: sig.carriedFrom ?? null, signature: sig.signature, ruleConfigVersion: sig.ruleConfigVersion,
       conflictNote: idea.conflict?.reason ?? null, downgradedFrom,
@@ -225,14 +233,13 @@ export function parseAgentEnvelope(out, requested, maxTurns) {
 export function agentModeArgs(o, budgetUsd) {
   return ["-p", "--output-format", "json", "--no-session-persistence", "--permission-mode", "dontAsk", "--tools", READ_ONLY_TOOLS, "--allowedTools", READ_ONLY_TOOLS, "--disallowedTools", "Bash,Edit,Write,NotebookEdit,WebFetch,WebSearch", "--max-budget-usd", String(budgetUsd), "--model", o.model];
 }
-/** Writes the input files the agent may read: facts, technicals, portfolio, ideas history, signals. Returns the file names. */
+/** Writes the input files the agent may read: facts, technicals, ideas history, signals. No portfolio file: the wording is data only. Returns the file names. */
 export function writeAgentFiles(dir, input, modelInput) {
   const items = modelInput.items;
   const files = {
     "facts.json": items.map((i) => ({ symbol: i.signal.symbol, score: i.context?.score, fields: i.context?.fields, expiredFields: i.context?.expiredFields, evidence: i.context?.evidence })),
     "technicals.json": items.map((i) => ({ symbol: i.signal.symbol, technicals: i.context?.technicals ?? null })),
-    "portfolio.json": modelInput.portfolio,
-    "ideas-history.json": input.previousIdeas ?? [],
+    "ideas-history.json": (input.previousIdeas ?? []).map((p) => ({ symbol: p.symbol, asOf: p.asOf, action: p.action, setup: p.setup, sizeTier: p.sizeTier ?? null })),
     "signals.json": items.map((i) => i.signal),
   };
   for (const [name, value] of Object.entries(files)) writeFileSync(join(dir, name), JSON.stringify(value, null, 1));
@@ -268,9 +275,9 @@ async function main() {
 
   if (record && !o.force && await checkSkip(o, token, { asOf })) { log("SKIPPED one run per day: a judge run for this date is already stored; use --force to rerun"); return; }
   const input = await loadInput(o, token, asOf);
-  if (!input.portfolio) { log("no portfolio baseline; enter one with POST /api/ingest/portfolio-baseline first"); if (!o.dryRun) process.exit(2); }
+  if (!input.portfolio) log("no portfolio baseline: signals come from data alone; owner EUR bands stay 0");
   const news = changedSignals(input.signals ?? [], input.previousIdeas);
-  log(`signals ${input.signals?.length ?? 0} (rules ${input.ruleConfigVersion}), changed ${news.length}${news.length ? `: ${news.map((s) => `${s.symbol} ${s.action} ${amountText(s.action, s.amountMinEur, s.amountMaxEur)}`).join(", ")}` : ""}`);
+  log(`signals ${input.signals?.length ?? 0} (rules ${input.ruleConfigVersion}), changed ${news.length}${news.length ? `: ${news.map((s) => `${s.symbol} ${s.action} ${s.sizeTier}`).join(", ")}` : ""}`);
   if (!news.length) { log("no signal changed since the last stored idea; no model call"); return; }
   const prompt = readFileSync(join(here, "prompts", "judge.md"), "utf8");
   const hash = judgeHash({ input, prompt, model: o.model, agent: o.agent, agentMode: o.agentMode });
@@ -281,7 +288,7 @@ async function main() {
   let promptInput = modelInput;
   if (o.agentMode) {
     const files = writeAgentFiles(work, input, modelInput);
-    promptInput = { asOf: modelInput.asOf, ruleConfigVersion: modelInput.ruleConfigVersion, benchmark: modelInput.benchmark, files, signals: modelInput.items.map((i) => i.signal), note: "Read the files in the current directory for the facts, technicals, portfolio and history." };
+    promptInput = { asOf: modelInput.asOf, ruleConfigVersion: modelInput.ruleConfigVersion, benchmark: modelInput.benchmark, files, signals: modelInput.items.map((i) => i.signal), note: "Read the files in the current directory for the facts, technicals and history." };
   }
   const text = fill(prompt, { AS_OF: asOf, INPUT: JSON.stringify(promptInput) });
   let spent = addUsage({}, {}), cost = 0, calls = 0, model = o.model, rawOutput = null, error = null, result = null;

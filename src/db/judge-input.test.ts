@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildJudgeInput, pickSymbols, shapeSymbol, signalsFor } from "./judge-input";
 import { baselineSchema } from "./portfolio-baseline";
 import { sampleBaseline } from "../ideas/fixtures";
+import { SIGNAL_RULES } from "../engine/signals";
 
 const bars = Array.from({ length: 30 }, (_, i) => ({ date: `2026-09-${String(i + 1).padStart(2, "0")}`, close: 100 + i, high: 101 + i }));
 const audit = (state: string, total: number, extra: object = {}) => ({ ticker: "X", asOf: "2026-10-05", technical: 8, fundamentals: 7, macro: 3, total, state, pullbackInUptrend: false, invalidReasons: [], inputs: { bars }, ruleHits: [{ id: "above_ma", matched: true }, { id: "dip", matched: false }], ...extra });
@@ -39,7 +40,7 @@ describe("judge input", () => {
     expect(input.portfolio?.investedEur).toBe(3030);
     expect(input.benchmark.symbol).toBe("CSPX");
     expect(calls.some((s) => s.includes("carried_from"))).toBe(true);
-    expect(input.ruleConfigVersion).toBe("2026-10-05.1");
+    expect(input.ruleConfigVersion).toBe(SIGNAL_RULES.version);
     expect(input.symbols[0].technicals?.regime).toBe("uptrend");
     expect(input.symbols[0].evidence.map((e) => e.url)).toEqual(["https://sec.gov/epsBeat"]);
     expect(calls.some((sql) => sql.includes("d.meta->>'display_allowed' = 'true'"))).toBe(true);
@@ -58,6 +59,15 @@ describe("judge input", () => {
     const rows = ([row("A", "Watch", 16), row("B", "Watch", 17)] as unknown as (Parameters<typeof shapeSymbol>[0] & { ticker: string })[]).map((r) => shapeSymbol(r, [c("epsBeat", { symbol: r.ticker }), c("revenueAccelerating", { symbol: r.ticker })], sampleBaseline, 3030, null));
     const p = { ...sampleBaseline, investedEur: 3030 };
     expect(signalsFor([...rows].reverse(), p)).toEqual(signalsFor(rows, p));
+  });
+  it("the baseline never changes a signature: it holds the action, ratings and tier, not the EUR band", () => {
+    const rows = ([row("A", "Setup met (>=18)", 19), row("B", "Watch", 16)] as unknown as (Parameters<typeof shapeSymbol>[0] & { ticker: string })[]).map((r) => shapeSymbol(r, [c("epsBeat", { symbol: r.ticker }), c("revenueAccelerating", { symbol: r.ticker })], sampleBaseline, 3030, null));
+    const key = (s: ReturnType<typeof signalsFor>[number]) => [s.symbol, s.action, s.sizeTier, s.signature];
+    expect(signalsFor(rows, null).map(key)).toEqual(signalsFor(rows, { ...sampleBaseline, investedEur: 3030 }).map(key));
+    for (const s of signalsFor(rows, null)) {
+      expect(s.signature).toBe(`${s.action}|${s.ratings.company}|${s.ratings.entry}|${s.ratings.catalyst}|${s.sizeTier}`);
+      expect([s.amountMinEur, s.amountMaxEur]).toEqual([0, 0]);
+    }
   });
   it("accepts the baseline shape, hand filled or from IBKR, and rejects loose data", () => {
     expect(baselineSchema.safeParse(sampleBaseline).success).toBe(true);

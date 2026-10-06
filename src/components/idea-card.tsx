@@ -1,11 +1,14 @@
 import { fill, formatDate, formatNumber, getMessages, type Locale } from "../i18n";
 import styles from "./idea-card.module.css";
 import type { StoredIdea } from "../db/ideas";
-import { stripEur } from "../ideas/public";
+import { hasBuySize, publicTier, stripEur } from "../ideas/public";
 
 const RATING_KEY = { "Very strong": "Very strong", Strong: "Strong", Good: "Good", Neutral: "Neutral", Weak: "Weak" } as const;
 
-/** One alert in the fixed layout: headline, verdict, what happened, why it matters, setup, numbers, plan, evidence. */
+/**
+ * One alert in the fixed layout: headline, verdict, what happened, why it matters, setup, numbers, plan, evidence.
+ * The public card (showAmounts false) shows the action and the size tier, never EUR. The private owner view adds the EUR band.
+ */
 export function IdeaCard({ idea: stored, locale, showAmounts = true, nested = false }: { idea: StoredIdea; locale: Locale; showAmounts?: boolean; nested?: boolean }) {
   const m = getMessages(locale).ideas;
   // ADR-001: without the flag no EUR amount or band is rendered, in any field.
@@ -13,7 +16,10 @@ export function IdeaCard({ idea: stored, locale, showAmounts = true, nested = fa
   const H = nested ? "h3" : "h2";
   const L = nested ? "h4" : "h3";
   const id = `idea-${idea.id}`;
-  const headline = !showAmounts ? fill(m.headlinePublic, { symbol: idea.symbol, action: idea.action }) : fill(m.headline, { symbol: idea.symbol, action: idea.action, min: formatNumber(locale, idea.amountMinEur), max: formatNumber(locale, idea.amountMaxEur) });
+  const tier = publicTier(idea);
+  const headline = showAmounts
+    ? fill(m.headline, { symbol: idea.symbol, action: idea.action, min: formatNumber(locale, idea.amountMinEur), max: formatNumber(locale, idea.amountMaxEur) })
+    : hasBuySize(tier) ? fill(m.headlineTier, { symbol: idea.symbol, action: idea.action, size: m.tiersShort[tier] }) : fill(m.headlinePublic, { symbol: idea.symbol, action: idea.action });
   const ratings: [string, keyof typeof idea.setup][] = [[m.company, "company"], [m.entry, "entry"], [m.catalyst, "catalyst"]];
   return (
     <article className={styles.card} aria-labelledby={`${id}-title`} data-action={idea.action}>
@@ -56,9 +62,10 @@ export function IdeaCard({ idea: stored, locale, showAmounts = true, nested = fa
           {idea.numbers.map((n, i) => <div key={i} className={styles.pair}><dt>{n.label}</dt><dd className="num">{n.value}</dd></div>)}
         </dl>
       </section>}
-      {(showAmounts || idea.plan.trigger || idea.plan.invalidation || idea.plan.opportunityCost) && <section aria-labelledby={`${id}-plan`}>
+      {(showAmounts || tier || idea.plan.trigger || idea.plan.invalidation || idea.plan.opportunityCost) && <section aria-labelledby={`${id}-plan`}>
         <L id={`${id}-plan`} className={styles.label}>{m.plan}</L>
         <dl className={styles.plan}>
+          {tier && <><dt>{m.size}</dt><dd data-tier={tier}>{m.tiers[tier]}<span className="muted small"> {m.sizeNote}</span></dd></>}
           {showAmounts && <><dt>{m.amountNow}</dt><dd>{idea.plan.amountNow}</dd></>}
           {idea.plan.trigger && <><dt>{m.trigger}</dt><dd>{idea.plan.trigger}</dd></>}
           {idea.plan.invalidation && <><dt>{m.invalidation}</dt><dd>{idea.plan.invalidation}</dd></>}

@@ -11,6 +11,7 @@ describe("idea card", () => {
   it("shows the alert layout in order, with the headline and evidence links", () => {
     const out = html();
     expect(out).toContain("NVDA - ADD - EUR 60-90");
+    expect(out).toContain("Add about 1/3 of a full position");
     const order = ["What happened", "Why it matters", "Setup", "Numbers", "Plan", "Evidence"].map((t) => out.indexOf(`>${t}<`));
     expect(order.every((n) => n > 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
@@ -47,9 +48,25 @@ describe("idea card", () => {
 });
 
 describe("idea card without amounts (ADR-001)", () => {
+  it("shows the tier and its wording in the headline and the plan, never EUR", () => {
+    const out = renderToStaticMarkup(<IdeaCard idea={add} locale="en" showAmounts={false} />);
+    expect(out).toContain("NVDA - ADD - Add 1/3<");
+    expect(out).toContain("Add about 1/3 of a full position");
+    expect(out).toContain("Not an amount and not tailored to you.");
+    expect(out).not.toMatch(/EUR|€|Amount now/);
+    const watchOut = renderToStaticMarkup(<IdeaCard idea={watch} locale="en" showAmounts={false} />);
+    expect(watchOut).toContain("AMD - WATCH<");
+    expect(watchOut).toContain("No new money");
+    expect(renderToStaticMarkup(<IdeaCard idea={add} locale="sk" showAmounts={false} />)).toContain("NVDA - ADD - Prikúpiť 1/3<");
+  });
+  it("an idea stored before tiers shows no size", () => {
+    const out = renderToStaticMarkup(<IdeaCard idea={{ ...add, sizeTier: null }} locale="en" showAmounts={false} />);
+    expect(out).toContain("NVDA - ADD<");
+    expect(out).not.toContain(">Size<");
+  });
   it("drops the band, amountNow and every sentence naming EUR", () => {
     const out = renderToStaticMarkup(<IdeaCard idea={{ ...add, verdict: "Setup holds. Buy EUR 80 now.", numbers: [...add.numbers, { label: "Size", value: "EUR 80" }] }} locale="en" showAmounts={false} />);
-    expect(out).toContain("NVDA - ADD<");
+    expect(out).toContain("NVDA - ADD - Add 1/3<");
     expect(out).toContain("Setup holds.");
     expect(out).toContain("Opportunity cost");
     expect(out).not.toMatch(/EUR|€|Amount now|Cash left/);

@@ -211,11 +211,13 @@ Decision 2026-10-06: the product says BUY, ADD, WAIT or REDUCE from data alone. 
 
 Today `src/engine/signals.ts` ties the action to the portfolio: no baseline forces WATCH EUR 0 for everything, bands are shares of available cash, there is a deploy cap, and held names take a different path (REDUCE, THESIS_BROKEN).
 
-### G1. Data-only action
+### G1. Data-only action (done 2026-10-06)
+- Note: rules `2026-10-06.1`. Buy actions and tiers come from data only; held only turns a no-money outcome into HOLD, REDUCE or THESIS_BROKEN; CSPX_ALLOCATION is dropped from the public path (owner view, G4); a missing baseline no longer stops the judge.
 - Do: compute START_POSITION, ADD, HIGH_CONVICTION_ADD, WATCH, REDUCE and THESIS_BROKEN from scores, the three ratings (company, entry, catalyst) and the evidence only. Remove the "no baseline means WATCH" rule and the cash-based deploy cap from the action step. "Held" becomes optional context for the owner's private view (REDUCE and THESIS_BROKEN stay available as signals for any holder). Keep `SIGNAL_RULES` versioned, bump the version.
 - DoD: the same inputs give the same action with or without a baseline; tests cover START, ADD, HIGH_CONVICTION_ADD, WATCH, REDUCE, THESIS_BROKEN with no portfolio; the judge still only explains and may only downgrade to WATCH.
 
-### G2. Size tiers, not euro amounts
+### G2. Size tiers, not euro amounts (done 2026-10-06)
+- Note: migration 011 adds `trade_ideas.size_tier`; the signature ends with the tier; the public card shows the tier in words and no EUR; owner EUR bands are filled only with a baseline, else 0.
 - Do: replace `amountMinEur/amountMaxEur` in the public idea with a tier: STARTER (about 1/3 of a full position), STANDARD (2/3), FULL, and for adds a fraction of a full position. Euro bands stay only in the owner's private view, computed from the baseline.
 - DoD: `trade_ideas` stores the tier; the public page and card show tier and wording, no euro amount; the private view still shows bands when the flag is on.
 

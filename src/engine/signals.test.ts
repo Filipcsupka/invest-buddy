@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeSignals, ratings, SIGNAL_RULES, type SignalField, type SignalPortfolio, type SignalSymbolInput } from "./signals";
+import { computeSignals, ratings, SIGNAL_RULES, SIZE_TIERS, TIERS_FOR_ACTION, tierFits, type SignalField, type SignalPortfolio, type SignalSymbolInput } from "./signals";
 import type { Technicals } from "../data/technicals";
 
 const tech = (over: Partial<Technicals> = {}): Technicals => ({ date: "2026-10-05", close: 100, return1dPercent: 0.5, return5dPercent: -3, return20dPercent: 2, return60dPercent: 8, vsMa20Percent: -2, vsMa50Percent: 4, vsMa200Percent: 15, belowHigh20Percent: 7, belowHigh52wPercent: 8, aboveLow52wPercent: 60, rangePosition52w: 85, rsi14: 48, avgVolume20: 1e6, volumeRatio: 1, atrPercent14: 2.5, relativeStrength20: 1.5, relativeStrength60: 3, regime: "pullback", ...over });
@@ -10,7 +10,10 @@ const sym = (symbol: string, over: Partial<SignalSymbolInput> = {}): SignalSymbo
   expiredFields: [], technicals: tech(), ...over,
 });
 const portfolio = (over: Partial<SignalPortfolio> = {}): SignalPortfolio => ({ cashEur: 1000, investedEur: 3000, positions: [{ symbol: "CSPX", valueEur: 2100 }], monthlyContributionEur: 200, ...over });
-const one = (s: SignalSymbolInput, p: SignalPortfolio | null = portfolio()) => computeSignals([s], p).find((x) => x.symbol === s.symbol)!;
+const one = (s: SignalSymbolInput, p: SignalPortfolio | null = null) => computeSignals([s], p).find((x) => x.symbol === s.symbol)!;
+/** Range regime, healthy RSI, no relative strength: entry Good, not Strong, no pullback. */
+const flatEntry = tech({ regime: "range", rsi14: 50, relativeStrength20: null, relativeStrength60: null });
+const decision = (s: { action: string; sizeTier: string; ratings: unknown; unconfirmed: boolean; reasons: string[] }) => ({ action: s.action, sizeTier: s.sizeTier, ratings: s.ratings, unconfirmed: s.unconfirmed, reasons: s.reasons });
 
 describe("ratings", () => {
   it("company comes from confirmed fundamentals only", () => {
@@ -30,66 +33,94 @@ describe("ratings", () => {
     expect(ratings(sym("A", { technicals: tech({ regime: "downtrend", relativeStrength20: -1, relativeStrength60: -1, rsi14: 35 }) })).ratings.entry).toBe("Weak");
     expect(ratings(sym("A", { technicals: tech({ regime: "uptrend", rsi14: 80, vsMa50Percent: 20, relativeStrength20: null, relativeStrength60: null }) })).ratings.entry).toBe("Weak");
     expect(ratings(sym("A", { technicals: null })).ratings.entry).toBe("Neutral");
+    expect(ratings(sym("A", { technicals: flatEntry })).ratings.entry).toBe("Good");
   });
 });
 
-describe("actions", () => {
-  it("starts a new name small and never jumps to conviction on the first buy", () => {
-    const s = one(sym("NEW"));
-    expect(s.action).toBe("START_POSITION");
-    expect([s.amountMinEur, s.amountMaxEur]).toEqual([50, 100]);
-    expect(s.ruleConfigVersion).toBe(SIGNAL_RULES.version);
+describe("actions from data only, no portfolio", () => {
+  it("HIGH_CONVICTION_ADD with tier ADD_HALF when every conviction condition holds", () => {
+    expect(one(sym("C"))).toMatchObject({ action: "HIGH_CONVICTION_ADD", sizeTier: "ADD_HALF", amountMinEur: 0, amountMaxEur: 0, ruleConfigVersion: SIGNAL_RULES.version });
+    expect(one(sym("C", { fields: { ...sym("C").fields, productCatalyst: f(true, { carriedFrom: "2026-09-01" }) } })).action).not.toBe("HIGH_CONVICTION_ADD");
   });
-  it("adds with conviction to a held name only when every conviction condition holds", () => {
-    const held = sym("H", { held: { valueEur: 300 } });
-    expect(one(held)).toMatchObject({ action: "HIGH_CONVICTION_ADD", amountMinEur: 150, amountMaxEur: 300 });
-    expect(one({ ...held, score: { total: 17, state: "Watch" } }).action).toBe("ADD");
-    expect(one({ ...held, fields: { ...held.fields, epsBeat: f(null), guidanceRaised: f(null) } }).action).toBe("ADD");
-    expect(one({ ...held, fields: { ...held.fields, productCatalyst: f(true, { carriedFrom: "2026-09-01" }) } }).action).not.toBe("HIGH_CONVICTION_ADD");
+  it("ADD with tier ADD_THIRD on a good entry without conviction", () => {
+    expect(one(sym("A", { score: { total: 17, state: "Watch" } }))).toMatchObject({ action: "ADD", sizeTier: "ADD_THIRD" });
+    expect(one(sym("A", { fields: { ...sym("A").fields, epsBeat: f(null), guidanceRaised: f(null) } }))).toMatchObject({ action: "ADD", sizeTier: "ADD_THIRD" });
   });
-  it("insufficient evidence is WATCH EUR 0 and unconfirmed", () => {
+  it("START_POSITION on an average entry, with the tier by strength", () => {
+    expect(one(sym("S", { technicals: flatEntry }))).toMatchObject({ action: "START_POSITION", sizeTier: "FULL" });
+    const noExecution = { ...sym("S").fields, epsBeat: f(null), guidanceRaised: f(null), insiderOrInstitutionalBuying: f(true) };
+    expect(one(sym("S", { technicals: flatEntry, fields: noExecution }))).toMatchObject({ action: "START_POSITION", sizeTier: "STANDARD" });
+    expect(one(sym("S", { technicals: flatEntry, score: { total: 16, state: "Watch" } }))).toMatchObject({ action: "START_POSITION", sizeTier: "STARTER" });
+  });
+  it("unconfirmed or carried data keeps a start to a starter", () => {
+    const carried = sym("S", { technicals: flatEntry, fields: { ...sym("S").fields, revenueAccelerating: f(true, { carriedFrom: "2026-09-20" }) } });
+    expect(one(carried)).toMatchObject({ action: "START_POSITION", sizeTier: "STARTER", unconfirmed: true });
+  });
+  it("insufficient evidence is WATCH with no size and unconfirmed", () => {
     const s = one(sym("T", { fields: { revenueAccelerating: f(true) } }));
-    expect(s).toMatchObject({ action: "WATCH", amountMinEur: 0, amountMaxEur: 0, unconfirmed: true });
+    expect(s).toMatchObject({ action: "WATCH", sizeTier: "NONE", amountMinEur: 0, amountMaxEur: 0, unconfirmed: true });
     expect(s.reasons[0]).toMatch(/Insufficient evidence/);
   });
-  it("a rejection rule breaks the thesis of a held name and only watches a new one", () => {
+  it("a rejection breaks the thesis of a held name and only watches a name that is not held", () => {
     const bad = { fields: { ...sym("X").fields, revenueDeclining: f(true) } };
-    expect(one(sym("X", { ...bad, held: { valueEur: 400 } })).action).toBe("THESIS_BROKEN");
-    expect(one(sym("X", bad)).action).toBe("WATCH");
+    expect(one(sym("X", { ...bad, held: { valueEur: 400 } }))).toMatchObject({ action: "THESIS_BROKEN", sizeTier: "NONE" });
+    expect(one(sym("X", bad))).toMatchObject({ action: "WATCH", sizeTier: "NONE" });
     expect(one(sym("X", { score: { total: 0, state: "Criteria broken" }, held: { valueEur: 400 } })).action).toBe("THESIS_BROKEN");
   });
-  it("reduces a held name with a Weak company rating in a downtrend", () => {
-    const s = one(sym("R", { held: { valueEur: 400 }, fields: { narrativeChanged: f(true), revenueAccelerating: f(null), epsBeat: f(false), guidanceRaised: f(null), productCatalyst: f(false), insiderOrInstitutionalBuying: f(null) }, technicals: tech({ regime: "downtrend" }), score: { total: 6, state: "Ignore" } }));
-    expect(s).toMatchObject({ action: "REDUCE", amountMinEur: 100, amountMaxEur: 200 });
+  it("REDUCE for a held name with a Weak company rating in a downtrend, WATCH when not held", () => {
+    const weak = { fields: { narrativeChanged: f(true), revenueAccelerating: f(null), epsBeat: f(false), guidanceRaised: f(null), productCatalyst: f(false), insiderOrInstitutionalBuying: f(null) }, technicals: tech({ regime: "downtrend" }), score: { total: 6, state: "Ignore" } };
+    expect(one(sym("R", { ...weak, held: { valueEur: 400 } }))).toMatchObject({ action: "REDUCE", sizeTier: "NONE", amountMaxEur: 0 });
+    expect(one(sym("R", weak))).toMatchObject({ action: "WATCH", sizeTier: "NONE" });
   });
-  it("never adds in a downtrend, whatever the position is worth against its cost", () => {
-    const s = one(sym("D", { held: { valueEur: 100 }, technicals: tech({ regime: "downtrend" }) }));
-    expect(["HOLD", "WATCH"]).toContain(s.action);
-    expect(s.amountMaxEur).toBe(0);
+  it("never buys in a downtrend, whatever the position is worth against its cost", () => {
+    expect(one(sym("D", { held: { valueEur: 100 }, technicals: tech({ regime: "downtrend" }) }))).toMatchObject({ action: "HOLD", sizeTier: "NONE" });
+    expect(one(sym("D", { technicals: tech({ regime: "downtrend" }) }))).toMatchObject({ action: "WATCH", sizeTier: "NONE" });
   });
-  it("holds a held name with a good company and an average entry", () => {
-    expect(one(sym("H", { held: { valueEur: 300 }, technicals: tech({ regime: "range", rsi14: 50, relativeStrength20: null, relativeStrength60: null }) })).action).toBe("HOLD");
+  it("held never changes a buy action or tier", () => {
+    for (const s of [sym("C"), sym("A", { score: { total: 17, state: "Watch" } }), sym("S", { technicals: flatEntry })]) {
+      expect(decision(one({ ...s, held: { valueEur: 300 } }))).toEqual(decision(one(s)));
+    }
   });
-  it("no baseline means WATCH EUR 0 for every symbol", () => {
-    expect(one(sym("A"), null)).toMatchObject({ action: "WATCH", amountMaxEur: 0 });
+  it("every action carries a tier that fits it, and CSPX_ALLOCATION is never produced", () => {
+    const all = computeSignals(["A", "B", "C", "D", "E"].map((n, i) => sym(n, { score: { total: 12 + i * 2, state: "Watch" }, technicals: tech({ regime: (["pullback", "range", "uptrend", "downtrend", "pullback"] as const)[i] }) })), portfolio({ cashEur: 50 }));
+    for (const s of all) expect(tierFits(s.action, s.sizeTier), `${s.symbol} ${s.action} ${s.sizeTier}`).toBe(true);
+    expect(all.some((s) => s.action === "CSPX_ALLOCATION" || s.symbol === "CSPX")).toBe(false);
+    expect(computeSignals([], portfolio()).length).toBe(0);
+    expect(Object.values(TIERS_FOR_ACTION).flat().every((t) => (SIZE_TIERS as readonly string[]).includes(t))).toBe(true);
   });
-  it("band under the minimum becomes WATCH, and the position limit caps an add", () => {
-    expect(one(sym("A"), portfolio({ cashEur: 150 })).action).toBe("WATCH");
+});
+
+describe("the portfolio is private context only", () => {
+  const universe = [sym("C"), sym("A", { score: { total: 17, state: "Watch" } }), sym("S", { technicals: flatEntry }), sym("T", { fields: { revenueAccelerating: f(true) } }), sym("D", { technicals: tech({ regime: "downtrend" }) })];
+  it("the same inputs give the same action, tier, ratings and reasons with or without a baseline, whatever the cash", () => {
+    const bare = computeSignals(universe, null).map(decision);
+    expect(computeSignals(universe, portfolio()).map(decision)).toEqual(bare);
+    expect(computeSignals(universe, portfolio({ cashEur: 0 })).map(decision)).toEqual(bare);
+    expect(computeSignals(universe, portfolio({ cashEur: 1e6 })).map(decision)).toEqual(bare);
+  });
+  it("without a baseline every owner amount is 0", () => {
+    for (const s of computeSignals(universe, null)) expect([s.amountMinEur, s.amountMaxEur]).toEqual([0, 0]);
+  });
+  it("with a baseline the owner band follows the tier as a share of cash", () => {
+    expect(one(sym("C"), portfolio())).toMatchObject({ action: "HIGH_CONVICTION_ADD", amountMinEur: 150, amountMaxEur: 300 });
+    expect(one(sym("S", { technicals: flatEntry, score: { total: 16, state: "Watch" } }), portfolio())).toMatchObject({ sizeTier: "STARTER", amountMinEur: 50, amountMaxEur: 100 });
+    expect(one(sym("R", { held: { valueEur: 400 }, fields: { narrativeChanged: f(true), epsBeat: f(false), productCatalyst: f(false) }, technicals: tech({ regime: "downtrend" }), score: { total: 6, state: "Ignore" } }), portfolio())).toMatchObject({ action: "REDUCE", amountMinEur: 100, amountMaxEur: 200 });
+  });
+  it("a band under the minimum is EUR 0 but keeps the action and tier", () => {
+    expect(one(sym("A", { score: { total: 17, state: "Watch" } }), portfolio({ cashEur: 100 }))).toMatchObject({ action: "ADD", sizeTier: "ADD_THIRD", amountMaxEur: 0 });
+  });
+  it("the position limit caps an owner band and notes it privately", () => {
     const capped = one(sym("H", { held: { valueEur: 740 } }), portfolio({ investedEur: 3000 }));
+    expect(capped.action).toBe("HIGH_CONVICTION_ADD");
     expect(capped.amountMaxEur).toBeLessThanOrEqual(Math.floor((0.25 * 3000 - 740) / 0.75));
-    expect(capped.reasons.join()).toMatch(/Position limit/);
+    expect(capped.ownerNotes.join()).toMatch(/Position limit/);
+    expect(capped.reasons.join()).not.toMatch(/Position limit|EUR/);
   });
-  it("deploy limit: total of the maxima stays within the share of cash, best names first", () => {
-    const all = computeSignals(["A", "B", "C", "D", "E", "F", "G", "H"].map((n) => sym(n)), portfolio());
-    const buys = all.filter((s) => s.amountMaxEur > 0 && s.action !== "CSPX_ALLOCATION");
-    expect(buys.reduce((n, s) => n + s.amountMaxEur, 0)).toBeLessThanOrEqual(600);
-    expect(all.filter((s) => s.action === "WATCH").map((s) => s.symbol)).toEqual(["G", "H"]);
-  });
-  it("CSPX allocation only when nothing else is bought and cash is idle", () => {
-    const quiet = computeSignals([sym("Q", { score: { total: 5, state: "Ignore" } })], portfolio());
-    expect(quiet.find((s) => s.symbol === "CSPX")).toMatchObject({ action: "CSPX_ALLOCATION", amountMinEur: 100, amountMaxEur: 200 });
-    expect(computeSignals([sym("A")], portfolio()).some((s) => s.symbol === "CSPX")).toBe(false);
-    expect(computeSignals([], portfolio({ cashEur: 50 })).length).toBe(0);
+  it("deploy limit: owner bands stay within the share of cash, best signals first, and no action changes", () => {
+    const all = computeSignals(["A", "B", "C", "D", "E", "F", "G", "H"].map((n) => sym(n, { technicals: flatEntry, score: { total: 16, state: "Watch" } })), portfolio());
+    expect(all.reduce((n, s) => n + s.amountMaxEur, 0)).toBeLessThanOrEqual(600);
+    expect(all.every((s) => s.action === "START_POSITION" && s.sizeTier === "STARTER")).toBe(true);
+    expect(all.filter((s) => s.amountMaxEur === 0).map((s) => s.symbol)).toEqual(["G", "H"]);
   });
 });
 

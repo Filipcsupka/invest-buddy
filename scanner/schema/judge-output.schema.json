@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "judge output (wording only; action, amount and ratings come from the rules)",
+  "title": "judge output (wording only; action, size tier and ratings come from the rules, from data alone)",
   "type": "object",
   "additionalProperties": false,
   "required": ["ideas"],

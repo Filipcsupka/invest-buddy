@@ -3,9 +3,9 @@ import type { ScoreResult } from "../engine";
 import { computeSignals, SIGNAL_RULES, type Signal, type SignalSymbolInput } from "../engine/signals";
 import { computeTechnicals, type Bar, type Technicals } from "../data/technicals";
 import { latestBaseline, type Baseline } from "./portfolio-baseline";
-import { latestIdeaPerSymbol, ideaSignature, type IdeaAction, type Idea } from "./ideas";
+import { latestIdeaPerSymbol, ideaSignature, type IdeaAction, type Idea, type SizeTier } from "./ideas";
 
-/** The benchmark every idea is compared against. CSPX_ALLOCATION is the default home for idle cash. */
+/** The benchmark every idea is compared against: the default home for money that has no better use. */
 export const BENCHMARK = { symbol: "CSPX", description: "S&P 500 UCITS ETF, the default home for money that has no better use" } as const;
 export const DEFAULT_MAX_SYMBOLS = 12;
 const MAX_EVIDENCE_PER_SYMBOL = 6;
@@ -27,7 +27,7 @@ export interface JudgeSymbol {
   evidence: JudgeEvidence[];
 }
 export interface JudgeSignal extends Signal { signature: string }
-export interface JudgePrevious { symbol: string; asOf: string; action: IdeaAction; setup: Idea["setup"]; signature: string; amountMinEur: number; amountMaxEur: number }
+export interface JudgePrevious { symbol: string; asOf: string; action: IdeaAction; setup: Idea["setup"]; signature: string; sizeTier: SizeTier | null }
 export interface JudgeInput {
   asOf: string;
   generatedAt: string;
@@ -35,7 +35,7 @@ export interface JudgeInput {
   benchmark: typeof BENCHMARK;
   portfolio: (Omit<Baseline, "positions"> & { investedEur: number; positions: { symbol: string; valueEur: number; quantity?: number }[] }) | null;
   symbols: JudgeSymbol[];
-  /** Action, amount band and ratings for each symbol, from src/engine/signals.ts. The judge cannot change them, only downgrade to WATCH. */
+  /** Action, size tier and ratings for each symbol, from data only (src/engine/signals.ts). The owner EUR band is filled only when a baseline exists. The judge cannot change them, only downgrade to WATCH. */
   signals: JudgeSignal[];
   previousIdeas: JudgePrevious[];
 }
@@ -76,11 +76,11 @@ export function shapeSymbol(row: ScoreRow, consensus: ConsensusRow[], baseline: 
   };
 }
 
-/** Deterministic signals for the picked symbols. Cost basis is dropped before this call: profit and loss never decide an action. */
+/** Deterministic signals for the picked symbols. The baseline only marks held names and fills the private owner band. Cost basis is dropped before this call: profit and loss never decide an action. */
 export function signalsFor(symbols: JudgeSymbol[], portfolio: JudgeInput["portfolio"]): JudgeSignal[] {
   const inputs: SignalSymbolInput[] = symbols.map((s) => ({ symbol: s.symbol, held: s.held ? { valueEur: s.held.valueEur } : null, score: { total: s.score.total, state: s.score.state }, fields: Object.fromEntries(Object.entries(s.fields).map(([k, f]) => [k, { value: f.value, agreement: f.agreement, verified: f.verified, carriedFrom: f.carriedFrom }])), expiredFields: s.expiredFields, technicals: s.technicals }));
   const sigs = computeSignals(inputs, portfolio ? { cashEur: portfolio.cashEur, investedEur: portfolio.investedEur, positions: portfolio.positions, monthlyContributionEur: portfolio.monthlyContributionEur } : null);
-  return sigs.map((s) => ({ ...s, signature: ideaSignature({ action: s.action, setup: s.ratings, amountMinEur: s.amountMinEur, amountMaxEur: s.amountMaxEur }) }));
+  return sigs.map((s) => ({ ...s, signature: ideaSignature({ action: s.action, setup: s.ratings, sizeTier: s.sizeTier }) }));
 }
 
 export async function buildJudgeInput(pool: Pick<pg.Pool, "query">, asOf: string, now = new Date(), maxSymbols = DEFAULT_MAX_SYMBOLS): Promise<JudgeInput> {
@@ -107,6 +107,6 @@ export async function buildJudgeInput(pool: Pick<pg.Pool, "query">, asOf: string
   return {
     asOf, generatedAt: now.toISOString(), ruleConfigVersion: SIGNAL_RULES.version, benchmark: BENCHMARK, portfolio, symbols,
     signals: signalsFor(symbols, portfolio),
-    previousIdeas: previous.map((p) => ({ symbol: p.symbol, asOf: p.asOf, action: p.action, setup: p.setup, signature: p.signature, amountMinEur: p.amountMinEur, amountMaxEur: p.amountMaxEur })),
+    previousIdeas: previous.map((p) => ({ symbol: p.symbol, asOf: p.asOf, action: p.action, setup: p.setup, signature: p.signature, sizeTier: p.sizeTier })),
   };
 }
