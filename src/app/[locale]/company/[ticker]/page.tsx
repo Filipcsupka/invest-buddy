@@ -9,6 +9,8 @@ import { IconArrowLeft, IconArrowRight, IconCheck, IconCross } from "@/component
 import { OperatorDisclosure } from "@/components/operator-disclosure";
 import { StateChip } from "@/components/score-badge";
 import { ScoreMark } from "@/components/score-mark";
+import { SourceList } from "@/components/source-list";
+import { inputSources, ruleSources, sourceSummary } from "@/components/view-model";
 import { companyIdea, ideasEnabled } from "@/data/ideas-store";
 import { instrumentUniverse, latestScores } from "@/data/store";
 import { DataStatus } from "@/components/data-status";
@@ -54,23 +56,24 @@ export default async function Company({ params }: Params) {
   const f = result.inputs.fundamentals;
   const mac = result.inputs.macro;
   const yesNo = (value: boolean | null) => value === null ? m.common.unknown : value ? m.common.yes : m.common.no;
-  const inputs: [string, string, string?][] = [
-    [m.company.inputs.revenueAccelerating, f.revenueAccelerating === undefined ? m.common.unknown : yesNo(f.revenueAccelerating), "revenueAccelerating"],
-    [m.company.inputs.revenueGrowthCurrent, f.revenueGrowthCurrent === null ? m.common.unknown : formatPercent(locale, f.revenueGrowthCurrent / 100, 0)],
-    [m.company.inputs.revenueGrowthPrior, f.revenueGrowthPrior === null ? m.common.unknown : formatPercent(locale, f.revenueGrowthPrior / 100, 0)],
-    [m.company.inputs.revenueDeclining, yesNo(f.revenueDeclining), "revenueDeclining"],
-    [m.company.inputs.epsBeat, yesNo(f.epsBeat), "epsBeat"],
-    [m.company.inputs.guidanceRaised, yesNo(f.guidanceRaised), "guidanceRaised"],
-    [m.company.inputs.earningsMissAndGuidanceCut, yesNo(f.earningsMissAndGuidanceCut)],
-    [m.company.inputs.guidanceCut, yesNo(result.consensusValues?.guidanceCut ?? null), "guidanceCut"],
-    [m.company.inputs.narrativeChanged, yesNo(result.consensusValues?.narrativeChanged ?? null), "narrativeChanged"],
-    [m.company.inputs.productCatalyst, yesNo(f.productCatalyst), "productCatalyst"],
-    [m.company.inputs.insiderOrInstitutionalAccumulation, yesNo(f.insiderOrInstitutionalAccumulation), "insiderOrInstitutionalBuying"],
-    [m.company.inputs.noRevenue, yesNo(f.noRevenue)],
-    [m.company.inputs.memePump, yesNo(f.memePump)],
-    [m.company.inputs.growthSectorRotation, yesNo(mac.growthSectorRotation), "sectorRotationIntoGrowth"],
-    [m.company.inputs.dataTailwind, yesNo(mac.dataTailwind), "dataTailwind"],
+  const inputs: [string, string, string | undefined, string][] = [
+    [m.company.inputs.revenueAccelerating, f.revenueAccelerating === undefined ? m.common.unknown : yesNo(f.revenueAccelerating), "revenueAccelerating", "revenueAccelerating"],
+    [m.company.inputs.revenueGrowthCurrent, f.revenueGrowthCurrent === null ? m.common.unknown : formatPercent(locale, f.revenueGrowthCurrent / 100, 0), undefined, "revenueGrowthCurrent"],
+    [m.company.inputs.revenueGrowthPrior, f.revenueGrowthPrior === null ? m.common.unknown : formatPercent(locale, f.revenueGrowthPrior / 100, 0), undefined, "revenueGrowthPrior"],
+    [m.company.inputs.revenueDeclining, yesNo(f.revenueDeclining), "revenueDeclining", "revenueDeclining"],
+    [m.company.inputs.epsBeat, yesNo(f.epsBeat), "epsBeat", "epsBeat"],
+    [m.company.inputs.guidanceRaised, yesNo(f.guidanceRaised), "guidanceRaised", "guidanceRaised"],
+    [m.company.inputs.earningsMissAndGuidanceCut, yesNo(f.earningsMissAndGuidanceCut), undefined, "earningsMissAndGuidanceCut"],
+    [m.company.inputs.guidanceCut, yesNo(result.consensusValues?.guidanceCut ?? null), "guidanceCut", "guidanceCut"],
+    [m.company.inputs.narrativeChanged, yesNo(result.consensusValues?.narrativeChanged ?? null), "narrativeChanged", "narrativeChanged"],
+    [m.company.inputs.productCatalyst, yesNo(f.productCatalyst), "productCatalyst", "productCatalyst"],
+    [m.company.inputs.insiderOrInstitutionalAccumulation, yesNo(f.insiderOrInstitutionalAccumulation), "insiderOrInstitutionalBuying", "insiderOrInstitutionalAccumulation"],
+    [m.company.inputs.noRevenue, yesNo(f.noRevenue), undefined, "noRevenue"],
+    [m.company.inputs.memePump, yesNo(f.memePump), undefined, "memePump"],
+    [m.company.inputs.growthSectorRotation, yesNo(mac.growthSectorRotation), "sectorRotationIntoGrowth", "growthSectorRotation"],
+    [m.company.inputs.dataTailwind, yesNo(mac.dataTailwind), "dataTailwind", "dataTailwind"],
   ];
+  const sources = scored ? sourceSummary(locale, result) : null;
   const ideaRow = await companyIdea(instrument.ticker);
   const index = instruments.findIndex((item) => item.ticker === instrument.ticker);
   const prev = instruments[(index - 1 + instruments.length) % instruments.length];
@@ -126,6 +129,7 @@ export default async function Company({ params }: Params) {
             <OperatorDisclosure text={m.common.operatorDisclosure} />
           </div>
         </div>
+        {sources && <p className="source-summary muted small">{sources}</p>}
         <ScoreMark size="lg" state={state} matched={scored ? result.ruleHits.filter((hit) => hit.matched).map((hit) => hit.id) : null} groupLabels={groupLabels(locale, result)} label={scored ? fill(m.mark.label, { total: result.total, fundamentals: result.fundamentals, technical: result.technical, macro: result.macro }) : m.mark.none} />
       </section>
 
@@ -187,6 +191,7 @@ export default async function Company({ params }: Params) {
                             <span className="rule-name">{m.rules[rule.id]}</span>
                           </span>
                           {hit ? <span className="rule-def num">{ruleDetail(locale, hit, result)}</span> : null}
+                          {hit ? <span className="rule-def rule-src"><SourceList locale={locale} items={ruleSources(locale, result, rule.id)} /></span> : null}
                         </th>
                         <td className="num rule-points">{met ? `+${rule.points}` : "0"}</td>
                       </tr>
@@ -220,10 +225,11 @@ export default async function Company({ params }: Params) {
           <section className="sheet-section" aria-labelledby="inputs">
             <h2 id="inputs">{m.company.inputsTitle}</h2>
             <dl className="input-list">
-              {inputs.map(([label, value, field]) => (
+              {inputs.map(([label, value, field, key]) => (
                 <div key={label}>
                   <dt>{label}</dt>
                   <dd className="num">{value}{field && result.agreement?.[field] ? <small className="muted"> · {m.agreement[result.agreement[field] as keyof typeof m.agreement]}</small> : null}{field && result.expiredFields?.includes(field) ? <small className="muted"> · {m.agreement.expired}</small> : field && result.carriedFrom?.[field] ? <small className="muted"> · {fill(m.agreement.carried, { date: formatDate(locale, result.carriedFrom[field]) })}</small> : null}</dd>
+                  <dd className="input-src"><SourceList locale={locale} items={inputSources(locale, result, key)} /></dd>
                 </div>
               ))}
             </dl>

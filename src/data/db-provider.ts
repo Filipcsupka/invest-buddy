@@ -1,6 +1,7 @@
 import type pg from "pg";
 import type { Fundamentals, Macro, OHLCV } from "../engine";
 import type { UniverseProvider, Instrument } from "./providers";
+import { fieldSourcesFor, type SourceItem } from "./sources";
 import { carryForwardEnabled, carryState, type ConsensusRow } from "./carry-forward";
 
 type CarryRow = ConsensusRow & { field: string };
@@ -9,7 +10,7 @@ export const CONFIRMED_FUNDAMENTAL_AGREEMENTS: readonly string[] = ["agree", "xb
 const confirmedFundamental = (row: { verified: boolean; agreement: string }) => row.verified && CONFIRMED_FUNDAMENTAL_AGREEMENTS.includes(row.agreement);
 
 export class DatabaseUniverseProvider implements UniverseProvider {
-  readonly provenance = new Map<string, { runIds: Record<string, string>; evidenceUrls: string[]; agreement: Record<string, string>; consensusValues: Record<string, boolean | null>; fingerprintRows: unknown[]; carriedFrom?: Record<string, string>; expiredFields?: string[] }>();
+  readonly provenance = new Map<string, { runIds: Record<string, string>; evidenceUrls: string[]; agreement: Record<string, string>; consensusValues: Record<string, boolean | null>; fingerprintRows: unknown[]; carriedFrom?: Record<string, string>; expiredFields?: string[]; sources: Record<string, SourceItem[]> }>();
   constructor(private readonly pool: pg.Pool, private readonly asOf?: string, private readonly carry: boolean = carryForwardEnabled()) {}
   private get refDate() { return this.asOf ?? new Date().toISOString().slice(0, 10); }
   /** CARRY_FORWARD=on only: tags rows older than the scoring date as carried and turns rows outside their field window into unknown. */
@@ -46,7 +47,7 @@ export class DatabaseUniverseProvider implements UniverseProvider {
       for (const [agent, item] of Object.entries(row.agent_values)) runIds[agent] = item.runId;
       for (const item of row.evidence_refs) evidenceUrls.add(item.url);
     }
-    this.provenance.set(ticker, { runIds, evidenceUrls: [...evidenceUrls], agreement, consensusValues, fingerprintRows });
+    this.provenance.set(ticker, { runIds, evidenceUrls: [...evidenceUrls], agreement, consensusValues, fingerprintRows, sources: await fieldSourcesFor(this.pool, rows.rows) });
     const get = (field: string) => { const row = by.get(field); return row && confirmedFundamental(row) ? row.value : null; };
     const epsBeat = get("epsBeat"), guidanceCut = get("guidanceCut");
     return { revenueGrowthCurrent: null, revenueGrowthPrior: null, revenueAccelerating: get("revenueAccelerating"), revenueDeclining: get("revenueDeclining"), epsBeat, guidanceRaised: get("guidanceRaised"), earningsMissAndGuidanceCut: epsBeat === false && guidanceCut === true ? true : epsBeat === null || guidanceCut === null ? null : false, productCatalyst: get("productCatalyst"), insiderOrInstitutionalAccumulation: get("insiderOrInstitutionalBuying"), noRevenue: null, memePump: null };
@@ -83,7 +84,7 @@ export class DatabaseUniverseProvider implements UniverseProvider {
       for (const [agent, item] of Object.entries(row.agent_values)) runIds[agent] = item.runId;
       for (const item of row.evidence_refs) evidenceUrls.add(item.url);
     }
-    this.provenance.set(ticker, { runIds, evidenceUrls: [...evidenceUrls], agreement, consensusValues, fingerprintRows, carriedFrom, expiredFields: expiredFields.sort() });
+    this.provenance.set(ticker, { runIds, evidenceUrls: [...evidenceUrls], agreement, consensusValues, fingerprintRows, carriedFrom, expiredFields: expiredFields.sort(), sources: await fieldSourcesFor(this.pool, evaluated.map(({ row }) => row)) });
     const get = (field: string) => { const row = by.get(field); return row && confirmedFundamental(row) ? row.value : null; };
     const epsBeat = get("epsBeat"), guidanceCut = get("guidanceCut");
     return { revenueGrowthCurrent: null, revenueGrowthPrior: null, revenueAccelerating: get("revenueAccelerating"), revenueDeclining: get("revenueDeclining"), epsBeat, guidanceRaised: get("guidanceRaised"), earningsMissAndGuidanceCut: epsBeat === false && guidanceCut === true ? true : epsBeat === null || guidanceCut === null ? null : false, productCatalyst: get("productCatalyst"), insiderOrInstitutionalAccumulation: get("insiderOrInstitutionalBuying"), noRevenue: null, memePump: null };

@@ -25,3 +25,28 @@ describe("DatabaseUniverseProvider fundamentals", () => {
     });
   }
 });
+
+describe("DatabaseUniverseProvider sources", () => {
+  const REL = "https://www.sec.gov/Archives/edgar/data/1/ex99.htm", AV = "https://www.alphavantage.co/query?function=EARNINGS&symbol=NVDA";
+  const withRefs = [
+    { ...row("epsBeat", "data_rule", true), evidence_refs: [{ url: AV, publishedAt: "2026-08-26" }] },
+    { ...row("guidanceRaised", "verified_single", true), evidence_refs: [{ url: REL, publishedAt: "2026-08-26" }] },
+  ];
+  let docQueries = 0;
+  const pool2 = { query: async (sql: string) => {
+    if (sql.includes("FROM source_documents")) { docQueries++; return { rows: [{ url: REL, doc_type: "8-K EX-99.1", published_at: "2026-08-26", display_allowed: "true" }, { url: AV, doc_type: "EPS surprise", published_at: "2026-08-26", display_allowed: "false" }] }; }
+    return { rows: sql.includes("FROM consensus_findings") && !sql.includes("field IN") ? withRefs : [] };
+  } } as unknown as pg.Pool;
+  for (const carry of [false, true]) {
+    it(`links only the display-allowed document, with one document query (carry ${carry ? "on" : "off"})`, async () => {
+      docQueries = 0;
+      const provider = new DatabaseUniverseProvider(pool2, "2026-10-05", carry);
+      await provider.fundamentals("NVDA");
+      expect(docQueries).toBe(1);
+      expect(provider.provenance.get("NVDA")?.sources).toEqual({
+        epsBeat: [{ kind: "alphavantage", href: null, publishedAt: "2026-08-26" }],
+        guidanceRaised: [{ kind: "release", href: REL, publishedAt: "2026-08-26" }],
+      });
+    });
+  }
+});

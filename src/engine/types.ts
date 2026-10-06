@@ -34,6 +34,8 @@ export interface ScoreResult {
   agreement?: Record<string, string>;
   consensusValues?: Record<string, boolean | null>;
   evidenceUrls?: string[];
+  /** Per consensus field: where the verified finding comes from. Links only for display-allowed stored documents and public SEC XBRL data. */
+  sources?: Record<string, { kind: string; publishedAt: string | null; href: string | null }[]>;
   /** Only with CARRY_FORWARD=on: field to the scan date its value was carried from, and fields that expired to unknown. */
   carriedFrom?: Record<string, string>;
   expiredFields?: string[];
