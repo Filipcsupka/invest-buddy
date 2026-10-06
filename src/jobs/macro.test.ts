@@ -117,7 +117,7 @@ describe.skipIf(!url)("macro job on postgres", () => {
     expect(first.dataTailwind.value).toBe(true);
     expect(first.sectorRotationIntoGrowth.value).toBe(true);
     const rows = await consensus();
-    expect(rows).toHaveLength(70);
+    expect(rows).toHaveLength(tickers.length * 2);
     expect(rows.every((row) => row.agreement === "data_rule" && row.verified && row.value === true)).toBe(true);
     expect(rows.find((row) => row.field === "dataTailwind")?.evidence_refs.map((ref) => ref.url)).toEqual(docUrls);
     expect(rows.find((row) => row.field === "dataTailwind")?.reason).toMatch(/10-year yield .* VIX/);
@@ -155,7 +155,7 @@ describe.skipIf(!url)("macro job on postgres", () => {
     expect(result.dataTailwind.value).toBeNull();
     expect(result.sectorRotationIntoGrowth.value).toBeNull();
     const rows = await consensus();
-    expect(rows).toHaveLength(70);
+    expect(rows).toHaveLength(tickers.length * 2);
     expect(rows.every((row) => row.value === null && !row.verified && row.agreement === "data_rule" && row.reason.startsWith("Unknown"))).toBe(true);
     expect(await new DatabaseUniverseProvider(pool, ASOF, false).macro("NVDA")).toEqual({ growthSectorRotation: null, dataTailwind: null });
   });

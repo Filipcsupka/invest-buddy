@@ -15,7 +15,7 @@ Two agents on two subscriptions need no extra paid account. Each agent runs as i
 | `schema/ticker-output.schema.json`, `schema/macro-output.schema.json` | Strict output shapes handed to `codex exec --output-schema`. |
 | `prompts/ticker-scan.md` | Prompt for one ticker: earnings, guidance, catalyst, insider and institutional activity, narrative. |
 | `prompts/macro-scan.md` | Prompt for the macro object: sector rotation, data tailwind, upcoming events. |
-| `universe.json` | The 35 tickers, taken from guide sections 3 and 9 and `src/data/fixtures.ts`. Edit by hand when the app's instruments change. |
+| `universe.json` | Offline scanner fallback. Live jobs and ingest use the editable `instruments` table. PCVX is included as the first discovery addition. |
 | `Dockerfile` | Image with node 22 slim, both CLIs, runner, prompts, schemas. Runs as user 10001. |
 | `launchd/` | Optional manual backup: weekday 06:30 schedule on the Mac. The scheduled scan is the CronJob. |
 | `test/` | Sample payload and tests for the validator. |
@@ -211,6 +211,12 @@ Run the command from the repo root. The Keychain item is readable from a login s
 
 Run `npm run watch` to poll EDGAR submissions. It records each CIK and accession once, using the collector's four requests per second SEC limiter. Run `npm run detect -- --output /work/gate.json` after collection, then pass the file to both `run-extract.mjs --symbols-file /work/gate.json` and `run-judge.mjs --symbols-file /work/gate.json`. An empty `symbols` array ends both AI steps without a model call. A full manual review uses `--force`.
 
+### Weekly discovery
+
+`npm run discovery` builds a private weekly shortlist from SEC XBRL frames across listed filers, paged current 8-K filings with Item 1.01 or 2.02, 13D/13G ownership filings, quarterly 13F holding changes for the configured managers, recent clinical trials, stored price and volume moves, and the beneficiary chains in `src/jobs/discovery-themes.json`. The frames source is the broad market screen; the theme file is one input. `src/jobs/discovery-config.ts` sets the weekly cap, screening cap, mover thresholds, and manager list. The job fetches at most the screening cap of price series through Twelve Data when the bars are not already stored, saves outside-universe bars in `discovery_price_bars` for later mover screens, then applies the same `score()` rules and exclusions as the tracked names. It needs `DATABASE_URL`, `SEC_USER_AGENT`, and `TWELVE_DATA_API_KEY`, but makes no model calls. The private `discovery_candidates` rows keep source links, the score, signal date, and SPY close for later comparison. There is no schedule manifest in this change.
+
+Review the rows with `SELECT week_start,symbol,rule_score,rule_state,signal_date,benchmark_close,sources,status FROM discovery_candidates ORDER BY week_start DESC,rule_score DESC;`, then run `npm run discovery -- --approve SYMBOL --output /work/discovery-gate.json` or `--reject SYMBOL`. Approval adds the symbol to `instruments`, which collect, prices, watch, detect, macro, the bundle route, and the extractor read at run time. Collect filings and prices for the new symbol, then pass the gate file through extract, reconcile, daily, and judge in that order. The extractor and judge use the existing token budget. `scanner/universe.json` remains an offline fallback; it does not authorize a live symbol. The 13F change is a quarter-end holding comparison, not evidence of a current trade.
+
 The ingest API's `/api/ingest/ai-budget` route shows this month's charged tokens and dollars. `AI_MONTHLY_TOKEN_CAP` and `AI_MONTHLY_USD_CAP` default to 500000 tokens and USD 20. Each call reserves 20000 tokens and its CLI dollar limit before it starts; a denied reservation exits with code 4. A failed call with missing usage is charged at its reservation. Extraction logs and database rows include input hashes, accession numbers, tokens and cost. The watch, gate, extract and judge jobs still need a shared symbols file or equivalent handoff when their schedule is changed in infra.
 
 A run is about 36 agent calls (35 tickers plus macro). In the NVDA dry run above, Claude needed about 68 seconds and Codex about 132 seconds for the ticker call, so a full run at concurrency 3 should take roughly 15 to 30 minutes with the stricter v2 prompts. These calls count against your subscription usage window. If you hit the limit, calls fail, get listed in the log, and the exit code turns non-zero once more than 20 percent fail. Lower `--concurrency` or run a subset with `--only`. Payloads stay well under the 1 MB limit.
@@ -227,7 +233,7 @@ See the caveat under Auth in a container.
 - `timeout after 300s`: raise `--timeout-s`, or lower `--concurrency`.
 - `schema: ... missing https evidence`: the model set a field to `true` without a source. The retry usually fixes it. If one ticker keeps failing, read its lines in `out/run-*.log`.
 - `symbol mismatch`: the model answered for a different company. Usually a one-off.
-- `server rejected X: unknown symbol`: the ticker is in `universe.json` but not in the instruments table.
+- `server rejected X: unknown symbol`: add or approve the ticker in the `instruments` table first. The live extractor reads that table through the authenticated universe endpoint.
 - HTTP 401: wrong or rotated token. HTTP 400: the log shows the field paths. HTTP 413: payload over 1 MB.
 - launchd job did nothing: check `scanner/out/launchd.err.log`, and confirm the PATH in the plist contains the folder of `claude` (`which claude`).
 - Logs live in `scanner/out/run-<asOf>-<id>.log`. They hold timestamps, ticker names and error text. The token is never written to them.

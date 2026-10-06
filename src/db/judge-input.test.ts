@@ -14,6 +14,10 @@ describe("judge input", () => {
     const rows = [row("A", "Setup met (>=18)", 19), row("B", "Ignore", 5), row("C", "Wait", 13), row("D", "Watch", 16), row("E", "Ignore", 4), row("F", "Criteria broken", 0)];
     expect(pickSymbols(rows, new Set(["E"]), new Set(["F"])).map((r) => r.ticker)).toEqual(["E", "A", "D", "F"]);
   });
+  it("includes a reviewed discovery name in the gated judge input even when its first score is Wait", () => {
+    const rows = [row("A", "Setup met (>=18)", 19), row("NEW", "Wait", 13), row("B", "Watch", 16)];
+    expect(pickSymbols(rows, new Set(), new Set(), 2, new Set(["NEW"])).map((r) => r.ticker)).toEqual(["NEW", "A"]);
+  });
   it("flags carried fields and keeps evidence urls of the symbol", () => {
     const s = shapeSymbol(row("X", "Watch", 16, { expiredFields: ["epsBeat"] }), [c("epsBeat", { carried_from: "2026-09-23", value: null }), c("guidanceRaised")], { ...sampleBaseline, positions: [{ symbol: "X", valueEur: 300 }] }, 1200, null, new Set(["https://sec.gov/epsBeat", "https://sec.gov/guidanceRaised"]));
     expect(s.carriedFrom).toBe("2026-09-23");

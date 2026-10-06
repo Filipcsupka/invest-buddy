@@ -1,0 +1,34 @@
+{
+  "themes": [
+    {
+      "name": "AI power",
+      "chain": "Data-center demand → generation and power capacity → equipment and operators",
+      "beneficiaries": [
+        { "symbol": "WULF", "name": "TeraWulf", "sector": "AI power", "sourceUrl": "https://investors.terawulf.com/" },
+        { "symbol": "VRT", "name": "Vertiv", "sector": "AI power", "sourceUrl": "https://investors.vertiv.com/" }
+      ]
+    },
+    {
+      "name": "Cooling",
+      "chain": "Higher rack density → liquid cooling → thermal infrastructure",
+      "beneficiaries": [
+        { "symbol": "VRT", "name": "Vertiv", "sector": "Cooling", "sourceUrl": "https://investors.vertiv.com/" },
+        { "symbol": "MOD", "name": "Modine", "sector": "Cooling", "sourceUrl": "https://investors.modine.com/" }
+      ]
+    },
+    {
+      "name": "Networking",
+      "chain": "AI clusters → interconnect bandwidth → networking equipment",
+      "beneficiaries": [
+        { "symbol": "ANET", "name": "Arista Networks", "sector": "Networking", "sourceUrl": "https://investors.arista.com/" }
+      ]
+    },
+    {
+      "name": "Biotech catalysts",
+      "chain": "Clinical readout → regulatory review → vaccine or drug launch",
+      "beneficiaries": [
+        { "symbol": "PCVX", "name": "Vaxcyte", "sector": "Biotech", "sourceUrl": "https://investors.vaxcyte.com/" }
+      ]
+    }
+  ]
+}

@@ -297,7 +297,7 @@ async function web(baseUrl, token, path, init = {}) {
   if (!res.ok) throw new Error(`${path.split("?")[0]} HTTP ${res.status}`);
   return res.json();
 }
-const loadInput = (o, token, asOf) => (o.inputFile ? JSON.parse(readFileSync(o.inputFile, "utf8")) : web(o.baseUrl, token, `judge-input?${new URLSearchParams({ asOf, maxSymbols: String(o.maxSymbols) })}`));
+const loadInput = (o, token, asOf, gate) => (o.inputFile ? JSON.parse(readFileSync(o.inputFile, "utf8")) : web(o.baseUrl, token, `judge-input?${new URLSearchParams({ asOf, maxSymbols: String(o.maxSymbols), ...(gate ? { symbols: gate.symbols.join(",") } : {}) })}`));
 const checkSkip = async (o, token, params) => (await web(o.baseUrl, token, `ideas?${new URLSearchParams({ agent: o.agent, ...params })}`)).skip === true;
 const postRun = (o, token, body) => web(o.baseUrl, token, "ideas", { method: "POST", body: JSON.stringify(body) });
 
@@ -318,7 +318,7 @@ async function main() {
   if (!token && !offline) { log("no INGEST_TOKEN; aborting"); process.exit(2); }
   const record = Boolean(token) && !o.dryRun;
 
-  const input = await loadInput(o, token, asOf);
+  const input = await loadInput(o, token, asOf, gate);
   if (!input.portfolio) log("no portfolio baseline: signals come from data alone; owner EUR bands stay 0");
   const gatedSignals = (input.signals ?? []).filter((s) => !gate || gate.symbols.includes(s.symbol));
   const news = o.force ? gatedSignals : changedSignals(gatedSignals, input.previousIdeas);

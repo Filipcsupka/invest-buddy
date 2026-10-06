@@ -1,5 +1,5 @@
 {
-  "note": "Derived from InvestingGuide sections 3 and 9 and the instruments in src/data/fixtures.ts. Keep in sync by hand; the server rejects symbols it does not know.",
+  "note": "Offline fallback for the scanner. Runtime jobs and ingest read the editable instruments table. Add names there for live use.",
   "instruments": [
     {"symbol":"NVDA","name":"NVIDIA","sector":"AI & semiconductors","tier":1},
     {"symbol":"AMD","name":"AMD","sector":"AI & semiconductors","tier":null},
@@ -23,6 +23,7 @@
     {"symbol":"VRTX","name":"Vertex Pharmaceuticals","sector":"Biotech","tier":null},
     {"symbol":"CRSP","name":"CRISPR Therapeutics","sector":"Biotech","tier":null},
     {"symbol":"REGN","name":"Regeneron","sector":"Biotech","tier":null},
+    {"symbol":"PCVX","name":"Vaxcyte","sector":"Biotech","tier":null},
     {"symbol":"TSLA","name":"Tesla","sector":"Energy & EV","tier":2},
     {"symbol":"ENPH","name":"Enphase Energy","sector":"Energy & EV","tier":3},
     {"symbol":"ROKU","name":"Roku","sector":"Additional growth","tier":3},

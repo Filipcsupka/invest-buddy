@@ -53,9 +53,9 @@ interface ConsensusRow { symbol: string; field: string; value: boolean | null; a
 interface ScoreRow { ticker: string; name: string; sector: string; tier: number | null; audit: ScoreResult }
 
 /** Which symbols go to the judge: held names, names with an earlier idea, and names in the Setup or Watch state. Everything else is noise. Capped at `max`. */
-export function pickSymbols(rows: ScoreRow[], held: Set<string>, previous: Set<string>, max = DEFAULT_MAX_SYMBOLS): ScoreRow[] {
-  const wanted = (r: ScoreRow) => held.has(r.ticker) || previous.has(r.ticker) || r.audit.state === "Setup met (>=18)" || r.audit.state === "Watch";
-  return rows.filter(wanted).sort((a, b) => Number(held.has(b.ticker)) - Number(held.has(a.ticker)) || b.audit.total - a.audit.total || a.ticker.localeCompare(b.ticker)).slice(0, max);
+export function pickSymbols(rows: ScoreRow[], held: Set<string>, previous: Set<string>, max = DEFAULT_MAX_SYMBOLS, requested: Set<string> = new Set()): ScoreRow[] {
+  const wanted = (r: ScoreRow) => requested.has(r.ticker) || held.has(r.ticker) || previous.has(r.ticker) || r.audit.state === "Setup met (>=18)" || r.audit.state === "Watch";
+  return rows.filter(wanted).sort((a, b) => Number(requested.has(b.ticker)) - Number(requested.has(a.ticker)) || Number(held.has(b.ticker)) - Number(held.has(a.ticker)) || b.audit.total - a.audit.total || a.ticker.localeCompare(b.ticker)).slice(0, max);
 }
 
 const refLabel = (ref: { url?: string; fiscalPeriod?: string }): string | null =>
@@ -106,13 +106,13 @@ export function signalsFor(symbols: JudgeSymbol[], portfolio: JudgeInput["portfo
   return sigs.map((s) => ({ ...s, signature: ideaSignature({ action: s.action, setup: s.ratings, sizeTier: s.sizeTier }) }));
 }
 
-export async function buildJudgeInput(pool: Pick<pg.Pool, "query">, asOf: string, now = new Date(), maxSymbols = DEFAULT_MAX_SYMBOLS): Promise<JudgeInput> {
+export async function buildJudgeInput(pool: Pick<pg.Pool, "query">, asOf: string, now = new Date(), maxSymbols = DEFAULT_MAX_SYMBOLS, requested: string[] = []): Promise<JudgeInput> {
   const baseline = await latestBaseline(pool, asOf);
   const previous = await latestIdeaPerSymbol(pool);
   const scores = await pool.query<ScoreRow>(`SELECT DISTINCT ON (s.ticker) s.ticker, i.name, i.sector, i.tier, s.audit FROM score_results s JOIN instruments i ON i.ticker=s.ticker
     WHERE s.as_of <= $1 AND s.as_of >= ($1::date - 10) ORDER BY s.ticker, s.as_of DESC`, [asOf]);
   const held = new Set((baseline?.positions ?? []).map((p) => p.symbol));
-  const picked = pickSymbols(scores.rows, held, new Set(previous.map((p) => p.symbol)), maxSymbols);
+  const picked = pickSymbols(scores.rows, held, new Set(previous.map((p) => p.symbol)), maxSymbols, new Set(requested));
   const tickers = picked.map((r) => r.ticker);
   const consensus = picked.length ? await pool.query<ConsensusRow>(`SELECT DISTINCT ON (symbol, field) symbol, field, value, agreement, verified, reason, carried_from::text, evidence_refs
     FROM consensus_findings WHERE symbol = ANY($1) AND as_of <= $2 ORDER BY symbol, field, as_of DESC`, [tickers, asOf]) : { rows: [] as ConsensusRow[] };

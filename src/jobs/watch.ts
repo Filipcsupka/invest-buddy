@@ -1,6 +1,6 @@
 import { runLoggedJob } from "./job-log";
 import pg from "pg";
-import universe from "../../scanner/universe.json";
+import { loadUniverse } from "../db/universe";
 import { companyCiks } from "../collectors/edgar";
 import { getText } from "../collectors/http";
 import { requireSecUserAgent } from "../collectors/sec-user-agent";
@@ -30,7 +30,7 @@ async function main() {
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
   let count = 0, missing = 0;
   try {
-    for (const company of universe.instruments) {
+    for (const company of await loadUniverse(pool)) {
       const cik = ciks.get(company.symbol) ?? ciks.get(DEFAULT_SYMBOL_MAP[company.symbol] ?? company.symbol);
       if (!cik) { process.stderr.write(`${company.symbol}: no CIK\n`); missing++; continue; }
       const url = `https://data.sec.gov/submissions/CIK${String(cik).padStart(10, "0")}.json`;

@@ -110,7 +110,7 @@ export default async function Company({ params }: Params) {
           stamp={data.sample ? m.common.sample : undefined}
           fields={[
             { label: m.company.sector, value: sectorLabel(locale, instrument.sector) },
-            { label: m.company.source, value: instrument.source === "sample extension" ? m.common.extension : m.common.guide },
+            { label: m.company.source, value: instrument.source === "sample extension" ? m.common.extension : instrument.source === "discovery" ? m.common.discovery : m.common.guide },
             { label: m.company.session, value: <span className="num">{result.asOf ? formatDate(locale, result.asOf) : m.common.noScore}</span> },
           ]}
         />

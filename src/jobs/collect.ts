@@ -15,12 +15,14 @@ import type { SourceHttp } from "../collectors/sources/client";
 import { formatPings, isExtra, runExtraSources, runPings } from "../collectors/sources/registry";
 import { MemoryCusipStore, PostgresCusipStore, type CusipStore } from "../db/source-collectors";
 import { isIsoDate } from "../db/iso-date";
+import { loadUniverse } from "../db/universe";
 
 const companies = universe.instruments as Company[];
 const daysAgo = (date: Date, days: number) => new Date(date.getTime() - days * 86400000).toISOString().slice(0, 10);
-export interface CollectOptions { since?: string; sources?: string[]; dryRun?: boolean; now?: () => Date; get?: (url: string) => Promise<string>; http?: SourceHttp; cusips?: CusipStore }
+export interface CollectOptions { since?: string; sources?: string[]; dryRun?: boolean; now?: () => Date; get?: (url: string) => Promise<string>; http?: SourceHttp; cusips?: CusipStore; companies?: Company[] }
 /** Phase A collectors (edgar, rss, fred) run as before. Phase A2 sources (`EXTRA_SOURCES`) run through the source registry. */
 export async function runCollect(repository: CollectorRepository, symbols: string[], options: CollectOptions = {}) {
+  const companies = options.companies ?? universe.instruments as Company[];
   const requested = options.sources ?? ["edgar", "rss"];
   const extra = requested.filter(isExtra), basic = requested.filter((name) => !isExtra(name));
   const first = basic.length ? await runLegacyCollect(repository, symbols, { ...options, sources: basic }) : undefined;
@@ -33,6 +35,7 @@ export async function runCollect(repository: CollectorRepository, symbols: strin
     documentsParsed: first.documentsParsed + second.documentsParsed, factsComputed: first.factsComputed + second.factsComputed, exitCode: first.exitCode || second.exitCode };
 }
 async function runLegacyCollect(repository: CollectorRepository, symbols: string[], options: CollectOptions = {}) {
+  const companies = options.companies ?? universe.instruments as Company[];
   const now = options.now?.() ?? new Date();
   const asOf = now.toISOString().slice(0, 10);
   // SEC filings count as evidence for up to 100 days (earnings and guidance), so the default window matches that.
@@ -166,14 +169,15 @@ async function main() {
     return { checked: results.length, failures: results.filter((result) => !result.ok).length };
   }
   guardCollectUserAgent(names, process.env);
-  const symbols = only ? [...new Set(only.split(",").map((s) => s.trim().toUpperCase()))] : companies.map((c) => c.symbol);
-  const unknown = symbols.filter((s) => !companies.some((c) => c.symbol === s));
-  if (unknown.length) throw new Error(`Unknown ticker(s): ${unknown.join(", ")}`);
   if (!memory && !process.env.DATABASE_URL) throw new Error("DATABASE_URL is required; use --memory for a run without a database");
   const pool = memory ? null : new pg.Pool({ connectionString: process.env.DATABASE_URL });
   try {
+    const activeCompanies = pool ? await loadUniverse(pool) : companies;
+    const symbols = only ? [...new Set(only.split(",").map((s) => s.trim().toUpperCase()))] : activeCompanies.map((c) => c.symbol);
+    const unknown = symbols.filter((s) => !activeCompanies.some((c) => c.symbol === s));
+    if (unknown.length) throw new Error(`Unknown ticker(s): ${unknown.join(", ")}`);
     const repository = pool ? new PostgresCollectorRepository(pool) : new MemoryCollectorRepository();
-    const result = await runCollect(repository, symbols, { since, sources: names as SourceName[] | undefined, dryRun, cusips: pool ? new PostgresCusipStore(pool) : new MemoryCusipStore() });
+    const result = await runCollect(repository, symbols, { since, sources: names as SourceName[] | undefined, dryRun, cusips: pool ? new PostgresCusipStore(pool) : new MemoryCusipStore(), companies: activeCompanies });
     process.stdout.write(`Collect: ${result.succeeded}/${result.requested} tickers, ${result.documentsParsed} documents parsed, ${result.factsComputed} facts computed, ${result.documentsWritten} documents written, ${result.factsWritten} facts written${dryRun ? " (dry run, nothing stored)" : ""}\n`);
     for (const failure of result.failures) process.stderr.write(`Failed ${failure.ticker}\n`);
     if (result.stoppedReason) process.stderr.write("Stopped: source limit reached\n");

@@ -10,11 +10,12 @@ const series = (n: number, close = 100) => Array.from({ length: n }, (_, i) => b
 const provider = (fn: (t: string) => Promise<OHLCV[]>): MarketDataProvider => ({ bars: fn });
 
 describe("priceTickers", () => {
-  it("is the 35 universe symbols plus SPY", () => {
+  it("includes the extended offline universe plus SPY", () => {
     const t = priceTickers();
-    expect(t).toHaveLength(36);
+    expect(t).toHaveLength(37);
     expect(t).toContain("SPY");
     expect(t).toContain("NVDA");
+    expect(t).toContain("PCVX");
   });
 });
 

@@ -8,6 +8,7 @@ import { collectVix } from "../collectors/sources/vix";
 import type { Company, Env } from "../collectors/sources/common";
 import { PostgresCollectorRepository, type CollectorRepository } from "../db/collectors";
 import { isIsoDate } from "../db/iso-date";
+import { loadUniverse } from "../db/universe";
 import { evaluateDataTailwind, evaluateSectorRotation, macroConfig, MACRO_RULES_VERSION, type Bar, type MacroConfig, type MacroResult, type VixPoint, type YieldPoint } from "../data/macro-rules";
 
 export const BENCHMARK = "SPY";
@@ -129,7 +130,7 @@ async function main() {
   if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required");
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
   try {
-    const result = await runMacro(pool, asOf, { fetch: !noFetch });
+    const result = await runMacro(pool, asOf, { fetch: !noFetch, tickers: (await loadUniverse(pool)).map((item) => item.symbol) });
     const show = (name: string, item: MacroResult) => `${name}=${item.value === null ? "unknown" : item.value}`;
     process.stdout.write(`Macro ${asOf}: ${show("dataTailwind", result.dataTailwind)} ${show("sectorRotationIntoGrowth", result.sectorRotationIntoGrowth)}, ${result.rows} consensus rows\n${result.dataTailwind.reason}\n${result.sectorRotationIntoGrowth.reason}\n`);
     if (result.failures.length) process.stderr.write(`Macro fetch failures: ${result.failures.length}\n`);
