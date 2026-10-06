@@ -19,6 +19,9 @@ describe("portfolio-baseline route", () => {
   it("stores a valid baseline and rejects loose bodies", async () => {
     expect((await POST(post(sampleBaseline))).status).toBe(200);
     expect(store.saved).toHaveLength(1);
+    expect((await POST(post({ ...sampleBaseline, source: "flex" }))).status).toBe(200);
+    expect((await POST(post({ ...sampleBaseline, source: "other" }))).status).toBe(400);
+    store.saved.pop();
     expect((await POST(post({ ...sampleBaseline, cashEur: -5 }))).status).toBe(400);
     expect((await POST(post({ ...sampleBaseline, accountId: "U123" }))).status).toBe(400);
   });

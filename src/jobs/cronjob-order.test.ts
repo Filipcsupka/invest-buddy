@@ -80,4 +80,10 @@ describe("daily pipeline order", () => {
     expect(doc).toContain("name: DATABASE_URL");
     for (const text of ["runAsNonRoot: true", "automountServiceAccountToken: false", "allowPrivilegeEscalation: false", "readOnlyRootFilesystem: true", 'drop: ["ALL"]', "type: RuntimeDefault", "concurrencyPolicy: Forbid"]) expect(doc).toContain(text);
   });
+  it("keeps the portfolio job suspended and gives it the ingest settings", () => {
+    const doc = job("portfolio");
+    expect(doc).toMatch(/^\s{2}suspend: true$/m);
+    expect(doc).toContain("value: http://web.invest.svc.cluster.local:3000");
+    expect(doc).toMatch(/name: INGEST_TOKEN\s+valueFrom:\s+secretKeyRef:\s+name: invest-buddy-secrets\s+key: INGEST_TOKEN/);
+  });
 });

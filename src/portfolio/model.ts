@@ -1,5 +1,6 @@
 import type { MarketDataProvider } from "../data/providers";
 import { parseFlexStatement } from "./flex";
+import { toEurPortfolio, type EurPortfolio } from "./eur";
 
 export interface PortfolioSnapshot {
   asOf: string;
@@ -33,8 +34,47 @@ export function tradingDayAfter(date: string, count = 1): string {
   return next.toISOString().slice(0, 10);
 }
 
+/** The last weekday on or before the date. Used when the statement carries no report date. */
+export function lastTradingDay(date: string): string {
+  const d = new Date(`${date}T00:00:00Z`);
+  while (d.getUTCDay() === 0 || d.getUTCDay() === 6) d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Live Flex shape in EUR. The report date falls back to today's trading date when the statement has none. */
+export function parseFlexPortfolio(xml: string, today = new Date().toISOString().slice(0, 10)): EurPortfolio & { asOf: string } {
+  const eur = toEurPortfolio(parseFlexStatement(xml));
+  return { ...eur, asOf: eur.asOf ?? lastTradingDay(today) };
+}
+
+/** Live shape: only weights and a rebased two-point period return. No amounts leave this function. */
+async function normalizeLive(xml: string, benchmarkProvider: MarketDataProvider, delayTradingDays: number): Promise<PortfolioSnapshot> {
+  const eur = parseFlexPortfolio(xml);
+  const total = eur.positions.reduce((sum, p) => sum + p.valueEur, 0);
+  if (!eur.positions.length || total <= 0) throw new Error("Incomplete Flex statement");
+  if (!eur.fromDate || eur.fromDate >= eur.asOf) throw new Error("Flex period too short");
+  if (eur.nav.start <= 0) throw new Error("Flex NAV invalid");
+  const weights = eur.positions.map((p) => ({ symbol: p.symbol, weightPercent: Number((100 * p.valueEur / total).toFixed(2)) }));
+  // Simple period return net of deposits. It is not a time-weighted return: the live report has no daily NAV rows.
+  const twr = (eur.nav.end - eur.nav.start - eur.nav.deposits) / eur.nav.start * 100;
+  if (!Number.isFinite(twr) || twr < -100 || twr > 1000) throw new Error("Benchmark or TWR invalid");
+  const bars = (await benchmarkProvider.bars("SPY")).filter((bar) => bar.close > 0).sort((a, b) => a.date.localeCompare(b.date));
+  const at = (date: string) => bars.filter((bar) => bar.date <= date).at(-1)?.close;
+  const first = at(eur.fromDate);
+  const last = at(eur.asOf);
+  if (!first || !last) throw new Error("Benchmark missing start date");
+  return {
+    asOf: eur.asOf, publishOn: tradingDayAfter(eur.asOf, delayTradingDays), sample: false, weights,
+    series: [
+      { date: eur.fromDate, nav: 100, twrPercent: 0, benchmark: 100 },
+      { date: eur.asOf, nav: Number((100 * (1 + twr / 100)).toFixed(4)), twrPercent: Number(twr.toFixed(4)), benchmark: Number((100 * last / first).toFixed(4)) },
+    ],
+  };
+}
+
 export async function normalizeFlex(xml: string, benchmarkProvider: MarketDataProvider, delayTradingDays = 1): Promise<PortfolioSnapshot> {
   const raw = parseFlexStatement(xml);
+  if (raw.navSummary) return normalizeLive(xml, benchmarkProvider, delayTradingDays);
   if (!raw.positions.length || !raw.nav.length) throw new Error("Incomplete Flex statement");
   const nav = raw.nav.map((row) => ({ date: iso(row.reportDate ?? row.date), twr: number(row.twr ?? row.TWR) }))
     .sort((a, b) => a.date.localeCompare(b.date));

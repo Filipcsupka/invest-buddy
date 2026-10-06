@@ -9,7 +9,7 @@ import { isoDate } from "./iso-date";
  */
 export const baselineSchema = z.object({
   asOf: isoDate(),
-  source: z.enum(["manual", "ibkr-mcp"]),
+  source: z.enum(["manual", "ibkr-mcp", "flex"]),
   currency: z.literal("EUR").default("EUR"),
   cashEur: z.number().nonnegative().max(1e9),
   monthlyContributionEur: z.number().nonnegative().max(1e7).nullable().optional(),
