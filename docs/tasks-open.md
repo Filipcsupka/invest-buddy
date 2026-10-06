@@ -2,7 +2,7 @@
 
 State on 2026-10-06. A1 to A4 are done (see the notes under each). Each task can be picked up alone or given to one agent. "Approval" means the owner must say yes before the step runs (cluster, push, secrets, money). Pick the lowest open task in a group whose dependencies are done. Tick the box and add one line on what changed.
 
-Groups: A first live run, B web, C pipeline quality, D data and accounts, E operations.
+Groups: A first live run, B web, C pipeline quality, D data and accounts, E operations, F cadence.
 
 ## A. First live run on khtz
 
@@ -162,6 +162,34 @@ Groups: A first live run, B web, C pipeline quality, D data and accounts, E oper
 - Do: the web logs almost nothing, so a failure is invisible. Add structured logs (JSON, one line per request on the ingest routes and the pages: route, status, duration, request id; errors with a stack) and a log line at the start and end of every job (counts, durations, failures). Log failed ingests with the reason, never tokens or request bodies. Decide where logs go: `kubectl logs` only, or a collector (Loki is in `monitoring/` of the infra repo if it runs).
 - DoD: a failed ingest and a failed page render each leave a readable log line; one job run shows start, end and counts; a note says where to read logs and how long they are kept.
 - Related: E2 (alerts) builds on this.
+
+## F. Cadence: fewer, change-driven runs
+
+Design and sources: `docs/cadence-design.md`. This group replaces the daily extract and judge schedule. Do F1 before unsuspending extract or judge (A8).
+
+### F1. Watch step
+- Do: a daily script (no AI) polls `data.sec.gov/submissions` for the 35 CIKs, stores new accession numbers per CIK (table or `collected_facts`), and keeps the 4 req/s limit. Second poll in earnings weeks.
+- DoD: a run lists new filings per ticker since the last run; a rerun with no new filings reports none; a test covers the dedupe by accession number.
+
+### F2. Gate step
+- Do: mark a ticker "changed" only for a new 8-K with Item 2.02, 4.02 or 5.02, a 10-Q, a 10-K or an amendment. Add an insider cluster rule (3 or more opportunistic Form 4 buys in 30 days, excluding same-month-every-year traders) and price band rules (drawdown and valuation, thresholds in config). Output is the `--symbols-file` for extract. This replaces `detect`, or extends it.
+- DoD: unit tests for each rule; the output for a day with no changes is an empty list and extract exits without a model call.
+
+### F3. Gated extract and judge schedule
+- Do: run extract on changed tickers only (haiku, escalate to sonnet when haiku flags a material change). Run judge when at least one ticker changed, and on the fixed schedule in F5. Change the CronJobs in infra (fewer runs, all weekdays stay for the watch step only).
+- DoD: a quiet week costs 0 model calls; a run with 3 changed tickers calls the model 3 times; counts and cost are logged per run.
+
+### F4. Token budget guard
+- Do: a monthly token and dollar cap. Extract and judge stop with a clear exit code and a log line when the cap is reached. Log processed accession numbers and input hashes. Reprocessing is manual only (`--force`).
+- DoD: a test with a tiny cap stops the run; the monthly total is readable from the database.
+
+### F5. Fixed review calendar
+- Do: weekly digest of events; a re-score and a "thesis intact, weakened or broken" note after each earnings filing; a full re-screen in May and November (only time new additions are ranked); an annual thesis rewrite. Store the thesis note and the thesis-break checklist per holding.
+- DoD: each item has a trigger or schedule in code or a CronJob, and the web shows the last review date per holding.
+
+### F6. Tune the placeholders
+- Do: drawdown band, valuation band, turnover target (30% a year) and the insider cluster size are placeholders. Check them against `InvestingGuide.md` and your own rules.
+- DoD: owner signs off the values; they live in one config file with a comment on where each came from.
 
 ## Not planned
 
