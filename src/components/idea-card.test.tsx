@@ -46,6 +46,20 @@ describe("idea card", () => {
   });
 });
 
+describe("idea card without amounts (ADR-001)", () => {
+  it("drops the band, amountNow and every sentence naming EUR", () => {
+    const out = renderToStaticMarkup(<IdeaCard idea={{ ...add, verdict: "Setup holds. Buy EUR 80 now.", numbers: [...add.numbers, { label: "Size", value: "EUR 80" }] }} locale="en" showAmounts={false} />);
+    expect(out).toContain("NVDA - ADD<");
+    expect(out).toContain("Setup holds.");
+    expect(out).toContain("Opportunity cost");
+    expect(out).not.toMatch(/EUR|€|Amount now|Cash left/);
+  });
+  it("strips euro-sign wording in Slovak too", () => {
+    const out = renderToStaticMarkup(<IdeaCard idea={{ ...add, plan: { ...add.plan, trigger: "Pridať 50 € pri páde." } }} locale="sk" showAmounts={false} />);
+    expect(out).not.toMatch(/EUR|€|Suma teraz/);
+  });
+});
+
 describe("ideas page gate", () => {
   it("is hidden unless IDEAS_PAGE=on or the app runs on fixture data", () => {
     const keep = { page: process.env.IDEAS_PAGE, mode: process.env.DATA_MODE };

@@ -3,11 +3,13 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Chart } from "@/components/chart";
 import { groupLabels, TitleBlock } from "@/components/datasheet";
+import { IdeaCard } from "@/components/idea-card";
 import { Disclaimer } from "@/components/disclaimer";
 import { IconArrowLeft, IconArrowRight, IconCheck, IconCross } from "@/components/icons";
 import { OperatorDisclosure } from "@/components/operator-disclosure";
 import { StateChip } from "@/components/score-badge";
 import { ScoreMark } from "@/components/score-mark";
+import { companyIdea, ideasEnabled } from "@/data/ideas-store";
 import { instrumentUniverse, latestScores } from "@/data/store";
 import { DataStatus } from "@/components/data-status";
 export const dynamic = "force-dynamic";
@@ -69,6 +71,7 @@ export default async function Company({ params }: Params) {
     [m.company.inputs.growthSectorRotation, yesNo(mac.growthSectorRotation), "sectorRotationIntoGrowth"],
     [m.company.inputs.dataTailwind, yesNo(mac.dataTailwind), "dataTailwind"],
   ];
+  const ideaRow = await companyIdea(instrument.ticker);
   const index = instruments.findIndex((item) => item.ticker === instrument.ticker);
   const prev = instruments[(index - 1 + instruments.length) % instruments.length];
   const next = instruments[(index + 1) % instruments.length];
@@ -126,10 +129,20 @@ export default async function Company({ params }: Params) {
         <ScoreMark size="lg" state={state} matched={scored ? result.ruleHits.filter((hit) => hit.matched).map((hit) => hit.id) : null} groupLabels={groupLabels(locale, result)} label={scored ? fill(m.mark.label, { total: result.total, fundamentals: result.fundamentals, technical: result.technical, macro: result.macro }) : m.mark.none} />
       </section>
 
+      {ideaRow && (
+        <section className="sheet-section" aria-labelledby="idea">
+          <div className="section-head">
+            <h2 id="idea">{m.company.ideaTitle}</h2>
+            <p className="muted small">{m.company.ideaNote}</p>
+          </div>
+          <IdeaCard idea={ideaRow.idea} locale={locale} showAmounts={ideasEnabled()} nested />
+        </section>
+      )}
+
       <section className="sheet-section" aria-labelledby="chart">
         <div className="section-head">
-          <h2 id="chart">{m.company.chartTitle}</h2>
-          <p className="muted small">{m.company.chartNote}</p>
+          <h2 id="chart">{data.sample ? m.company.chartTitle : m.company.chartTitleLive}</h2>
+          {data.sample && <p className="muted small">{m.company.chartNote}</p>}
         </div>
         <Chart
           animate

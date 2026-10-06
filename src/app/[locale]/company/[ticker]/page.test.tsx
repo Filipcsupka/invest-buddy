@@ -3,13 +3,17 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const universe = vi.fn();
 const scores = vi.fn();
+const idea = vi.fn();
+const eurOn = vi.fn();
 vi.mock("@/data/store", () => ({ instrumentUniverse: () => universe(), latestScores: () => scores() }));
+vi.mock("@/data/ideas-store", () => ({ companyIdea: () => idea(), ideasEnabled: () => eurOn() }));
 
 import Company, * as page from "./page";
 import { instruments } from "@/data/fixtures";
 import { scoredUniverse } from "@/data/scored";
+import { sampleIdeas } from "@/ideas/fixtures";
 
-afterEach(() => { universe.mockReset(); scores.mockReset(); });
+afterEach(() => { universe.mockReset(); scores.mockReset(); idea.mockReset(); eurOn.mockReset(); });
 const props = (ticker: string, locale = "en") => ({ params: Promise.resolve({ locale, ticker }) });
 const dbInstrument = { ticker: "ZZZZ", name: "Zed Corp", sector: "Cloud & SaaS", tier: null, source: "guide" as const };
 
@@ -44,5 +48,67 @@ describe("company page", () => {
     const html = renderToStaticMarkup(await Company(props("ZZZZ")));
     expect(html).toContain('href="/en/company/XXXX"');
     expect(html).toContain('href="/en/company/YYYY"');
+  });
+
+  async function render(opts: { sample: boolean; locale?: string; idea?: unknown; eur?: boolean }) {
+    const rows = (await scoredUniverse()).slice(0, 1);
+    universe.mockResolvedValue([rows[0].instrument]);
+    scores.mockResolvedValue({ rows, sample: opts.sample, lastUpdated: "2026-10-05", stale: false });
+    idea.mockResolvedValue(opts.idea ?? null);
+    eurOn.mockReturnValue(opts.eur ?? false);
+    return renderToStaticMarkup(await Company(props(rows[0].instrument.ticker, opts.locale)));
+  }
+
+  describe("price chart wording", () => {
+    it("never shows the synthetic wording on database data", async () => {
+      for (const locale of ["en", "sk"]) {
+        const html = await render({ sample: false, locale });
+        expect(html).not.toMatch(/Synthetic series|Syntetický rad|illustration only/);
+        expect(html).toContain(locale === "en" ? "Daily closes, last 100 sessions" : "Denné zatváracie ceny");
+      }
+    });
+    it("keeps it on fixture data", async () => {
+      const html = await render({ sample: true });
+      expect(html).toContain("Price, last 100 sessions");
+      expect(html).toContain("Synthetic series, for illustration only.");
+    });
+  });
+
+  describe("latest idea card", () => {
+    const [add, watch] = sampleIdeas;
+    const withIdea = (i: typeof add, extra = {}) => ({ idea: { ...i, ...extra }, sample: false });
+    it("shows a WATCH idea with plan, badges and date", async () => {
+      const html = await render({ sample: false, idea: withIdea(watch) });
+      expect(html).toContain("Latest trade idea");
+      expect(html).toContain("AMD - WATCH");
+      expect(html).toContain("UNCONFIRMED");
+      expect(html).toContain("Carried data from");
+      expect(html).toContain("Opportunity cost");
+      expect(html).toContain("Idea of ");
+    });
+    it("shows START_POSITION with only the evidence links stored in the idea", async () => {
+      const html = await render({ sample: false, idea: withIdea(add, { action: "START_POSITION" }) });
+      expect(html).toContain("START_POSITION");
+      expect(html).toContain('href="https://example.com/nvda-release"');
+      expect(html.match(/href="https:\/\/example\.com/g)).toHaveLength(2);
+    });
+    it("is hidden when there is no idea to show (HOLD is filtered by companyIdea)", async () => {
+      expect(await render({ sample: false, idea: null })).not.toContain("Latest trade idea");
+    });
+    it("shows no EUR amount in any field while the flag is off", async () => {
+      const html = await render({ sample: false, eur: false, idea: withIdea(add) });
+      expect(html).toContain("NVDA - ADD");
+      expect(html).not.toMatch(/EUR|€|Amount now/);
+    });
+    it("shows the band and amount when the flag is on", async () => {
+      const html = await render({ sample: false, eur: true, idea: withIdea(add) });
+      expect(html).toContain("NVDA - ADD - EUR 60-90");
+      expect(html).toContain("Amount now");
+    });
+    it("renders in Slovak", async () => {
+      const html = await render({ sample: false, locale: "sk", idea: withIdea(add) });
+      expect(html).toContain("Posledný investičný nápad");
+      expect(html).toContain("Čo sa stalo");
+    });
   });
 });
