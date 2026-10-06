@@ -1,6 +1,7 @@
 import pg from "pg";
 import { describe, expect, it } from "vitest";
-import { expiredDocuments, purgeExtractionRuns } from "./retention";
+import { freshnessDays } from "../data/evidence";
+import { expiredDocuments, purgeExtractionRuns, windowCase } from "./retention";
 import { purgeIdeas } from "./retention-ideas";
 
 describe("retention", () => {
@@ -16,7 +17,7 @@ describe("retention", () => {
         VALUES ('fixture','NVDA','test',$1,now()-interval '40 days','hash','test',now()-interval '1 day')`, [url]);
       await client.query(`INSERT INTO consensus_findings
         (symbol,field,as_of,value,agreement,agent_values,evidence_refs,verified,reason)
-        VALUES ('NVDA','fundamentals.guidanceRaised','2026-10-05',true,'agree','{}'::jsonb,$1::jsonb,true,'fixture')`, [JSON.stringify([{ url: cited }])]);
+        VALUES ('NVDA','guidanceRaised',current_date,true,'agree','{}'::jsonb,$1::jsonb,true,'fixture')`, [JSON.stringify([{ url: cited }])]);
       const result = await client.query(`DELETE ${expiredDocuments} RETURNING url`);
       expect(result.rows.map((row) => row.url)).toContain(uncited);
       expect(result.rows.map((row) => row.url)).not.toContain(cited);
@@ -27,6 +28,11 @@ describe("retention", () => {
       client.release();
       await pool.end();
     }
+  });
+
+  it("builds the consensus window from freshnessDays", () => {
+    for (const [field, days] of Object.entries(freshnessDays)) expect(windowCase).toContain(`WHEN '${field}' THEN ${days}`);
+    expect(expiredDocuments).toContain(windowCase);
   });
 
   it("protects every fresh consensus row, live idea and extraction output", () => {
@@ -43,7 +49,7 @@ describe("retention", () => {
     const urls = ["older", "idea", "extract", "uncited"].map((suffix) => `https://example.test/retention-${suffix}-${Date.now()}`);
     try {
       await client.query("BEGIN");
-      await client.query("INSERT INTO instruments (ticker,name) VALUES ('RTNTEST','Retention test') ON CONFLICT DO NOTHING");
+      await client.query("INSERT INTO instruments (ticker,name,sector,source) VALUES ('RTNTEST','Retention test','Test','guide') ON CONFLICT DO NOTHING");
       for (const url of urls) await client.query(`INSERT INTO source_documents (source,symbol,doc_type,url,published_at,content_hash,body,expires_at)
         VALUES ('fixture','RTNTEST','test',$1,now()-interval '40 days','hash','text',now()-interval '1 day')`, [url]);
       for (const [offset, url] of [[1, urls[0]], [0, "https://example.test/newer"]] as [number,string][]) await client.query(`INSERT INTO consensus_findings
@@ -56,6 +62,25 @@ describe("retention", () => {
       const removed = await client.query(`DELETE ${expiredDocuments} RETURNING url`);
       expect(removed.rows.map((row) => row.url)).toContain(urls[3]);
       for (const url of urls.slice(0, 3)) expect(removed.rows.map((row) => row.url)).not.toContain(url);
+    } finally { await client.query("ROLLBACK"); client.release(); await pool.end(); }
+  });
+
+  it.skipIf(!process.env.TEST_DATABASE_URL)("deletes a document cited only by a 40 day old productCatalyst but keeps one cited by a 40 day old guidanceRaised", async () => {
+    const pool = new pg.Pool({ connectionString: process.env.TEST_DATABASE_URL });
+    const client = await pool.connect();
+    const stamp = Date.now();
+    const catalyst = `https://example.test/retention-catalyst-${stamp}`, guidance = `https://example.test/retention-guidance-${stamp}`;
+    try {
+      await client.query("BEGIN");
+      await client.query("INSERT INTO instruments (ticker,name,sector,source) VALUES ('RTNTEST','Retention test','Test','guide') ON CONFLICT DO NOTHING");
+      for (const url of [catalyst, guidance]) await client.query(`INSERT INTO source_documents (source,symbol,doc_type,url,published_at,content_hash,body,expires_at)
+        VALUES ('fixture','RTNTEST','test',$1,now()-interval '40 days','hash','text',now()-interval '1 day')`, [url]);
+      for (const [field, url] of [["productCatalyst", catalyst], ["guidanceRaised", guidance]]) await client.query(`INSERT INTO consensus_findings
+        (symbol,field,as_of,value,agreement,agent_values,evidence_refs,verified,reason)
+        VALUES ('RTNTEST',$1,current_date-40,true,'agree','{}'::jsonb,$2::jsonb,true,'fixture')`, [field, JSON.stringify([{ url }])]);
+      const removed = (await client.query(`DELETE ${expiredDocuments} RETURNING url`)).rows.map((row) => row.url);
+      expect(removed).toContain(catalyst);
+      expect(removed).not.toContain(guidance);
     } finally { await client.query("ROLLBACK"); client.release(); await pool.end(); }
   });
 
@@ -86,10 +111,10 @@ describe("retention", () => {
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
-      await client.query("INSERT INTO instruments (ticker, name) VALUES ('RTNTEST','Retention test') ON CONFLICT DO NOTHING");
+      await client.query("INSERT INTO instruments (ticker,name,sector,source) VALUES ('RTNTEST','Retention test','Test','guide') ON CONFLICT DO NOTHING");
       const hash = "a".repeat(64);
       for (const [agent, expiry] of [["claude", "-1 day"], ["codex", "+1 day"]]) await client.query(
-        `INSERT INTO extraction_runs (symbol, as_of, agent, model, input_hash, status, expires_at) VALUES ('RTNTEST','2026-10-05',$1,'m',$2,'ok', now() + $3::interval)`, [agent, hash, expiry]);
+        `INSERT INTO extraction_runs (symbol, as_of, agent, model, input_hash, status, expires_at) VALUES ('RTNTEST',current_date,$1,'m',$2,'ok', now() + $3::interval)`, [agent, hash, expiry]);
       expect(await purgeExtractionRuns(client, true)).toBeGreaterThanOrEqual(1);
       expect(await purgeExtractionRuns(client, false)).toBeGreaterThanOrEqual(1);
       const left = await client.query("SELECT agent FROM extraction_runs WHERE symbol='RTNTEST'");

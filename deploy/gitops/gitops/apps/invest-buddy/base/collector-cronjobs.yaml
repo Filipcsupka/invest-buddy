@@ -9,7 +9,7 @@ spec:
   schedule: "35 5 * * 2-6"
   timeZone: Europe/Bratislava
   concurrencyPolicy: Forbid
-  startingDeadlineSeconds: 1800
+  startingDeadlineSeconds: 300
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3
   jobTemplate:
@@ -71,11 +71,11 @@ metadata:
   namespace: invest
 spec:
   suspend: true
-  # After collect's 1800 s deadline (05:35 + 30 min = 06:05) and before reconcile (06:40 Tue-Sat).
+  # After collect's 1800 s deadline (05:35 + 30 min = 06:05) and before extract (06:25) and reconcile (07:00).
   schedule: "10 6 * * 2-6"
   timeZone: Europe/Bratislava
   concurrencyPolicy: Forbid
-  startingDeadlineSeconds: 1200
+  startingDeadlineSeconds: 300
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3
   jobTemplate:

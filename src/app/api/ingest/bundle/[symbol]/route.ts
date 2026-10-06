@@ -1,5 +1,6 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import pg from "pg";
+import { isIsoDate } from "../../../../../db/iso-date";
 import universe from "../../../../../../scanner/universe.json";
 import { buildBundle, MAX_WINDOW_DAYS } from "../../../../../db/bundle";
 
@@ -22,7 +23,7 @@ export async function GET(request: Request, context: { params: Promise<{ symbol:
   const days = Number(query.get("days") ?? MAX_WINDOW_DAYS);
   if (!Number.isInteger(days) || days < 1 || days > 365) return Response.json({ error: "days must be 1-365" }, { status: 400 });
   const asOf = query.get("asOf") ?? new Date().toISOString().slice(0, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(asOf) || Number.isNaN(Date.parse(`${asOf}T00:00:00Z`)) || new Date(`${asOf}T00:00:00Z`).toISOString().slice(0, 10) !== asOf) return Response.json({ error: "asOf must be YYYY-MM-DD" }, { status: 400 });
+  if (!isIsoDate(asOf)) return Response.json({ error: "asOf must be YYYY-MM-DD" }, { status: 400 });
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
   try { return Response.json(await buildBundle(pool, symbol, days, new Date(), undefined, asOf)); }
   catch { return Response.json({ error: "Database unavailable" }, { status: 503 }); }

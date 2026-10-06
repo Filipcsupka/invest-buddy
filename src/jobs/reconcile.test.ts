@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import type pg from "pg";
-import { reconcileField, selectVerifier, type AgentFinding } from "./reconcile";
+import { guardReconcileUserAgent, reconcileField, selectVerifier, type AgentFinding } from "./reconcile";
 import { fixtureVerifier, liveVerifier, offVerifier } from "../data/evidence";
 const finding = (name: "claude" | "codex", value: boolean): AgentFinding => ({ runId: `${name}-run`, runner: { name }, fundamentals: { epsBeat: value }, evidence: { items: [{ claim: "fundamentals.epsBeat", url: "https://example.com/result", publishedAt: "2026-10-03", fiscalPeriod: "Q2 FY2027", quote: "Revenue rose." }] }, confidence: "high" });
 it("keeps a disagreement unknown and retains both agent runs", async () => {
@@ -29,4 +29,13 @@ it("keeps off and fixture modes as they were and reads stored documents first in
   const live = selectVerifier("live", pool);
   expect(live).not.toBe(liveVerifier);
   expect(await live({ claim: "fundamentals.epsBeat", url: "https://stored.example/a", publishedAt: "2026-09-20", fiscalPeriod: "Q2", quote: "revenue rose 56%" }, "2026-10-05")).toBe(true);
+});
+
+it("live reconcile refuses a missing or placeholder SEC_USER_AGENT; off and fixture modes do not need one", () => {
+  for (const env of [{}, { SEC_USER_AGENT: "Porgy REPLACE_WITH_CONTACT_EMAIL" }]) {
+    expect(() => guardReconcileUserAgent("live", env)).toThrow(/SEC_USER_AGENT/);
+    expect(() => guardReconcileUserAgent("off", env)).not.toThrow();
+    expect(() => guardReconcileUserAgent("fixture", env)).not.toThrow();
+  }
+  expect(() => guardReconcileUserAgent("live", { SEC_USER_AGENT: "Porgy ops@example.com" })).not.toThrow();
 });

@@ -9,7 +9,7 @@ it("checks field freshness without network in fixture mode", async () => {
 
 import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
-import { fetchPage } from "./evidence";
+import { fetchPage, evidenceUserAgent } from "./evidence";
 import type { LookupAddress } from "node:dns";
 import type { ClientRequest, IncomingMessage } from "node:http";
 import type { RequestOptions } from "node:https";
@@ -56,4 +56,19 @@ it("bounds the page cache and evicts the least recently used page", async () => 
   expect(result).toMatchObject({ size: 200, evicted: "test-0" });
   expect(rememberPage("test-100", "new page")).toMatchObject({ size: 200, evicted: null });
   expect(rememberPage("test-extra", "page")).toMatchObject({ size: 200, evicted: "test-1" });
+});
+
+it("uses SEC_USER_AGENT for sec.gov hosts and the evidence agent elsewhere", async () => {
+  const env = { SEC_USER_AGENT: "Test Agent test@example.invalid" } as unknown as NodeJS.ProcessEnv;
+  expect(evidenceUserAgent("www.sec.gov", env)).toBe("Test Agent test@example.invalid");
+  expect(evidenceUserAgent("data.sec.gov", env)).toBe("Test Agent test@example.invalid");
+  expect(evidenceUserAgent("example.com", env)).toContain("InvestBuddy-evidence");
+  expect(evidenceUserAgent("notsec.gov", env)).toContain("InvestBuddy-evidence");
+  expect(() => evidenceUserAgent("www.sec.gov", {} as unknown as NodeJS.ProcessEnv)).toThrow("SEC_USER_AGENT");
+  let seen: string | undefined;
+  const get = ((url: URL, options: RequestOptions, cb: (i: IncomingMessage) => void) => { seen = String((options.headers as Record<string, string>)["user-agent"]); return fakeGet(() => ({ status: 200, body: "ok" }))(url, options, cb); }) as unknown as typeof import("node:https").get;
+  const prev = process.env.SEC_USER_AGENT;
+  process.env.SEC_USER_AGENT = "Test Agent test@example.invalid";
+  try { await fetchPage("https://www.sec.gov/a", { lookup: publicLookup, get }); } finally { if (prev === undefined) delete process.env.SEC_USER_AGENT; else process.env.SEC_USER_AGENT = prev; }
+  expect(seen).toBe("Test Agent test@example.invalid");
 });

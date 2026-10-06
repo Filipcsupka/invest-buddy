@@ -1,10 +1,11 @@
 import type pg from "pg";
 import { z } from "zod";
+import { isoDate } from "./iso-date";
 
 /** One AI extraction attempt for a ticker. Stored so an unchanged input is skipped and token use is visible per run. */
 export const extractionRunSchema = z.object({
   symbol: z.string().regex(/^[A-Z.]{1,10}$/),
-  asOf: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  asOf: isoDate(),
   agent: z.enum(["claude", "codex"]),
   model: z.string().min(1).max(100),
   inputHash: z.string().regex(/^[0-9a-f]{64}$/),
@@ -22,9 +23,9 @@ export const extractionRunSchema = z.object({
 }).strict();
 export type ExtractionRun = z.infer<typeof extractionRunSchema>;
 
-/** True when this exact input was already extracted and its result applied for the same agent, symbol and date. An ok row that was never applied (dry run, failed post) does not skip. */
-export async function hasOkExtraction(pool: Pick<pg.Pool, "query">, key: { symbol: string; asOf: string; agent: string; inputHash: string }): Promise<boolean> {
-  const result = await pool.query("SELECT 1 FROM extraction_runs WHERE symbol=$1 AND as_of=$2 AND agent=$3 AND input_hash=$4 AND status='ok' AND applied_at IS NOT NULL AND expires_at > now() LIMIT 1", [key.symbol, key.asOf, key.agent, key.inputHash]);
+/** True when this exact input was already extracted and its result applied for the same agent and symbol. The date is not part of the key, so an unchanged input is skipped on later days until the row expires. An ok row that was never applied (dry run, failed post) does not skip. */
+export async function hasOkExtraction(pool: Pick<pg.Pool, "query">, key: { symbol: string; agent: string; inputHash: string }): Promise<boolean> {
+  const result = await pool.query("SELECT 1 FROM extraction_runs WHERE symbol=$1 AND agent=$2 AND input_hash=$3 AND status='ok' AND applied_at IS NOT NULL AND expires_at > now() LIMIT 1", [key.symbol, key.agent, key.inputHash]);
   return (result.rowCount ?? 0) > 0;
 }
 

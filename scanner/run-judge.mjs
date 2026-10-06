@@ -105,16 +105,38 @@ export function validateJudgeOutput(obj) {
 }
 
 // ---------- no invented figures ----------
-const FIGURE = /\d[\d,]*(?:\.\d+)?/g;
-const norm = (t) => Number(t.replace(/,/g, ""));
+// A minus counts as a sign only at the start of a figure (not in "60-90", "20-day" or "2026-10-05").
+const FIGURE = /(?:(?<![\w.)])([-\u2212])(?=\d))?(\d[\d,]*(?:\.\d+)?)/g;
+const ISO_DATE = /\b\d{4}-\d{2}-\d{2}\b/g;
+/** SEC form names such as 8-K and 10-Q are labels, not figures. */
+const FORM_NAME = /\b(?:8|10|20|40)-[KQF]\b|\b13[DFG]\b/gi;
+const URL_TEXT = /https?:\/\/\S+/g;
+/** Fields that hold identifiers, links or timestamps. Digits in them are not figures. */
+const NON_FIGURE_KEYS = /^(url|evidenceUrl|id|runId|accession\w*|signature|ruleConfigVersion|asOf|generatedAt|publishedAt|fiscalPeriod|filedAt|date|field)$|(Url|Id|At|Date)$/;
+export const figuresIn = (text) => [...String(text).replace(FORM_NAME, " ").matchAll(FIGURE)].map((m) => (m[1] ? -1 : 1) * Number(m[2].replace(/,/g, "")));
+/** Numbers in numeric fields and in free-text strings; never in URLs, dates, ids or accession numbers. */
+function collect(v, key, figures, dates) {
+  if (typeof v === "number") { if (Number.isFinite(v)) figures.add(v); return; }
+  if (typeof v === "string") {
+    for (const d of v.match(ISO_DATE) ?? []) dates.add(d);
+    if (NON_FIGURE_KEYS.test(key ?? "") || /^https?:\/\//.test(v)) return;
+    for (const n of figuresIn(v.replace(URL_TEXT, " ").replace(ISO_DATE, " "))) figures.add(n);
+    return;
+  }
+  if (Array.isArray(v)) { for (const x of v) collect(x, key, figures, dates); return; }
+  if (v && typeof v === "object") for (const [k, x] of Object.entries(v)) collect(x, k, figures, dates);
+}
 /** Only named rule windows and the score denominator may appear without an input figure. */
 const ruleFigure = (text, value) => (value === 14 && /\bRSI\s*14\b/i.test(text)) || (value === 20 && /\b20[- ]day\b/i.test(text)) || (value === 25 && /\bof 25\b/i.test(text));
-export const figuresIn = (text) => [...String(text).matchAll(FIGURE)].map((m) => norm(m[0]));
 /** Every figure in the model's wording must occur in the input it was given. Returns the offending figures. */
 export function inventedFigures(texts, inputValue) {
-  const allowed = new Set(figuresIn(typeof inputValue === "string" ? inputValue : JSON.stringify(inputValue)));
+  const allowed = new Set(), dates = new Set();
+  collect(inputValue, undefined, allowed, dates);
   const bad = [];
-  for (const t of texts) for (const n of figuresIn(t)) if (!allowed.has(n) && !ruleFigure(t, n)) bad.push(n);
+  for (const t of texts) {
+    const text = String(t).replace(ISO_DATE, (d) => (dates.has(d) ? " " : d));
+    for (const n of figuresIn(text)) if (!allowed.has(n) && !ruleFigure(text, Math.abs(n))) bad.push(n);
+  }
   return [...new Set(bad)];
 }
 const wording = (i) => [i.verdict, ...i.whatHappened, ...i.whyItMatters, ...i.numbers.flatMap((n) => [n.label, n.value]), i.plan.trigger, i.plan.invalidation, i.plan.opportunityCost, i.downgrade?.reason, i.conflict?.reason].filter(Boolean);

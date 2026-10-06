@@ -13,6 +13,7 @@ import { EXTRA_SOURCES, LEGACY_SOURCES, type SourceName } from "../collectors/ty
 import type { SourceHttp } from "../collectors/sources/client";
 import { formatPings, isExtra, runExtraSources, runPings } from "../collectors/sources/registry";
 import { MemoryCusipStore, PostgresCusipStore, type CusipStore } from "../db/source-collectors";
+import { isIsoDate } from "../db/iso-date";
 
 const companies = universe.instruments as Company[];
 const daysAgo = (date: Date, days: number) => new Date(date.getTime() - days * 86400000).toISOString().slice(0, 10);
@@ -131,6 +132,12 @@ export async function deriveFacts(symbol: string, docs: CollectedDocument[], ids
   return facts;
 }
 
+const SEC_SOURCES = ["edgar", "frames", "getcurrent", "13f"];
+/** A run that reaches SEC (no --source, or an SEC source in it) must have a real contact in SEC_USER_AGENT before anything else starts. */
+export function guardCollectUserAgent(names: string[] | undefined, env: Record<string, string | undefined>): void {
+  if (!names || names.some((name) => SEC_SOURCES.includes(name))) requireSecUserAgent(env.SEC_USER_AGENT);
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const option = (name: string) => { const i = args.indexOf(name); return i < 0 ? undefined : args[i + 1]; };
@@ -140,7 +147,7 @@ async function main() {
   for (const flag of ["--only", "--since", "--source"]) if (args.includes(flag)) { consumed.add(flag); consumed.add(option(flag) ?? ""); }
   const names = source?.split(",").map((name) => name.trim());
   if (args.some((arg) => !consumed.has(arg)) || (args.includes("--only") && !only) || (args.includes("--since") && !since) || (args.includes("--source") && !source)) throw new Error(`Usage: collect [--only A,B] [--since YYYY-MM-DD] [--source ${[...LEGACY_SOURCES, ...EXTRA_SOURCES].join("|")}[,...]] [--dry-run] [--memory] | collect --ping [--source NAME]`);
-  if (since && !/^\d{4}-\d{2}-\d{2}$/.test(since)) throw new Error("--since requires YYYY-MM-DD");
+  if (since && !isIsoDate(since)) throw new Error("--since requires YYYY-MM-DD");
   const known = new Set<string>([...LEGACY_SOURCES, ...EXTRA_SOURCES]);
   if (names && names.some((name) => !known.has(name) && !(ping && name === "openfigi"))) throw new Error("Unknown source");
   if (ping) {
@@ -149,7 +156,7 @@ async function main() {
     process.exitCode = results.some((result) => !result.ok) ? 1 : 0;
     return;
   }
-  if (!names || names.some((name) => ["edgar", "frames", "getcurrent", "13f"].includes(name))) requireSecUserAgent(process.env.SEC_USER_AGENT);
+  guardCollectUserAgent(names, process.env);
   const symbols = only ? [...new Set(only.split(",").map((s) => s.trim().toUpperCase()))] : companies.map((c) => c.symbol);
   const unknown = symbols.filter((s) => !companies.some((c) => c.symbol === s));
   if (unknown.length) throw new Error(`Unknown ticker(s): ${unknown.join(", ")}`);

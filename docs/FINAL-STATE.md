@@ -6,7 +6,7 @@ The extractor reads bounded keyword windows from stored text, checks cited quote
 
 ## Run locally
 
-Use `npm run migrate` before jobs that write to Postgres. Set `DATABASE_URL` for database jobs and `SEC_USER_AGENT` with a real contact address for SEC requests. Set `FRED_API_KEY` to collect FRED data, and `TWELVE_DATA_API_KEY` for prices. The scanner needs `INGEST_BASE_URL`, `INGEST_TOKEN`, and a working Claude CLI login or `CLAUDE_CODE_OAUTH_TOKEN`. Set `IDEAS_PAGE=on` at build and run time when testing the ideas page.
+Use `npm run migrate` before jobs that write to Postgres. Set `DATABASE_URL` for database jobs and `SEC_USER_AGENT` with a real contact address for SEC requests. Set `FRED_API_KEY` to collect FRED data, and `TWELVE_DATA_API_KEY` for prices. The scanner needs `INGEST_BASE_URL`, `INGEST_TOKEN`, and a working Claude CLI login or `CLAUDE_CODE_OAUTH_TOKEN`. Set `IDEAS_PAGE=on` at run time to serve the ideas page; it is read per request. Set it at build time as well only if the nav link should show on statically generated pages (methodology, legal).
 
 ```sh
 npm run collect:ping
@@ -30,4 +30,4 @@ A cluster test needs approval. Proposed sequence: build the local images, apply 
 
 ## Intended daily order
 
-The new pipeline is planned for Tuesday through Saturday: prices at 05:00, collect at 05:35, detect at 06:10 (20-minute start deadline and 10-minute job deadline), manual extraction, reconcile at 06:40, daily scoring at 07:00, and digest at 07:30. The two existing 05:30 scan CronJobs remain on their existing schedules; the Claude scan remains suspended. New collector, detect, and retention CronJobs remain suspended, and extraction and judge have no CronJobs. Do not enable the sequence until extraction can finish before reconcile.
+The pipeline runs Tuesday through Saturday: prices at 05:00, collect at 05:35, detect at 06:10 (20-minute start deadline and 10-minute job deadline), extract at 06:25 (30-minute job deadline), reconcile at 07:00, daily scoring at 07:15, digest at 07:30 and judge at 07:45. Collect, detect, extract, judge and retention are suspended. Both web-search scan CronJobs are now suspended in the base manifests as well; they were set for 05:30, before collect, so move one between detect and reconcile if you resume it. `src/jobs/cronjob-order.test.ts` checks the order, the weekdays and the suspended flags.

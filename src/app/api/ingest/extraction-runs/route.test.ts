@@ -5,7 +5,7 @@ vi.mock("../../../../db/extraction-runs", async (importOriginal) => ({ ...(await
 import { GET, POST } from "./route";
 
 const hash = "b".repeat(64);
-const url = (over: Record<string, string> = {}) => `http://localhost/api/ingest/extraction-runs?${new URLSearchParams({ symbol: "nvda", asOf: "2026-10-05", agent: "claude", inputHash: hash, ...over })}`;
+const url = (over: Record<string, string> = {}) => `http://localhost/api/ingest/extraction-runs?${new URLSearchParams({ symbol: "nvda", agent: "claude", inputHash: hash, ...over })}`;
 const get = (u: string, token = "Bearer secret") => new Request(u, { headers: { authorization: token } });
 const post = (body: unknown, token = "Bearer secret") => new Request("http://localhost/api/ingest/extraction-runs", { method: "POST", headers: { authorization: token }, body: typeof body === "string" ? body : JSON.stringify(body) });
 const original = { token: process.env.INGEST_TOKEN, db: process.env.DATABASE_URL };
@@ -32,6 +32,7 @@ describe("extraction-runs route", () => {
     expect((await POST(post({ ...body, status: "weird" }))).status).toBe(400);
     expect((await POST(post("{"))).status).toBe(400);
     expect((await POST(post({ ...body, symbol: "ZZZZ" }))).status).toBe(400);
+    expect((await POST(post({ ...body, asOf: "2026-02-30" }))).status).toBe(400);
     expect((await POST(post("x".repeat(200_001)))).status).toBe(413);
     const stream = new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(new TextEncoder().encode("x".repeat(200_001))); controller.close(); } });
     const oversized = new Request("http://localhost/api/ingest/extraction-runs", { method: "POST", headers: { authorization: "Bearer secret" }, body: stream, duplex: "half" } as RequestInit);

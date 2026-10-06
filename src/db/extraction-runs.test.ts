@@ -8,12 +8,13 @@ const pool = (rowCount = 1) => { const calls: { sql: string; params: unknown[] }
 describe("extraction runs", () => {
   it("skips only when an ok, applied, unexpired run with the same key exists", async () => {
     const hit = pool(1), miss = pool(0);
-    expect(await hasOkExtraction(hit, { symbol: "NVDA", asOf: "2026-10-05", agent: "claude", inputHash: hash })).toBe(true);
-    expect(await hasOkExtraction(miss, { symbol: "NVDA", asOf: "2026-10-05", agent: "claude", inputHash: hash })).toBe(false);
+    expect(await hasOkExtraction(hit, { symbol: "NVDA", agent: "claude", inputHash: hash })).toBe(true);
+    expect(await hasOkExtraction(miss, { symbol: "NVDA", agent: "claude", inputHash: hash })).toBe(false);
     expect(hit.calls[0].sql).toContain("status='ok'");
     expect(hit.calls[0].sql).toContain("applied_at IS NOT NULL");
     expect(hit.calls[0].sql).toContain("expires_at > now()");
-    expect(hit.calls[0].params).toEqual(["NVDA", "2026-10-05", "claude", hash]);
+    expect(hit.calls[0].params).toEqual(["NVDA", "claude", hash]);
+    expect(hit.calls[0].sql).not.toContain("as_of");
   });
   it("records usage and output, applied time only when applied, and never downgrades an ok row", async () => {
     const p = pool();

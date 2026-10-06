@@ -4,6 +4,8 @@ metadata:
   name: invest-buddy-scan-claude
   namespace: invest
 spec:
+  suspend: true
+  # Web-search scan, replaced by collect, detect and extract. 05:30 runs before collect (05:35). If you resume it, move it between detect and reconcile.
   schedule: "30 5 * * 1-5"
   timeZone: Europe/Bratislava
   concurrencyPolicy: Forbid
@@ -76,6 +78,8 @@ metadata:
   name: invest-buddy-scan-codex
   namespace: invest
 spec:
+  suspend: true
+  # Web-search scan, replaced by collect, detect and extract. 05:30 runs before collect (05:35). If you resume it, move it between detect and reconcile.
   schedule: "30 5 * * 1-5"
   timeZone: Europe/Bratislava
   concurrencyPolicy: Forbid

@@ -1,5 +1,6 @@
 import type pg from "pg";
 import { z } from "zod";
+import { isoDate } from "./iso-date";
 
 /**
  * What the judge needs from the portfolio: positions and cash, in EUR. A person fills it by hand today
@@ -7,7 +8,7 @@ import { z } from "zod";
  * This is personal data. It is read only by the bearer-protected judge input and never shown on a public page.
  */
 export const baselineSchema = z.object({
-  asOf: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  asOf: isoDate(),
   source: z.enum(["manual", "ibkr-mcp"]),
   currency: z.literal("EUR").default("EUR"),
   cashEur: z.number().nonnegative().max(1e9),

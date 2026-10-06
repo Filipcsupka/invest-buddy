@@ -3,6 +3,7 @@ import type { ScoreResult } from "../engine";
 import type { Instrument } from "./providers";
 import { scoredUniverse as fixtureUniverse } from "./scored";
 import { fixtureRecord } from "./record";
+import { instruments as fixtureInstruments } from "./fixtures";
 import { samplePortfolio } from "../portfolio/fixture";
 import { PostgresPortfolioRepository } from "../db/portfolio";
 
@@ -19,6 +20,15 @@ export async function latestScores(): Promise<StoreData<StoreRow[]>> {
     const rows = result.rows.map((row) => ({ instrument: { ticker: row.ticker, name: row.name, sector: row.sector, tier: row.tier, source: row.source }, result: row.audit }));
     const lastUpdated = result.rows.map((row) => row.as_of).sort().at(-1) ?? null;
     return { rows, sample: false, lastUpdated, stale: stale(lastUpdated) };
+  } finally { await db.end(); }
+}
+/** Ticker universe: fixture instruments in fixture mode, otherwise the instruments table (benchmarks excluded). */
+export async function instrumentUniverse(): Promise<Instrument[]> {
+  if (fixtureMode()) return fixtureInstruments;
+  const db = pool(); if (!db) return [];
+  try {
+    const result = await db.query<Instrument>("SELECT ticker,name,sector,tier,source FROM instruments WHERE source <> 'benchmark' ORDER BY ticker");
+    return result.rows;
   } finally { await db.end(); }
 }
 export async function scoreHistory(): Promise<StoreData<StoreRow[]>> {

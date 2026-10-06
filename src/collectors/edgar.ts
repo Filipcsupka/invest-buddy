@@ -1,5 +1,6 @@
 import { XMLParser } from "fast-xml-parser";
-import { document, type CollectedDocument } from "./types";
+import { type CollectedDocument } from "./types";
+import { LICENSES, sourceDocument } from "./sources/common";
 import { getText } from "./http";
 
 type Get = (url: string) => Promise<string>;
@@ -65,22 +66,22 @@ export async function collectEdgar(symbol: string, cik: number, since: string, g
     const raw = await get(url);
     const meta: Record<string, unknown> = { accession: row.accession, items: row.items };
     if (row.form === "4") meta.trades = parseForm4(raw);
-    docs.push(document({ source: "edgar", symbol, docType: row.form,
-      url, publishedAt: `${row.date}T00:00:00Z`, body: raw, meta }));
+    docs.push(sourceDocument({ source: "edgar", symbol, docType: row.form,
+      url, publishedAt: `${row.date}T00:00:00Z`, body: raw, meta }, LICENSES.sec));
     if (row.form === "8-K") {
       const index = JSON.parse(await get(`${base}index.json`)) as { directory?: { item?: { name: string; type?: string }[] } };
       const items = index.directory?.item ?? [];
       const exhibit = items.find((item) => /EX-99\.1/i.test(item.type ?? "") || /(?:ex|exhibit)[-_]?99[.-]?1/i.test(item.name));
       if (exhibit && exhibit.name !== row.primary) {
         const exhibitUrl = filingUrl(base, exhibit.name);
-        docs.push(document({ source: "edgar", symbol, docType: "8-K EX-99.1", url: exhibitUrl,
-          publishedAt: `${row.date}T00:00:00Z`, body: await get(exhibitUrl), meta }));
+        docs.push(sourceDocument({ source: "edgar", symbol, docType: "8-K EX-99.1", url: exhibitUrl,
+          publishedAt: `${row.date}T00:00:00Z`, body: await get(exhibitUrl), meta }, LICENSES.sec));
       } else if (!exhibit) {
         // Many filers (NVDA: q2fy27pr.htm, q2fy27cfocommentary.htm) name the exhibit freely and index.json gives no form type.
         for (const name of earningsExhibitNames(items.map((item) => item.name), row.primary, row.items)) {
           const exhibitUrl = filingUrl(base, name);
-          docs.push(document({ source: "edgar", symbol, docType: /pr|press|release/i.test(name) ? "8-K EX-99.1" : "8-K EX-99.2", url: exhibitUrl,
-            publishedAt: `${row.date}T00:00:00Z`, body: await get(exhibitUrl), meta }));
+          docs.push(sourceDocument({ source: "edgar", symbol, docType: /pr|press|release/i.test(name) ? "8-K EX-99.1" : "8-K EX-99.2", url: exhibitUrl,
+            publishedAt: `${row.date}T00:00:00Z`, body: await get(exhibitUrl), meta }, LICENSES.sec));
         }
       }
     }

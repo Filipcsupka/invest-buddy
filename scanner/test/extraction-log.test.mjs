@@ -30,12 +30,12 @@ test("skip check and record use the route, and failures do not throw", async () 
   const calls = []; const real = globalThis.fetch;
   globalThis.fetch = async (url, init) => { calls.push([String(url), init.method]); return new Response(JSON.stringify({ skip: true }), { status: 200 }); };
   try {
-    assert.equal(await alreadyExtracted("http://x", "t", { symbol: "NVDA", asOf: "2026-10-05", agent: "claude", inputHash: "a".repeat(64) }), true);
+    assert.equal(await alreadyExtracted("http://x", "t", { symbol: "NVDA", agent: "claude", inputHash: "a".repeat(64) }), true);
     await recordRun("http://x", "t", { symbol: "NVDA" });
-    assert.match(calls[0][0], /extraction-runs\?symbol=NVDA&asOf=2026-10-05&agent=claude&inputHash=a{64}$/);
+    assert.match(calls[0][0], /extraction-runs\?symbol=NVDA&agent=claude&inputHash=a{64}$/);
     assert.equal(calls[1][1], "POST");
     globalThis.fetch = async () => { throw new Error("down"); };
-    assert.equal(await alreadyExtracted("http://x", "t", { symbol: "NVDA", asOf: "d", agent: "claude", inputHash: "a" }), false);
+    assert.equal(await alreadyExtracted("http://x", "t", { symbol: "NVDA", agent: "claude", inputHash: "a" }), false);
     const logs = []; await recordRun("http://x", "t", { symbol: "NVDA" }, (m) => logs.push(m)); assert.equal(logs.length, 1);
   } finally { globalThis.fetch = real; }
 });

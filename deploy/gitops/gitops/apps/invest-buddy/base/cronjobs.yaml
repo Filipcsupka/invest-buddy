@@ -4,7 +4,7 @@ metadata:
   name: invest-buddy-reconcile-config
   namespace: invest
 data:
-  SEC_USER_AGENT: "InvestBuddy operator REPLACE_WITH_CONTACT_EMAIL"
+  SEC_USER_AGENT: "InvestBuddy Filip Csupka devopssro@gmail.com"
 ---
 apiVersion: batch/v1
 kind: CronJob
@@ -74,7 +74,10 @@ metadata:
   name: invest-buddy-reconcile
   namespace: invest
 spec:
-  schedule: "40 6 * * 2-6"
+  suspend: true
+  # Suspended until SEC_USER_AGENT holds a real contact (live mode refuses the placeholder) and extract runs.
+  # After extract (06:25, 30 min deadline, ends by 06:55).
+  schedule: "0 7 * * 2-6"
   timeZone: Europe/Bratislava
   concurrencyPolicy: Forbid
   startingDeadlineSeconds: 300
@@ -136,7 +139,10 @@ metadata:
   name: invest-buddy-daily
   namespace: invest
 spec:
-  schedule: "0 7 * * 2-6"
+  suspend: true
+  # Suspended with reconcile: daily scores what reconcile and extract produce. Unsuspend after SEC_USER_AGENT is set and extract has run.
+  # After reconcile (07:00, 10 min deadline).
+  schedule: "15 7 * * 2-6"
   timeZone: Europe/Bratislava
   concurrencyPolicy: Forbid
   startingDeadlineSeconds: 1800

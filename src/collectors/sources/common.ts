@@ -34,6 +34,7 @@ export interface SourceModule {
 export interface License { license_note: string; display_allowed: boolean }
 export const LICENSES = {
   sec: { display_allowed: true, license_note: "US government data from SEC EDGAR, public." },
+  rss: { display_allowed: false, license_note: "GlobeNewswire feed text. Redistribution terms not checked; internal signal only." },
   openfda: { display_allowed: true, license_note: "openFDA content is public domain under CC0 1.0 (open.fda.gov/terms). Some linked data may not be public domain." },
   clinicaltrials: { display_allowed: false, license_note: "ClinicalTrials.gov (NLM). Terms text not checked; treated as not cleared for display." },
   usaspending: { display_allowed: true, license_note: "USAspending.gov, US government open data." },

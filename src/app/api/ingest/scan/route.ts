@@ -2,6 +2,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import pg from "pg";
 import { scanSchema } from "../../../../data/scan";
 import { ingestScan } from "../../../../db/scan";
+import { readBoundedBody } from "../read-bounded-body";
 
 export const runtime = "nodejs";
 const limit = 1_000_000;
@@ -21,24 +22,10 @@ export async function POST(request: Request) {
   const bucket = buckets.get(key);
   if (bucket && bucket.until > now && bucket.count >= 60) return Response.json({ error: "Rate limit exceeded" }, { status: 429 });
   buckets.set(key, { count: bucket && bucket.until > now ? bucket.count + 1 : 1, until: bucket && bucket.until > now ? bucket.until : now + 60_000 });
-  if (Number(request.headers.get("content-length")) > limit) return Response.json({ error: "Payload too large" }, { status: 413 });
-  const reader = request.body?.getReader();
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  if (reader) {
-    while (true) {
-      const part = await reader.read();
-      if (part.done) break;
-      size += part.value.byteLength;
-      if (size > limit) { await reader.cancel(); return Response.json({ error: "Payload too large" }, { status: 413 }); }
-      chunks.push(part.value);
-    }
-  }
-  const bytes = new Uint8Array(size);
-  let offset = 0;
-  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+  const text = await readBoundedBody(request, limit);
+  if (text === null) return Response.json({ error: "Payload too large" }, { status: 413 });
   let raw: unknown;
-  try { raw = JSON.parse(new TextDecoder().decode(bytes)); } catch { return Response.json({ error: "Invalid JSON" }, { status: 400 }); }
+  try { raw = JSON.parse(text); } catch { return Response.json({ error: "Invalid JSON" }, { status: 400 }); }
   const parsed = scanSchema.safeParse(raw);
   if (!parsed.success) return Response.json({ error: "Invalid scan", fields: parsed.error.issues.map((issue) => ({ path: issue.path.join("."), reason: issue.message })) }, { status: 400 });
   if (!process.env.DATABASE_URL) return Response.json({ error: "Database unavailable" }, { status: 503 });

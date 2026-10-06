@@ -1,10 +1,14 @@
 import type pg from "pg";
 import type { CollectedDocument } from "../collectors/types";
+import { freshnessDays } from "../data/evidence";
 
 export interface StoredDocument extends CollectedDocument { id: number }
 export interface Fact { symbol: string; key: string; asOf: string; value: unknown; documentIds: number[] }
-/** Keep filings through the longest evidence window they can support. */
-export const documentRetentionDays = (docType: string) => /^(8-K|10-Q|10-K|20-F|6-K)(?:\b|\s)|EX-99\.1|XBRL revenue/i.test(docType) ? 100 : /^(4|13F)\b|insider/i.test(docType) ? 60 : 30;
+/** Keep a document through the longest evidence window of any field it can support. The windows are `freshnessDays` in evidence.ts. */
+export const documentRetentionDays = (docType: string) => /^(8-K|10-Q|10-K|20-F|6-K)(?:\b|\s)|EX-99\.1|XBRL revenue/i.test(docType)
+  ? Math.max(freshnessDays.revenueAccelerating, freshnessDays.epsBeat, freshnessDays.guidanceRaised)
+  : /^(4|13F)\b|insider/i.test(docType) ? freshnessDays.insiderOrInstitutionalBuying
+    : Math.max(freshnessDays.productCatalyst, freshnessDays.narrativeChanged);
 export interface CollectorRun { startedAt: string; sources: string[]; requested: number; succeeded: number; failures: { ticker: string; reason: string }[]; documentsWritten: number; factsWritten: number; stoppedReason: string | null }
 export interface CollectorRepository {
   upsertDocument(doc: CollectedDocument): Promise<{ id: number; written: boolean }>;

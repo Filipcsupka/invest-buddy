@@ -7,7 +7,8 @@ import { collectFred } from "../collectors/fred";
 import { getText, resetSecLimiter, secSlot, RateLimitLockout } from "../collectors/http";
 import { parseRss } from "../collectors/rss";
 import { MemoryCollectorRepository } from "../db/collectors";
-import { deriveFacts, runCollect } from "./collect";
+import { shapeSymbol } from "../db/judge-input";
+import { deriveFacts, guardCollectUserAgent, runCollect } from "./collect";
 
 const dir = join(process.cwd(), "src/collectors/fixtures");
 const fixture = (name: string) => readFile(join(dir, name), "utf8");
@@ -59,6 +60,23 @@ describe("collectors", () => {
     expect(result.exitCode).toBe(0);
     expect([...repo.documents.values()].map((doc) => doc.docType)).toEqual(["6-K", "20-F"]);
     expect([...repo.facts.values()]).toEqual([]);
+  });
+
+  it("marks edgar documents display_allowed and rss documents not, so only edgar reaches judge input", async () => {
+    const repo = new MemoryCollectorRepository();
+    await runCollect(repo, ["NVDA"], { since: "2026-09-01", sources: ["edgar", "rss"], get, now: () => new Date("2026-10-05T12:00:00Z") });
+    const stored = [...repo.documents.values()];
+    const edgar = stored.filter((doc) => doc.source === "edgar"), rss = stored.filter((doc) => doc.source === "rss");
+    expect(edgar.length).toBeGreaterThan(0);
+    expect(rss.length).toBeGreaterThan(0);
+    for (const doc of edgar) expect(doc.meta).toMatchObject({ display_allowed: true, license_note: expect.stringContaining("SEC") });
+    for (const doc of rss) expect(doc.meta.display_allowed).toBe(false);
+    // The judge input and the ideas page keep a url only when meta->>'display_allowed' = 'true'.
+    const cleared = new Set(stored.filter((doc) => String(doc.meta.display_allowed) === "true").map((doc) => doc.url));
+    const row = { ticker: "NVDA", name: "NVDA", sector: "AI", tier: 1, audit: { ticker: "NVDA", asOf: "2026-10-05", technical: 8, fundamentals: 7, macro: 3, total: 18, state: "Watch", pullbackInUptrend: false, invalidReasons: [], inputs: { bars: [] }, ruleHits: [] } } as never;
+    const finding = { symbol: "NVDA", field: "epsBeat", value: true, agreement: "agree", verified: true, reason: "r", carried_from: null, evidence_refs: stored.map((doc) => ({ url: doc.url, publishedAt: "2026-10-01", quote: "q" })) } as never;
+    const symbol = shapeSymbol(row, [finding], null, 0, null, cleared);
+    expect(symbol.evidence.map((e) => e.url).sort()).toEqual(edgar.map((doc) => doc.url).sort());
   });
 
   it("keeps stored filings through their evidence windows", () => {
@@ -172,4 +190,18 @@ describe("earningsExhibitNames", () => {
     expect(earningsExhibitNames(names, "nvda-20260826.htm", "2.02,9.01")).toEqual(["q2fy27cfocommentary.htm", "q2fy27pr.htm"]);
   });
   it("returns nothing without Item 2.02", () => { expect(earningsExhibitNames(names, "nvda-20260826.htm", "5.02")).toEqual([]); });
+});
+
+describe("collect SEC_USER_AGENT guard", () => {
+  const real = { SEC_USER_AGENT: "Porgy ops@example.com" };
+  it("refuses a missing or placeholder contact for the default run and for SEC sources", () => {
+    for (const env of [{}, { SEC_USER_AGENT: "Porgy REPLACE_WITH_CONTACT_EMAIL" }, { SEC_USER_AGENT: "Porgy" }]) {
+      expect(() => guardCollectUserAgent(undefined, env)).toThrow(/SEC_USER_AGENT/);
+      for (const source of ["edgar", "frames", "getcurrent", "13f"]) expect(() => guardCollectUserAgent(["rss", source], env)).toThrow(/SEC_USER_AGENT/);
+    }
+  });
+  it("accepts a real contact, and does not ask for one on sources that never call SEC", () => {
+    expect(() => guardCollectUserAgent(undefined, real)).not.toThrow();
+    expect(() => guardCollectUserAgent(["rss", "fred", "gnews"], {})).not.toThrow();
+  });
 });

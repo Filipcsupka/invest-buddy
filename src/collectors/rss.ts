@@ -1,5 +1,6 @@
 import { XMLParser } from "fast-xml-parser";
-import { document, plainText, type CollectedDocument } from "./types";
+import { plainText, type CollectedDocument } from "./types";
+import { LICENSES, sourceDocument } from "./sources/common";
 import { getText } from "./http";
 
 export const GLOBE_NEWSWIRE_FEED = "https://www.globenewswire.com/rssfeed";
@@ -28,8 +29,8 @@ export function parseRss(xml: string, companies: Company[], since: string): Coll
       const name = ambiguousNames[ticker]?.test(haystack) ?? new RegExp(`(^|[^a-z0-9])${company.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^a-z0-9]|$)`, "i").test(haystack);
       if (marketTicker || plainTicker || name) matches.push(ticker);
     }
-    if (matches.length) out.push(document({ source: "rss", symbol: matches[0], docType: "press release", url: link,
-      publishedAt: publishedAt.toISOString(), body: `${title}\n${summary}`, meta: { title, summary, symbols: matches } }));
+    if (matches.length) out.push(sourceDocument({ source: "rss", symbol: matches[0], docType: "press release", url: link,
+      publishedAt: publishedAt.toISOString(), body: `${title}\n${summary}`, meta: { title, summary, symbols: matches } }, LICENSES.rss));
   }
   return out;
 }
