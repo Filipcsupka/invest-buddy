@@ -24,7 +24,9 @@ describe("insiderFromFact", () => {
   it("is unknown without a usable fact, with a stale fact, or when the dollars are only a lower bound", () => {
     expect(insiderFromFact(null, [], asOf)).toBeNull();
     expect(insiderFromFact(fact({ netShares: 1, netDollars: 1_000_000 }, "2026-09-06"), [buyDoc()], asOf)).toBeNull();
-    expect(insiderFromFact(fact({ netShares: 1, netDollars: 1_000_000 }, "2026-10-07"), [buyDoc()], asOf)).toBeNull();
+    expect(insiderFromFact(fact({ netShares: 1, netDollars: 1_000_000 }, "2026-10-10"), [buyDoc()], asOf)).toBeNull();
+    // collect runs after the session it describes, so a fact dated up to 3 days after the scoring date still counts
+    expect(insiderFromFact(fact({ netShares: -500, netDollars: -1000 }, "2026-10-07"), [], asOf)?.value).toBe(false);
     expect(insiderFromFact(fact({ netShares: "x" }), [], asOf)).toBeNull();
     expect(insiderFromFact(fact({ netShares: 500, netDollars: 1000, dollarsComplete: false }), [buyDoc()], asOf)?.value).toBeNull();
     expect(insiderFromFact(fact({ netShares: -500, netDollars: -1000, dollarsComplete: false }), [], asOf)?.value).toBe(false);

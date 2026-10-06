@@ -4,6 +4,8 @@ import { freshnessDays, type EvidenceRef } from "./evidence";
 export const DEFAULT_INSIDER_MIN_NET_BUY_USD = 100_000;
 /** The collected fact is trusted for this many days after its as_of date (same as collected_facts.expires_at). */
 export const INSIDER_FACT_DAYS = 30;
+/** Collect runs after the session it describes, so a fact can be dated a few days after the scoring date it belongs to. */
+export const INSIDER_FACT_LEAD_DAYS = 3;
 export const insiderMinNetBuyUsd = (env: Record<string, string | undefined> = process.env): number => {
   const raw = env.INSIDER_MIN_NET_BUY_USD;
   const parsed = raw === undefined || raw.trim() === "" ? Number.NaN : Number(raw);
@@ -23,7 +25,7 @@ const FIELD_CLAIM = "fundamentals.insiderOrInstitutionalBuying";
  * Form 4 documents are kept 91 days, so same-month-every-year trading cannot be seen yet.
  */
 export function insiderFromFact(fact: InsiderFact | null, documents: InsiderDocument[], asOf: string, minNetBuy = DEFAULT_INSIDER_MIN_NET_BUY_USD): InsiderResult | null {
-  if (!fact || fact.asOf > asOf || fact.asOf <= dayShift(asOf, INSIDER_FACT_DAYS)) return null;
+  if (!fact || fact.asOf > dayShift(asOf, -INSIDER_FACT_LEAD_DAYS) || fact.asOf <= dayShift(asOf, INSIDER_FACT_DAYS)) return null;
   const v = fact.value as { netShares?: unknown; netDollars?: unknown; dollarsComplete?: unknown } | null;
   if (!v || typeof v.netShares !== "number" || typeof v.netDollars !== "number" || !Number.isFinite(v.netShares) || !Number.isFinite(v.netDollars)) return null;
   const complete = v.dollarsComplete !== false;

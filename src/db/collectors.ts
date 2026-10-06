@@ -1,7 +1,7 @@
 import type pg from "pg";
 import type { CollectedDocument } from "../collectors/types";
 import { freshnessDays } from "../data/evidence";
-import { insiderFromFact, DEFAULT_INSIDER_MIN_NET_BUY_USD, INSIDER_FACT_DAYS, type InsiderDocument, type InsiderResult } from "../data/insider";
+import { insiderFromFact, DEFAULT_INSIDER_MIN_NET_BUY_USD, INSIDER_FACT_DAYS, INSIDER_FACT_LEAD_DAYS, type InsiderDocument, type InsiderResult } from "../data/insider";
 
 export interface StoredDocument extends CollectedDocument { id: number }
 export interface Fact { symbol: string; key: string; asOf: string; value: unknown; documentIds: number[] }
@@ -40,7 +40,7 @@ export class MemoryCollectorRepository implements CollectorRepository {
 /** Reads the newest fresh insider_net_buy_90d fact and the display-allowed Form 4 documents behind it. null when there is no usable fact. */
 export async function loadInsider(pool: pg.Pool, symbol: string, asOf: string, minNetBuy = DEFAULT_INSIDER_MIN_NET_BUY_USD): Promise<InsiderResult | null> {
   const fact = await pool.query<{ as_of: string; value: unknown; document_ids: string[] }>(`SELECT as_of::text,value,document_ids FROM collected_facts
-    WHERE symbol=$1 AND fact_key='insider_net_buy_90d' AND as_of <= $2::date AND as_of > $2::date - $3::int ORDER BY as_of DESC LIMIT 1`, [symbol, asOf, INSIDER_FACT_DAYS]);
+    WHERE symbol=$1 AND fact_key='insider_net_buy_90d' AND as_of <= $2::date + $4::int AND as_of > $2::date - $3::int ORDER BY as_of DESC LIMIT 1`, [symbol, asOf, INSIDER_FACT_DAYS, INSIDER_FACT_LEAD_DAYS]);
   const row = fact.rows[0];
   if (!row) return null;
   const docs = await pool.query<{ url: string; published: string; meta: { trades?: InsiderDocument["trades"] } }>(`SELECT url,to_char(published_at AT TIME ZONE 'UTC','YYYY-MM-DD') AS published,meta FROM source_documents
