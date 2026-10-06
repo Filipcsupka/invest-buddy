@@ -132,4 +132,11 @@ describe("focusExcerpt", () => {
     expect(selectExcerpts([doc(9, "10-Q", "2026-09-01T00:00:00Z", body)])[0].excerpt).toBe(excerpt.excerpt);
     for (const piece of excerpt.excerpt.split("\n[...]\n")) expect(body.includes(piece)).toBe(true);
   });
+  it("keeps a catalyst and leadership change buried in a long filing", () => {
+    const body = `${"Routine filing text. ".repeat(500)}The company launched a new accelerator with a major customer. ${"More filing text. ".repeat(500)}The board appointed a new chief financial officer.`;
+    const excerpt = focusExcerpt(body, 1200);
+    expect(excerpt).toContain("launched a new accelerator with a major customer");
+    expect(excerpt).toContain("appointed a new chief financial officer");
+    for (const piece of excerpt.split("\n[...]\n")) expect(body.includes(piece)).toBe(true);
+  });
 });

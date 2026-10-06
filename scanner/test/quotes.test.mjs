@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { checkEvidence } from "../quotes.mjs";
 
-const bundle = { documents: [{ url: "https://sec.gov/a", publishedAt: "2026-09-20T00:00:00.000Z", displayAllowed: true, fiscalPeriod: "Q2", excerpt: "Revenue was $46.7 billion,   up 56% from a year ago. Guidance raised." }] };
+const bundle = { documents: [{ url: "https://sec.gov/a", publishedAt: "2026-09-20T00:00:00.000Z", displayAllowed: true, fiscalPeriod: "Q2", excerpt: "Revenue was $46.7 billion,   up 56% from a year ago. Guidance maintained." }] };
 const base = () => ({ symbol: "NVDA", confidence: "high", fundamentals: { revenueAccelerating: true, epsBeat: true, productCatalyst: { present: true, kind: "chip", summary: "x" }, guidanceRaised: false }, evidence: [] });
 
 test("keeps true claims whose quote is in the cited stored text (whitespace and case tolerant)", () => {
@@ -22,13 +22,15 @@ test("downgrades true to null when the quote is not in the stored text", () => {
   const out = base(); out.evidence = [{ claim: "fundamentals.revenueAccelerating", url: "https://sec.gov/a", publishedAt: "2026-09-20", fiscalPeriod: "Q2 FY2027", quote: "Revenue doubled." }];
   assert.equal(checkEvidence(out, bundle).output.fundamentals.revenueAccelerating, null);
 });
-test("nulls productCatalyst present:true without verified evidence; leaves false values alone", () => {
+test("nulls unsupported true and false values, including a negative catalyst", () => {
   const r = checkEvidence(base(), bundle);
   assert.equal(r.output.fundamentals.productCatalyst, null);
-  assert.equal(r.output.fundamentals.guidanceRaised, false);
+  assert.equal(r.output.fundamentals.guidanceRaised, null);
+  const out = base(); out.fundamentals.productCatalyst = { present: false, kind: null, summary: null };
+  assert.equal(checkEvidence(out, bundle).output.fundamentals.productCatalyst, null);
 });
 
-const ev = (over = {}) => ({ claim: "fundamentals.revenueAccelerating", url: "https://sec.gov/a", publishedAt: "2026-09-20", fiscalPeriod: "Q2 FY2027", quote: "Guidance raised.", ...over });
+const ev = (over = {}) => ({ claim: "fundamentals.revenueAccelerating", url: "https://sec.gov/a", publishedAt: "2026-09-20", fiscalPeriod: "Q2 FY2027", quote: "Guidance maintained.", ...over });
 const run = (item, b = bundle, opts) => { const out = base(); out.evidence = [item]; return checkEvidence(out, b, opts); };
 
 test("drops a claim when the model's publishedAt differs from the document date", () => {
@@ -56,9 +58,14 @@ test("drops evidence that cites a document that is not cleared for display, or h
     assert.equal(r.dropped[0].reason, "document not cleared for display");
   }
 });
-test("keeps false values that cite nothing, even from a non-display bundle", () => {
+test("does not keep a false value without a citable quote", () => {
   const b = { documents: [{ ...bundle.documents[0], displayAllowed: false }] };
-  assert.equal(checkEvidence(base(), b).output.fundamentals.guidanceRaised, false);
+  assert.equal(checkEvidence(base(), b).output.fundamentals.guidanceRaised, null);
+});
+test("keeps a false value with a fresh quote from a display-allowed document", () => {
+  const out = base();
+  out.evidence = [ev({ claim: "fundamentals.guidanceRaised" })];
+  assert.equal(checkEvidence(out, bundle, { asOf: "2026-10-05" }).output.fundamentals.guidanceRaised, false);
 });
 test("enforces the per-field freshness window when asOf is given", () => {
   const catalyst = (asOf) => { const out = base(); out.fundamentals.productCatalyst = { present: true, kind: "chip", summary: "x" }; out.evidence = [ev({ claim: "fundamentals.productCatalyst" })]; return checkEvidence(out, bundle, { asOf }); };

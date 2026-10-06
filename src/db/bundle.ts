@@ -39,7 +39,7 @@ export function withinWindow(doc: Pick<RawDocument, "docType" | "publishedAt">, 
 const priority = (docType: string) => /EX-99\.[12]/i.test(docType) ? 0 : /^(10-Q|10-K|20-F|6-K)$/i.test(docType) ? 1 : /^8-K/i.test(docType) ? 2 : docType === "4" ? 3 : 4;
 
 const SEPARATOR = "\n[...]\n";
-const KEYWORDS = /\b(?:Item\s+\d{1,2}\.\d{2}|total revenue|net revenue|revenues?|net sales|year[- ]over[- ]year|growth|guidance|outlook|rais(?:es|ed|ing)|lower(?:s|ed|ing)|reaffirms?|EPS|earnings per share|repurchases?|backlog|remaining performance obligations|RPO|ARR)\b/gi;
+const KEYWORDS = /\b(?:Item\s+\d{1,2}\.\d{2}|total revenue|net revenue|revenues?|net sales|year[- ]over[- ]year|growth|guidance|outlook|rais(?:es|ed|ing)|lower(?:s|ed|ing)|reaffirms?|EPS|earnings per share|repurchases?|backlog|remaining performance obligations|RPO|ARR|launch(?:es|ed)?|major customer|partnership|approv(?:al|ed)|appointed|resigned|lawsuit|investigation|strategy change)\b/gi;
 /** 8-K item headings ("Item 5.02 Departure of Directors ...") start the event text, so they keep more of what follows. */
 const ITEM = /^Item\s/i;
 const ITEM_AFTER = 1200;
@@ -58,7 +58,7 @@ export function focusExcerpt(body: string, room: number): string {
     if (isBoilerplate(body, match.index, match[0])) continue;
     const item = ITEM.test(match[0]);
     const start = Math.max(0, match.index - (item ? 0 : half)), end = Math.min(body.length, match.index + match[0].length + (item ? ITEM_AFTER : half));
-    const priority = /^(?:Item\s|total revenue|net revenue|net sales|year[- ]over[- ]year|growth|guidance|outlook|rais|lower|reaffirm|EPS|earnings per share|repurchase|backlog|remaining performance obligations|RPO|ARR)/i.test(match[0]) ? 0 : 1;
+    const priority = /^(?:Item\s|total revenue|net revenue|net sales|year[- ]over[- ]year|growth|guidance|outlook|rais|lower|reaffirm|EPS|earnings per share|repurchase|backlog|remaining performance obligations|RPO|ARR|launch|major customer|partnership|approv|appointed|resigned|lawsuit|investigation|strategy change)/i.test(match[0]) ? 0 : 1;
     const last = spans[spans.length - 1];
     if (last && start <= last.end && end - last.start <= (item || last.item ? ITEM_AFTER + 300 : 900)) { last.end = Math.max(last.end, end); last.priority = Math.min(last.priority, priority); last.item ||= item; }
     else spans.push({ start, end, priority, item });
