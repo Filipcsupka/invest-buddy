@@ -110,7 +110,25 @@ export function validateJudgeOutput(obj) {
 const FIGURE = /(?:(?<![\w.)])([-\u2212])(?=\d))?(\d[\d,]*(?:\.\d+)?)/g;
 const ISO_DATE = /\b\d{4}-\d{2}-\d{2}\b/g;
 /** SEC form names such as 8-K and 10-Q are labels, not figures. */
-const FORM_NAME = /\b(?:8|10|20|40)-[KQF]\b|\b13[DFG]\b/gi;
+const FORM_NAME = /\b(?:6|8|10|20|40)-[KQF]\b|\b13[DFG]\b|\b(?:Form|Schedule|Items?)\s+\d+(?:\.\d+)?[A-Z]?\b/gi;
+/**
+ * Numbers that are part of a label, not a claimed figure: windows (200-day, 52-week, 12-month, 3-year, 10 days, 20d), moving averages (MA200, SMA50, EMA 21),
+ * quarter and fiscal labels (Q3, 2Q26, FY26, fiscal 2027, H1), years after a context word, top-N, ordinals, list numbers, and the tier wording (1/3 of a full position).
+ * Real figures (prices, percentages, revenue, backlog, share counts) are not matched and stay checked.
+ */
+const LABELS = [
+  /\b\d+(?:\.\d+)?[- ]?(?:day|week|month|year|quarter|session|trading[- ]day)s?\b/gi,
+  /\b\d+[dw]\b/gi,
+  /\b[SE]?MA[- ]?\d+\b/gi,
+  /\b(?:Q[1-4]|[1-4]Q|H[12])(?:[- ]?(?:FY)?\d{2,4})?\b/gi,
+  /\b(?:FY|CY)[- ]?\d{2,4}\b|\bfiscal(?:\s+year)?\s+\d{2,4}\b/gi,
+  /\b(?:in|since|by|during|through|until|from|for|of|to|calendar|year|between)\s+(20[0-3]\d)\b/gi,
+  /\btop[- ]\d+\b/gi,
+  /\b\d+(?:st|nd|rd|th)\b/gi,
+  /(?:^|\n)\s*\d+[.)](?=\s)|\(\d+\)|#\d+|\b(?:step|rank|ranked|item|point|number|no\.)\s+\d+\b(?!\.\d)/gi,
+  /\b\d+\/\d+\b|\b\d+(?:\.\d+)?\s*(?:%|percent)\s+of\s+(?:a|the)\s+(?:full\s+)?position\b/gi,
+];
+const stripLabels = (text) => LABELS.reduce((t, re) => t.replace(re, (m, y) => (typeof y === "string" ? m.replace(y, " ") : " ")), text);
 const URL_TEXT = /https?:\/\/\S+/g;
 /** Fields that hold identifiers, links or timestamps. Digits in them are not figures. */
 const NON_FIGURE_KEYS = /^(url|evidenceUrl|id|runId|accession\w*|signature|ruleConfigVersion|asOf|generatedAt|publishedAt|fiscalPeriod|filedAt|date|field)$|(Url|Id|At|Date)$/;
@@ -136,7 +154,7 @@ export function inventedFigures(texts, inputValue) {
   const bad = [];
   for (const t of texts) {
     const text = String(t).replace(ISO_DATE, (d) => (dates.has(d) ? " " : d));
-    for (const n of figuresIn(text)) if (!allowed.has(n) && !ruleFigure(text, Math.abs(n))) bad.push(n);
+    for (const n of figuresIn(stripLabels(text))) if (!allowed.has(n) && !ruleFigure(text, Math.abs(n))) bad.push(n);
   }
   return [...new Set(bad)];
 }
@@ -176,14 +194,23 @@ export function buildModelInput(input, news) {
  * an evidence url outside the input, an invented figure) throws, so the call is tried again. Nothing the model writes can change the action upward,
  * the tier, the amounts or the ratings: an unknown field is a schema error, and a downgrade only moves a buy to WATCH with tier NONE and EUR 0.
  */
-export function mergeIdeas(output, news, modelInput) {
+export function mergeIdeas(output, news, modelInput, { collect = false } = {}) {
   const bySymbol = new Map(news.map((s) => [s.symbol, s]));
-  const seen = new Set(), ideas = [], notes = [];
+  const seen = new Set(), ideas = [], notes = [], failed = new Map();
   for (const idea of output.ideas) {
     const sig = bySymbol.get(idea.symbol);
     if (!sig) throw new Error(`idea for ${idea.symbol}, which is not an item`);
     if (seen.has(idea.symbol)) throw new Error(`second idea for ${idea.symbol}`);
     seen.add(idea.symbol);
+    try { ideas.push(mergeOne(idea, sig, modelInput, notes)); } catch (e) { if (!collect) throw e; failed.set(idea.symbol, e.message.replace(`${idea.symbol}: `, "")); }
+  }
+  const missing = news.filter((s) => !seen.has(s.symbol)).map((s) => s.symbol);
+  if (collect) for (const m of missing) failed.set(m, "no idea in the output");
+  else if (missing.length) throw new Error(`no idea for ${missing.join(", ")}`);
+  return { ideas, notes, failed };
+}
+function mergeOne(idea, sig, modelInput, notes) {
+  {
     const item = modelInput.items.find((i) => i.signal.symbol === idea.symbol);
     const urls = new Set((item?.context?.evidence ?? []).map((e) => e.url));
     const bad = idea.evidence.filter((e) => !urls.has(e.url));
@@ -199,16 +226,13 @@ export function mergeIdeas(output, news, modelInput) {
       if (DOWNGRADABLE.includes(action)) { downgradedFrom = action; action = "WATCH"; sizeTier = "NONE"; min = 0; max = 0; }
       else notes.push(`${idea.symbol}: downgrade ignored, ${action} is not a buy`);
     }
-    ideas.push({
+    return {
       symbol: idea.symbol, action, sizeTier, amountMinEur: min, amountMaxEur: max, verdict: idea.verdict, whatHappened: idea.whatHappened, whyItMatters: idea.whyItMatters,
       setup: sig.ratings, numbers: idea.numbers, plan: { amountNow: amountText(action, min, max), ...idea.plan }, evidence: idea.evidence,
       unconfirmed: sig.unconfirmed || idea.unconfirmed || downgradedFrom !== null, carriedFrom: sig.carriedFrom ?? null, signature: sig.signature, ruleConfigVersion: sig.ruleConfigVersion,
       conflictNote: idea.conflict?.reason ?? null, downgradedFrom,
-    });
+    };
   }
-  const missing = news.filter((s) => !seen.has(s.symbol)).map((s) => s.symbol);
-  if (missing.length) throw new Error(`no idea for ${missing.join(", ")}`);
-  return { ideas, notes };
 }
 
 /** Hash of what the model decides from: the input without generatedAt and previousIdeas (the rule version is inside it), plus prompt, schema, agent, model and mode. Same hash, same stored result, so the run is skipped. */
@@ -290,29 +314,49 @@ async function main() {
     const files = writeAgentFiles(work, input, modelInput);
     promptInput = { asOf: modelInput.asOf, ruleConfigVersion: modelInput.ruleConfigVersion, benchmark: modelInput.benchmark, files, signals: modelInput.items.map((i) => i.signal), note: "Read the files in the current directory for the facts, technicals and history." };
   }
-  const text = fill(prompt, { AS_OF: asOf, INPUT: JSON.stringify(promptInput) });
-  let spent = addUsage({}, {}), cost = 0, calls = 0, model = o.model, rawOutput = null, error = null, result = null;
+  const textFor = (items) => {
+    const pi = o.agentMode ? { ...promptInput, signals: items.map((i) => i.signal) } : { ...promptInput, items };
+    return fill(prompt, { AS_OF: asOf, INPUT: JSON.stringify(pi) });
+  };
+  let text = textFor(modelInput.items);
+  let spent = addUsage({}, {}), cost = 0, calls = 0, model = o.model, rawOutput = null, error = null;
+  const good = new Map(), skipped = new Map(), notes = [];
+  let pending = news;
   const t0 = Date.now();
-  for (let attempt = 1; attempt <= 2 && !result; attempt++) {
+  // At most two calls. A symbol whose wording still fails after the second call is skipped; the retry only asks for the symbols that failed.
+  for (let attempt = 1; attempt <= 2 && pending.length; attempt++) {
     const remaining = o.budgetUsd - cost;
     if (remaining < MIN_ATTEMPT_USD) { error = `${error ?? "no result"}; cost cap $${o.budgetUsd} reached after $${cost.toFixed(4)}`; log(`cost cap reached (spent $${cost.toFixed(4)} of $${o.budgetUsd}); no further call`); break; }
     try {
       const budget = Number(remaining.toFixed(4));
+      const sub = { ...modelInput, items: modelInput.items.filter((i) => pending.some((s) => s.symbol === i.signal.symbol)) };
+      text = textFor(sub.items);
       const r = o.agentMode ? await callAgentReadOnly(o, text, work, budget) : await callAgentNoTools({ agent: "claude", model: o.model, timeoutS: o.timeoutS, budgetUsd: budget }, text, work);
       calls++; spent = addUsage(spent, r.usage); cost += r.costUsd ?? 0; if (r.model) model = r.model;
-      rawOutput = normalizeOutput(extractJson(r.text));
-      const errs = validateJudgeOutput(rawOutput);
+      const out = normalizeOutput(extractJson(r.text));
+      const errs = validateJudgeOutput(out);
       if (errs.length) throw new Error(`schema: ${errs.slice(0, 5).join("; ")}`);
-      result = mergeIdeas(rawOutput, news, modelInput);
+      const merged = mergeIdeas(out, pending, sub, { collect: true });
+      rawOutput = { ...out, ideas: [...(rawOutput?.ideas ?? []), ...out.ideas.filter((i) => !merged.failed.has(i.symbol))] };
+      for (const i of merged.ideas) good.set(i.symbol, i);
+      notes.push(...merged.notes);
+      for (const [sym, why] of merged.failed) log(`attempt ${attempt}: ${sym} failed: ${why}`);
+      pending = pending.filter((s) => merged.failed.has(s.symbol));
+      if (pending.length) error = pending.map((s) => `${s.symbol}: ${merged.failed.get(s.symbol)}`).join("; ");
+      for (const s of pending) skipped.set(s.symbol, merged.failed.get(s.symbol));
     } catch (e) {
       error = e.message;
       log(`attempt ${attempt} failed: ${e.message}`);
       if (RATE_LIMIT.test(e.message)) { log("rate limit; stopping without retry"); break; }
     }
   }
+  for (const s of pending) if (!skipped.has(s.symbol)) skipped.set(s.symbol, error ?? "no result");
+  for (const s of news) if (good.has(s.symbol)) skipped.delete(s.symbol);
+  const result = good.size ? { ideas: news.filter((s) => good.has(s.symbol)).map((s) => good.get(s.symbol)), notes } : null;
+  if (result) for (const [sym, why] of skipped) log(`SKIPPED ${sym}: ${why}`);
   if (!process.env.SCAN_KEEP_WORK) rmSync(work, { recursive: true, force: true });
   const secs = Math.round((Date.now() - t0) / 1000);
-  const totals = `${calls} model call(s), ${text.length} input chars, tokens in ${spent.inputTokens ?? "?"} out ${spent.outputTokens ?? "?"} cache read ${spent.cacheReadTokens ?? "?"} cache created ${spent.cacheCreationTokens ?? "?"}, turns ${spent.turns ?? "?"}${cost ? `, cost $${cost.toFixed(4)}` : ""}, ${secs}s`;
+  const totals = `${calls} model call(s), ${text.length} input chars, tokens in ${spent.inputTokens ?? "?"} out ${spent.outputTokens ?? "?"} cache read ${spent.cacheReadTokens ?? "?"} cache created ${spent.cacheCreationTokens ?? "?"}, turns ${spent.turns ?? "?"}${cost ? `, cost $${cost.toFixed(4)}` : ""}, ${secs}s${skipped.size ? `; skipped ${[...skipped.keys()].join(", ")}` : ""}`;
   const runBase = { asOf, agent: o.agent, model, inputHash: hash, usage: spent, costUsd: cost || null, ruleConfigVersion: input.ruleConfigVersion };
   if (!result) {
     log(`FAILED ${error}; ${totals}`);
@@ -321,7 +365,7 @@ async function main() {
   }
   for (const n of result.notes) log(n);
   const downgraded = result.ideas.filter((i) => i.downgradedFrom).length, conflicts = result.ideas.filter((i) => i.conflictNote).length;
-  log(`ideas: ${result.ideas.length} from ${news.length} changed signals, ${downgraded} downgraded, ${conflicts} conflict flags`);
+  log(`ideas: ${result.ideas.length} from ${news.length} changed signals, ${downgraded} downgraded, ${conflicts} conflict flags${skipped.size ? `; skipped ${[...skipped.keys()].join(", ")}` : ""}`);
   const file = join(OUT, `judge-payload-${asOf}-${runId.slice(0, 8)}.json`);
   writeFileSync(file, JSON.stringify({ run: { ...runBase, status: "ok", ideaCount: result.ideas.length }, ideas: result.ideas, notes: rawOutput.notes ?? null }, null, 2) + "\n");
   log(`payload written ${file}`);
