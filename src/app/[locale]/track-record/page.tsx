@@ -33,12 +33,12 @@ export default async function TrackRecord({ params }: LocaleParams) {
           <h1 className="title">{m.trackRecord.title}</h1>
           {data.sample && <SampleStamp text={m.common.sample} />}
         </div>
-        <p className="lede">{m.trackRecord.lede}</p>
+        <p className="lede">{data.sample ? m.trackRecord.lede : m.trackRecord.liveLede}</p>
         <DataStatus locale={locale} lastUpdated={data.lastUpdated} stale={data.stale} />
         <OperatorDisclosure text={m.common.operatorDisclosure} />
       </header>
 
-      <p className="notice">{m.trackRecord.note}</p>
+      <p className="notice">{data.sample ? m.trackRecord.note : m.trackRecord.liveNote}</p>
 
       {data.sample && <section className="sheet-section" aria-labelledby="benchmark">
         <div className="section-head">

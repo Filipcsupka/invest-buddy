@@ -1,19 +1,24 @@
 import { fill, formatDate, formatNumber, getMessages, type Locale } from "../i18n";
 import styles from "./idea-card.module.css";
 import type { StoredIdea } from "../db/ideas";
+import { stripEur } from "../ideas/public";
 
 const RATING_KEY = { "Very strong": "Very strong", Strong: "Strong", Good: "Good", Neutral: "Neutral", Weak: "Weak" } as const;
 
 /** One alert in the fixed layout: headline, verdict, what happened, why it matters, setup, numbers, plan, evidence. */
-export function IdeaCard({ idea, locale }: { idea: StoredIdea; locale: Locale }) {
+export function IdeaCard({ idea: stored, locale, showAmounts = true, nested = false }: { idea: StoredIdea; locale: Locale; showAmounts?: boolean; nested?: boolean }) {
   const m = getMessages(locale).ideas;
+  // ADR-001: without the flag no EUR amount or band is rendered, in any field.
+  const idea = showAmounts ? stored : stripEur(stored);
+  const H = nested ? "h3" : "h2";
+  const L = nested ? "h4" : "h3";
   const id = `idea-${idea.id}`;
-  const headline = fill(m.headline, { symbol: idea.symbol, action: idea.action, min: formatNumber(locale, idea.amountMinEur), max: formatNumber(locale, idea.amountMaxEur) });
+  const headline = !showAmounts ? fill(m.headlinePublic, { symbol: idea.symbol, action: idea.action }) : fill(m.headline, { symbol: idea.symbol, action: idea.action, min: formatNumber(locale, idea.amountMinEur), max: formatNumber(locale, idea.amountMaxEur) });
   const ratings: [string, keyof typeof idea.setup][] = [[m.company, "company"], [m.entry, "entry"], [m.catalyst, "catalyst"]];
   return (
     <article className={styles.card} aria-labelledby={`${id}-title`} data-action={idea.action}>
       <header className={styles.head}>
-        <h2 id={`${id}-title`} className={styles.headline}>{headline}</h2>
+        <H id={`${id}-title`} className={styles.headline}>{headline}</H>
         <p className={styles.meta}>
           <span>{fill(m.dated, { date: formatDate(locale, idea.asOf) })}</span>
           {idea.unconfirmed && <span className={`stamp ${styles.flag}`} title={m.unconfirmedNote}>{m.unconfirmed}</span>}
@@ -21,21 +26,21 @@ export function IdeaCard({ idea, locale }: { idea: StoredIdea; locale: Locale })
           {idea.downgradedFrom && <span className={`stamp ${styles.flag}`}>{fill(m.downgraded, { action: idea.downgradedFrom })}</span>}
           {idea.carriedFrom && <span className={`stamp ${styles.flag}`} title={m.carriedNote}>{fill(m.carried, { date: formatDate(locale, idea.carriedFrom) })}</span>}
         </p>
-        <p className={styles.verdict}>{idea.verdict}</p>
+        {idea.verdict && <p className={styles.verdict}>{idea.verdict}</p>}
         {idea.conflictNote && <p className={styles.conflict}>{fill(m.conflictLabel, { note: idea.conflictNote })}</p>}
         {idea.unconfirmed && <p className="visually-hidden">{m.unconfirmedNote}</p>}
         {idea.carriedFrom && <p className="visually-hidden">{m.carriedNote}</p>}
       </header>
-      <section aria-labelledby={`${id}-happened`}>
-        <h3 id={`${id}-happened`} className={styles.label}>{m.whatHappened}</h3>
+      {idea.whatHappened.length > 0 && <section aria-labelledby={`${id}-happened`}>
+        <L id={`${id}-happened`} className={styles.label}>{m.whatHappened}</L>
         <ul className={styles.list}>{idea.whatHappened.map((t, i) => <li key={i}>{t}</li>)}</ul>
-      </section>
-      <section aria-labelledby={`${id}-why`}>
-        <h3 id={`${id}-why`} className={styles.label}>{m.whyItMatters}</h3>
+      </section>}
+      {idea.whyItMatters.length > 0 && <section aria-labelledby={`${id}-why`}>
+        <L id={`${id}-why`} className={styles.label}>{m.whyItMatters}</L>
         <ul className={styles.list}>{idea.whyItMatters.map((t, i) => <li key={i}>{t}</li>)}</ul>
-      </section>
+      </section>}
       <section aria-labelledby={`${id}-setup`}>
-        <h3 id={`${id}-setup`} className={styles.label}>{m.setup}</h3>
+        <L id={`${id}-setup`} className={styles.label}>{m.setup}</L>
         <dl className={styles.pairs}>
           {ratings.map(([label, key]) => (
             <div key={key} className={styles.pair}>
@@ -45,24 +50,24 @@ export function IdeaCard({ idea, locale }: { idea: StoredIdea; locale: Locale })
           ))}
         </dl>
       </section>
-      <section aria-labelledby={`${id}-numbers`}>
-        <h3 id={`${id}-numbers`} className={styles.label}>{m.numbers}</h3>
+      {idea.numbers.length > 0 && <section aria-labelledby={`${id}-numbers`}>
+        <L id={`${id}-numbers`} className={styles.label}>{m.numbers}</L>
         <dl className={styles.pairs}>
           {idea.numbers.map((n, i) => <div key={i} className={styles.pair}><dt>{n.label}</dt><dd className="num">{n.value}</dd></div>)}
         </dl>
-      </section>
-      <section aria-labelledby={`${id}-plan`}>
-        <h3 id={`${id}-plan`} className={styles.label}>{m.plan}</h3>
+      </section>}
+      {(showAmounts || idea.plan.trigger || idea.plan.invalidation || idea.plan.opportunityCost) && <section aria-labelledby={`${id}-plan`}>
+        <L id={`${id}-plan`} className={styles.label}>{m.plan}</L>
         <dl className={styles.plan}>
-          <dt>{m.amountNow}</dt><dd>{idea.plan.amountNow}</dd>
-          <dt>{m.trigger}</dt><dd>{idea.plan.trigger}</dd>
-          <dt>{m.invalidation}</dt><dd>{idea.plan.invalidation}</dd>
-          <dt>{m.opportunityCost}</dt><dd>{idea.plan.opportunityCost}</dd>
+          {showAmounts && <><dt>{m.amountNow}</dt><dd>{idea.plan.amountNow}</dd></>}
+          {idea.plan.trigger && <><dt>{m.trigger}</dt><dd>{idea.plan.trigger}</dd></>}
+          {idea.plan.invalidation && <><dt>{m.invalidation}</dt><dd>{idea.plan.invalidation}</dd></>}
+          {idea.plan.opportunityCost && <><dt>{m.opportunityCost}</dt><dd>{idea.plan.opportunityCost}</dd></>}
         </dl>
-      </section>
+      </section>}
       {idea.evidence.length > 0 && (
         <section aria-labelledby={`${id}-evidence`}>
-          <h3 id={`${id}-evidence`} className={styles.label}>{m.evidence}</h3>
+          <L id={`${id}-evidence`} className={styles.label}>{m.evidence}</L>
           <ul className={styles.links}>
             {idea.evidence.map((e) => (
               <li key={e.url}>
