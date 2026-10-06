@@ -22,6 +22,8 @@ export function displayAllowedFor(source: string, meta: unknown): boolean {
 /** Longest freshness window (days) of any field a document can support. The values come from evidence.ts, which reconcile uses. */
 export function windowDaysFor(docType: string): number {
   if (/EX-99\.[12]/i.test(docType) || /^(10-Q|10-K|20-F|6-K|8-K)/i.test(docType)) return Math.max(freshnessDays.revenueAccelerating, freshnessDays.epsBeat, freshnessDays.guidanceRaised);
+  // sec-frames growth rows are dated at quarter end and only exist 45+ days later, so a 30-day window would always drop them.
+  if (docType === "XBRL revenue growth") return Math.max(freshnessDays.revenueAccelerating, freshnessDays.revenueDeclining);
   if (docType === "4") return freshnessDays.insiderOrInstitutionalBuying;
   return Math.max(freshnessDays.productCatalyst, freshnessDays.narrativeChanged);
 }
@@ -37,7 +39,12 @@ export function withinWindow(doc: Pick<RawDocument, "docType" | "publishedAt">, 
 const priority = (docType: string) => /EX-99\.[12]/i.test(docType) ? 0 : /^(10-Q|10-K|20-F|6-K)$/i.test(docType) ? 1 : /^8-K/i.test(docType) ? 2 : docType === "4" ? 3 : 4;
 
 const SEPARATOR = "\n[...]\n";
-const KEYWORDS = /\b(?:total revenue|net revenue|revenues?|net sales|year[- ]over[- ]year|growth|guidance|outlook|rais(?:es|ed|ing)|lower(?:s|ed|ing)|reaffirms?|EPS|earnings per share|repurchases?|backlog|remaining performance obligations|RPO|ARR)\b/gi;
+const KEYWORDS = /\b(?:Item\s+\d{1,2}\.\d{2}|total revenue|net revenue|revenues?|net sales|year[- ]over[- ]year|growth|guidance|outlook|rais(?:es|ed|ing)|lower(?:s|ed|ing)|reaffirms?|EPS|earnings per share|repurchases?|backlog|remaining performance obligations|RPO|ARR)\b/gi;
+/** 8-K item headings ("Item 5.02 Departure of Directors ...") start the event text, so they keep more of what follows. */
+const ITEM = /^Item\s/i;
+const ITEM_AFTER = 1200;
+/** "emerging growth company" is cover-page boilerplate on every SEC form; it must not use the excerpt budget. */
+const isBoilerplate = (body: string, index: number, word: string) => /^growth$/i.test(word) && /emerging\s+$/i.test(body.slice(Math.max(0, index - 12), index));
 
 /**
  * Keep keyword windows from long filings. Specific terms get first use of the budget;
@@ -46,13 +53,15 @@ const KEYWORDS = /\b(?:total revenue|net revenue|revenues?|net sales|year[- ]ove
 export function focusExcerpt(body: string, room: number): string {
   if (body.length <= room) return body;
   const half = 220;
-  const spans: { start: number; end: number; priority: number }[] = [];
+  const spans: { start: number; end: number; priority: number; item: boolean }[] = [];
   for (const match of body.matchAll(KEYWORDS)) {
-    const start = Math.max(0, match.index - half), end = Math.min(body.length, match.index + match[0].length + half);
-    const priority = /^(?:total revenue|net revenue|net sales|year[- ]over[- ]year|growth|guidance|outlook|rais|lower|reaffirm|EPS|earnings per share|repurchase|backlog|remaining performance obligations|RPO|ARR)/i.test(match[0]) ? 0 : 1;
+    if (isBoilerplate(body, match.index, match[0])) continue;
+    const item = ITEM.test(match[0]);
+    const start = Math.max(0, match.index - (item ? 0 : half)), end = Math.min(body.length, match.index + match[0].length + (item ? ITEM_AFTER : half));
+    const priority = /^(?:Item\s|total revenue|net revenue|net sales|year[- ]over[- ]year|growth|guidance|outlook|rais|lower|reaffirm|EPS|earnings per share|repurchase|backlog|remaining performance obligations|RPO|ARR)/i.test(match[0]) ? 0 : 1;
     const last = spans[spans.length - 1];
-    if (last && start <= last.end && end - last.start <= 900) { last.end = Math.max(last.end, end); last.priority = Math.min(last.priority, priority); }
-    else spans.push({ start, end, priority });
+    if (last && start <= last.end && end - last.start <= (item || last.item ? ITEM_AFTER + 300 : 900)) { last.end = Math.max(last.end, end); last.priority = Math.min(last.priority, priority); last.item ||= item; }
+    else spans.push({ start, end, priority, item });
   }
   if (!spans.length) return body.slice(0, room);
   const selected: typeof spans = [];
