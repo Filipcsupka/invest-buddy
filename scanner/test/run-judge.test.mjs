@@ -108,6 +108,19 @@ test("evidence urls outside the input, invented figures and wrong symbols fail t
   assert.throws(() => merge([words("NVDA", { evidence: [{ url: U1, label: "one" }] }), words("AMD", { evidence: [] })]), /fewer than two evidence links/);
 });
 
+test("a buy with fewer than two cited links is topped up from the labelled input links", () => {
+  const i = input();
+  const ev = (url, label) => ({ url, field: "epsBeat", publishedAt: "2026-10-01", quote: null, label });
+  i.symbols[0].evidence = [ev(U1, "Earnings release"), ev(U2, "10-Q")];
+  const { ideas, notes } = merge([words("NVDA", { evidence: [{ url: U1, label: "one" }] }), words("AMD", { evidence: [] })], i);
+  const nvda = ideas.find((x) => x.symbol === "NVDA");
+  assert.deepEqual(nvda.evidence.map((e) => e.url), [U1, U2]);
+  assert.ok(notes.some((n) => /NVDA: evidence link added/.test(n)));
+  // a link without a label is never added
+  i.symbols[0].evidence = [ev(U1, "Earnings release"), ev(U2, null)];
+  assert.throws(() => merge([words("NVDA", { evidence: [{ url: U1, label: "one" }] }), words("AMD", { evidence: [] })], i), /fewer than two evidence links/);
+});
+
 test("figures: input numbers and common rule windows pass, others are rejected", () => {
   const inp = { score: 19, below: 7.4, text: "price 1,200.50" };
   assert.deepEqual(inventedFigures(["score 19, 7.40 percent under the 20-day high, RSI 14, 1200.5"], inp), []);
