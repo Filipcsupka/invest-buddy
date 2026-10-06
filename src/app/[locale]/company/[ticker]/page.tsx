@@ -12,7 +12,7 @@ import { ScoreMark } from "@/components/score-mark";
 import { SourceList } from "@/components/source-list";
 import { inputSources, ruleSources, sourceSummary } from "@/components/view-model";
 import { companyIdea, ideasEnabled } from "@/data/ideas-store";
-import { instrumentUniverse, latestScores } from "@/data/store";
+import { instrumentUniverse, latestPortfolio, latestScores } from "@/data/store";
 import { DataStatus } from "@/components/data-status";
 export const dynamic = "force-dynamic";
 import { fill, formatDate, formatPercent, getMessages, isLocale, type Locale } from "@/i18n";
@@ -46,8 +46,10 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 
 export default async function Company({ params }: Params) {
   const { locale, instrument, instruments, result, data } = await load(params);
-  if (!result) return <div className="frame page"><h1 className="title">{instrument.ticker}</h1><DataStatus locale={locale} lastUpdated={data.lastUpdated} stale={data.stale} /></div>;
   const m = getMessages(locale);
+  const portfolio = await latestPortfolio();
+  const held = portfolio?.weights.some((position) => position.weightPercent > 0 && position.symbol.toUpperCase() === instrument.ticker) ?? false;
+  if (!result) return <div className="frame page"><h1 className="title">{instrument.ticker}</h1>{held && <span className="tag">{m.portfolio.heldNoSignal}</span>}<DataStatus locale={locale} lastUpdated={data.lastUpdated} stale={data.stale} /></div>;
   const state = stateKey(result.state);
   const scored = state !== "insufficient";
   const hits = new Map(result.ruleHits.map((hit) => [hit.id, hit]));
@@ -81,8 +83,8 @@ export default async function Company({ params }: Params) {
 
   return (
     <div className="frame page company">
-      <nav className="crumbs" aria-label={m.nav.scanner}>
-        <Link className="arrow-link is-back" href={`/${locale}/scanner`}>
+      <nav className="crumbs" aria-label={m.nav.dashboard}>
+        <Link className="arrow-link is-back" href={`/${locale}/dashboard`}>
           <IconArrowLeft />
           {m.company.back}
         </Link>
@@ -103,6 +105,7 @@ export default async function Company({ params }: Params) {
           <span className="title-ticker">{instrument.ticker}</span>
           <span className="title-name">{instrument.name}</span>
         </h1>
+        {held && <p><span className="tag">{state === "setup" || state === "watch" ? m.portfolio.held : m.portfolio.heldNoSignal}</span></p>}
         <TitleBlock
           stamp={data.sample ? m.common.sample : undefined}
           fields={[
