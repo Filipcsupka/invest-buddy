@@ -205,6 +205,32 @@ Design and sources: `docs/cadence-design.md`. This group replaces the daily extr
 - Do: take the three old scan cards (EFXT START, PCVX WATCH, WULF START, 2026-10-05 and 06) as test cases. For each, collect the same inputs through the scripts (the filings and facts the old card cited) and run extract and judge. Compare action, band, setup ratings and the plan triggers with the old card, and count tokens and cost.
 - DoD: a table in `docs/` with old versus new per card (same action or not, which facts the scripts could not supply, tokens and dollars); gaps become tasks. The target is the same decisions at a fraction of the tokens.
 
+## G. Signals from data only, sizing as a generic guide
+
+Decision 2026-10-06: the product says BUY, ADD, WAIT or REDUCE from data alone. The portfolio does not decide the signal. Readers have different accounts, so size is a separate generic guide that each reader applies to their own account. The owner's own portfolio is a private example, not an input to the public signal. Research and sources: `docs/sizing-guide.md`.
+
+Today `src/engine/signals.ts` ties the action to the portfolio: no baseline forces WATCH EUR 0 for everything, bands are shares of available cash, there is a deploy cap, and held names take a different path (REDUCE, THESIS_BROKEN).
+
+### G1. Data-only action
+- Do: compute START_POSITION, ADD, HIGH_CONVICTION_ADD, WATCH, REDUCE and THESIS_BROKEN from scores, the three ratings (company, entry, catalyst) and the evidence only. Remove the "no baseline means WATCH" rule and the cash-based deploy cap from the action step. "Held" becomes optional context for the owner's private view (REDUCE and THESIS_BROKEN stay available as signals for any holder). Keep `SIGNAL_RULES` versioned, bump the version.
+- DoD: the same inputs give the same action with or without a baseline; tests cover START, ADD, HIGH_CONVICTION_ADD, WATCH, REDUCE, THESIS_BROKEN with no portfolio; the judge still only explains and may only downgrade to WATCH.
+
+### G2. Size tiers, not euro amounts
+- Do: replace `amountMinEur/amountMaxEur` in the public idea with a tier: STARTER (about 1/3 of a full position), STANDARD (2/3), FULL, and for adds a fraction of a full position. Euro bands stay only in the owner's private view, computed from the baseline.
+- DoD: `trade_ideas` stores the tier; the public page and card show tier and wording, no euro amount; the private view still shows bands when the flag is on.
+
+### G3. Generic sizing matrix on the web
+- Do: a page or section "How to size this" with a matrix: signal tier by account size bucket (under 5k, 5 to 25k, 25 to 100k, over 100k EUR) and cash level (under 10%, 10 to 30%, over 30%). Percent of the reader's own portfolio per name, a hard cap per name, rules for adding (one add a month, never above the cap, no ADD above cap through drift), cash multiplier, and a line that the guide is illustrative and not advice. Starting numbers are in `docs/sizing-guide.md` and are placeholders.
+- DoD: EN and SK text; a pure function from (signal tier, account bucket, cash bucket) to percent with tests; a worked example on the page; no input of real balances is stored on the server.
+
+### G4. Owner view
+- Do: the owner's baseline (EUR 200 a month, cash, positions) feeds a private view: the same matrix applied to the owner's account plus the monthly-contribution split (for example a starter as a share of the monthly contribution).
+- DoD: private page or flag-gated view; the judge no longer reads the baseline for the action.
+
+### G5. Wording and legal check
+- Do: use "screening signal", "illustrative sizing guide", "you decide" and the owner's position disclosure. Before any paid launch ask a lawyer: whether BUY and ADD labels count as investment recommendations under MAR in the EU (SK, CZ), what disclosure is required, and the effect of any calculator that takes the reader's balance.
+- DoD: written answer from a lawyer; wording on the site matches it.
+
 ## Not planned
 
 - Go or microservice rewrite. The workload is about 35 tickers a day and the jobs share types and logic with the web. Revisit only if one collector gets heavy or the pieces get different owners.
