@@ -244,6 +244,13 @@ spec:
                     secretKeyRef:
                       name: invest-buddy-flex-secrets
                       key: FLEX_QUERY_ID
+                - name: INGEST_BASE_URL
+                  value: http://web.invest.svc.cluster.local:3000
+                - name: INGEST_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-secrets
+                      key: INGEST_TOKEN
               securityContext:
                 allowPrivilegeEscalation: false
                 readOnlyRootFilesystem: true

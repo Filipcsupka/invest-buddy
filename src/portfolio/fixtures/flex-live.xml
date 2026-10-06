@@ -1,0 +1,23 @@
+<FlexQueryResponse queryName="synthetic" type="AF">
+  <FlexStatements count="1">
+    <FlexStatement accountId="PRIVATE-ACCOUNT" fromDate="20260901" toDate="20260930" period="LastMonth" whenGenerated="20261001;050000">
+      <ChangeInNAV startingValue="50000" depositsWithdrawals="1000" endingValue="52000" />
+      <CashReport>
+        <CashReportCurrency currency="BASE_SUMMARY" endingCash="1500" endingCashSec="1500" endingCashCom="0" />
+        <CashReportCurrency currency="EUR" endingCash="1000" endingCashSec="1000" endingCashCom="0" />
+        <CashReportCurrency currency="USD" endingCash="550" endingCashSec="550" endingCashCom="0" />
+      </CashReport>
+      <OpenPositions>
+        <OpenPosition accountId="PRIVATE-ACCOUNT" currency="USD" symbol="AAAA" position="10" positionValue="1100" costBasisPrice="90" />
+        <OpenPosition accountId="PRIVATE-ACCOUNT" currency="EUR" symbol="BBBB" position="20" positionValue="3000" costBasisPrice="140" />
+        <OpenPosition accountId="PRIVATE-ACCOUNT" currency="CHF" symbol="CCCC" position="5" positionValue="500" costBasisPrice="95" />
+      </OpenPositions>
+      <ConversionRates>
+        <ConversionRate reportDate="20260929" fromCurrency="USD" toCurrency="EUR" rate="0.5" />
+        <ConversionRate reportDate="20260930" fromCurrency="USD" toCurrency="EUR" rate="0.9" />
+        <ConversionRate reportDate="20260930" fromCurrency="EUR" toCurrency="USD" rate="1.1111" />
+        <ConversionRate reportDate="20260930" fromCurrency="EUR" toCurrency="EUR" rate="1" />
+      </ConversionRates>
+    </FlexStatement>
+  </FlexStatements>
+</FlexQueryResponse>

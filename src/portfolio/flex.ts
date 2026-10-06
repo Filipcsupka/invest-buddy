@@ -57,10 +57,38 @@ export function flexServiceFromEnv(transport?: FlexTransport, pause?: (ms: numbe
   return new FlexService(token, queryId, transport, pause);
 }
 
-export function parseFlexStatement(xml: string): { positions: Record<string, unknown>[]; nav: Record<string, unknown>[] } {
+export interface FlexRaw {
+  positions: Record<string, unknown>[];
+  nav: Record<string, unknown>[];
+  /** Live-shape extras. Empty or undefined when the statement uses the older shape. */
+  cash: Record<string, unknown>[];
+  rates: Record<string, unknown>[];
+  navSummary?: Record<string, unknown>;
+  fromDate?: string;
+  toDate?: string;
+}
+
+const list = (value: unknown): Record<string, unknown>[] => (Array.isArray(value) ? value : value ? [value] : []).map(obj);
+/** Rows sit either directly under the statement or inside a wrapper element, depending on the query. */
+function rows(statement: Record<string, unknown>, wrapper: string, item: string): Record<string, unknown>[] {
+  return [...list(statement[item]), ...list(obj(statement[wrapper])[item])];
+}
+
+export function parseFlexStatement(xml: string): FlexRaw {
   const root = obj(parse(xml).FlexQueryResponse);
   const statement = obj(obj(root.FlexStatements).FlexStatement);
   if (!Object.keys(statement).length) throw new Error("Flex statement missing");
-  const list = (value: unknown): Record<string, unknown>[] => (Array.isArray(value) ? value : value ? [value] : []).map(obj);
-  return { positions: list(obj(statement.OpenPositions).OpenPosition), nav: list(obj(statement.ChangeInNAV).ChangeInNAV) };
+  // ChangeInNAV is one element with attributes in the live shape, and a wrapper of dated rows in the older one.
+  const navNode = obj(statement.ChangeInNAV);
+  const nested = list(navNode.ChangeInNAV);
+  const navSummary = nested.length || !Object.keys(navNode).length ? undefined : navNode;
+  return {
+    positions: rows(statement, "OpenPositions", "OpenPosition"),
+    nav: nested,
+    cash: rows(statement, "CashReport", "CashReportCurrency"),
+    rates: rows(statement, "ConversionRates", "ConversionRate"),
+    navSummary,
+    fromDate: statement.fromDate === undefined ? undefined : String(statement.fromDate),
+    toDate: statement.toDate === undefined ? undefined : String(statement.toDate),
+  };
 }
