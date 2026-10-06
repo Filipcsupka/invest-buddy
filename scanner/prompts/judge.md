@@ -24,7 +24,7 @@ What you write for every item, using the symbol exactly as given:
 - whyItMatters: exactly 1 or 2 bullets (never more) tying the facts to the fixed ratings and reasons.
 - numbers: 3 to 5 items { label, value } with short strings copied from the input.
 - plan: trigger (what would upgrade this, phrased from the rule outputs), invalidation (what would break it), opportunityCost (versus CSPX and versus keeping cash; no reader's holdings).
-- evidence: 2 to 4 links chosen from that item's evidence urls, each with a short label. WATCH, HOLD, REDUCE and THESIS_BROKEN items may have fewer, down to none.
+- evidence: 2 to 4 links chosen from that item's evidence urls, each with a short label (the input labels some: Earnings release, 10-Q, Form 4, SEC XBRL; reuse those, write your own for the rest). WATCH, HOLD, REDUCE and THESIS_BROKEN items may have fewer, down to none.
 - unconfirmed: true when a key claim rests on one agent, is disputed, carried or unverified, or when signal.unconfirmed is true. Say so in the verdict. You may set it to true; the script never lets you set it to false when signal.unconfirmed is true.
 
 Two optional fields. Leave them out completely when unused; never send null. Each needs a reason and an evidenceUrl copied from the input:
