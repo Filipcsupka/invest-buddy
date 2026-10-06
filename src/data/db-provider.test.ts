@@ -1,5 +1,7 @@
 import type pg from "pg";
 import { describe, expect, it } from "vitest";
+import type { ScoreResult } from "../engine";
+import { ruleDetail } from "../i18n/score-text";
 import { DatabaseUniverseProvider } from "./db-provider";
 
 const row = (field: string, agreement: string, value: boolean | null, verified = true) => ({ field, as_of: "2026-10-05", carried_from: null, value, agreement, agent_values: { claude: { value, runId: "c1" } }, evidence_refs: [], reason: "r", verified });
@@ -24,6 +26,39 @@ describe("DatabaseUniverseProvider fundamentals", () => {
       expect(provider.provenance.get("NVDA")?.agreement).toMatchObject({ epsBeat: "data_rule", guidanceRaised: "verified_single" });
     });
   }
+
+  const secUrl = "https://data.sec.gov/api/xbrl/companyfacts/CIK0001045810.json";
+  for (const carry of [false, true]) {
+    it(`uses confirmed SEC revenue growth in the company detail (carry ${carry ? "on" : "off"})`, async () => {
+      const secRows = [
+        { ...row("revenueAccelerating", "xbrl_override", true), evidence_refs: [{ url: secUrl, publishedAt: "2026-10-05", quote: "Revenue growth 25.50% versus 10.25%" }] },
+        row("revenueDeclining", "xbrl_override", false),
+      ];
+      const secPool = { query: async (sql: string) => ({ rows: sql.includes("FROM consensus_findings") ? secRows : [] }) } as unknown as pg.Pool;
+      const provider = new DatabaseUniverseProvider(secPool, "2026-10-05", carry);
+      const f = await provider.fundamentals("NVDA");
+      expect(f).toMatchObject({ revenueAccelerating: true, revenueGrowthCurrent: 25.5, revenueGrowthPrior: 10.25 });
+      const detail = ruleDetail("en", { id: "revenue-acceleration" } as ScoreResult["ruleHits"][number], { inputs: { fundamentals: f } } as ScoreResult);
+      expect(detail).toBe("Revenue growth from 10% to 26%");
+    });
+
+    it(`does not show third-party or unverified revenue numbers (carry ${carry ? "on" : "off"})`, async () => {
+      const badRows = [
+        { ...row("revenueAccelerating", "data_rule", true), evidence_refs: [{ url: "https://www.alphavantage.co/query", quote: "Revenue growth 25.50% versus 10.25%" }] },
+        { ...row("revenueDeclining", "xbrl_override", false, false), evidence_refs: [{ url: secUrl, quote: "Revenue growth 25.50% versus 10.25%" }] },
+      ];
+      const badPool = { query: async (sql: string) => ({ rows: sql.includes("FROM consensus_findings") ? badRows : [] }) } as unknown as pg.Pool;
+      const provider = new DatabaseUniverseProvider(badPool, "2026-10-05", carry);
+      expect(await provider.fundamentals("NVDA")).toMatchObject({ revenueGrowthCurrent: null, revenueGrowthPrior: null });
+    });
+  }
+
+  it("drops SEC figures when the carried revenue finding expires", async () => {
+    const old = { ...row("revenueAccelerating", "xbrl_override", true), as_of: "2026-06-01", carried_from: "2026-06-01", evidence_refs: [{ url: secUrl, publishedAt: "2026-06-01", quote: "Revenue growth 25.50% versus 10.25%" }] };
+    const oldPool = { query: async (sql: string) => ({ rows: sql.includes("FROM consensus_findings") ? [old] : [] }) } as unknown as pg.Pool;
+    const provider = new DatabaseUniverseProvider(oldPool, "2026-10-05", true);
+    expect(await provider.fundamentals("NVDA")).toMatchObject({ revenueAccelerating: null, revenueGrowthCurrent: null, revenueGrowthPrior: null });
+  });
 });
 
 describe("DatabaseUniverseProvider sources", () => {

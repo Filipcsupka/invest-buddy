@@ -8,6 +8,21 @@ type CarryRow = ConsensusRow & { field: string };
 /** Fundamentals agreements that count for scoring when verified: two agents agreed, SEC data decided, one extractor with a stored verbatim quote, or a data rule (epsBeat from Alpha Vantage). */
 export const CONFIRMED_FUNDAMENTAL_AGREEMENTS: readonly string[] = ["agree", "xbrl_override", "verified_single", "data_rule"];
 const confirmedFundamental = (row: { verified: boolean; agreement: string }) => row.verified && CONFIRMED_FUNDAMENTAL_AGREEMENTS.includes(row.agreement);
+const SEC_REVENUE_URL = /^https:\/\/data\.sec\.gov\/api\/xbrl\/companyfacts\/CIK\d{10}\.json$/;
+const SEC_GROWTH_QUOTE = /^Revenue growth (-?\d+(?:\.\d+)?)% versus (-?\d+(?:\.\d+)?)%$/;
+function revenueGrowth(rows: ({ verified: boolean; agreement: string; evidence_refs: { url: string; quote?: string }[] } | undefined)[]) {
+  for (const row of rows) {
+    if (!row?.verified || !["xbrl_override", "agree"].includes(row.agreement)) continue;
+    for (const ref of row.evidence_refs) {
+      if (!SEC_REVENUE_URL.test(ref.url)) continue;
+      const values = SEC_GROWTH_QUOTE.exec(ref.quote ?? "");
+      if (!values) continue;
+      const current = Number(values[1]), prior = Number(values[2]);
+      if (Number.isFinite(current) && Number.isFinite(prior)) return { current, prior };
+    }
+  }
+  return { current: null, prior: null };
+}
 
 export class DatabaseUniverseProvider implements UniverseProvider {
   readonly provenance = new Map<string, { runIds: Record<string, string>; evidenceUrls: string[]; agreement: Record<string, string>; consensusValues: Record<string, boolean | null>; fingerprintRows: unknown[]; carriedFrom?: Record<string, string>; expiredFields?: string[]; sources: Record<string, SourceItem[]> }>();
@@ -32,7 +47,7 @@ export class DatabaseUniverseProvider implements UniverseProvider {
   }
   async fundamentals(ticker: string): Promise<Fundamentals> {
     if (this.carry) return this.fundamentalsWithCarry(ticker);
-    const rows = await this.pool.query<{ field: string; value: boolean | null; agreement: string; agent_values: Record<string, { runId: string }>; evidence_refs: { url: string }[]; verified: boolean }>(`SELECT DISTINCT ON (field) field,as_of::text,value,agreement,agent_values,evidence_refs,verified
+    const rows = await this.pool.query<{ field: string; value: boolean | null; agreement: string; agent_values: Record<string, { runId: string }>; evidence_refs: { url: string; quote?: string }[]; verified: boolean }>(`SELECT DISTINCT ON (field) field,as_of::text,value,agreement,agent_values,evidence_refs,verified
       FROM consensus_findings WHERE symbol=$1 AND ($2::date IS NULL OR as_of <= $2) ORDER BY field,as_of DESC`, [ticker, this.asOf ?? null]);
     const by = new Map(rows.rows.map((row) => [row.field,row]));
     const runIds: Record<string,string> = {};
@@ -50,7 +65,8 @@ export class DatabaseUniverseProvider implements UniverseProvider {
     this.provenance.set(ticker, { runIds, evidenceUrls: [...evidenceUrls], agreement, consensusValues, fingerprintRows, sources: await fieldSourcesFor(this.pool, rows.rows) });
     const get = (field: string) => { const row = by.get(field); return row && confirmedFundamental(row) ? row.value : null; };
     const epsBeat = get("epsBeat"), guidanceCut = get("guidanceCut");
-    return { revenueGrowthCurrent: null, revenueGrowthPrior: null, revenueAccelerating: get("revenueAccelerating"), revenueDeclining: get("revenueDeclining"), epsBeat, guidanceRaised: get("guidanceRaised"), earningsMissAndGuidanceCut: epsBeat === false && guidanceCut === true ? true : epsBeat === null || guidanceCut === null ? null : false, productCatalyst: get("productCatalyst"), insiderOrInstitutionalAccumulation: get("insiderOrInstitutionalBuying"), noRevenue: null, memePump: null };
+    const growth = revenueGrowth([by.get("revenueAccelerating"), by.get("revenueDeclining")]);
+    return { revenueGrowthCurrent: growth.current, revenueGrowthPrior: growth.prior, revenueAccelerating: get("revenueAccelerating"), revenueDeclining: get("revenueDeclining"), epsBeat, guidanceRaised: get("guidanceRaised"), earningsMissAndGuidanceCut: epsBeat === false && guidanceCut === true ? true : epsBeat === null || guidanceCut === null ? null : false, productCatalyst: get("productCatalyst"), insiderOrInstitutionalAccumulation: get("insiderOrInstitutionalBuying"), noRevenue: null, memePump: null };
   }
   async macro(ticker: string): Promise<Macro> {
     if (this.carry) return this.macroWithCarry(ticker);
@@ -87,7 +103,8 @@ export class DatabaseUniverseProvider implements UniverseProvider {
     this.provenance.set(ticker, { runIds, evidenceUrls: [...evidenceUrls], agreement, consensusValues, fingerprintRows, carriedFrom, expiredFields: expiredFields.sort(), sources: await fieldSourcesFor(this.pool, evaluated.map(({ row }) => row)) });
     const get = (field: string) => { const row = by.get(field); return row && confirmedFundamental(row) ? row.value : null; };
     const epsBeat = get("epsBeat"), guidanceCut = get("guidanceCut");
-    return { revenueGrowthCurrent: null, revenueGrowthPrior: null, revenueAccelerating: get("revenueAccelerating"), revenueDeclining: get("revenueDeclining"), epsBeat, guidanceRaised: get("guidanceRaised"), earningsMissAndGuidanceCut: epsBeat === false && guidanceCut === true ? true : epsBeat === null || guidanceCut === null ? null : false, productCatalyst: get("productCatalyst"), insiderOrInstitutionalAccumulation: get("insiderOrInstitutionalBuying"), noRevenue: null, memePump: null };
+    const growth = revenueGrowth([by.get("revenueAccelerating"), by.get("revenueDeclining")]);
+    return { revenueGrowthCurrent: growth.current, revenueGrowthPrior: growth.prior, revenueAccelerating: get("revenueAccelerating"), revenueDeclining: get("revenueDeclining"), epsBeat, guidanceRaised: get("guidanceRaised"), earningsMissAndGuidanceCut: epsBeat === false && guidanceCut === true ? true : epsBeat === null || guidanceCut === null ? null : false, productCatalyst: get("productCatalyst"), insiderOrInstitutionalAccumulation: get("insiderOrInstitutionalBuying"), noRevenue: null, memePump: null };
   }
   private async macroWithCarry(ticker: string): Promise<Macro> {
     const rows = await this.pool.query<CarryRow>(`SELECT DISTINCT ON (field) field,as_of::text AS as_of,carried_from::text AS carried_from,value,agreement,evidence_refs,reason,verified FROM consensus_findings
