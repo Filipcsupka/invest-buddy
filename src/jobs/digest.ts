@@ -1,3 +1,4 @@
+import { runLoggedJob } from "./job-log";
 import type { AlertChange } from "../db/types";
 import pg from "pg";
 import { MemoryScoreRepository } from "../db/memory";
@@ -53,8 +54,10 @@ async function main() {
     const asOf = date ?? (pool ? (await pool.query<{ as_of: string }>("SELECT max(as_of)::text AS as_of FROM ingest_runs")).rows[0]?.as_of : new Date().toISOString().slice(0, 10));
     if (!asOf) throw new Error("No completed daily run");
     const repo = pool ? new PostgresScoreRepository(pool) : new MemoryScoreRepository();
-    await new ConsoleMailer().send(buildDigest(to, asOf, await repo.alerts(asOf), locale));
+    const alerts = await repo.alerts(asOf);
+    await new ConsoleMailer().send(buildDigest(to, asOf, alerts, locale));
+    return { alerts: alerts.length, failures: 0 };
   } finally { await pool?.end(); }
 }
 
-if (/(?:^|[/\\])digest\.(?:ts|js)$/.test(process.argv[1] ?? "")) main().catch((error) => { console.error(error); process.exitCode = 1; });
+if (/(?:^|[/\\])digest\.(?:ts|js)$/.test(process.argv[1] ?? "")) void runLoggedJob("digest", main);

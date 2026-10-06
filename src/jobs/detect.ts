@@ -1,3 +1,4 @@
+import { runLoggedJob } from "./job-log";
 import { writeFileSync } from "node:fs";
 import pg from "pg";
 import universe from "../../scanner/universe.json";
@@ -82,6 +83,7 @@ async function main() {
     const json = JSON.stringify(payload) + "\n";
     if (out) writeFileSync(out, json);
     process.stdout.write(json);
+    return { selected: result.symbols.length, failures: 0 };
   } finally { await pool.end(); }
 }
-if (/(?:^|[/\\])detect\.(?:ts|js)$/.test(process.argv[1] ?? "")) main().catch((e) => { console.error(e instanceof Error ? e.message : e); process.exitCode = 1; });
+if (/(?:^|[/\\])detect\.(?:ts|js)$/.test(process.argv[1] ?? "")) void runLoggedJob("detect", main);

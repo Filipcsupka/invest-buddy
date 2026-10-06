@@ -1,3 +1,4 @@
+import { logIngestRequest, recordIngestError } from "../request-log";
 import { createHash, timingSafeEqual } from "node:crypto";
 import pg from "pg";
 import { scanSchema } from "../../../../data/scan";
@@ -13,7 +14,7 @@ function authorized(header: string | null, token: string) {
   const b = createHash("sha256").update(token).digest();
   return timingSafeEqual(a, b) && supplied.length > 0;
 }
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   const token = process.env.INGEST_TOKEN;
   if (!token) return Response.json({ error: "Ingest unavailable" }, { status: 503 });
   if (!authorized(request.headers.get("authorization"), token)) return Response.json({ error: "Unauthorized" }, { status: 401 });
@@ -31,6 +32,8 @@ export async function POST(request: Request) {
   if (!process.env.DATABASE_URL) return Response.json({ error: "Database unavailable" }, { status: 503 });
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
   try { return Response.json(await ingestScan(pool, parsed.data, { skipMacro: new URL(request.url).searchParams.get("macro") === "skip" })); }
-  catch { return Response.json({ error: "Database unavailable" }, { status: 503 }); }
+  catch (error) { recordIngestError(request, error); return Response.json({ error: "Database unavailable" }, { status: 503 }); }
   finally { await pool.end(); }
 }
+
+export const POST = (request: Request) => logIngestRequest("/api/ingest/scan", request, () => postHandler(request));

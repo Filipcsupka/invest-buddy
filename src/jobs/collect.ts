@@ -1,3 +1,4 @@
+import { runLoggedJob } from "./job-log";
 import pg from "pg";
 import universe from "../../scanner/universe.json";
 import { collectEdgar, companyCiks, type InsiderTrade } from "../collectors/edgar";
@@ -162,7 +163,7 @@ async function main() {
     const results = await runPings(names);
     process.stdout.write(`${formatPings(results)}\n`);
     process.exitCode = results.some((result) => !result.ok) ? 1 : 0;
-    return;
+    return { checked: results.length, failures: results.filter((result) => !result.ok).length };
   }
   guardCollectUserAgent(names, process.env);
   const symbols = only ? [...new Set(only.split(",").map((s) => s.trim().toUpperCase()))] : companies.map((c) => c.symbol);
@@ -174,9 +175,10 @@ async function main() {
     const repository = pool ? new PostgresCollectorRepository(pool) : new MemoryCollectorRepository();
     const result = await runCollect(repository, symbols, { since, sources: names as SourceName[] | undefined, dryRun, cusips: pool ? new PostgresCusipStore(pool) : new MemoryCusipStore() });
     process.stdout.write(`Collect: ${result.succeeded}/${result.requested} tickers, ${result.documentsParsed} documents parsed, ${result.factsComputed} facts computed, ${result.documentsWritten} documents written, ${result.factsWritten} facts written${dryRun ? " (dry run, nothing stored)" : ""}\n`);
-    for (const failure of result.failures) process.stderr.write(`Failed ${failure.ticker}: ${failure.reason}\n`);
-    if (result.stoppedReason) process.stderr.write(`Stopped: ${result.stoppedReason}\n`);
+    for (const failure of result.failures) process.stderr.write(`Failed ${failure.ticker}\n`);
+    if (result.stoppedReason) process.stderr.write("Stopped: source limit reached\n");
     process.exitCode = result.exitCode;
+    return { requested: result.requested, succeeded: result.succeeded, failures: result.failures.length, documentsWritten: result.documentsWritten, factsWritten: result.factsWritten };
   } finally { await pool?.end(); }
 }
-if (/(?:^|[/\\])collect\.(?:ts|js)$/.test(process.argv[1] ?? "")) main().catch((error) => { console.error(error instanceof Error ? error.message : error); process.exitCode = 1; });
+if (/(?:^|[/\\])collect\.(?:ts|js)$/.test(process.argv[1] ?? "")) void runLoggedJob("collect", main);

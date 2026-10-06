@@ -1,3 +1,4 @@
+import { runLoggedJob } from "./job-log";
 import pg from "pg";
 import { fixtureProvider } from "../data/fixtures";
 import { PostgresPortfolioRepository, type PortfolioRepository } from "../db/portfolio";
@@ -37,26 +38,31 @@ export async function postBaseline(xml: string, target: BaselineTarget, today?: 
 export async function runPortfolio(repository: PortfolioRepository, delayTradingDays = 1, target?: BaselineTarget, log: (line: string) => void = (line) => process.stdout.write(`${line}\n`), history?: NavHistoryRepository) {
   const xml = await flexServiceFromEnv().statement();
   let failed = false;
+  let positions = 0, navPoints = 0, skippedPositions = 0;
   try {
     const snapshot = await normalizeFlex(xml, fixtureProvider, delayTradingDays);
     await repository.save(snapshot);
+    positions = snapshot.weights.length;
     log(`snapshot stored positions=${snapshot.weights.length}`);
   } catch { failed = true; log("snapshot failed; previous snapshot retained"); }
   if (history) {
     try {
       const points = navPointsFromXml(xml);
       await history.upsert(points);
+      navPoints = points.length;
       log(`nav history upserted points=${points.length}`);
     } catch { failed = true; log("nav history failed"); }
   } else log("nav history not configured");
   if (target) {
     try {
       const result = await postBaseline(xml, target);
+      skippedPositions = result.skipped;
       log(`baseline ${result.status} positions=${result.positions} skippedPositions=${result.skipped}`);
       if (result.status === "rejected") failed = true;
     } catch { failed = true; log("baseline failed"); }
   } else log("baseline not configured");
   if (failed) throw new Error("Portfolio sync incomplete");
+  return { positions, navPoints, skippedPositions, failures: 0 };
 }
 
 async function main() {
@@ -67,8 +73,8 @@ async function main() {
   const baseUrl = process.env.INGEST_BASE_URL;
   const pool = new pg.Pool({ connectionString: url });
   try {
-    await runPortfolio(new PostgresPortfolioRepository(pool), delay, token && baseUrl ? { baseUrl, token } : undefined, undefined, new PostgresNavHistoryRepository(pool));
+    return await runPortfolio(new PostgresPortfolioRepository(pool), delay, token && baseUrl ? { baseUrl, token } : undefined, undefined, new PostgresNavHistoryRepository(pool));
   } finally { await pool.end(); }
 }
 
-if (/(?:^|[/\\])portfolio\.(?:ts|js)$/.test(process.argv[1] ?? "")) main().catch(() => { console.error("Portfolio sync failed; previous snapshot retained"); process.exitCode = 1; });
+if (/(?:^|[/\\])portfolio\.(?:ts|js)$/.test(process.argv[1] ?? "")) void runLoggedJob("portfolio", main);

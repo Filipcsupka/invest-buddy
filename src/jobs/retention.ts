@@ -1,3 +1,4 @@
+import { runLoggedJob } from "./job-log";
 import pg from "pg";
 import { freshnessDays } from "../data/evidence";
 import { purgeIdeas } from "./retention-ideas";
@@ -36,7 +37,8 @@ async function main() {
     const ideas = await purgeIdeas(client, dryRun);
     await client.query(dryRun ? "ROLLBACK" : "COMMIT");
     process.stdout.write(`${JSON.stringify({ dryRun, facts: dryRun ? facts.rows[0].count : facts.rowCount, documents: dryRun ? docs.rows[0].count : docs.rowCount, extractionRuns: runs, ideas })}\n`);
+    return { facts: dryRun ? facts.rows[0].count : facts.rowCount ?? 0, documents: dryRun ? docs.rows[0].count : docs.rowCount ?? 0, extractionRuns: runs, tradeIdeas: ideas.tradeIdeas, judgeRuns: ideas.judgeRuns, failures: 0 };
   } catch (error) { await client.query("ROLLBACK"); throw error; }
   finally { client.release(); await pool.end(); }
 }
-if (/(?:^|[/\\])retention\.(?:ts|js)$/.test(process.argv[1] ?? "")) main().catch((error) => { console.error(error instanceof Error ? error.message : error); process.exitCode = 1; });
+if (/(?:^|[/\\])retention\.(?:ts|js)$/.test(process.argv[1] ?? "")) void runLoggedJob("retention", main);

@@ -1,3 +1,4 @@
+import { runLoggedJob } from "./job-log";
 import pg from "pg";
 import { liveVerifier, offVerifier, fixtureVerifier, type EvidenceRef, type EvidenceVerifier } from "../data/evidence";
 import { pgDocumentLookup, storedFirstVerifier, storedOnlyVerifier } from "../data/stored-evidence";
@@ -162,6 +163,7 @@ async function main() {
     const storedVerify = mode === "live" ? storedOnlyVerifier(pgDocumentLookup(pool)) : undefined;
     const count = await runReconcile(pool,asOf,verifier,secLookup,undefined,{ storedVerify });
     process.stdout.write(`Reconciled ${count} fields for ${asOf} (${mode} evidence mode)\n`);
+    return { fields: count, failures: 0 };
   } finally { await pool.end(); }
 }
-if (/(?:^|[/\\])reconcile\.(?:ts|js)$/.test(process.argv[1] ?? "")) main().catch((error) => { console.error(error); process.exitCode = 1; });
+if (/(?:^|[/\\])reconcile\.(?:ts|js)$/.test(process.argv[1] ?? "")) void runLoggedJob("reconcile", main);
