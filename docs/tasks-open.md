@@ -67,6 +67,11 @@ Groups: A first live run, B web, C pipeline quality, D data and accounts, E oper
 ### B2. Portfolio page benchmark and sample check
 - Do: trace what `benchmarkSample` does in `src/db/portfolio.ts` and `/portfolio`. Make live mode use real data or hide the block.
 - DoD: no fixture figure is reachable in `DATA_MODE=db`; test added.
+- Note (2026-10-06): done on branch `portfolio-history`. `benchmarkSample` is removed; db mode builds the chart from `portfolio_nav_history` (migration 015) and real SPY bars from `daily_bars`, and the SAMPLE badge shows only in fixture mode. The page still needs a deploy plus a migrate run.
+
+### B2a. Daily NAV in the Flex query
+- Do: in Flex Web Service query settings (General Configuration), set 'Breakout by Day' to Yes and the period to 365 days (or the longest the account allows), so the next portfolio run backfills `portfolio_nav_history`. Until then the page shows 'History builds from ...' and only gains two points per run.
+- DoD: `portfolio_nav_history` holds one `flex-daily` row per statement day since inception; `/portfolio` draws the line. Check that the report returns EUR base values (non-EUR rows are skipped).
 
 ### B3. Decide the ideas page
 - Owner decision. ADR-001 forbids EUR sizing in the public product, and the ideas page shows EUR bands sized to one private portfolio.

@@ -3,6 +3,8 @@ import { fixtureProvider } from "../data/fixtures";
 import { PostgresPortfolioRepository, type PortfolioRepository } from "../db/portfolio";
 import { baselineSchema, type Baseline } from "../db/portfolio-baseline";
 import { flexServiceFromEnv } from "../portfolio/flex";
+import { navPointsFromXml } from "../portfolio/history";
+import { PostgresNavHistoryRepository, type NavHistoryRepository } from "../db/portfolio-history";
 import { normalizeFlex, parseFlexPortfolio } from "../portfolio/model";
 
 export type Fetcher = (url: string, init?: RequestInit) => Promise<Response>;
@@ -32,14 +34,21 @@ export async function postBaseline(xml: string, target: BaselineTarget, today?: 
   return { status: response.ok ? "posted" : "rejected", positions: eur.positions.length, skipped: eur.warnings.skippedPositions };
 }
 
-export async function runPortfolio(repository: PortfolioRepository, delayTradingDays = 1, target?: BaselineTarget, log: (line: string) => void = (line) => process.stdout.write(`${line}\n`)) {
+export async function runPortfolio(repository: PortfolioRepository, delayTradingDays = 1, target?: BaselineTarget, log: (line: string) => void = (line) => process.stdout.write(`${line}\n`), history?: NavHistoryRepository) {
   const xml = await flexServiceFromEnv().statement();
   let failed = false;
   try {
     const snapshot = await normalizeFlex(xml, fixtureProvider, delayTradingDays);
-    await repository.save({ ...snapshot, benchmarkSample: true });
+    await repository.save(snapshot);
     log(`snapshot stored positions=${snapshot.weights.length}`);
   } catch { failed = true; log("snapshot failed; previous snapshot retained"); }
+  if (history) {
+    try {
+      const points = navPointsFromXml(xml);
+      await history.upsert(points);
+      log(`nav history upserted points=${points.length}`);
+    } catch { failed = true; log("nav history failed"); }
+  } else log("nav history not configured");
   if (target) {
     try {
       const result = await postBaseline(xml, target);
@@ -58,7 +67,7 @@ async function main() {
   const baseUrl = process.env.INGEST_BASE_URL;
   const pool = new pg.Pool({ connectionString: url });
   try {
-    await runPortfolio(new PostgresPortfolioRepository(pool), delay, token && baseUrl ? { baseUrl, token } : undefined);
+    await runPortfolio(new PostgresPortfolioRepository(pool), delay, token && baseUrl ? { baseUrl, token } : undefined, undefined, new PostgresNavHistoryRepository(pool));
   } finally { await pool.end(); }
 }
 

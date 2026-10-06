@@ -6,6 +6,8 @@ import { fixtureRecord } from "./record";
 import { instruments as fixtureInstruments } from "./fixtures";
 import { samplePortfolio } from "../portfolio/fixture";
 import { PostgresPortfolioRepository } from "../db/portfolio";
+import { PostgresNavHistoryRepository } from "../db/portfolio-history";
+import { buildIndexedSeries, type IndexedSeries } from "../portfolio/history";
 
 export interface StoreRow { instrument: Instrument; result: ScoreResult }
 export interface StoreData<T> { rows: T; sample: boolean; lastUpdated: string | null; stale: boolean }
@@ -46,6 +48,17 @@ export async function latestPortfolio() {
   const db = pool(); if (!db) return null;
   try { return await new PostgresPortfolioRepository(db).latestPublished(new Date().toISOString().slice(0, 10)); }
   finally { await db.end(); }
+}
+
+/** Indexed portfolio and real SPY series from the private NAV history. Null in fixture mode. Raw EUR amounts never leave this function. */
+export async function portfolioIndexedSeries(): Promise<IndexedSeries | null> {
+  if (fixtureMode()) return null;
+  const db = pool(); if (!db) return { points: [], twrPercent: null, benchmarkPercent: null };
+  try {
+    const history = await new PostgresNavHistoryRepository(db).all();
+    const bars = await db.query<{ date: string; close: string }>("SELECT bar_date::text AS date, close FROM daily_bars WHERE ticker='SPY' ORDER BY bar_date");
+    return buildIndexedSeries(history, bars.rows.map((row) => ({ date: row.date, close: Number(row.close) })));
+  } finally { await db.end(); }
 }
 
 export async function alertHistory() {

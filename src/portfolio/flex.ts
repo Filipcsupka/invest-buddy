@@ -64,6 +64,8 @@ export interface FlexRaw {
   cash: Record<string, unknown>[];
   rates: Record<string, unknown>[];
   navSummary?: Record<string, unknown>;
+  /** Every ChangeInNAV row that carries values: nested dated rows, per-day breakout rows and the period summary. */
+  navRows: Record<string, unknown>[];
   fromDate?: string;
   toDate?: string;
 }
@@ -78,17 +80,27 @@ export function parseFlexStatement(xml: string): FlexRaw {
   const root = obj(parse(xml).FlexQueryResponse);
   const statement = obj(obj(root.FlexStatements).FlexStatement);
   if (!Object.keys(statement).length) throw new Error("Flex statement missing");
-  // ChangeInNAV is one element with attributes in the live shape, and a wrapper of dated rows in the older one.
-  const navNode = obj(statement.ChangeInNAV);
-  const nested = list(navNode.ChangeInNAV);
-  const navSummary = nested.length || !Object.keys(navNode).length ? undefined : navNode;
+  // ChangeInNAV is one element with attributes in the live shape, a wrapper of dated rows in the older one,
+  // and a list of per-day elements when the query has "Breakout by Day" on.
+  const nodes = list(statement.ChangeInNAV);
+  const nested = nodes.flatMap((node) => list(node.ChangeInNAV));
+  const flat = nodes.filter((node) => !("ChangeInNAV" in node) && Object.keys(node).length);
+  const dated = (row: Record<string, unknown>) => String(row.reportDate ?? row.toDate ?? "");
+  const byDate = [...flat].sort((a, b) => dated(a).localeCompare(dated(b)));
+  const deposit = (row: Record<string, unknown>) => Number(row.depositsWithdrawals ?? row.deposits ?? 0) || 0;
+  const navSummary = nested.length ? undefined
+    : flat.length === 1 ? flat[0]
+    : flat.length > 1 ? { startingValue: byDate[0].startingValue, endingValue: byDate.at(-1)!.endingValue, depositsWithdrawals: String(byDate.reduce((sum, row) => sum + deposit(row), 0)) }
+    : undefined;
+  const rowDate = (row: Record<string, unknown>, key: "fromDate" | "toDate") => row[key] === undefined ? undefined : String(row[key]);
   return {
     positions: rows(statement, "OpenPositions", "OpenPosition"),
     nav: nested,
     cash: rows(statement, "CashReport", "CashReportCurrency"),
     rates: rows(statement, "ConversionRates", "ConversionRate"),
     navSummary,
-    fromDate: statement.fromDate === undefined ? undefined : String(statement.fromDate),
-    toDate: statement.toDate === undefined ? undefined : String(statement.toDate),
+    navRows: [...nested, ...flat],
+    fromDate: statement.fromDate === undefined ? (flat.length > 1 ? rowDate(byDate[0], "fromDate") ?? dated(byDate[0]) : undefined) : String(statement.fromDate),
+    toDate: statement.toDate === undefined ? (flat.length > 1 ? dated(byDate.at(-1)!) || undefined : undefined) : String(statement.toDate),
   };
 }
