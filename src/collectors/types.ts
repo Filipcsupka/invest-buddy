@@ -82,6 +82,6 @@ export function document(input: Omit<CollectedDocument, "contentHash">): Collect
 
 /** Phase A collectors, selected one at a time by `collect --source`. */
 export const LEGACY_SOURCES = ["edgar", "rss", "fred"] as const;
-/** Phase A2 sources. Needs no key or account. `13f` is large and only runs when asked for. Not in the default run. */
-export const EXTRA_SOURCES = ["frames", "getcurrent", "13f", "openfda", "clinicaltrials", "usaspending", "fed", "treasury", "bls", "vix", "gnews", "gdelt"] as const;
+/** Phase A2 sources. None is in the default run. `13f` is large and only runs when asked for. `alphavantage` needs ALPHA_VANTAGE_API_KEY; the others need no key. */
+export const EXTRA_SOURCES = ["frames", "getcurrent", "13f", "openfda", "clinicaltrials", "usaspending", "fed", "treasury", "bls", "vix", "gnews", "gdelt", "alphavantage"] as const;
 export type SourceName = (typeof LEGACY_SOURCES)[number] | (typeof EXTRA_SOURCES)[number];

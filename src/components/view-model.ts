@@ -46,8 +46,14 @@ export function toRow(locale: Locale, { instrument, result }: { instrument: Inst
     matched: scored ? result.ruleHits.filter((hit) => hit.matched).map((hit) => hit.id) : null,
     markLabel: scored ? fill(m.mark.label, { total: result.total, fundamentals: result.fundamentals, technical: result.technical, macro: result.macro }) : m.mark.none,
     reasons: reasonsFor(locale, result),
-    agreementLabel: result.agreement ? Object.values(result.agreement).some((value) => value === "disputed") ? m.agreement.disputed : Object.values(result.agreement).some((value) => value === "single") ? m.agreement.single : Object.values(result.agreement).some((value) => value === "xbrl_override") ? m.agreement.xbrl_override : Object.values(result.agreement).every((value) => value === "data_rule") ? m.agreement.data_rule : m.agreement.agree : null,
+    agreementLabel: result.agreement ? agreementSummary(m.agreement, Object.values(result.agreement)) : null,
   };
+}
+
+/** Weakest agreement first: one disputed field labels the row disputed, and "both agree" only when every field is agree. */
+const AGREEMENT_ORDER = ["disputed", "single", "verified_single", "data_rule", "xbrl_override"] as const;
+function agreementSummary(labels: Record<(typeof AGREEMENT_ORDER)[number] | "agree", string>, values: string[]): string {
+  return labels[AGREEMENT_ORDER.find((key) => values.includes(key)) ?? "agree"];
 }
 
 export const byScore = (a: ScreenRow, b: ScreenRow) => b.total - a.total || a.ticker.localeCompare(b.ticker);
