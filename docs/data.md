@@ -69,6 +69,8 @@ Run records. Migration 009 adds `extraction_runs`: symbol, as_of, agent, model, 
 
 `run-extract.mjs` checks the skip before the model call, records `failed` rows with the tokens spent, and records `ok` only after the scan POST succeeded, so a result that was never stored is not skipped on the next run. A dry run records nothing. At the end it logs the totals: model calls, input characters, input, output, cache read and cache creation tokens, turns, and cost when the CLI reports it. The retention job deletes expired `extraction_runs` rows.
 
+Insider flag. Reconcile sets `insiderOrInstitutionalBuying` from the stored `insider_net_buy_90d` fact when its `as_of` is within 30 days: true when net dollars exceed `INSIDER_MIN_NET_BUY_USD` (placeholder, default 100000) and a stored display-allowed Form 4 purchase filing from the last 60 days can be cited; false for net selling, no buying or buying below the threshold; no fact or unpriced trades leave the agent consensus. The Form 4 data overrides a conflicting agent claim (agreement `xbrl_override`, reason says so) and the cited urls are the stored Form 4 documents. Open: the routine-trader exclusion needs insider identity and more than 91 days of history.
+
 Evidence check. With `RECONCILE_VERIFY=live` (the default), reconcile checks a citation against the stored `source_documents` text when the url is stored: same normalisation as `src/data/evidence.ts`, `publishedAt` equal to the stored date, same freshness window. Only a url that is not stored is fetched live. `off` and `fixture` behave as before.
 
 ## Carry-forward
