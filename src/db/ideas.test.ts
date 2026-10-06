@@ -89,6 +89,7 @@ describe("judge storage", () => {
     expect(calls[0]).toContain("expires_at > now()");
     expect(calls[0]).toContain("ORDER BY i.as_of DESC, i.id DESC");
     expect(calls[0]).toContain("d.meta->>'display_allowed' = 'true'");
+    expect(calls[0]).toContain("https://data.sec.gov/api/xbrl/%");
     expect(calls[0]).toContain("size_tier");
     expect(list[0]).toMatchObject({ id: 7, sizeTier: "ADD_THIRD", amountMinEur: 60, amountMaxEur: 90, evidence: base.evidence });
     expect(mapIdea({ ...row, size_tier: null } as never).sizeTier).toBeNull();
