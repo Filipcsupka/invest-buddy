@@ -5,7 +5,7 @@ export const carryForwardEnabled = (env: Record<string, string | undefined> = pr
 
 export interface ConsensusRow {
   symbol?: string; field: string; as_of: string; value: boolean | null; agreement: string;
-  agent_values: Record<string, { value?: boolean | null; runId: string }>; evidence_refs: { url: string; publishedAt?: string }[];
+  agent_values: Record<string, { value?: boolean | null; runId: string }>; evidence_refs: { url: string; publishedAt?: string; quote?: string }[];
   verified: boolean; reason: string; carried_from?: string | null;
 }
 export type CarryState = { state: "fresh" } | { state: "carried"; carriedFrom: string; windowDays: number } | { state: "expired"; carriedFrom: string; windowDays: number };
