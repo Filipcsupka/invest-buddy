@@ -1,0 +1,57 @@
+.scroll {
+  overflow-x: auto;
+  margin-top: var(--s5);
+}
+
+.matrix {
+  width: 100%;
+  min-width: 680px;
+  border-collapse: collapse;
+  background: var(--sheet);
+  font-variant-numeric: tabular-nums;
+}
+
+.matrix th,
+.matrix td {
+  padding: var(--s3) var(--s4);
+  border-bottom: 1px solid var(--rule);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.matrix th:first-child {
+  text-align: left;
+}
+
+.matrix thead th {
+  color: var(--ink-2);
+  font-size: var(--t-sm);
+  font-weight: 600;
+  white-space: normal;
+  vertical-align: bottom;
+}
+
+.matrix tbody th {
+  font-weight: 600;
+}
+
+.add th,
+.add td {
+  background: var(--sheet-hover);
+}
+
+.cap th,
+.cap td {
+  border-top: 1px solid var(--ink);
+  font-weight: 700;
+}
+
+.rules {
+  display: grid;
+  gap: var(--s3);
+  max-width: 72ch;
+  padding-left: var(--s5);
+  font-family: var(--serif);
+  font-size: var(--t-prose);
+  line-height: 1.55;
+}
