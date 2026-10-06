@@ -1,6 +1,6 @@
-// Quote check for script-first extraction. The model only saw stored text, so every positive
+// Quote check for script-first extraction. The model only saw stored text, so every decided
 // claim must cite a stored document and the quote must occur in that document's excerpt.
-// Claims that fail are downgraded to null (unknown), never kept as true.
+// Decided claims that fail are downgraded to null (unknown).
 //
 // An evidence item is kept only when all of these hold:
 //   - its url is a bundle document and the document may be shown publicly (displayAllowed === true; missing means false)
@@ -41,8 +41,8 @@ export function checkEvidence(output, bundle, { asOf = null } = {}) {
   }
   const fundamentals = { ...output.fundamentals };
   for (const [field, value] of Object.entries(fundamentals)) {
-    if (value === true && !good.has(`fundamentals.${field}`)) { fundamentals[field] = null; dropped.push({ claim: `fundamentals.${field}`, reason: "true without verified evidence; set to null" }); }
-    if (field === "productCatalyst" && value && value.present === true && !good.has("fundamentals.productCatalyst")) { fundamentals.productCatalyst = null; dropped.push({ claim: "fundamentals.productCatalyst", reason: "present without verified evidence; set to null" }); }
+    if (typeof value === "boolean" && !good.has(`fundamentals.${field}`)) { fundamentals[field] = null; dropped.push({ claim: `fundamentals.${field}`, reason: `${value} without verified evidence; set to null` }); }
+    if (field === "productCatalyst" && value && typeof value.present === "boolean" && !good.has("fundamentals.productCatalyst")) { fundamentals.productCatalyst = null; dropped.push({ claim: "fundamentals.productCatalyst", reason: "present without verified evidence; set to null" }); }
   }
   return { output: { ...output, fundamentals, evidence }, dropped };
 }
