@@ -17,6 +17,7 @@ import { runCli, extractJson, fill, withRetry, pool, getToken, lastUsTradingDay 
 import { validateTicker, validatePayload } from "./validate.mjs";
 import { checkEvidence } from "./quotes.mjs";
 import { inputHash, usageFromEnvelope, alreadyExtracted, recordRun } from "./extraction-log.mjs";
+import { reserveBudget, finishBudget } from "./ai-budget.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const OUT = process.env.SCAN_OUT_DIR || join(here, "out");
@@ -28,7 +29,7 @@ function usage(msg) {
   process.exit(msg ? 2 : 0);
 }
 export function parseArgs(argv) {
-  const o = { dryRun: false, force: false, budgetUsd: 0.5, only: null, symbolsFile: null, agent: "claude", model: null, concurrency: 3, timeoutS: 300, asOf: null, baseUrl: process.env.INGEST_BASE_URL || "http://web.invest.svc.cluster.local:3000", bundleDir: null };
+  const o = { dryRun: false, force: false, budgetUsd: 0.5, only: null, symbolsFile: null, agent: "claude", model: null, concurrency: 1, timeoutS: 300, asOf: null, baseUrl: process.env.INGEST_BASE_URL || "http://web.invest.svc.cluster.local:3000", bundleDir: null };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const val = () => { if (i + 1 >= argv.length) usage(`missing value for ${a}`); return argv[++i]; };
@@ -98,6 +99,8 @@ export function addUsage(a, b) {
   return sum;
 }
 const emptyUsage = () => addUsage({}, {});
+export const materialChange = (output) => output.fundamentals?.guidanceCut === true || output.fundamentals?.narrativeChanged === true || output.fundamentals?.revenueDeclining === true ||
+  output.evidence?.some((e) => /restat(?:e|ement)|material weakness/i.test(e.quote ?? ""));
 
 async function loadBundle(opts, symbol, token, asOf) {
   if (opts.bundleDir) return JSON.parse(readFileSync(join(opts.bundleDir, `${symbol}.json`), "utf8"));
@@ -125,7 +128,10 @@ async function main() {
   const opts = parseArgs(process.argv.slice(2));
   const universe = JSON.parse(readFileSync(join(here, "universe.json"), "utf8")).instruments;
   let wanted = opts.only;
-  if (opts.symbolsFile) wanted = JSON.parse(readFileSync(opts.symbolsFile, "utf8")).symbols;
+  const gate = opts.symbolsFile ? JSON.parse(readFileSync(opts.symbolsFile, "utf8")) : null;
+  if (gate) wanted = gate.symbols;
+  if (!wanted && !opts.force) usage("--symbols-file or --only is required; use --force for a manual full pass");
+  if (gate && !Array.isArray(wanted)) usage("symbols file must contain a symbols array");
   const selected = wanted ? universe.filter((u) => wanted.includes(u.symbol)) : universe;
   const unknown = (wanted ?? []).filter((s) => !universe.some((u) => u.symbol === s));
   if (unknown.length) usage(`not in universe.json: ${unknown.join(", ")}`);
@@ -144,14 +150,16 @@ async function main() {
   const work = mkdtempSync(join(tmpdir(), "investbuddy-extract-"));
   let model = opts.model || "default";
   const failed = [], tickers = [], droppedAll = {}, skippedSymbols = [], postFailed = [];
-  let totals = emptyUsage(), totalCost = 0, calls = 0, inputChars = 0;
+  let totals = emptyUsage(), totalCost = 0, calls = 0, inputChars = 0, budgetHit = false;
   await pool(selected, opts.concurrency, async (u) => {
+    if (budgetHit) return;
     const t0 = Date.now();
-    let spent = emptyUsage(), hash = null, tickerModel = opts.model || "default";
+    let spent = emptyUsage(), hash = null, tickerModel = opts.model || "default", tickerCost = 0;
     try {
       const bundle = await withRetry(() => loadBundle(opts, u.symbol, token, asOf), log, `${u.symbol} bundle`);
       if (!bundle.documents?.length && !bundle.facts?.length) throw Object.assign(new Error("empty bundle"), { skip: true });
       hash = inputHash({ bundle, prompt, agent: opts.agent, model: opts.model });
+      log(`${u.symbol}: input hash ${hash}; accessions ${(gate?.accessions?.[u.symbol] ?? []).join(",") || "none"}`);
       if (logRuns && !opts.force && await alreadyExtracted(opts.baseUrl, token, { symbol: u.symbol, agent: opts.agent, inputHash: hash })) {
         skippedSymbols.push(u.symbol);
         log(`${u.symbol}: SKIPPED same input already extracted and applied (input ${hash.slice(0, 12)}); use --force to rerun`);
@@ -160,12 +168,22 @@ async function main() {
       const value = await withRetry(async () => {
         const text = fill(prompt, { SYMBOL: u.symbol, NAME: u.name, SECTOR: u.sector, AS_OF: asOf, BUNDLE: JSON.stringify(bundle) });
         inputChars += text.length;
-        const r = await callAgentNoTools(opts, text, work);
-        calls++;
-        spent = addUsage(spent, r.usage);
-        totalCost += r.costUsd ?? 0;
+        const invoke = async (model) => {
+          const id = token ? await reserveBudget(opts.baseUrl, token, "extract", opts.budgetUsd) : null;
+          let r;
+          try { r = await callAgentNoTools({ ...opts, model }, text, work); }
+          finally { if (id) await finishBudget(opts.baseUrl, token, id, r?.usage, r?.costUsd); }
+          calls++; spent = addUsage(spent, r.usage); tickerCost += r.costUsd ?? 0; totalCost += r.costUsd ?? 0;
+          return r;
+        };
+        let r = await invoke(opts.model);
+        let obj = extractJson(r.text);
+        if (opts.agent === "claude" && opts.model === "haiku" && materialChange(obj)) {
+          log(`${u.symbol}: material change flagged; escalating to sonnet`);
+          r = await invoke("sonnet");
+          obj = extractJson(r.text);
+        }
         if (r.model && r.model !== "default") { model = r.model; tickerModel = r.model; }
-        const obj = extractJson(r.text);
         if (obj.symbol !== u.symbol) throw new Error(`symbol mismatch: got ${obj.symbol}`);
         const checked = checkEvidence(obj, bundle, { asOf });
         const errs = validateTicker(checked.output);
@@ -174,11 +192,11 @@ async function main() {
         return { output: checked.output, chars: text.length };
       }, log, u.symbol);
       totals = addUsage(totals, spent);
-      log(`${u.symbol}: ok in ${Math.round((Date.now() - t0) / 1000)}s, input ${value.chars} chars, tokens in/out ${spent.inputTokens ?? "?"}/${spent.outputTokens ?? "?"} (cache read ${spent.cacheReadTokens ?? "?"}, created ${spent.cacheCreationTokens ?? "?"}), turns ${spent.turns ?? "?"}${droppedAll[u.symbol] ? `, ${droppedAll[u.symbol].length} claims downgraded` : ""}`);
+      log(`${u.symbol}: ok in ${Math.round((Date.now() - t0) / 1000)}s, input ${value.chars} chars, tokens in/out ${spent.inputTokens ?? "?"}/${spent.outputTokens ?? "?"} (cache read ${spent.cacheReadTokens ?? "?"}, created ${spent.cacheCreationTokens ?? "?"}), turns ${spent.turns ?? "?"}, cost $${tickerCost.toFixed(4)}${droppedAll[u.symbol] ? `, ${droppedAll[u.symbol].length} claims downgraded` : ""}`);
       tickers.push(value.output);
       if (!opts.dryRun) {
         // Each result is stored as soon as it is ready, so a killed run keeps its progress and the skip key makes the rerun cheap.
-        const run = { symbol: u.symbol, asOf, agent: opts.agent, model: tickerModel, inputHash: hash, usage: spent, output: value.output };
+        const run = { symbol: u.symbol, asOf, agent: opts.agent, model: tickerModel, inputHash: hash, accessions: gate?.accessions?.[u.symbol] ?? [], usage: spent, costUsd: tickerCost, output: value.output };
         const posted = await postTicker(opts, token, { asOf, model: tickerModel, output: value.output }, log);
         // ok is recorded only after the scan is stored, so an unapplied result is never skipped on the next run.
         await recordRun(opts.baseUrl, token, posted ? { ...run, status: "ok", applied: true } : { ...run, output: undefined, status: "failed", error: "POST /api/ingest/scan failed; result not applied", applied: false }, log);
@@ -186,10 +204,11 @@ async function main() {
       }
     } catch (e) {
       totals = addUsage(totals, spent);
+      if (e.exitCode === 4) budgetHit = true;
       log(`${u.symbol}: ${e.skip ? "SKIPPED" : "FAILED"} ${e.message}`);
       if (!e.skip) {
         failed.push({ symbol: u.symbol, reason: e.message });
-        if (logRuns && hash) await recordRun(opts.baseUrl, token, { symbol: u.symbol, asOf, agent: opts.agent, model: tickerModel, inputHash: hash, status: "failed", usage: spent, error: e.message.slice(0, 2000), applied: false }, log);
+        if (logRuns && hash) await recordRun(opts.baseUrl, token, { symbol: u.symbol, asOf, agent: opts.agent, model: tickerModel, inputHash: hash, accessions: gate?.accessions?.[u.symbol] ?? [], status: "failed", usage: spent, costUsd: tickerCost, error: e.message.slice(0, 2000), applied: false }, log);
       }
     }
   });
@@ -205,10 +224,12 @@ async function main() {
   log(`payload written ${payloadFile} (${tickers.length} tickers)`);
   const logTotals = () => log(`totals: ${calls} model calls, ${inputChars} input chars, tokens in ${totals.inputTokens ?? "?"} out ${totals.outputTokens ?? "?"} cache read ${totals.cacheReadTokens ?? "?"} cache created ${totals.cacheCreationTokens ?? "?"}, turns ${totals.turns ?? "?"}${totalCost ? `, cost $${totalCost.toFixed(4)}` : ""}; ok ${tickers.length}, skipped ${skippedSymbols.length}, failed ${failed.length}`);
   if (!opts.dryRun) {
-    if (!tickers.length) { logTotals(); log("no valid tickers; not posting"); process.exit(failed.length ? 1 : 0); }
+    if (!tickers.length) { logTotals(); log("no valid tickers; not posting"); process.exit(budgetHit ? 4 : failed.length ? 1 : 0); }
+    if (budgetHit) { logTotals(); log("monthly AI budget reached; exit 4"); process.exit(4); }
     if (postFailed.length) { logTotals(); log(`not stored: ${postFailed.join(", ")}`); process.exit(3); }
   } else log("dry run: nothing posted, nothing recorded");
   logTotals();
+  if (budgetHit) { log("monthly AI budget reached; exit 4"); process.exit(4); }
   if (failed.length / selected.length > MAX_FAIL_RATIO) { log(`failure ratio exceeds ${MAX_FAIL_RATIO * 100}%: ${failed.map((f) => f.symbol).join(", ")}`); process.exit(1); }
 }
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main().catch((e) => { console.error(`fatal: ${e.stack || e.message}`); process.exit(1); });

@@ -58,12 +58,12 @@ describe("M3 Form 4 trade without a price", () => {
 
 describe("M4 document evidence windows", () => {
   it("keeps SEC filings for their evidence windows", () => {
-    expect(documentRetentionDays("4")).toBe(60);
+    expect(documentRetentionDays("4")).toBe(400);
     expect(documentRetentionDays("8-K EX-99.1")).toBe(100);
   });
   it("takes the retention days from freshnessDays and never drops a document before the bundle stops serving it", () => {
     expect(documentRetentionDays("10-Q")).toBe(Math.max(freshnessDays.revenueAccelerating, freshnessDays.epsBeat, freshnessDays.guidanceRaised));
-    expect(documentRetentionDays("4")).toBe(freshnessDays.insiderOrInstitutionalBuying);
+    expect(documentRetentionDays("4")).toBe(Math.max(400, freshnessDays.insiderOrInstitutionalBuying));
     expect(documentRetentionDays("rss")).toBe(Math.max(freshnessDays.productCatalyst, freshnessDays.narrativeChanged));
     for (const docType of ["8-K", "8-K EX-99.1", "10-Q", "10-K", "20-F", "6-K", "4", "13F-HR", "rss", "gdelt", "XBRL revenue frame"]) {
       expect(documentRetentionDays(docType), docType).toBeGreaterThanOrEqual(windowDaysFor(docType));
@@ -79,7 +79,7 @@ describe("M4 document evidence windows", () => {
     const base = { source: "edgar", symbol: "NVDA", url: "https://www.sec.gov/x", publishedAt: "2026-10-02T00:00:00Z", body: "b", meta: {}, contentHash: "h" };
     expect(await repo.upsertDocument({ ...base, docType: "4" })).toEqual({ id: 1, written: false });
     expect(await repo.upsertDocument({ ...base, docType: "10-K" })).toEqual({ id: 1, written: false });
-    expect(calls[1].params.at(-1)).toBe(60);
+    expect(calls[1].params.at(-1)).toBe(400);
     expect(calls[3].params.at(-1)).toBe(100);
     expect(calls[1].sql).toContain("expires_at=EXCLUDED.expires_at");
     expect(calls[1].sql).not.toContain("WHERE source_documents.content_hash");

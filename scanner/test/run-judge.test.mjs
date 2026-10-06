@@ -269,6 +269,7 @@ function mockWeb({ skipDay = false, skipHash = false, inputOverride = null } = {
       seen.auth.push(req.headers.authorization);
       const send = (o, status = 200) => { res.writeHead(status, { "content-type": "application/json" }); res.end(JSON.stringify(o)); };
       if (req.method === "POST" && req.url === "/api/ingest/ideas") { seen.posts.push(JSON.parse(body)); return send({ recorded: true, stored: 1 }); }
+      if (req.method === "POST" && req.url === "/api/ingest/ai-budget") return send({ allowed: true });
       if (req.url.startsWith("/api/ingest/judge-input")) { seen.gets.push(req.url); return send(inputOverride ?? input()); }
       if (req.url.startsWith("/api/ingest/ideas?")) { seen.gets.push(req.url); return send({ skip: req.url.includes("inputHash") ? skipHash : skipDay }); }
       send({ error: "not found" }, 404);
@@ -278,8 +279,10 @@ function mockWeb({ skipDay = false, skipHash = false, inputOverride = null } = {
 }
 function runJudge(args, { s, env = {} }) {
   const out = mkdtempSync(join(tmpdir(), "judge-out-"));
+  const gate = join(out, "gate.json"); writeFileSync(gate, JSON.stringify({ symbols: ["NVDA", "AMD"] }));
+  const gatedArgs = args.includes("--symbols-file") || args.includes("--force") ? args : [...args, "--symbols-file", gate];
   return new Promise((resolve) => {
-    const child = spawn(process.execPath, [SCRIPT, ...args], { env: { ...process.env, PATH: `${s.dir}:${process.env.PATH}`, INGEST_TOKEN: "test-token", SCAN_OUT_DIR: out, ...env } });
+    const child = spawn(process.execPath, [SCRIPT, ...gatedArgs], { env: { ...process.env, PATH: `${s.dir}:${process.env.PATH}`, INGEST_TOKEN: "test-token", SCAN_OUT_DIR: out, ...env } });
     let err = ""; child.stderr.on("data", (d) => { err += d; });
     child.on("close", (code) => resolve({ code, err, out }));
   });
@@ -343,23 +346,22 @@ test("no portfolio baseline: the run goes on, the data-only signal is posted wit
   } finally { await web.close(); }
 });
 
-test("one run per day and an unchanged input skip the call; --force reruns", async () => {
+test("a new same-day input runs, an unchanged input skips, and --force reruns", async () => {
   const s = stub(); s.respond(envelope(JSON.stringify({ ideas: both })));
   let web = await mockWeb({ skipDay: true });
   try {
     const r = await runJudge(["--as-of", "2026-10-05", "--base-url", web.base], { s });
     assert.equal(r.code, 0, r.err);
-    assert.match(r.err, /one run per day/);
-    assert.equal(s.calls().length, 0);
+    assert.equal(s.calls().length, 1);
     const forced = await runJudge(["--as-of", "2026-10-05", "--base-url", web.base, "--force"], { s });
     assert.equal(forced.code, 0, forced.err);
-    assert.equal(s.calls().length, 1);
+    assert.equal(s.calls().length, 2);
   } finally { await web.close(); }
   web = await mockWeb({ skipHash: true });
   try {
     const r = await runJudge(["--as-of", "2026-10-05", "--base-url", web.base], { s });
     assert.match(r.err, /same input already judged/);
-    assert.equal(s.calls().length, 1, "no new call");
+    assert.equal(s.calls().length, 2, "no new call");
     assert.equal(web.seen.posts.length, 0);
   } finally { await web.close(); }
 });

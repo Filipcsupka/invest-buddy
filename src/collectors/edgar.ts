@@ -29,9 +29,15 @@ export function parseForm4(xml: string): InsiderTrade[] {
   return out;
 }
 
+export function form4OwnerCik(xml: string): string | null {
+  const owner = parser.parse(xml).ownershipDocument?.reportingOwner?.reportingOwnerId?.rptOwnerCik;
+  const cik = value(owner).trim();
+  return /^\d+$/.test(cik) ? cik : null;
+}
+
 export function filingRows(recent: Recent, since: string, form4Since = since) {
   return recent.form.map((form, i) => ({ form, accession: recent.accessionNumber[i], primary: recent.primaryDocument[i], date: recent.filingDate[i], items: recent.items?.[i] ?? "" }))
-    .filter((row) => ["8-K", "10-Q", "10-K", "4", "6-K", "20-F"].includes(row.form) && row.date >= (row.form === "4" ? (form4Since < since ? form4Since : since) : since) && ACCESSION.test(row.accession ?? "") && row.primary);
+    .filter((row) => ["8-K", "8-K/A", "10-Q", "10-Q/A", "10-K", "10-K/A", "4", "6-K", "20-F"].includes(row.form) && row.date >= (row.form === "4" ? (form4Since < since ? form4Since : since) : since) && ACCESSION.test(row.accession ?? "") && row.primary);
 }
 
 export async function companyCiks(get: Get = getText): Promise<Map<string, number>> {
@@ -65,10 +71,10 @@ export async function collectEdgar(symbol: string, cik: number, since: string, g
     const url = filingUrl(base, file);
     const raw = await get(url);
     const meta: Record<string, unknown> = { accession: row.accession, items: row.items };
-    if (row.form === "4") meta.trades = parseForm4(raw);
+    if (row.form === "4") { meta.trades = parseForm4(raw); meta.ownerCik = form4OwnerCik(raw); }
     docs.push(sourceDocument({ source: "edgar", symbol, docType: row.form,
       url, publishedAt: `${row.date}T00:00:00Z`, body: raw, meta }, LICENSES.sec));
-    if (row.form === "8-K") {
+    if (row.form === "8-K" || row.form === "8-K/A") {
       const index = JSON.parse(await get(`${base}index.json`)) as { directory?: { item?: { name: string; type?: string }[] } };
       const items = index.directory?.item ?? [];
       const exhibit = items.find((item) => /EX-99\.1/i.test(item.type ?? "") || /(?:ex|exhibit)[-_]?99[.-]?1/i.test(item.name));

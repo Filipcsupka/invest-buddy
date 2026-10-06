@@ -1,66 +1,87 @@
+import { writeFileSync } from "node:fs";
 import pg from "pg";
 import universe from "../../scanner/universe.json";
 import { isIsoDate } from "../db/iso-date";
+import { GATE } from "./gate-config";
 
-export interface ChangedRow { symbol: string; reason: string; fact_key?: string | null; value?: unknown }
-/** A price move or volume spike worth a new look. Daily facts under these are noise: collect writes a new row for every ticker every trading day. */
-export const PRICE_MOVE_PERCENT = 5;
-export const VOLUME_RATIO = 2;
-/** Reason for a new fact, or null when the fact is not a change. insider_net_buy_90d is left out: a new Form 4 already shows up as a new document. */
-export function materialFactReason(key: string | null | undefined, value: unknown): string | null {
-  const v = (value ?? {}) as { percent?: unknown; ratio?: unknown };
-  if (key === "latest_earnings_8k") return "new earnings 8-K";
-  if (key === "price_move_5d" && typeof v.percent === "number" && Math.abs(v.percent) >= PRICE_MOVE_PERCENT) return `price move ${v.percent.toFixed(1)}% over 5 days`;
-  if (key === "volume_ratio_20d" && typeof v.ratio === "number" && v.ratio >= VOLUME_RATIO) return `volume ${v.ratio.toFixed(1)}x 20-day average`;
-  return null;
+export interface Filing { symbol: string; accession: string; form: string; items: string }
+export interface InsiderFiling { symbol: string; accession: string; date: string; ownerCik: string | null; trades: { code: string; date: string }[]; isNew?: boolean }
+export interface Band { symbol: string; current: number; previous: number }
+export const relevantFiling = (f: Pick<Filing, "form" | "items">) =>
+  /^(10-Q|10-K)(\/A)?$/.test(f.form) || /^8-K(\/A)?$/.test(f.form) && /(?:^|[,\s])(?:2\.02|4\.02|5\.02)(?:$|[,\s])/.test(f.items);
+
+export function insiderCluster(rows: InsiderFiling[], today: string, count = GATE.insiderBuys, days = GATE.insiderDays): string[] {
+  const start = new Date(`${today}T00:00:00Z`); start.setUTCDate(start.getUTCDate() - days);
+  const from = start.toISOString().slice(0, 10);
+  const prior = rows.filter((r) => r.date < from && r.ownerCik);
+  const bySymbol = new Map<string, Set<string>>(), hasNew = new Set<string>();
+  for (const r of rows) {
+    if (r.date < from || r.date > today || !r.ownerCik || !r.trades.some((t) => t.code === "P" && t.date >= from && t.date <= today)) continue;
+    const routine = prior.some((p) => p.symbol === r.symbol && p.ownerCik === r.ownerCik && p.date.slice(5, 7) === r.date.slice(5, 7) && p.trades.some((t) => t.code === "P"));
+    if (!routine) {
+      if (!bySymbol.has(r.symbol)) bySymbol.set(r.symbol, new Set());
+      bySymbol.get(r.symbol)!.add(r.accession);
+      if (r.isNew !== false) hasNew.add(r.symbol);
+    }
+  }
+  return [...bySymbol].filter(([symbol, accessions]) => accessions.size >= count && hasNew.has(symbol)).map(([symbol]) => symbol);
 }
-export function detectSymbols(rows: ChangedRow[], order: string[], max?: number) {
+export const drawdownHit = (band: Band, threshold = GATE.drawdownPct) => band.current <= -threshold && band.previous > -threshold;
+export const valuationHit = (band: Band, threshold = GATE.valuationPe) => band.current <= threshold && band.previous > threshold;
+
+export function gateSymbols(input: { filings: Filing[]; insiders: InsiderFiling[]; drawdowns: Band[]; valuations: Band[]; today: string }, order: string[]) {
   const reasons: Record<string, string[]> = {};
-  for (const row of rows) {
-    const reason = row.reason === "new fact" ? materialFactReason(row.fact_key, row.value) : row.reason;
-    if (reason) (reasons[row.symbol] ??= []).push(reason);
+  const add = (symbol: string, reason: string) => { (reasons[symbol] ??= []).push(reason); };
+  for (const f of input.filings) if (relevantFiling(f)) add(f.symbol, `${f.form} ${f.accession}`);
+  for (const symbol of insiderCluster(input.insiders, input.today)) add(symbol, "opportunistic insider buy cluster");
+  for (const b of input.drawdowns) if (drawdownHit(b)) add(b.symbol, `drawdown band ${GATE.drawdownPct}%`);
+  for (const b of input.valuations) if (valuationHit(b)) add(b.symbol, `valuation P/E band ${GATE.valuationPe}`);
+  const symbols = order.filter((s) => reasons[s]);
+  return { symbols, reasons: Object.fromEntries(symbols.map((s) => [s, reasons[s]])) };
+}
+
+export function parseArgs(args: string[]) {
+  let out: string | null = null, since: string | null = null;
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === "--output" && args[i + 1]) out = args[++i];
+    else if (args[i] === "--since" && args[i + 1] && isIsoDate(args[i + 1])) since = args[++i];
+    else throw new Error("Usage: detect [--output FILE] [--since YYYY-MM-DD]");
   }
-  const symbols = order.filter((symbol) => reasons[symbol]).slice(0, max);
-  return { symbols, reasons: Object.fromEntries(symbols.map((symbol) => [symbol, [...new Set(reasons[symbol])]])) };
+  return { out, since };
 }
-/** Flags and the value after --since/--max only. A missing flag must not make argument 0 look like its value. */
-export function validDetectArgs(args: string[]): boolean {
-  const sinceIndex = args.indexOf("--since"), maxIndex = args.indexOf("--max");
-  const since = sinceIndex < 0 ? undefined : args[sinceIndex + 1];
-  const max = maxIndex < 0 ? undefined : Number(args[maxIndex + 1]);
-  if (sinceIndex >= 0 && (!since || !isIsoDate(since))) return false;
-  if (maxIndex >= 0 && (!Number.isInteger(max) || max! < 1)) return false;
-  const values = new Set([sinceIndex >= 0 ? sinceIndex + 1 : -1, maxIndex >= 0 ? maxIndex + 1 : -1]);
-  return args.every((arg, i) => values.has(i) || ["--since", "--max", "--force-all"].includes(arg));
-}
+
 async function main() {
-  const args = process.argv.slice(2);
-  const sinceIndex = args.indexOf("--since"), maxIndex = args.indexOf("--max");
-  const since = sinceIndex < 0 ? undefined : args[sinceIndex + 1];
-  const max = maxIndex < 0 ? undefined : Number(args[maxIndex + 1]);
-  if (!validDetectArgs(args)) throw new Error("Usage: detect [--since YYYY-MM-DD] [--max N] [--force-all]");
+  const { out, since } = parseArgs(process.argv.slice(2));
   if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required");
-  const order = (universe.instruments as { symbol: string }[]).map((item) => item.symbol);
-  if (args.includes("--force-all")) {
-    const result = detectSymbols(order.map((symbol) => ({ symbol, reason: "force-all" })), order, max);
-    process.stdout.write(`${JSON.stringify({ asOf: new Date().toISOString().slice(0, 10), ...result })}\n`);
-    return;
-  }
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
   try {
-    const result = await pool.query<ChangedRow>(`WITH last_scan AS (
-      SELECT symbol,max(received_at) AS scanned_at FROM scan_findings WHERE superseded_by IS NULL GROUP BY symbol
-    )
-    SELECT i.ticker AS symbol, 'never scanned' AS reason, NULL::text AS fact_key, NULL::jsonb AS value FROM instruments i LEFT JOIN last_scan s ON s.symbol=i.ticker
-      WHERE i.source <> 'benchmark' AND s.scanned_at IS NULL
-    UNION ALL
-    SELECT s.symbol,'new document',NULL::text,NULL::jsonb FROM source_documents d JOIN last_scan s
-      ON s.symbol=d.symbol OR (d.source='rss' AND d.meta->'symbols' ? s.symbol)
-      WHERE d.fetched_at > s.scanned_at AND ($1::date IS NULL OR d.published_at >= $1::date)
-    UNION ALL
-    SELECT f.symbol,'new fact',f.fact_key,f.value FROM collected_facts f JOIN last_scan s ON s.symbol=f.symbol
-      WHERE f.fact_key IN ('latest_earnings_8k','price_move_5d','volume_ratio_20d') AND f.computed_at > s.scanned_at AND ($1::date IS NULL OR f.as_of >= $1::date)`, [since ?? null]);
-    process.stdout.write(`${JSON.stringify({ asOf: new Date().toISOString().slice(0, 10), ...detectSymbols(result.rows, order, max) })}\n`);
+    const filings = await pool.query<Filing>(`SELECT w.symbol,w.accession,w.form,w.items || ',' || COALESCE((
+      SELECT substring(d.body from '(?i)Item[[:space:]]+(2[.]02|4[.]02|5[.]02)')
+      FROM source_documents d WHERE d.symbol=w.symbol AND d.meta->>'accession'=w.accession
+        AND d.doc_type IN ('8-K','8-K/A') LIMIT 1), '') AS items FROM filing_watch w
+      WHERE ($1::date IS NULL OR w.filed_at >= $1::date) AND NOT EXISTS (
+        SELECT 1 FROM extraction_runs e WHERE e.symbol=w.symbol AND e.status='ok' AND e.applied_at IS NOT NULL AND e.created_at >= w.first_seen_at)`, [since]);
+    const docs = await pool.query<{ symbol: string; accession: string; date: string; owner_cik: string | null; trades: InsiderFiling["trades"]; is_new: boolean }>(`SELECT d.symbol,d.meta->>'accession' AS accession,to_char(d.published_at AT TIME ZONE 'UTC','YYYY-MM-DD') AS date,
+      d.meta->>'ownerCik' AS owner_cik,d.meta->'trades' AS trades,NOT EXISTS (
+        SELECT 1 FROM extraction_runs e WHERE e.symbol=d.symbol AND e.status='ok' AND e.applied_at IS NOT NULL AND d.meta->>'accession'=ANY(e.accessions)) AS is_new
+      FROM source_documents d WHERE d.doc_type='4' AND d.published_at >= now() - interval '400 days' AND d.symbol IS NOT NULL`);
+    const today = new Date().toISOString().slice(0, 10);
+    const bars = await pool.query<{ symbol: string; close: string; high: string; previous: string }>(`WITH ranked AS (
+      SELECT ticker,bar_date,close,max(high) OVER (PARTITION BY ticker ORDER BY bar_date ROWS BETWEEN 251 PRECEDING AND CURRENT ROW) AS high,
+        lag(close) OVER (PARTITION BY ticker ORDER BY bar_date) AS previous,
+        row_number() OVER (PARTITION BY ticker ORDER BY bar_date DESC) AS rn FROM daily_bars)
+      SELECT ticker AS symbol,close::text,high::text,previous::text FROM ranked WHERE rn=1 AND previous IS NOT NULL`);
+    const valuations = await pool.query<{ symbol: string; current: string; previous: string }>(`WITH ranked AS (
+      SELECT symbol,(value->>'pe')::numeric AS pe,lag((value->>'pe')::numeric) OVER (PARTITION BY symbol ORDER BY as_of) AS previous,
+        row_number() OVER (PARTITION BY symbol ORDER BY as_of DESC) AS rn FROM collected_facts WHERE fact_key='valuation_pe')
+      SELECT symbol,pe::text AS current,previous::text FROM ranked WHERE rn=1 AND previous IS NOT NULL`);
+    const result = gateSymbols({ filings: filings.rows, insiders: docs.rows.map((r) => ({ symbol: r.symbol, accession: r.accession, date: r.date, ownerCik: r.owner_cik, trades: Array.isArray(r.trades) ? r.trades : [], isNew: r.is_new })),
+      drawdowns: bars.rows.flatMap((r) => { const peak = Number(r.high); return peak > 0 ? [{ symbol: r.symbol, current: 100 * (Number(r.close) / peak - 1), previous: 100 * (Number(r.previous) / peak - 1) }] : []; }),
+      valuations: valuations.rows.map((r) => ({ symbol: r.symbol, current: Number(r.current), previous: Number(r.previous) })), today }, universe.instruments.map((u) => u.symbol));
+    const payload = { asOf: today, ...result, accessions: Object.fromEntries(result.symbols.map((symbol) => [symbol, [...new Set([...filings.rows.filter((f) => f.symbol === symbol && relevantFiling(f)).map((f) => f.accession), ...docs.rows.filter((d) => d.symbol === symbol && d.is_new && d.accession).map((d) => d.accession)])]])) };
+    const json = JSON.stringify(payload) + "\n";
+    if (out) writeFileSync(out, json);
+    process.stdout.write(json);
   } finally { await pool.end(); }
 }
-if (/(?:^|[/\\])detect\.(?:ts|js)$/.test(process.argv[1] ?? "")) main().catch((error) => { console.error(error instanceof Error ? error.message : error); process.exitCode = 1; });
+if (/(?:^|[/\\])detect\.(?:ts|js)$/.test(process.argv[1] ?? "")) main().catch((e) => { console.error(e instanceof Error ? e.message : e); process.exitCode = 1; });

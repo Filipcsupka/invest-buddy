@@ -32,10 +32,9 @@ async function call(baseUrl, token, path, init) {
   if (!res.ok) throw new Error(`extraction-runs HTTP ${res.status}`);
   return res.json();
 }
-/** True when an ok run with this input already exists. A failed check returns false, so extraction still runs. */
+/** True when an ok run with this input already exists. An unavailable check stops automatic reprocessing. */
 export async function alreadyExtracted(baseUrl, token, key) {
-  try { return (await call(baseUrl, token, `?${new URLSearchParams({ symbol: key.symbol, agent: key.agent, inputHash: key.inputHash })}`, { method: "GET" })).skip === true; }
-  catch { return false; }
+  return (await call(baseUrl, token, `?${new URLSearchParams({ symbol: key.symbol, agent: key.agent, inputHash: key.inputHash })}`, { method: "GET" })).skip === true;
 }
 /** Best effort: a failed log write must not fail the extraction. */
 export async function recordRun(baseUrl, token, run, log = () => {}) {

@@ -92,7 +92,7 @@ describe("collectors", () => {
 
   it("keeps stored filings through their evidence windows", () => {
     for (const type of ["8-K", "10-Q", "10-K", "20-F", "6-K", "8-K EX-99.1"]) expect(documentRetentionDays(type)).toBe(100);
-    expect(documentRetentionDays("4")).toBe(60);
+    expect(documentRetentionDays("4")).toBe(400);
     expect(documentRetentionDays("13F holdings summary")).toBe(60);
     expect(documentRetentionDays("press release")).toBe(30);
   });

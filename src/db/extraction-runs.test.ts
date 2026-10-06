@@ -22,10 +22,10 @@ describe("extraction runs", () => {
     const { sql, params } = p.calls[0];
     expect(sql).toContain("ON CONFLICT (symbol,as_of,agent,input_hash)");
     expect(sql).toContain("WHERE extraction_runs.status <> 'ok' OR EXCLUDED.status = 'ok'");
-    expect(params).toEqual(["NVDA", "2026-10-05", "claude", "haiku", hash, "ok", 10, 20, 30, 40, 1, '{"symbol":"NVDA"}', null, true]);
+    expect(params).toEqual(["NVDA", "2026-10-05", "claude", "haiku", hash, "ok", 10, 20, 30, 40, 1, '{"symbol":"NVDA"}', null, true, null, []]);
     const q = pool();
     await recordExtraction(q, { ...run, status: "failed", error: "schema: bad" });
-    expect(q.calls[0].params).toEqual(["NVDA", "2026-10-05", "claude", "haiku", hash, "failed", null, null, null, null, null, null, "schema: bad", false]);
+    expect(q.calls[0].params).toEqual(["NVDA", "2026-10-05", "claude", "haiku", hash, "failed", null, null, null, null, null, null, "schema: bad", false, null, []]);
   });
   it("validates the body", () => {
     expect(extractionRunSchema.safeParse(run).success).toBe(true);
