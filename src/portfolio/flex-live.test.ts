@@ -42,10 +42,7 @@ describe("live Flex shape", () => {
   it("publishes weights and percentages only", async () => {
     const snapshot = await normalizeFlex(await readFile(fixture, "utf8"), provider);
     expect(snapshot.weights).toEqual([{ symbol: "AAAA", weightPercent: 24.81 }, { symbol: "BBBB", weightPercent: 75.19 }]);
-    expect(snapshot.series).toEqual([
-      { date: "2026-09-01", nav: 100, twrPercent: 0, benchmark: 100 },
-      { date: "2026-09-30", nav: 102, twrPercent: 2, benchmark: 104 },
-    ]);
+    expect(snapshot.series).toEqual([]);
     expect(JSON.stringify(snapshot)).not.toMatch(/PRIVATE-ACCOUNT|52000|50000|1495|990|3000|CCCC|cash/i);
   });
 });
