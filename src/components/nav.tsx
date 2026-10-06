@@ -34,6 +34,7 @@ export function Nav({ locale }: { locale: Locale }) {
             { href: "/track-record", text: m.nav.trackRecord },
             { href: "/portfolio", text: m.nav.portfolio },
             { href: "/methodology", text: m.nav.methodology },
+            { href: "/sizing", text: m.nav.sizing },
           ]}
         />
         <div className="header-tools">
