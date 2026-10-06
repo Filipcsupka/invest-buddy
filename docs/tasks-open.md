@@ -2,7 +2,7 @@
 
 State on 2026-10-06. A1 to A4 are done (see the notes under each). Each task can be picked up alone or given to one agent. "Approval" means the owner must say yes before the step runs (cluster, push, secrets, money). Pick the lowest open task in a group whose dependencies are done. Tick the box and add one line on what changed.
 
-Groups: A first live run, B web, C pipeline quality, D data and accounts, E operations.
+Groups: A first live run, B web, C pipeline quality, D data and accounts, E operations, F cadence.
 
 ## A. First live run on khtz
 
@@ -80,6 +80,11 @@ Groups: A first live run, B web, C pipeline quality, D data and accounts, E oper
 ### B5. Empty and stale states
 - Do: check each page when `score_results` is empty or older than 3 days. `/api/health` already returns null dates for an empty database.
 - DoD: each page shows a clear "no data yet" or "stale since <date>" message, with a screenshot or test per page.
+
+### B6. Idea summary on the company page
+- Why: the old scan produced a short card per ticker, and that is what makes a WATCH or START useful: action and size band, what happened, why it matters, setup ratings (company, entry, catalyst), 3 to 5 numbers, the plan (when to start or add, when to stop adding, invalidation, opportunity cost) and evidence links. The judge output and `trade_ideas` already hold these fields.
+- Do: show the latest idea card on `/company/[ticker]` when the action is WATCH, START_POSITION or ADD (and above), with the date, the evidence links and an "unconfirmed" or "carried from <date>" label when set. Keep the EUR band behind the private flag from B3, since ADR-001 forbids public sizing. Hide the card when the latest action is HOLD and nothing changed.
+- DoD: the page renders the card from `trade_ideas` in `DATA_MODE=db`; a test covers WATCH, START and the hidden cases; no EUR amount shows when the flag is off.
 
 ## C. Pipeline quality
 
@@ -162,6 +167,43 @@ Groups: A first live run, B web, C pipeline quality, D data and accounts, E oper
 - Do: the web logs almost nothing, so a failure is invisible. Add structured logs (JSON, one line per request on the ingest routes and the pages: route, status, duration, request id; errors with a stack) and a log line at the start and end of every job (counts, durations, failures). Log failed ingests with the reason, never tokens or request bodies. Decide where logs go: `kubectl logs` only, or a collector (Loki is in `monitoring/` of the infra repo if it runs).
 - DoD: a failed ingest and a failed page render each leave a readable log line; one job run shows start, end and counts; a note says where to read logs and how long they are kept.
 - Related: E2 (alerts) builds on this.
+
+## F. Cadence: fewer, change-driven runs
+
+Design and sources: `docs/cadence-design.md`. This group replaces the daily extract and judge schedule. Do F1 before unsuspending extract or judge (A8).
+
+### F1. Watch step
+- Do: a daily script (no AI) polls `data.sec.gov/submissions` for the 35 CIKs, stores new accession numbers per CIK (table or `collected_facts`), and keeps the 4 req/s limit. Second poll in earnings weeks.
+- DoD: a run lists new filings per ticker since the last run; a rerun with no new filings reports none; a test covers the dedupe by accession number.
+
+### F2. Gate step
+- Do: mark a ticker "changed" only for a new 8-K with Item 2.02, 4.02 or 5.02, a 10-Q, a 10-K or an amendment. Add an insider cluster rule (3 or more opportunistic Form 4 buys in 30 days, excluding same-month-every-year traders) and price band rules (drawdown and valuation, thresholds in config). Output is the `--symbols-file` for extract. This replaces `detect`, or extends it.
+- DoD: unit tests for each rule; the output for a day with no changes is an empty list and extract exits without a model call.
+
+### F3. Gated extract and judge schedule
+- Do: run extract on changed tickers only (haiku, escalate to sonnet when haiku flags a material change). Run judge when at least one ticker changed, and on the fixed schedule in F5. Change the CronJobs in infra (fewer runs, all weekdays stay for the watch step only).
+- DoD: a quiet week costs 0 model calls; a run with 3 changed tickers calls the model 3 times; counts and cost are logged per run.
+
+### F4. Token budget guard
+- Do: a monthly token and dollar cap. Extract and judge stop with a clear exit code and a log line when the cap is reached. Log processed accession numbers and input hashes. Reprocessing is manual only (`--force`).
+- DoD: a test with a tiny cap stops the run; the monthly total is readable from the database.
+
+### F5. Fixed review calendar
+- Do: weekly digest of events; a re-score and a "thesis intact, weakened or broken" note after each earnings filing; a full re-screen in May and November (only time new additions are ranked); an annual thesis rewrite. Store the thesis note and the thesis-break checklist per holding.
+- DoD: each item has a trigger or schedule in code or a CronJob, and the web shows the last review date per holding.
+
+### F6. Tune the placeholders
+- Do: drawdown band, valuation band, turnover target (30% a year) and the insider cluster size are placeholders. Check them against `InvestingGuide.md` and your own rules.
+- DoD: owner signs off the values; they live in one config file with a comment on where each came from.
+
+### F7. Discovery of new names
+- Why: the old scan found names outside the fixed universe (for example EFXT after a 450 MW data-center contract, PCVX after a Phase 3 result, WULF after a power-capacity amendment) by following beneficiary chains. The script-first pipeline only covers the 35 tickers, so it can never propose a new name.
+- Do: a separate, low-frequency discovery step. Sources that cost no tokens first: EDGAR current-filings feed filtered to 8-K Items 1.01 and 2.02 (material agreements), big price and volume movers, 13F changes of a short list of managers, and a themes file (AI power, cooling, networking, biotech catalysts) with beneficiary chains. A cheap model ranks the shortlist; only the top few get a full bundle and a judge run. Run it weekly, plus the semi-annual re-screen from F5.
+- DoD: a run produces at most N candidates per week (N in config) with source links; a candidate that passes goes into the same extract and judge path as holdings; a test shows a ticker outside the universe can be added without code changes (universe from a table or file).
+
+### F8. Quality check against the old scans
+- Do: take the three old scan cards (EFXT START, PCVX WATCH, WULF START, 2026-10-05 and 06) as test cases. For each, collect the same inputs through the scripts (the filings and facts the old card cited) and run extract and judge. Compare action, band, setup ratings and the plan triggers with the old card, and count tokens and cost.
+- DoD: a table in `docs/` with old versus new per card (same action or not, which facts the scripts could not supply, tokens and dollars); gaps become tasks. The target is the same decisions at a fraction of the tokens.
 
 ## Not planned
 
