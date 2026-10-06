@@ -1,27 +1,41 @@
 import pg from "pg";
 import { liveVerifier, offVerifier, fixtureVerifier, type EvidenceRef, type EvidenceVerifier } from "../data/evidence";
-import { pgDocumentLookup, storedFirstVerifier } from "../data/stored-evidence";
+import { pgDocumentLookup, storedFirstVerifier, storedOnlyVerifier } from "../data/stored-evidence";
+import { epsBeatMinSurprisePct, type EpsResult } from "../data/eps";
 import { secRevenue, type RevenueResult } from "../data/sec";
 import { requireSecUserAgent } from "../collectors/sec-user-agent";
 import { carryField, carryForwardEnabled, type CarriedField, type ConsensusRow } from "../data/carry-forward";
 import { isIsoDate } from "../db/iso-date";
 import { insiderMinNetBuyUsd, type InsiderResult } from "../data/insider";
-import { loadInsider } from "../db/collectors";
+import { loadEpsSurprise, loadInsider } from "../db/collectors";
 
 type Agent = "claude" | "codex";
-export type Agreement = "agree" | "disputed" | "single" | "xbrl_override";
+/**
+ * agree: two agents, same value, evidence passed. verified_single: one extractor whose quote matched stored, display-allowed text.
+ * xbrl_override: SEC data decides. data_rule: a deterministic rule on a collected fact decides (epsBeat from Alpha Vantage).
+ */
+export type Agreement = "agree" | "disputed" | "single" | "xbrl_override" | "verified_single" | "data_rule";
 export interface AgentFinding { runId: string; runner: { name: Agent }; fundamentals: Record<string, unknown>; evidence: { items: EvidenceRef[] }; confidence: string }
 export interface ConsensusField { symbol: string; field: string; asOf: string; value: boolean | null; agreement: Agreement; agentValues: Record<string, { value: boolean | null; runId: string }>; evidenceRefs: EvidenceRef[]; verified: boolean; reason: string }
 export const fields = ["revenueAccelerating", "revenueDeclining", "epsBeat", "guidanceRaised", "guidanceCut", "productCatalyst", "insiderOrInstitutionalBuying", "narrativeChanged", "sectorRotationIntoGrowth", "dataTailwind"] as const;
+const MACRO_FIELDS = new Set(["sectorRotationIntoGrowth", "dataTailwind"]);
+/** Narrative fields have no written rule; reconcile always stores them as unknown. */
+const FORCED_NULL_FIELDS = new Set(["sectorRotationIntoGrowth", "narrativeChanged"]);
 const valueOf = (finding: AgentFinding | undefined, field: string): boolean | null => {
   const value = finding?.fundamentals[field];
   return typeof value === "boolean" ? value : field === "productCatalyst" && value && typeof value === "object" && typeof (value as { present?: unknown }).present === "boolean" ? (value as { present: boolean }).present : null;
 };
-export async function reconcileField(symbol: string, field: string, asOf: string, findings: AgentFinding[], verify: EvidenceVerifier, sec?: RevenueResult | null, insider?: InsiderResult | null): Promise<ConsensusField> {
+/**
+ * `storedVerify` checks a quote against stored, display-allowed source_documents text only (no live fetch). Without it a single
+ * extractor's finding stays `single`. `eps` is the Alpha Vantage rule result for epsBeat.
+ */
+export interface ReconcileExtras { storedVerify?: EvidenceVerifier; eps?: EpsResult | null }
+export async function reconcileField(symbol: string, field: string, asOf: string, findings: AgentFinding[], verify: EvidenceVerifier, sec?: RevenueResult | null, insider?: InsiderResult | null, extras: ReconcileExtras = {}): Promise<ConsensusField> {
   const agents = Object.fromEntries(findings.map((item) => [item.runner.name, item])) as Partial<Record<Agent, AgentFinding>>;
   const agentValues = Object.fromEntries(findings.map((item) => [item.runner.name, { value: valueOf(item, field), runId: item.runId }]));
   const values = [valueOf(agents.claude, field), valueOf(agents.codex, field)];
-  const evidenceRefs = findings.flatMap((item) => item.evidence.items.filter((entry) => entry.claim === `${field === "sectorRotationIntoGrowth" || field === "dataTailwind" ? "macro" : "fundamentals"}.${field}`));
+  const claim = `${MACRO_FIELDS.has(field) ? "macro" : "fundamentals"}.${field}`;
+  const evidenceRefs = findings.flatMap((item) => item.evidence.items.filter((entry) => entry.claim === claim));
   let agreement: Agreement = findings.length < 2 ? "single" : "disputed";
   let value: boolean | null = null;
   let verified = false;
@@ -30,11 +44,21 @@ export async function reconcileField(symbol: string, field: string, asOf: string
     const checks = await Promise.all(findings.map(async (item) => {
       if (item.confidence === "low") return false;
       if (values[0] === false) return true;
-      const refs = item.evidence.items.filter((entry) => entry.claim === `${field === "sectorRotationIntoGrowth" || field === "dataTailwind" ? "macro" : "fundamentals"}.${field}`);
+      const refs = item.evidence.items.filter((entry) => entry.claim === claim);
       return (await Promise.all(refs.map((entry) => verify(entry, asOf)))).some(Boolean);
     }));
     if (checks.every(Boolean)) { agreement = "agree"; value = values[0]; verified = true; reason = value === false ? "Both agents independently report false" : "Both agents agree and supporting evidence passed"; }
     else reason = "Agreement lacks verified, fresh evidence";
+  }
+  // One extractor (the script-first pipeline): its true/false claim counts when at least one cited quote is found verbatim in a stored,
+  // display-allowed document inside the field's window. False needs a verified quote too. Null stays unknown. Macro fields are not covered.
+  const single = findings.length === 1 ? findings[0] : undefined;
+  const singleValue = valueOf(single, field);
+  if (single && extras.storedVerify && singleValue !== null && !MACRO_FIELDS.has(field) && !FORCED_NULL_FIELDS.has(field)) {
+    const refs = single.evidence.items.filter((entry) => entry.claim === claim);
+    const passed = single.confidence !== "low" && (await Promise.all(refs.map((entry) => extras.storedVerify!(entry, asOf)))).some(Boolean);
+    if (passed) { agreement = "verified_single"; value = singleValue; verified = true; reason = `One extractor (${single.runner.name}); its quote matched stored source text`; }
+    else reason = single.confidence === "low" ? "One extractor with low confidence" : "One extractor; no cited quote matched stored, display-allowed source text";
   }
   const deterministic = field === "revenueAccelerating" ? sec?.revenueAccelerating : field === "revenueDeclining" ? sec?.revenueDeclining : undefined;
   if (deterministic !== undefined) {
@@ -50,7 +74,14 @@ export async function reconcileField(symbol: string, field: string, asOf: string
     value = insider.value; verified = true; reason = conflict ? `${insider.reason}; overrides agent claim` : `${insider.reason}; confirmed by SEC data`;
     evidenceRefs.splice(0, evidenceRefs.length, ...insider.refs);
   }
-  if (field === "sectorRotationIntoGrowth" || field === "narrativeChanged") {
+  if (field === "epsBeat" && extras.eps && extras.eps.value !== null) {
+    // The Alpha Vantage surprise decides, like SEC data. Agent values stay in agentValues; the cited url is the stored, non-display document.
+    const eps = extras.eps;
+    const conflict = values.some((v) => v !== null && v !== eps.value);
+    agreement = "data_rule"; value = eps.value; verified = true; reason = conflict ? `${eps.reason}; overrides agent claim` : eps.reason;
+    evidenceRefs.splice(0, evidenceRefs.length, ...eps.refs);
+  }
+  if (FORCED_NULL_FIELDS.has(field)) {
     value = null; verified = false; reason = "No written rule confirms this narrative field";
   }
   return { symbol, field, asOf, value, agreement, agentValues, evidenceRefs, verified, reason };
@@ -63,7 +94,9 @@ const upsertFresh = upsertLegacy.replace("reconciled_at=now()", "carried_from=NU
 const upsertCarried = `INSERT INTO consensus_findings (symbol,field,as_of,value,agreement,agent_values,evidence_refs,verified,reason,carried_from)
       VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8,$9,$10)
       ON CONFLICT (symbol,field,as_of) DO UPDATE SET value=EXCLUDED.value,agreement=EXCLUDED.agreement,agent_values=EXCLUDED.agent_values,evidence_refs=EXCLUDED.evidence_refs,verified=EXCLUDED.verified,reason=EXCLUDED.reason,carried_from=EXCLUDED.carried_from,reconciled_at=now()`;
-export async function runReconcile(pool: pg.Pool, asOf: string, verify: EvidenceVerifier, secLookup: (symbol: string, asOf: string) => Promise<RevenueResult | null> = secRevenue, insiderLookup: (symbol: string, asOf: string) => Promise<InsiderResult | null> = (symbol, date) => loadInsider(pool, symbol, date, insiderMinNetBuyUsd())) {
+export interface RunExtras { storedVerify?: EvidenceVerifier; epsLookup?: (symbol: string, asOf: string) => Promise<EpsResult | null> }
+export async function runReconcile(pool: pg.Pool, asOf: string, verify: EvidenceVerifier, secLookup: (symbol: string, asOf: string) => Promise<RevenueResult | null> = secRevenue, insiderLookup: (symbol: string, asOf: string) => Promise<InsiderResult | null> = (symbol, date) => loadInsider(pool, symbol, date, insiderMinNetBuyUsd()), extras: RunExtras = {}) {
+  const epsLookup = extras.epsLookup ?? ((symbol: string, date: string) => loadEpsSurprise(pool, symbol, date, epsBeatMinSurprisePct()));
   const result = await pool.query<{ symbol: string; run_id: string; runner: { name: Agent }; fundamentals: Record<string, unknown>; evidence: { items: EvidenceRef[] }; confidence: string }>("SELECT symbol,run_id,runner,fundamentals,evidence,confidence FROM scan_findings WHERE as_of=$1 AND superseded_by IS NULL AND runner->>'name' IN ('claude','codex') ORDER BY symbol,received_at DESC", [asOf]);
   const grouped = new Map<string, AgentFinding[]>();
   for (const row of result.rows) grouped.set(row.symbol, [...(grouped.get(row.symbol) ?? []), { runId: row.run_id, runner: row.runner, fundamentals: row.fundamentals, evidence: row.evidence, confidence: row.confidence }]);
@@ -76,9 +109,10 @@ export async function runReconcile(pool: pg.Pool, asOf: string, verify: Evidence
   for (const [symbol, findings] of grouped) {
     const sec = await secLookup(symbol, asOf).catch(() => null);
     const insider = await insiderLookup(symbol, asOf);
+    const eps = await epsLookup(symbol, asOf);
     for (const field of fields) {
       if (ruleRows.has(`${symbol}:${field}`)) continue;
-      const item = await reconcileField(symbol, field, asOf, field === "sectorRotationIntoGrowth" || field === "dataTailwind" ? macroFindings : findings, verify, sec, insider);
+      const item = await reconcileField(symbol, field, asOf, MACRO_FIELDS.has(field) ? macroFindings : findings, verify, sec, insider, { storedVerify: extras.storedVerify, eps });
       pending.push(item);
     }
   }
@@ -124,7 +158,9 @@ async function main() {
     guardReconcileUserAgent(mode, process.env);
     const verifier = selectVerifier(mode, pool);
     const secLookup = mode === "live" ? secRevenue : async () => null;
-    const count = await runReconcile(pool,asOf,verifier,secLookup);
+    // A single extractor's finding is checked only against stored, display-allowed text, and only in live mode.
+    const storedVerify = mode === "live" ? storedOnlyVerifier(pgDocumentLookup(pool)) : undefined;
+    const count = await runReconcile(pool,asOf,verifier,secLookup,undefined,{ storedVerify });
     process.stdout.write(`Reconciled ${count} fields for ${asOf} (${mode} evidence mode)\n`);
   } finally { await pool.end(); }
 }

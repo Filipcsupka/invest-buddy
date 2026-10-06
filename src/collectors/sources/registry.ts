@@ -2,6 +2,7 @@ import type { CollectorRepository, CollectorRun } from "../../db/collectors";
 import type { CusipStore } from "../../db/source-collectors";
 import { RateLimitLockout } from "../http";
 import { EXTRA_SOURCES, type SourceName } from "../types";
+import * as alphavantage from "./alphavantage";
 import * as bls from "./bls";
 import { defaultHttp, type SourceHttp } from "./client";
 import * as clinicaltrials from "./clinicaltrials";
@@ -37,6 +38,7 @@ export const SOURCES: (Omit<SourceModule, "name"> & { name: SourceName | "openfi
   { name: "vix", collect: vix.collectVix, ping: vix.ping },
   { name: "gnews", collect: gnews.collectGnews, ping: gnews.ping },
   { name: "gdelt", collect: gdelt.collectGdelt, ping: gdelt.ping },
+  { name: "alphavantage", collect: alphavantage.collectAlphaVantage, ping: alphavantage.ping },
 ];
 export const PING_NAMES = SOURCES.map((source) => source.name);
 
@@ -44,11 +46,12 @@ export interface ExtraOptions { since: string; now: Date; dryRun?: boolean; http
 
 /**
  * Runs the sources that are not phase A collectors. One failing source does not stop the others, except that a 429 lockout
- * on a SEC source skips the remaining SEC sources. Each source is one "ticker" in the run's failure list.
+ * on a SEC source skips the remaining SEC sources. Each source is one "ticker" in the run's failure list, plus the per-ticker
+ * failures a source reports itself. Metered requests (`apiRequests`) are recorded even on a dry run, so a dry run counts against a daily cap.
  */
 export async function runExtraSources(repository: CollectorRepository, names: SourceName[], options: ExtraOptions) {
-  const run: CollectorRun = { startedAt: options.now.toISOString(), sources: names, requested: names.length, succeeded: 0, failures: [], documentsWritten: 0, factsWritten: 0, stoppedReason: null };
-  const ctx: SourceContext = { http: options.http ?? defaultHttp(), companies: options.companies, symbols: options.symbols, since: options.since, now: options.now, env: options.env ?? process.env, cusips: options.cusips };
+  const run: CollectorRun = { startedAt: options.now.toISOString(), sources: names, requested: names.length, succeeded: 0, failures: [], documentsWritten: 0, factsWritten: 0, stoppedReason: null, apiRequests: {} };
+  const ctx: SourceContext = { http: options.http ?? defaultHttp(), companies: options.companies, symbols: options.symbols, since: options.since, now: options.now, env: options.env ?? process.env, cusips: options.cusips, state: repository };
   const universe = new Set(options.companies.map((company) => company.symbol));
   let documentsParsed = 0, factsComputed = 0, secLocked = false;
   for (const name of names) {
@@ -57,6 +60,9 @@ export async function runExtraSources(repository: CollectorRepository, names: So
     if (secLocked && source.sec) { run.failures.push({ ticker: name, reason: "not fetched: SEC rate-limit lockout" }); continue; }
     try {
       const output = await source.collect(ctx);
+      if (output.apiRequests) run.apiRequests![name] = (run.apiRequests![name] ?? 0) + output.apiRequests;
+      if (output.failures) run.failures.push(...output.failures);
+      if (output.skipped) process.stderr.write(`${name}: skipped, ${output.skipped}\n`);
       documentsParsed += output.documents.length;
       const ids = new Map<string, number>();
       const facts = output.facts.filter((fact) => universe.has(fact.symbol));
@@ -69,7 +75,7 @@ export async function runExtraSources(repository: CollectorRepository, names: So
         }
         for (const fact of facts) {
           const documentIds = fact.documentUrls.map((url) => ids.get(url)).filter((id): id is number => id !== undefined);
-          if (await repository.upsertFact({ symbol: fact.symbol, key: fact.key, asOf: fact.asOf, value: fact.value, documentIds })) run.factsWritten++;
+          if (await repository.upsertFact({ symbol: fact.symbol, key: fact.key, asOf: fact.asOf, value: fact.value, documentIds, ...(fact.expiresAt ? { expiresAt: fact.expiresAt } : {}) })) run.factsWritten++;
         }
       }
       run.succeeded++;
@@ -79,7 +85,7 @@ export async function runExtraSources(repository: CollectorRepository, names: So
       if (error instanceof RateLimitLockout && source.sec) { secLocked = true; run.stoppedReason = reason; }
     }
   }
-  if (!options.dryRun) await repository.recordRun(run);
+  if (!options.dryRun || Object.keys(run.apiRequests!).length) await repository.recordRun(run);
   return { ...run, documentsParsed, factsComputed, exitCode: run.failures.length ? 1 : 0 };
 }
 

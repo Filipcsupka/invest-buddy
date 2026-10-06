@@ -41,6 +41,7 @@ export const SOURCE_HOSTS: readonly string[] = [
   "api.openfigi.com", "api.fda.gov", "clinicaltrials.gov", "api.usaspending.gov", "www.federalreserve.gov",
   "api.fiscaldata.treasury.gov", "api.bls.gov", "news.google.com", "api.gdeltproject.org",
   "cdn.cboe.com", "cdn-api.cboe.com", // VIX file redirects from the first to the second
+  "www.alphavantage.co",
 ];
 
 /** Minimum gap between two requests to a host. Documented limits are in the comments. */
@@ -56,6 +57,7 @@ export const MIN_INTERVAL_MS: Record<string, number> = {
   "www.federalreserve.gov": 500,
   "cdn.cboe.com": 500,
   "cdn-api.cboe.com": 500,
+  "www.alphavantage.co": 12_000, // free key: 25 requests per day; the source caps itself at 20. Five per minute keeps clear of any burst limit.
 };
 /** Minimum wait before retrying after 429 or 5xx, when the server sends no Retry-After. */
 export const RETRY_FLOOR_MS: Record<string, number> = { "api.gdeltproject.org": 15_000 };

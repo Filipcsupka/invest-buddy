@@ -107,6 +107,7 @@ Groups: A first live run, B web, C pipeline quality, D data and accounts, E oper
 
 ### C5. Review the scoring rules
 - Owner task. Check the point tables and band percentages in `SIGNAL_RULES` (`src/engine/signals.ts`) against `InvestingGuide.md`.
+- Also review the single-extractor policy (2026-10-06, `docs/data.md`): one extractor's true/false claim counts as `verified_single` when a cited quote is found in a stored, display-allowed document. Decide whether that is enough, and whether `signals.ts` should count `verified_single` and `data_rule` (it counts only `agree` and `xbrl_override` today). Also check the `EPS_BEAT_MIN_SURPRISE_PCT` placeholder (0).
 - DoD: owner signs off or lists changes; golden tests updated.
 
 ### C6. Cost and quota guard for extract
@@ -133,6 +134,7 @@ Groups: A first live run, B web, C pipeline quality, D data and accounts, E oper
 
 ### D2. EPS consensus source
 - Do: no free verified source exists, so `epsBeat` stays unknown. Find one or accept unknown.
+- Note (2026-10-06): the `alphavantage` source and the `data_rule` for `epsBeat` are in place (`docs/data.md`). Open: put `ALPHA_VANTAGE_API_KEY` into secret `invest-buddy-source-keys`, unsuspend `invest-buddy-collect-alphavantage`, and get the display terms in writing (D1). Until then the page shows only the derived yes/no with the source name.
 - DoD: decision recorded; if a source is chosen, a collector and a test.
 
 ### D3. Portfolio baseline

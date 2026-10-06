@@ -1,5 +1,6 @@
 import { DEFAULT_SYMBOL_MAP } from "../../data/twelvedata";
 import type { CusipStore } from "../../db/source-collectors";
+import type { SourceState } from "../../db/collectors";
 import { document, type CollectedDocument } from "../types";
 import type { SourceHttp } from "./client";
 import { validSecUserAgent } from "../sec-user-agent";
@@ -17,10 +18,16 @@ export interface SourceContext {
   now: Date;
   env: Env;
   cusips?: CusipStore;
+  /** Stored facts and recorded API usage, for sources that plan their requests (alphavantage). */
+  state?: SourceState;
 }
-/** Facts reference documents by URL; the runner swaps in database ids after the upsert. */
-export interface PendingFact { symbol: string; key: string; asOf: string; value: unknown; documentUrls: string[] }
-export interface SourceOutput { documents: CollectedDocument[]; facts: PendingFact[] }
+/** Facts reference documents by URL; the runner swaps in database ids after the upsert. `expiresAt` overrides the 30-day default. */
+export interface PendingFact { symbol: string; key: string; asOf: string; value: unknown; documentUrls: string[]; expiresAt?: string }
+/**
+ * `apiRequests`: requests sent to a metered API, recorded in collector_runs.api_requests. `failures`: per-ticker failures of a source
+ * that keeps going after one ticker fails. `skipped`: why the source sent nothing (no key, cap reached).
+ */
+export interface SourceOutput { documents: CollectedDocument[]; facts: PendingFact[]; apiRequests?: number; failures?: { ticker: string; reason: string }[]; skipped?: string }
 export interface PingResult { source: string; ok: boolean; ms: number; detail: string; skipped?: boolean }
 export interface SourceModule {
   name: string;
@@ -45,6 +52,7 @@ export const LICENSES = {
   gnews: { display_allowed: false, license_note: "Google News feed. Feed text allows only personal, non-commercial use in a feed reader. Internal signal only." },
   gdelt: { display_allowed: false, license_note: "GDELT DOC 2.0. Terms of use not checked; internal signal only." },
   openfigi: { display_allowed: false, license_note: "OpenFIGI mapping used only to link CUSIPs to tickers; terms not checked." },
+  alphavantage: { display_allowed: false, license_note: "Alpha Vantage EARNINGS. Display rights not verified; internal only. The page may show only the derived EPS beat yes/no with the source name, never the estimate." },
 } satisfies Record<string, License>;
 
 export function sourceDocument(input: Omit<CollectedDocument, "contentHash">, license: License): CollectedDocument {

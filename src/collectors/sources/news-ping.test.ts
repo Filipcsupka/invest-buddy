@@ -134,11 +134,12 @@ describe("ping", () => {
     if (url.includes("submissions/CIK")) return JSON.stringify({ filings: { recent: { form: ["8-K"], filingDate: ["2026-10-01"] } } });
     if (url.includes("globenewswire")) return phaseA("globenewswire.xml");
     if (url.includes("stlouisfed")) return JSON.stringify({ observations: [{ date: "2026-09-01", value: "4.25" }] });
+    if (url.includes("alphavantage") && url.includes("apikey=demo")) return JSON.stringify({ symbol: "IBM", quarterlyEarnings: [{ fiscalDateEnding: "2026-06-30", reportedDate: "2026-07-22", reportedEPS: "2.80", estimatedEPS: "2.65", surprisePercentage: "5.66" }] });
     throw new Error(`unrouted ${url}`);
   };
 
   it("every source module has a ping and each passes against stubbed responses, one request each", async () => {
-    expect(PING_NAMES).toEqual(["edgar", "rss", "fred", "frames", "getcurrent", "13f", "openfigi", "openfda", "clinicaltrials", "usaspending", "fed", "treasury", "bls", "vix", "gnews", "gdelt"]);
+    expect(PING_NAMES).toEqual(["edgar", "rss", "fred", "frames", "getcurrent", "13f", "openfigi", "openfda", "clinicaltrials", "usaspending", "fed", "treasury", "bls", "vix", "gnews", "gdelt", "alphavantage"]);
     expect(SOURCES.every((source) => typeof source.ping === "function")).toBe(true);
     const http = stubHttp(routes);
     const results = await runPings(undefined, http, { SEC_USER_AGENT: "Test Agent test@example.invalid", FRED_API_KEY: "k" });

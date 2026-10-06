@@ -4,6 +4,9 @@ import type { UniverseProvider, Instrument } from "./providers";
 import { carryForwardEnabled, carryState, type ConsensusRow } from "./carry-forward";
 
 type CarryRow = ConsensusRow & { field: string };
+/** Fundamentals agreements that count for scoring when verified: two agents agreed, SEC data decided, one extractor with a stored verbatim quote, or a data rule (epsBeat from Alpha Vantage). */
+export const CONFIRMED_FUNDAMENTAL_AGREEMENTS: readonly string[] = ["agree", "xbrl_override", "verified_single", "data_rule"];
+const confirmedFundamental = (row: { verified: boolean; agreement: string }) => row.verified && CONFIRMED_FUNDAMENTAL_AGREEMENTS.includes(row.agreement);
 
 export class DatabaseUniverseProvider implements UniverseProvider {
   readonly provenance = new Map<string, { runIds: Record<string, string>; evidenceUrls: string[]; agreement: Record<string, string>; consensusValues: Record<string, boolean | null>; fingerprintRows: unknown[]; carriedFrom?: Record<string, string>; expiredFields?: string[] }>();
@@ -39,12 +42,12 @@ export class DatabaseUniverseProvider implements UniverseProvider {
     for (const row of rows.rows) {
       fingerprintRows.push(row);
       agreement[row.field] = row.agreement;
-      consensusValues[row.field] = row.verified && (row.agreement === "agree" || row.agreement === "xbrl_override") ? row.value : null;
+      consensusValues[row.field] = confirmedFundamental(row) ? row.value : null;
       for (const [agent, item] of Object.entries(row.agent_values)) runIds[agent] = item.runId;
       for (const item of row.evidence_refs) evidenceUrls.add(item.url);
     }
     this.provenance.set(ticker, { runIds, evidenceUrls: [...evidenceUrls], agreement, consensusValues, fingerprintRows });
-    const get = (field: string) => { const row = by.get(field); return row?.verified && (row.agreement === "agree" || row.agreement === "xbrl_override") ? row.value : null; };
+    const get = (field: string) => { const row = by.get(field); return row && confirmedFundamental(row) ? row.value : null; };
     const epsBeat = get("epsBeat"), guidanceCut = get("guidanceCut");
     return { revenueGrowthCurrent: null, revenueGrowthPrior: null, revenueAccelerating: get("revenueAccelerating"), revenueDeclining: get("revenueDeclining"), epsBeat, guidanceRaised: get("guidanceRaised"), earningsMissAndGuidanceCut: epsBeat === false && guidanceCut === true ? true : epsBeat === null || guidanceCut === null ? null : false, productCatalyst: get("productCatalyst"), insiderOrInstitutionalAccumulation: get("insiderOrInstitutionalBuying"), noRevenue: null, memePump: null };
   }
@@ -76,12 +79,12 @@ export class DatabaseUniverseProvider implements UniverseProvider {
       if (state.state === "expired") { expiredFields.push(row.field); carriedFrom[row.field] = state.carriedFrom; consensusValues[row.field] = null; continue; }
       if (state.state === "carried") carriedFrom[row.field] = state.carriedFrom;
       agreement[row.field] = row.agreement;
-      consensusValues[row.field] = row.verified && (row.agreement === "agree" || row.agreement === "xbrl_override") ? row.value : null;
+      consensusValues[row.field] = confirmedFundamental(row) ? row.value : null;
       for (const [agent, item] of Object.entries(row.agent_values)) runIds[agent] = item.runId;
       for (const item of row.evidence_refs) evidenceUrls.add(item.url);
     }
     this.provenance.set(ticker, { runIds, evidenceUrls: [...evidenceUrls], agreement, consensusValues, fingerprintRows, carriedFrom, expiredFields: expiredFields.sort() });
-    const get = (field: string) => { const row = by.get(field); return row?.verified && (row.agreement === "agree" || row.agreement === "xbrl_override") ? row.value : null; };
+    const get = (field: string) => { const row = by.get(field); return row && confirmedFundamental(row) ? row.value : null; };
     const epsBeat = get("epsBeat"), guidanceCut = get("guidanceCut");
     return { revenueGrowthCurrent: null, revenueGrowthPrior: null, revenueAccelerating: get("revenueAccelerating"), revenueDeclining: get("revenueDeclining"), epsBeat, guidanceRaised: get("guidanceRaised"), earningsMissAndGuidanceCut: epsBeat === false && guidanceCut === true ? true : epsBeat === null || guidanceCut === null ? null : false, productCatalyst: get("productCatalyst"), insiderOrInstitutionalAccumulation: get("insiderOrInstitutionalBuying"), noRevenue: null, memePump: null };
   }
