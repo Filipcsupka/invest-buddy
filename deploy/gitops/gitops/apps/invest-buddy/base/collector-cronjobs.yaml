@@ -44,6 +44,12 @@ spec:
                     configMapKeyRef:
                       name: invest-buddy-reconcile-config
                       key: SEC_USER_AGENT
+                - name: FRED_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-source-keys
+                      key: FRED_API_KEY
+                      optional: true
               securityContext:
                 allowPrivilegeEscalation: false
                 readOnlyRootFilesystem: true
