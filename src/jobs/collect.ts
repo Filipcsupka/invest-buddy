@@ -34,7 +34,8 @@ export async function runCollect(repository: CollectorRepository, symbols: strin
 async function runLegacyCollect(repository: CollectorRepository, symbols: string[], options: CollectOptions = {}) {
   const now = options.now?.() ?? new Date();
   const asOf = now.toISOString().slice(0, 10);
-  const since = options.since ?? daysAgo(now, 30);
+  // SEC filings count as evidence for up to 100 days (earnings and guidance), so the default window matches that.
+  const since = options.since ?? daysAgo(now, 100);
   const sources = options.sources ?? ["edgar", "rss"];
   const run: CollectorRun = { startedAt: now.toISOString(), sources, requested: symbols.length, succeeded: 0, failures: [], documentsWritten: 0, factsWritten: 0, stoppedReason: null };
   let documentsParsed = 0, factsComputed = 0;
