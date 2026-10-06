@@ -130,6 +130,29 @@ test("figures: the sign matters, ranges and windows are not signs", () => {
   assert.deepEqual(inventedFigures(["EUR 60-90 and the 20-day high"], inp), []);
 });
 
+test("figures: labels are not figures", () => {
+  const inp = { score: 19 };
+  const ok = (t) => assert.deepEqual(inventedFigures([t], inp), [], t);
+  ok("Price is under the 200-day moving average and the 50 day line.");
+  ok("52-week high, 12-month return, 3-year view, 10 days ago, 5d and 2w moves.");
+  ok("Below MA200, SMA50 and EMA 21.");
+  ok("Q3 results, 2Q26 guide, FY26 and fiscal 2027, FY2027, H2 ramp.");
+  ok("Guidance in 2027 and since 2025.");
+  ok("Top 5 holding, 3rd quarter, list item 2, (1) first, #2 pick.");
+  ok("Filed an 8-K and a 10-Q, Form 4, Item 2.02, 13D.");
+  ok("Starter is about 1/3 of a full position, or 33% of a full position.");
+  ok("1. First point\n2. Second point");
+});
+
+test("figures: real figures next to labels are still caught", () => {
+  const inp = { score: 19, below: 7.4 };
+  assert.deepEqual(inventedFigures(["200-day average at 310.5"], inp), [310.5]);
+  assert.deepEqual(inventedFigures(["Q3 revenue 5.2 billion and backlog 40"], inp), [5.2, 40]);
+  assert.deepEqual(inventedFigures(["MA200 up 12 percent, 8-K shows 900 million shares"], inp), [12, 900]);
+  assert.deepEqual(inventedFigures(["FY26 EPS 4.1, price 2,150"], inp), [4.1, 2150]);
+  assert.deepEqual(inventedFigures(["close fell -5.2 percent over 30 days"], inp), [-5.2]);
+});
+
 test("each idea can cite only its own figures and URLs", () => {
   assert.throws(() => merge([words("NVDA", { whatHappened: ["AMD held EUR 0.", "The price was 999."] }), words("AMD", { evidence: [] })]), /figures not in the input/);
   assert.throws(() => merge([words("NVDA", { evidence: [{ url: U1, label: "own" }, { url: U3, label: "other symbol" }] }), words("AMD", { evidence: [] })]), /evidence url not in the input/);
@@ -333,15 +356,43 @@ test("a downgrade from the model is applied by the script, never an upgrade", as
 });
 
 test("invalid wording is retried once, then a failed run is recorded and the exit is 1", async () => {
-  const s = stub(); s.respond(envelope(JSON.stringify({ ideas: [words("NVDA", { verdict: "Cash left EUR 510." }), words("AMD", { evidence: [] })] })));
+  const s = stub(); s.respond(envelope(JSON.stringify({ ideas: [words("NVDA", { verdict: "Cash left EUR 510." }), words("AMD", { evidence: [], verdict: "Target 777." })] })));
   const web = await mockWeb();
   try {
     const r = await runJudge(["--as-of", "2026-10-05", "--base-url", web.base], { s });
     assert.equal(r.code, 1);
-    assert.equal(s.calls().length, 2);
+    assert.equal(s.calls().length, 2, "no third call");
     assert.equal(web.seen.posts[0].run.status, "failed");
     assert.deepEqual(web.seen.posts[0].ideas, []);
     assert.match(web.seen.posts[0].run.error, /figures not in the input/);
+  } finally { await web.close(); }
+});
+
+test("a symbol that still fails after the retry is skipped, the others are stored, exit 0", async () => {
+  const s = stub(); s.respond(envelope(JSON.stringify({ ideas: [words("NVDA", { verdict: "Cash left EUR 510." }), words("AMD", { evidence: [] })] })));
+  const web = await mockWeb();
+  try {
+    const r = await runJudge(["--as-of", "2026-10-05", "--base-url", web.base], { s });
+    assert.equal(r.code, 0, r.err);
+    assert.equal(s.calls().length, 2, "the retry happens once and never a third time");
+    assert.match(r.err, /SKIPPED NVDA: figures not in the input: 510/);
+    assert.match(r.err, /POST ok.*skipped NVDA/);
+    assert.equal(web.seen.posts.length, 1);
+    assert.equal(web.seen.posts[0].run.status, "ok");
+    assert.deepEqual(web.seen.posts[0].ideas.map((i) => i.symbol), ["AMD"]);
+  } finally { await web.close(); }
+});
+
+test("a symbol fixed by the retry is stored and nothing is skipped", async () => {
+  const s = stub();
+  s.queue([envelope(JSON.stringify({ ideas: [words("NVDA", { verdict: "Cash left EUR 510." }), words("AMD", { evidence: [] })] })), envelope(JSON.stringify({ ideas: [words("NVDA")] }))]);
+  const web = await mockWeb();
+  try {
+    const r = await runJudge(["--as-of", "2026-10-05", "--base-url", web.base], { s });
+    assert.equal(r.code, 0, r.err);
+    assert.equal(s.calls().length, 2);
+    assert.doesNotMatch(r.err, /SKIPPED/);
+    assert.deepEqual(web.seen.posts[0].ideas.map((i) => i.symbol).sort(), ["AMD", "NVDA"]);
   } finally { await web.close(); }
 });
 

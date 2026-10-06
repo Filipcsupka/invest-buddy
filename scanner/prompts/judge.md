@@ -31,7 +31,7 @@ Two optional fields. Leave them out completely when unused; never send null. Eac
 - downgrade: use it only when the cited evidence contradicts the fixed buy action (for example a document in the input reports a guidance cut that the rule fields do not show). The script then turns the idea into WATCH with no new money. You can never raise an action or a tier.
 - conflict: use it when the evidence and the fixed action disagree but you are not sure enough to downgrade. The script shows your reason on the card.
 
-Never invent data. Every number, date and claim must come from the input. Do not compute new figures: no sums, no differences, no share counts, no targets, no amounts. Copy numbers as given, rounded to two decimals. The script rejects any figure that is not in the input. Never write a currency amount.
+Never invent data. Every number, date and claim must come from the input. Do not compute new figures: no sums, no differences, no share counts, no targets, no amounts. Copy numbers as given, rounded to two decimals. The script rejects any figure that is not in the input. Labels such as 200-day, MA200, Q3, FY26, 8-K and years are not figures and are fine. Never write a currency amount.
 
 Style: plain, neutral, short sentences, like an analyst's note. This is a screening signal, not personal advice: no "you should", no guarantees, no price targets, no return forecasts, no urgency. The site already shows its screening disclaimer; do not add another.
 
