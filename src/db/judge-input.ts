@@ -3,6 +3,7 @@ import type { ScoreResult } from "../engine";
 import { computeSignals, SIGNAL_RULES, type Signal, type SignalSymbolInput } from "../engine/signals";
 import { computeTechnicals, type Bar, type Technicals } from "../data/technicals";
 import { freshnessDays } from "../data/evidence";
+import { CITABLE_AGREEMENTS, SEC_PUBLIC_URL } from "../data/sources";
 import { latestBaseline, type Baseline } from "./portfolio-baseline";
 import { latestIdeaPerSymbol, ideaSignature, type IdeaAction, type Idea, type SizeTier } from "./ideas";
 
@@ -11,9 +12,6 @@ export const BENCHMARK = { symbol: "CSPX", description: "S&P 500 UCITS ETF, the 
 export const DEFAULT_MAX_SYMBOLS = 12;
 export const MAX_EVIDENCE_PER_SYMBOL = 8;
 /** Agreements that stand as verified facts. Their evidence refs may be cited. */
-const CITABLE_AGREEMENTS = new Set(["agree", "verified_single", "xbrl_override", "data_rule"]);
-/** Public SEC data. The XBRL facts url is not a stored source_documents row, but it is open government data and may be shown. */
-const SEC_PUBLIC_URL = /^https:\/\/data\.sec\.gov\/api\/xbrl\//;
 /** Primary documents behind the flags: the earnings release exhibit and the 10-Q. */
 export const PRIMARY_DOC_TYPES = ["8-K EX-99.1", "8-K EX-99.2", "10-Q"] as const;
 const BENCH_SPY = "SPY";

@@ -4,6 +4,8 @@ Set `DATABASE_URL` and run `npm run migrate`. Numbered SQL migrations run once u
 
 A scan is a proposed finding. Claude and Codex runs are stored separately for each symbol and date. The reconcile job writes one consensus row per field. A disputed field has no score value, and a field supplied by one agent has none unless it passes the single-extractor rule below. The score audit contains each field's agreement, both available run IDs and cited URLs.
 
+Sources on the company page. Daily stores `sources` in the audit: per field, the evidence refs of verified findings as `{kind, publishedAt, href}`. It looks the cited urls up in `source_documents` with one query per symbol. `href` is set only for a stored document with `meta.display_allowed` true or the public `data.sec.gov/api/xbrl/` url, and only for https. Alpha Vantage, FRED and Cboe VIX data, and pages with no stored copy, keep a kind and no href, so the page shows a text label. The page shows the source under each rule and input; technical rules name "Own price bars" and the macro rules name their data. A field without a source shows "No source yet". `sources` is part of the score fingerprint, so the first daily run after this change re-scores the date and fills it in; older audits show labels without links until then.
+
 Agreement values (migration 012 widens the check constraint):
 
 | Value | Meaning | Counts for scoring |

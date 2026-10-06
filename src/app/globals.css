@@ -1864,3 +1864,40 @@ th[aria-sort] .sort .icon {
  .portfolio-legend { display: flex; gap: 24px; margin-top: 12px; font-size: var(--t-sm); }
  .portfolio-legend span::before { content: ""; display: inline-block; width: 18px; border-top: 2px solid var(--ink); vertical-align: middle; margin-right: 8px; }
  .portfolio-legend span + span::before { border-color: var(--ink-3); border-top-style: dashed; }
+
+/* Sources under rules and inputs */
+.src {
+  color: var(--ink-3);
+  overflow-wrap: anywhere;
+}
+.src a {
+  color: var(--signal);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  display: inline-block;
+  padding: 0.125rem 0;
+}
+.src a:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 2px;
+}
+.src-none {
+  font-style: italic;
+}
+.rule-table .rule-src {
+  margin-top: 0;
+  font-size: var(--t-xs);
+}
+.input-list > div {
+  flex-wrap: wrap;
+}
+.input-list dd.input-src {
+  flex-basis: 100%;
+  text-align: left;
+  font-weight: 400;
+  font-size: var(--t-xs);
+}
+.source-summary {
+  max-width: 68ch;
+  overflow-wrap: anywhere;
+}

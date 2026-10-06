@@ -59,6 +59,41 @@ describe("company page", () => {
     return renderToStaticMarkup(await Company(props(rows[0].instrument.ticker, opts.locale)));
   }
 
+  describe("sources", () => {
+    const RELEASE = "https://www.sec.gov/Archives/edgar/data/1/ex99.htm";
+    async function renderWith(locale: string) {
+      const [row] = await scoredUniverse();
+      const f = { ...row.result.inputs.fundamentals, guidanceRaised: true, epsBeat: true, productCatalyst: null };
+      const result = { ...row.result, inputs: { ...row.result.inputs, fundamentals: f }, agreement: { epsBeat: "data_rule", guidanceRaised: "verified_single" },
+        sources: { epsBeat: [{ kind: "alphavantage", href: null, publishedAt: "2026-08-26" }], guidanceRaised: [{ kind: "release", href: RELEASE, publishedAt: "2026-08-26" }] } };
+      universe.mockResolvedValue([row.instrument]);
+      scores.mockResolvedValue({ rows: [{ ...row, result }], sample: false, lastUpdated: "2026-10-05", stale: false });
+      idea.mockResolvedValue(null);
+      eurOn.mockReturnValue(false);
+      return renderToStaticMarkup(await Company(props(row.instrument.ticker, locale)));
+    }
+    it("shows a source under each rule and input, a link only for the stored release, and the summary", async () => {
+      const html = await renderWith("en");
+      expect(html).toContain("Source: ");
+      expect(html).toContain(`href="${RELEASE}"`);
+      expect(html).toContain('rel="noopener noreferrer"');
+      expect(html).toContain("Alpha Vantage earnings data");
+      expect(html).not.toMatch(/href="https:\/\/www\.alphavantage/);
+      expect(html).toContain("Own price bars");
+      expect(html).toContain("No source yet");
+      expect(html).toContain("Data sources: ");
+      expect(html.match(/class="[^"]*\brule-src\b/g)).toHaveLength(10);
+      expect(html.match(/class="input-src"/g)).toHaveLength(15);
+    });
+    it("renders in Slovak", async () => {
+      const html = await renderWith("sk");
+      expect(html).toContain("Zdroj: ");
+      expect(html).toContain("Zatiaľ bez zdroja");
+      expect(html).toContain("Zdroje údajov: ");
+      expect(html).toContain("otvorí sa na novej karte");
+    });
+  });
+
   describe("price chart wording", () => {
     it("never shows the synthetic wording on database data", async () => {
       for (const locale of ["en", "sk"]) {
