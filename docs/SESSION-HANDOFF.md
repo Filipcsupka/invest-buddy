@@ -1,0 +1,70 @@
+# Session handoff, 2026-10-06
+
+Read this first in the next session, then `docs/tasks-open.md` (task list with definitions of done). Product rules live in `~/Documents/ops-brain/projects/investing-platform/`.
+
+## Where things stand
+
+The script-first pipeline runs end to end on the khtz cluster, by hand. `invest.filipcsupka.online` shows real data for 2026-10-05: scores, fundamentals, macro flags, source links, five ADD idea cards and the owner's position weights. Nothing runs on a schedule yet. Every CronJob except `prices` and `digest` is suspended, and every run today was a Job I created from a CronJob.
+
+- Cluster: khtz (personal Hetzner k3s). Shell access: `export KUBECONFIG=~/.kube/khtz`. The `kubernetes` MCP tool uses context `default` and is read-only.
+- Deployed image: `sha-5a64bcf` (web and scanner), pinned in infra `gitops/apps/invest-buddy/overlays/prod/kustomization.yaml`.
+- Database: Postgres in namespace `invest`, migrations 001 to 015 applied. Test data only, safe to wipe and rebuild.
+- Repos: app `Filipcsupka/invest-buddy` (this repo, branch `main`), infra `Filipcsupka/infra`. No open PRs in either.
+- Argo CD syncs infra every 60 s (`timeout.reconciliation: 60s`) with automated prune and self-heal.
+
+## How a change reaches the cluster
+
+1. PR to `main` in this repo. CI runs `quality` and builds the web and scanner images (`ghcr.io/filipcsupka/invest-buddy[-scanner]:sha-<7>`).
+2. After merge, the `deploy-gitops` job pins the new tag in infra (repo variable `INFRA_BUMP=true`, secret `INFRA_REPO_TOKEN`). Argo applies it within about a minute. The web pod's init container runs new migrations.
+3. Manifest changes under `deploy/gitops/` do not travel by themselves. Copy the changed files into infra `gitops/apps/invest-buddy/base/` by PR. Do not overwrite `backup-cronjob.yaml` or `scan-cronjob.yaml` (infra keeps live suspends the proposal lacks). Sealed secrets go in infra `gitops/sealed-secrets/invest/`.
+4. If several PRs merge in a row, the last build to finish decides the pin. Merge them together and check that the pin equals the `main` short sha.
+
+## What a manual run looks like
+
+Create a Job from a CronJob and read its log. To pass arguments, patch them in:
+```
+kubectl -n invest create job NAME --from=cronjob/invest-buddy-judge --dry-run=client -o json \
+  | jq '.spec.template.spec.containers[0].args += ["--force"]' | kubectl -n invest apply -f -
+```
+Order for a full pass (asOf = last US session): `collect` (SEC filings, 100-day window), `collect --source fred`, `collect-alphavantage` (20 requests a day cap), `extract` (AI, haiku, about $2.5 for 35 tickers), `macro`, `reconcile`, `daily`, `judge` (AI, sonnet, `--force` to rerun the same day), `portfolio`. Delete only the Jobs you created, by name. Never `delete job --all`.
+
+## What was built this session
+
+- Collectors for SEC EDGAR (filings, Form 4, companyfacts), a GlobeNewswire feed (times out from the cluster, now optional), FRED, and Alpha Vantage EPS surprise. Documents and facts go to `source_documents`, `collected_facts`, `collector_runs`.
+- Extractor (AI, no tools) with quote check against stored text. Reconcile accepts a single-extractor claim when its quote is verified (`verified_single`), SEC data (revenue growth, Form 4 insider flag) and data rules (EPS beat, macro) override.
+- Macro step with no AI: `dataTailwind` (10-year yield change and VIX) and `sectorRotationIntoGrowth` (universe against SPY). Thresholds are placeholders.
+- Signals come from data only. Ideas carry a size tier (STARTER, STANDARD, FULL, ADD_THIRD, ADD_HALF) and no EUR amount on the public page. The owner's EUR band exists only with a baseline and only in the flag-gated private view.
+- Judge (AI, one call) explains signals that changed. Evidence links come from verified findings plus the earnings release, 10-Q and Form 4. The script tops up links when the model cites fewer than two. A symbol that fails validation is skipped, not fatal.
+- Web: company page with idea card, a source line per rule, data sources summary; track record; portfolio with weights, real SPY and own NAV history (`portfolio_nav_history`).
+- IBKR: Flex Web Service query ID 1662148, token in sealed secret `invest-buddy-flex-secrets`. The portfolio job converts to EUR, posts a `flex` baseline and stores NAV points.
+
+## Secrets (names only, values are sealed)
+
+`invest-buddy-secrets` (DATABASE_URL, INGEST_TOKEN and others), `invest-buddy-scanner-secrets` (Claude token), `invest-buddy-market-secrets` (Twelve Data), `invest-buddy-source-keys` (FRED, EIA, Alpha Vantage, BLS, OpenFIGI; only FRED and Alpha Vantage are read by code), `invest-buddy-flex-secrets` (Flex token and query ID). Keys were pasted into chat during this session, so rotate them if that matters.
+
+## Needs the owner
+
+1. Edit the Flex query 1662148 in the IBKR portal (a private browser window works): General Configuration, Breakout by Day = Yes; Delivery Configuration, Period = Last 365 Calendar Days. Then run the portfolio job once to backfill the curve since inception. Until then `/portfolio` shows only weights and a note.
+2. Decide the ideas page (task B3): ADR-001 keeps EUR sizing out of the public product.
+3. Review placeholders (C5, F6): signal tier thresholds, macro thresholds (`MACRO_*`), insider net buy threshold (`INSIDER_MIN_NET_BUY_USD`), the fundamentals policy (`verified_single`), the sizing matrix in `docs/sizing-guide.md`.
+4. Lawyer check before any paid launch (G5).
+5. Real portfolio baseline is now from Flex, the earlier test baseline (EUR 600 cash, 200 a month) was replaced for the same date. Set `monthlyContributionEur` if the judge should use it.
+
+## Next steps, in order
+
+1. After the Flex change: run the portfolio job, check `/portfolio`.
+2. Build the change-driven gate (F1 to F3) and the token budget (F4) so extract and judge run only when something changed. Then unsuspend the chain: collect, macro, reconcile, daily first, extract and judge last (task A8).
+3. Display bug: "Revenue growth from unknown to unknown" shows no numbers although the flag is confirmed. Add the XBRL growth figures to the field detail.
+4. Remaining unknown fundamentals: guidance, catalyst, narrative still show "one source" unless a verified quote exists. Check the policy and the prompt.
+5. Generic sizing matrix on the web (G3), owner view (G4), discovery of new names (F7), quality check against the three old scan cards (F8).
+6. Operations: Postgres backups (E1), job and log visibility (E5, E6), run the DB tests in CI (C1), schema and role split (C2).
+
+## Pitfalls found
+
+- Collect stamps facts with the run date, one day after the scoring date. Rules that need `as_of <= asOf` ignore them (fixed for insider with a 3-day lead).
+- Collect window was 30 days, earnings evidence counts 100. Default is 100 now.
+- Judge figure check flags label numbers ("200-day", "S&P 500"). Many are handled; a skip now logs the surrounding words.
+- `listIdeas` hides ideas whose evidence is not stored display-allowed documents. The public SEC XBRL address is allowed.
+- Keep the `sleep` and long loops out of tool calls that time out; use background runs.
+- Alpha Vantage free tier is 25 requests a day. Third-party sources (Alpha Vantage, FRED, VIX, RSS) are never shown with links or raw numbers.
+- A hard reload in the IBKR portal did not work in Safari; a private window did.

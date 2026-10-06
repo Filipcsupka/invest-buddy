@@ -1,5 +1,7 @@
 # Status, 2026-10-05
 
+**2026-10-06: see `docs/SESSION-HANDOFF.md` for the current state, how to deploy and the next steps. The text below is the 2026-10-05 state.**
+
 Open work is tracked as tasks with a definition of done in `docs/tasks-open.md`. On 2026-10-05 GitHub Actions was down, so no image was built; PR #2 (this repo) and infra PR #15 are open and unmerged.
 
 Work paused here. Nothing from this branch is deployed. The only cluster change today was suspending `invest-buddy-scan-claude` through the infra repo (PR #14).
