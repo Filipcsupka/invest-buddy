@@ -126,6 +126,7 @@ const LABELS = [
   /\btop[- ]\d+\b/gi,
   /\b\d+(?:st|nd|rd|th)\b/gi,
   /(?:^|\n)\s*\d+[.)](?=\s)|\(\d+\)|#\d+|\b(?:step|rank|ranked|item|point|number|no\.)\s+\d+\b(?!\.\d)/gi,
+  /\b(?:S&P|SP|Nasdaq|NASDAQ|Russell|Dow|DJIA|FTSE|DAX|Stoxx|STOXX)[- ]?(?:Composite\s+)?\d{2,4}\b/g,
   /\b\d+\/\d+\b|\b\d+(?:\.\d+)?\s*(?:%|percent)\s+of\s+(?:a|the)\s+(?:full\s+)?position\b/gi,
 ];
 const stripLabels = (text) => LABELS.reduce((t, re) => t.replace(re, (m, y) => (typeof y === "string" ? m.replace(y, " ") : " ")), text);
@@ -147,6 +148,13 @@ function collect(v, key, figures, dates) {
 }
 /** Only named rule windows and the score denominator may appear without an input figure. */
 const ruleFigure = (text, value) => (value === 14 && /\bRSI\s*14\b/i.test(text)) || (value === 20 && /\b20[- ]day\b/i.test(text)) || (value === 25 && /\bof 25\b/i.test(text));
+/** The words around the first offending figure, so a skip in the log shows what the model wrote. */
+export function figureContext(texts, figure) {
+  const text = texts.map(String).join(" | ");
+  const needle = String(Math.abs(figure));
+  const i = text.indexOf(needle);
+  return i < 0 ? "no context" : text.slice(Math.max(0, i - 30), i + needle.length + 30).replace(/\s+/g, " ");
+}
 /** Every figure in the model's wording must occur in the input it was given. Returns the offending figures. */
 export function inventedFigures(texts, inputValue) {
   const allowed = new Set(), dates = new Set();
@@ -226,7 +234,7 @@ function mergeOne(idea, sig, modelInput, notes) {
     if (idea.evidence.length < 2 && !NO_EVIDENCE_OK.includes(sig.action)) throw new Error(`${idea.symbol}: fewer than two evidence links for ${sig.action}`);
     for (const k of ["downgrade", "conflict"]) if (idea[k] && !urls.has(idea[k].evidenceUrl)) throw new Error(`${idea.symbol}: ${k} cites a url not in the input`);
     const figures = inventedFigures(wording(idea), { item });
-    if (figures.length) throw new Error(`${idea.symbol}: figures not in the input: ${figures.slice(0, 5).join(", ")}`);
+    if (figures.length) throw new Error(`${idea.symbol}: figures not in the input: ${figures.slice(0, 5).join(", ")} (${figureContext(wording(idea), figures[0])})`);
     let { action, sizeTier, amountMinEur: min, amountMaxEur: max } = sig;
     let downgradedFrom = null;
     if (idea.downgrade) {
