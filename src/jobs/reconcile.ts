@@ -5,6 +5,8 @@ import { secRevenue, type RevenueResult } from "../data/sec";
 import { requireSecUserAgent } from "../collectors/sec-user-agent";
 import { carryField, carryForwardEnabled, type CarriedField, type ConsensusRow } from "../data/carry-forward";
 import { isIsoDate } from "../db/iso-date";
+import { insiderMinNetBuyUsd, type InsiderResult } from "../data/insider";
+import { loadInsider } from "../db/collectors";
 
 type Agent = "claude" | "codex";
 export type Agreement = "agree" | "disputed" | "single" | "xbrl_override";
@@ -15,7 +17,7 @@ const valueOf = (finding: AgentFinding | undefined, field: string): boolean | nu
   const value = finding?.fundamentals[field];
   return typeof value === "boolean" ? value : field === "productCatalyst" && value && typeof value === "object" && typeof (value as { present?: unknown }).present === "boolean" ? (value as { present: boolean }).present : null;
 };
-export async function reconcileField(symbol: string, field: string, asOf: string, findings: AgentFinding[], verify: EvidenceVerifier, sec?: RevenueResult | null): Promise<ConsensusField> {
+export async function reconcileField(symbol: string, field: string, asOf: string, findings: AgentFinding[], verify: EvidenceVerifier, sec?: RevenueResult | null, insider?: InsiderResult | null): Promise<ConsensusField> {
   const agents = Object.fromEntries(findings.map((item) => [item.runner.name, item])) as Partial<Record<Agent, AgentFinding>>;
   const agentValues = Object.fromEntries(findings.map((item) => [item.runner.name, { value: valueOf(item, field), runId: item.runId }]));
   const values = [valueOf(agents.claude, field), valueOf(agents.codex, field)];
@@ -41,6 +43,13 @@ export async function reconcileField(symbol: string, field: string, asOf: string
     value = deterministic; verified = true; reason = conflict ? `SEC revenue facts override agent claim for ${sec?.period}` : `SEC revenue facts confirm ${sec?.period}`;
     if (sec) evidenceRefs.push({ claim: `fundamentals.${field}`, url: sec.source, publishedAt: asOf, fiscalPeriod: sec.period, quote: `Revenue growth ${sec.currentGrowth.toFixed(2)}% versus ${sec.priorGrowth.toFixed(2)}%` });
   }
+  if (field === "insiderOrInstitutionalBuying" && insider && insider.value !== null) {
+    // Stored Form 4 data decides, like SEC revenue facts. A conflicting agent claim is overridden and the reason says so.
+    const conflict = values.some((v) => v !== null && v !== insider.value);
+    agreement = conflict ? "xbrl_override" : agreement === "agree" ? "agree" : "xbrl_override";
+    value = insider.value; verified = true; reason = conflict ? `${insider.reason}; overrides agent claim` : `${insider.reason}; confirmed by SEC data`;
+    evidenceRefs.splice(0, evidenceRefs.length, ...insider.refs);
+  }
   if (field === "sectorRotationIntoGrowth" || field === "narrativeChanged") {
     value = null; verified = false; reason = "No written rule confirms this narrative field";
   }
@@ -54,7 +63,7 @@ const upsertFresh = upsertLegacy.replace("reconciled_at=now()", "carried_from=NU
 const upsertCarried = `INSERT INTO consensus_findings (symbol,field,as_of,value,agreement,agent_values,evidence_refs,verified,reason,carried_from)
       VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8,$9,$10)
       ON CONFLICT (symbol,field,as_of) DO UPDATE SET value=EXCLUDED.value,agreement=EXCLUDED.agreement,agent_values=EXCLUDED.agent_values,evidence_refs=EXCLUDED.evidence_refs,verified=EXCLUDED.verified,reason=EXCLUDED.reason,carried_from=EXCLUDED.carried_from,reconciled_at=now()`;
-export async function runReconcile(pool: pg.Pool, asOf: string, verify: EvidenceVerifier, secLookup: (symbol: string, asOf: string) => Promise<RevenueResult | null> = secRevenue) {
+export async function runReconcile(pool: pg.Pool, asOf: string, verify: EvidenceVerifier, secLookup: (symbol: string, asOf: string) => Promise<RevenueResult | null> = secRevenue, insiderLookup: (symbol: string, asOf: string) => Promise<InsiderResult | null> = (symbol, date) => loadInsider(pool, symbol, date, insiderMinNetBuyUsd())) {
   const result = await pool.query<{ symbol: string; run_id: string; runner: { name: Agent }; fundamentals: Record<string, unknown>; evidence: { items: EvidenceRef[] }; confidence: string }>("SELECT symbol,run_id,runner,fundamentals,evidence,confidence FROM scan_findings WHERE as_of=$1 AND superseded_by IS NULL AND runner->>'name' IN ('claude','codex') ORDER BY symbol,received_at DESC", [asOf]);
   const grouped = new Map<string, AgentFinding[]>();
   for (const row of result.rows) grouped.set(row.symbol, [...(grouped.get(row.symbol) ?? []), { runId: row.run_id, runner: row.runner, fundamentals: row.fundamentals, evidence: row.evidence, confidence: row.confidence }]);
@@ -63,8 +72,9 @@ export async function runReconcile(pool: pg.Pool, asOf: string, verify: Evidence
   const pending: ConsensusField[] = [];
   for (const [symbol, findings] of grouped) {
     const sec = await secLookup(symbol, asOf).catch(() => null);
+    const insider = await insiderLookup(symbol, asOf);
     for (const field of fields) {
-      const item = await reconcileField(symbol, field, asOf, field === "sectorRotationIntoGrowth" || field === "dataTailwind" ? macroFindings : findings, verify, sec);
+      const item = await reconcileField(symbol, field, asOf, field === "sectorRotationIntoGrowth" || field === "dataTailwind" ? macroFindings : findings, verify, sec, insider);
       pending.push(item);
     }
   }
