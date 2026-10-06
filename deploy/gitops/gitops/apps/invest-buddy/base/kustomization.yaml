@@ -11,4 +11,5 @@ resources:
   - cronjobs.yaml
   - collector-cronjobs.yaml
   - extract-judge-cronjobs.yaml
+  - macro-cronjob.yaml
   - backup-cronjob.yaml

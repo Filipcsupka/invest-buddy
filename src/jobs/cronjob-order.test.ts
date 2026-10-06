@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const base = join(process.cwd(), "deploy/gitops/gitops/apps/invest-buddy/base");
-const files = ["scan-cronjob.yaml", "cronjobs.yaml", "collector-cronjobs.yaml", "extract-judge-cronjobs.yaml"];
+const files = ["scan-cronjob.yaml", "cronjobs.yaml", "collector-cronjobs.yaml", "extract-judge-cronjobs.yaml", "macro-cronjob.yaml"];
 const docs = files.flatMap((file) => readFileSync(join(base, file), "utf8").split(/^---$/m)).filter((doc) => /kind: CronJob/.test(doc));
 const job = (name: string) => docs.find((doc) => new RegExp(`name: invest-buddy-${name}\\n`).test(doc)) ?? "";
 const minutes = (name: string) => {
@@ -63,7 +63,21 @@ describe("daily pipeline order", () => {
     expect(job("extract")).toContain('command: ["node", "/app/scanner/run-extract.mjs"]');
     expect(job("judge")).toContain('command: ["node", "/app/scanner/run-judge.mjs"]');
   });
-  it("lists the new file in the kustomization", () => {
-    expect(readFileSync(join(base, "kustomization.yaml"), "utf8")).toContain("- extract-judge-cronjobs.yaml");
+  it("lists the new files in the kustomization", () => {
+    const kustomization = readFileSync(join(base, "kustomization.yaml"), "utf8");
+    expect(kustomization).toContain("- extract-judge-cronjobs.yaml");
+    expect(kustomization).toContain("- macro-cronjob.yaml");
+  });
+  it("runs macro after collect and ends it before reconcile starts, suspended and hardened like collect", () => {
+    const macro = minutes("macro");
+    expect(macro.days).toBe("2-6");
+    expect(macro.at).toBeGreaterThanOrEqual(minutes("collect").at + deadline("collect"));
+    expect(macro.at + startWindow("macro") + deadline("macro")).toBeLessThanOrEqual(minutes("reconcile").at);
+    expect(deadline("macro")).toBeLessThanOrEqual(5);
+    const doc = job("macro");
+    expect(doc).toMatch(/^\s{2}suspend: true$/m);
+    expect(doc).toContain('command: ["node", "dist/jobs/macro.js"]');
+    expect(doc).toContain("name: DATABASE_URL");
+    for (const text of ["runAsNonRoot: true", "automountServiceAccountToken: false", "allowPrivilegeEscalation: false", "readOnlyRootFilesystem: true", 'drop: ["ALL"]', "type: RuntimeDefault", "concurrencyPolicy: Forbid"]) expect(doc).toContain(text);
   });
 });
