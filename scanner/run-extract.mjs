@@ -109,6 +109,14 @@ async function loadBundle(opts, symbol, token, asOf) {
   return res.json();
 }
 
+export async function loadRuntimeUniverse(baseUrl, token) {
+  const res = await fetch(`${baseUrl}/api/ingest/universe`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(30_000) });
+  if (!res.ok) throw new Error(`universe HTTP ${res.status}`);
+  const body = await res.json();
+  if (!Array.isArray(body.instruments)) throw new Error("invalid universe response");
+  return body.instruments;
+}
+
 /** Posts one ticker as its own scan (macro=skip: no macro result here, so the daily macro finding stays). Returns true when stored. */
 export async function postTicker(opts, token, { asOf, model, output }, log) {
   const payload = {
@@ -126,15 +134,20 @@ export async function postTicker(opts, token, { asOf, model, output }, log) {
 
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
-  const universe = JSON.parse(readFileSync(join(here, "universe.json"), "utf8")).instruments;
   let wanted = opts.only;
   const gate = opts.symbolsFile ? JSON.parse(readFileSync(opts.symbolsFile, "utf8")) : null;
   if (gate) wanted = gate.symbols;
   if (!wanted && !opts.force) usage("--symbols-file or --only is required; use --force for a manual full pass");
   if (gate && !Array.isArray(wanted)) usage("symbols file must contain a symbols array");
+  if (Array.isArray(wanted) && !wanted.length) { console.error("nothing to extract"); return; }
+  const token = opts.bundleDir && opts.dryRun ? null : getToken();
+  if (!token && !(opts.bundleDir && opts.dryRun)) { console.error("no INGEST_TOKEN; aborting"); process.exit(2); }
+  const universe = opts.bundleDir && opts.dryRun
+    ? JSON.parse(readFileSync(join(here, "universe.json"), "utf8")).instruments
+    : await loadRuntimeUniverse(opts.baseUrl, token);
   const selected = wanted ? universe.filter((u) => wanted.includes(u.symbol)) : universe;
   const unknown = (wanted ?? []).filter((s) => !universe.some((u) => u.symbol === s));
-  if (unknown.length) usage(`not in universe.json: ${unknown.join(", ")}`);
+  if (unknown.length) usage(`not in instruments table: ${unknown.join(", ")}`);
   if (!selected.length) { console.error("nothing to extract"); return; }
   const asOf = opts.asOf || lastUsTradingDay();
   const runId = randomUUID();
@@ -142,8 +155,6 @@ async function main() {
   const logFile = join(OUT, `extract-${asOf}-${runId.slice(0, 8)}.log`);
   const log = (m) => { const line = `${new Date().toISOString()} ${m}`; console.error(line); appendFileSync(logFile, line + "\n"); };
   log(`extract ${runId} asOf=${asOf} agent=${opts.agent} model=${opts.model || "default"} tickers=${selected.length} dryRun=${opts.dryRun} force=${opts.force} offline=${Boolean(opts.bundleDir)}`);
-  const token = opts.bundleDir && opts.dryRun ? null : getToken();
-  if (!token && !(opts.bundleDir && opts.dryRun)) { log("no INGEST_TOKEN; aborting"); process.exit(2); }
   // Dry runs never touch extraction_runs: an ok row without a posted scan would make the next real run skip the ticker.
   const logRuns = Boolean(token) && !opts.dryRun;
   const prompt = readFileSync(join(here, "prompts", "ticker-extract.md"), "utf8");

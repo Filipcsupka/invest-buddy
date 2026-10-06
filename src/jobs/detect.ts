@@ -1,7 +1,7 @@
 import { runLoggedJob } from "./job-log";
 import { writeFileSync } from "node:fs";
 import pg from "pg";
-import universe from "../../scanner/universe.json";
+import { loadUniverse } from "../db/universe";
 import { isIsoDate } from "../db/iso-date";
 import { GATE } from "./gate-config";
 
@@ -78,7 +78,7 @@ async function main() {
       SELECT symbol,pe::text AS current,previous::text FROM ranked WHERE rn=1 AND previous IS NOT NULL`);
     const result = gateSymbols({ filings: filings.rows, insiders: docs.rows.map((r) => ({ symbol: r.symbol, accession: r.accession, date: r.date, ownerCik: r.owner_cik, trades: Array.isArray(r.trades) ? r.trades : [], isNew: r.is_new })),
       drawdowns: bars.rows.flatMap((r) => { const peak = Number(r.high); return peak > 0 ? [{ symbol: r.symbol, current: 100 * (Number(r.close) / peak - 1), previous: 100 * (Number(r.previous) / peak - 1) }] : []; }),
-      valuations: valuations.rows.map((r) => ({ symbol: r.symbol, current: Number(r.current), previous: Number(r.previous) })), today }, universe.instruments.map((u) => u.symbol));
+      valuations: valuations.rows.map((r) => ({ symbol: r.symbol, current: Number(r.current), previous: Number(r.previous) })), today }, (await loadUniverse(pool)).map((u) => u.symbol));
     const payload = { asOf: today, ...result, accessions: Object.fromEntries(result.symbols.map((symbol) => [symbol, [...new Set([...filings.rows.filter((f) => f.symbol === symbol && relevantFiling(f)).map((f) => f.accession), ...docs.rows.filter((d) => d.symbol === symbol && d.is_new && d.accession).map((d) => d.accession)])]])) };
     const json = JSON.stringify(payload) + "\n";
     if (out) writeFileSync(out, json);

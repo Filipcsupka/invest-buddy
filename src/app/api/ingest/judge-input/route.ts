@@ -25,8 +25,10 @@ async function getHandler(request: Request) {
   if (!isIsoDate(asOf)) return Response.json({ error: "asOf must be YYYY-MM-DD" }, { status: 400 });
   const max = Number(new URL(request.url).searchParams.get("maxSymbols") ?? DEFAULT_MAX_SYMBOLS);
   if (!Number.isInteger(max) || max < 1 || max > 40) return Response.json({ error: "maxSymbols must be 1-40" }, { status: 400 });
+  const requested = new URL(request.url).searchParams.get("symbols")?.split(",").filter(Boolean) ?? [];
+  if (requested.length > 40 || requested.some((symbol) => !/^[A-Z][A-Z0-9.-]{0,9}$/.test(symbol))) return Response.json({ error: "Invalid symbols" }, { status: 400 });
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
-  try { return Response.json(await buildJudgeInput(pool, asOf, new Date(), max)); }
+  try { return Response.json(await buildJudgeInput(pool, asOf, new Date(), max, requested)); }
   catch (error) { recordIngestError(request, error); return Response.json({ error: "Database unavailable" }, { status: 503 }); }
   finally { await pool.end(); }
 }

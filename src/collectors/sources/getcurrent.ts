@@ -6,7 +6,7 @@ import { loadTickers, universeByCik } from "./sec";
 
 /** The type filter on getcurrent is a prefix match, so "SCHEDULE 13D" also returns 13D/A. */
 export const FEED_TYPES = ["SCHEDULE 13D", "SCHEDULE 13G", "8-K"] as const;
-export const feedUrl = (type: string, count = 100) => `https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&type=${encodeURIComponent(type)}&company=&dateb=&owner=include&start=0&count=${count}&output=atom`;
+export const feedUrl = (type: string, count = 100, start = 0) => `https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&type=${encodeURIComponent(type)}&company=&dateb=&owner=include&start=${start}&count=${count}&output=atom`;
 const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "@_", trimValues: true });
 const many = <T>(value: T | T[] | undefined): T[] => value === undefined ? [] : Array.isArray(value) ? value : [value];
 

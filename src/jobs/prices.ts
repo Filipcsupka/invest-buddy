@@ -4,12 +4,13 @@ import universe from "../../scanner/universe.json";
 import type { MarketDataProvider } from "../data/providers";
 import { DailyLimitError, SymbolNotFoundError, TwelveDataProvider } from "../data/twelvedata";
 import { MemoryPriceRepository, PostgresPriceRepository, type PriceRepository, type PriceRunRecord } from "../db/prices";
+import { loadUniverse } from "../db/universe";
 
 export const BENCHMARK = "SPY";
 export const FAILURE_LIMIT = 0.1;
 
-export function priceTickers(): string[] {
-  return [...new Set([...(universe.instruments as { symbol: string }[]).map((item) => item.symbol), BENCHMARK])];
+export function priceTickers(instruments: { symbol: string }[] = universe.instruments): string[] {
+  return [...new Set([...instruments.map((item) => item.symbol), BENCHMARK])];
 }
 
 export interface PriceRunOptions { dryRun?: boolean; provider?: string; now?: () => Date }
@@ -56,12 +57,12 @@ async function main() {
   if (!apiKey) throw new Error("TWELVE_DATA_API_KEY is required; no request was made");
   const url = process.env.DATABASE_URL;
   if (!memory && !url) throw new Error("DATABASE_URL is required; use --memory for a run without a database");
-  const all = priceTickers();
-  const unknown = (only ?? []).filter((t) => !all.includes(t));
-  if (unknown.length) throw new Error(`Unknown ticker(s): ${unknown.join(", ")}`);
-  const tickers = only ?? all;
   const pool = memory ? null : new pg.Pool({ connectionString: url });
   try {
+    const all = priceTickers(pool ? await loadUniverse(pool) : universe.instruments);
+    const unknown = (only ?? []).filter((t) => !all.includes(t));
+    if (unknown.length) throw new Error(`Unknown ticker(s): ${unknown.join(", ")}`);
+    const tickers = only ?? all;
     const repository = pool ? new PostgresPriceRepository(pool) : new MemoryPriceRepository();
     const result = await runPrices(new TwelveDataProvider({ apiKey }), repository, tickers, { dryRun });
     process.stdout.write(`Prices: ${result.succeeded}/${result.requested} tickers, ${result.barsWritten} bars written${dryRun ? " (dry run, nothing stored)" : ""}\n`);

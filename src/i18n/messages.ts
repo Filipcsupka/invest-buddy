@@ -81,6 +81,7 @@ const en = {
     noScore: "No score",
     extension: "Sample extension",
     guide: "Investing guide",
+    discovery: "Discovery",
     loading: "Loading the screen…",
   },
   nav: {
@@ -514,6 +515,7 @@ const sk: Messages = {
     noScore: "Bez skóre",
     extension: "Ukážkové rozšírenie",
     guide: "Investičná príručka",
+    discovery: "Objavený titul",
     loading: "Načítava sa prehľad…",
   },
   nav: {

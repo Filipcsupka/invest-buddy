@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseArgs, parseClaudeEnvelope, addUsage, postTicker, materialChange } from "../run-extract.mjs";
+import { parseArgs, parseClaudeEnvelope, addUsage, postTicker, materialChange, loadRuntimeUniverse } from "../run-extract.mjs";
 import { spawnSync } from "node:child_process";
 import { chmodSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -48,6 +48,18 @@ test("a quiet gate exits before token lookup or model call", () => {
   const run = spawnSync(process.execPath, [new URL("../run-extract.mjs", import.meta.url).pathname, "--symbols-file", file], { env: { ...process.env, INGEST_TOKEN: "", SCAN_OUT_DIR: dir }, encoding: "utf8" });
   assert.equal(run.status, 0, run.stderr);
   assert.match(run.stderr, /nothing to extract/);
+});
+
+test("the live extractor accepts an instrument supplied by the database universe endpoint", async () => {
+  const previous = globalThis.fetch;
+  try {
+    globalThis.fetch = async (url, options) => {
+      assert.equal(url, "http://web/api/ingest/universe");
+      assert.equal(options.headers.Authorization, "Bearer token");
+      return Response.json({ instruments: [{ symbol: "F7ZZ", name: "New Company", sector: "Biotech", tier: null }] });
+    };
+    assert.deepEqual((await loadRuntimeUniverse("http://web", "token")).map((row) => row.symbol), ["F7ZZ"]);
+  } finally { globalThis.fetch = previous; }
 });
 
 test("haiku escalation is limited to material changes", () => {
