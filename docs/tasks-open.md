@@ -1,31 +1,34 @@
 # Open tasks
 
-State on 2026-10-05. Each task can be picked up alone or given to one agent. "Approval" means the owner must say yes before the step runs (cluster, push, secrets, money). Pick the lowest open task in a group whose dependencies are done. Tick the box and add one line on what changed.
+State on 2026-10-06. A1 to A4 are done (see the notes under each). Each task can be picked up alone or given to one agent. "Approval" means the owner must say yes before the step runs (cluster, push, secrets, money). Pick the lowest open task in a group whose dependencies are done. Tick the box and add one line on what changed.
 
 Groups: A first live run, B web, C pipeline quality, D data and accounts, E operations.
 
 ## A. First live run on khtz
 
-### A1. Build the images
+### A1. Build the images (done 2026-10-06)
+- Note: the build and the infra pin are automatic now (`INFRA_BUMP=true`, secret `INFRA_REPO_TOKEN`). Merge to `main` to a running pod takes about 2 minutes (Argo polls every 60 s).
 - Depends on: PR #2 (`invest-buddy`) green. GitHub Actions had a major outage on 2026-10-05, so CI had no runner.
 - Do: merge PR #2 to `main` once `quality` passes. The `image` job pushes `ghcr.io/filipcsupka/invest-buddy` and `invest-buddy-scanner` with tag `sha-<7 chars>`.
 - Fallback if Actions stays down: build both images locally for the cluster architecture (check the node arch first, this Mac is arm64) and import them. Needs approval, because the `gh` token has no `write:packages`.
 - DoD: both tags exist and pull on a khtz node. Tag written down in this file.
 - Approval: merge, any import.
 
-### A2. Merge infra and pin the tags
+### A2. Merge infra and pin the tags (done 2026-10-06)
 - Depends on: A1.
 - Do: update `overlays/prod/kustomization.yaml` in infra PR #15 to the new tag for both images, check `kustomize build` and `kubeconform -strict`, merge. Argo auto-syncs (`selfHeal`); the repo sets `timeout.reconciliation: 300s`, so confirm the live value too.
 - DoD: `kubectl -n invest get cronjob` shows collect, detect, extract, judge, reconcile and daily all suspended; the web pod runs the new tag and `/api/health` returns 200.
 - Approval: infra merge.
 
-### A3. Apply migrations 007 to 010
+### A3. Apply migrations 007 to 010 (done 2026-10-06)
+- Note: the web init container applied 007 to 010 when the new web pod started.
 - Depends on: A2.
 - Do: run the migrate step from the new web image against the invest Postgres (a one-off Job or the existing migrate path). Take a `pg_dump` first. The data is test data, so a wipe and restart is acceptable.
 - DoD: `\dt` lists `source_documents`, `collected_facts`, `collector_runs`, `cusip_map`, `extraction_runs`, `trade_ideas`, `judge_runs`, `portfolio_baseline`; `schema_migrations` shows 010.
 - Approval: yes, it writes to the live database.
 
-### A4. First manual collect Job
+### A4. First manual collect Job (done 2026-10-06)
+- Result: 35 of 35 tickers, 763 documents (735 Form 4, 18 8-K, 6 earnings exhibits, 2 10-Q, 1 10-K, 1 EX-99.2), 109 facts, all `display_allowed = true`. The GlobeNewswire feed times out from the cluster (15 s, repeated), so RSS collects nothing. The collector now treats that as its own failure and continues.
 - Depends on: A3, `SEC_USER_AGENT` set (done in the repo, check it in the live ConfigMap).
 - Do: create one Job from the collect CronJob (`kubectl create job --from=cronjob/invest-buddy-collect`). Run `collect --ping` first from a pod to prove egress to sec.gov, data.sec.gov and the keyless sources from `k8s-worker-01`.
 - DoD: `collector_runs` has a row with no unexplained failures; `source_documents` has rows for at least 10 symbols with `meta.display_allowed` set (true for edgar and sec, false for rss); a note lists each source that failed or was skipped and why (missing key, 429, egress).
@@ -149,6 +152,16 @@ Groups: A first live run, B web, C pipeline quality, D data and accounts, E oper
 ### E4. Tidy the infra repo copy
 - Do: the proposal in `deploy/gitops/` lost two live edits (backup and scan suspends). Sync the proposal with infra, or delete the proposal and treat infra as the source.
 - DoD: one source of truth, noted in `deploy/README.md`.
+
+### E5. Check every Job and CronJob, remove what is not needed
+- Do: list every CronJob and Job in `invest` and in the manifests (`ib-*-manual-*` leftovers, `invest-buddy-scan-claude`, `invest-buddy-scan-codex`, `portfolio`, `digest`, `retention`, `backup`, `prices`, and the new collect, detect, extract, judge). For each: is it needed in its current form, who consumes its output, does it still match the script-first design. Remove what is dead (old manual Jobs, replaced scan jobs, unused PVC such as `invest-buddy-codex-home` if Codex stays unused).
+- DoD: a table in `deploy/README.md` with job, purpose, schedule, state and owner; dead objects deleted from the manifests and from the cluster through infra; `kubectl -n invest get cronjob,job` matches the table.
+- Approval: infra changes and cluster deletions.
+
+### E6. Logging and visibility
+- Do: the web logs almost nothing, so a failure is invisible. Add structured logs (JSON, one line per request on the ingest routes and the pages: route, status, duration, request id; errors with a stack) and a log line at the start and end of every job (counts, durations, failures). Log failed ingests with the reason, never tokens or request bodies. Decide where logs go: `kubectl logs` only, or a collector (Loki is in `monitoring/` of the infra repo if it runs).
+- DoD: a failed ingest and a failed page render each leave a readable log line; one job run shows start, end and counts; a note says where to read logs and how long they are kept.
+- Related: E2 (alerts) builds on this.
 
 ## Not planned
 
