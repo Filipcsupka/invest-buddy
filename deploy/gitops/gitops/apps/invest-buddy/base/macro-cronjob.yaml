@@ -1,0 +1,66 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: invest-buddy-macro
+  namespace: invest
+spec:
+  suspend: true
+  # After collect (05:35, ends by 06:05) and before reconcile (07:00). Placeholder rules for dataTailwind and sectorRotationIntoGrowth, no AI.
+  # Reads stored daily bars, so it needs prices (05:00). Starts while extract may still run; it does not depend on it. Latest end 06:59 (start window 5 min plus 240 s).
+  schedule: "50 6 * * 2-6"
+  timeZone: Europe/Bratislava
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 240
+      template:
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          nodeSelector:
+            kubernetes.io/hostname: k8s-worker-01
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: macro
+              image: ghcr.io/filipcsupka/invest-buddy:latest
+              command: ["node", "dist/jobs/macro.js"]
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-secrets
+                      key: DATABASE_URL
+                - name: FRED_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-source-keys
+                      key: FRED_API_KEY
+                      optional: true
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 128Mi
+                limits:
+                  cpu: 300m
+                  memory: 384Mi
+              volumeMounts:
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: tmp
+              emptyDir:
+                sizeLimit: 256Mi

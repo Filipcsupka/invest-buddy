@@ -127,6 +127,10 @@ Groups: A first live run, B web, C pipeline quality, D data and accounts, E oper
 - See `docs/tasks-accounts-needed.md`: Alpha Vantage key and display rights, FRED key, EIA key, Twelve Data plan, Google News and GDELT terms.
 - DoD: each source is marked usable or dropped, with the terms link.
 
+### D1b. Macro rule thresholds
+- Do: review the placeholder rules in `docs/data.md` (Macro rules): 10-year yield 20-observation change at or below 0 pp, VIX below 25, universe minus SPY 20-session return above 2 pp, 5 day staleness. Decide the thresholds, whether one missing input should leave the flag unknown, and the FRED and Cboe display terms. Unsuspend `invest-buddy-macro` with collect after migration 012.
+- DoD: thresholds confirmed or changed through `MACRO_*` variables; the macro score is no longer 0 of 5 for every ticker.
+
 ### D2. EPS consensus source
 - Do: no free verified source exists, so `epsBeat` stays unknown. Find one or accept unknown.
 - DoD: decision recorded; if a source is chosen, a collector and a test.

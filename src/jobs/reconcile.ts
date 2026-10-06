@@ -70,10 +70,14 @@ export async function runReconcile(pool: pg.Pool, asOf: string, verify: Evidence
   const macros = await pool.query<{ run_id: string; data: Record<string, unknown>; evidence: { items: EvidenceRef[] } }>("SELECT run_id,data,evidence FROM macro_findings WHERE as_of=$1 AND superseded_by IS NULL AND data->>'runnerName' IN ('claude','codex')", [asOf]);
   const macroFindings = macros.rows.map((row) => ({ runId: row.run_id, runner: { name: row.data.runnerName as Agent }, fundamentals: row.data, evidence: row.evidence, confidence: "high" }));
   const pending: ConsensusField[] = [];
+  // The macro job (src/jobs/macro.ts) stores deterministic macro rows with agreement data_rule before this step. Agents must not overwrite them.
+  const rules = await pool.query<{ symbol: string; field: string }>("SELECT symbol,field FROM consensus_findings WHERE as_of=$1 AND agreement='data_rule'", [asOf]);
+  const ruleRows = new Set(rules.rows.map((row) => `${row.symbol}:${row.field}`));
   for (const [symbol, findings] of grouped) {
     const sec = await secLookup(symbol, asOf).catch(() => null);
     const insider = await insiderLookup(symbol, asOf);
     for (const field of fields) {
+      if (ruleRows.has(`${symbol}:${field}`)) continue;
       const item = await reconcileField(symbol, field, asOf, field === "sectorRotationIntoGrowth" || field === "dataTailwind" ? macroFindings : findings, verify, sec, insider);
       pending.push(item);
     }
@@ -83,7 +87,7 @@ export async function runReconcile(pool: pg.Pool, asOf: string, verify: Evidence
   const carried: CarriedField[] = [];
   if (carry) {
     const latest = await pool.query<ConsensusRow & { symbol: string }>("SELECT DISTINCT ON (symbol,field) symbol,field,as_of::text AS as_of,value,agreement,agent_values,evidence_refs,verified,reason,carried_from::text AS carried_from FROM consensus_findings WHERE as_of < $1 ORDER BY symbol,field,as_of DESC", [asOf]);
-    for (const row of latest.rows) if (!grouped.has(row.symbol) && (fields as readonly string[]).includes(row.field)) carried.push(carryField(row, asOf));
+    for (const row of latest.rows) if (!grouped.has(row.symbol) && (fields as readonly string[]).includes(row.field) && !ruleRows.has(`${row.symbol}:${row.field}`)) carried.push(carryField(row, asOf));
   }
   const client = await pool.connect();
   try {

@@ -73,6 +73,24 @@ Insider flag. Reconcile sets `insiderOrInstitutionalBuying` from the stored `ins
 
 Evidence check. With `RECONCILE_VERIFY=live` (the default), reconcile checks a citation against the stored `source_documents` text when the url is stored: same normalisation as `src/data/evidence.ts`, `publishedAt` equal to the stored date, same freshness window. Only a url that is not stored is fetched live. `off` and `fixture` behave as before.
 
+## Macro rules (placeholder, no AI)
+
+Two score fields, `dataTailwind` and `sectorRotationIntoGrowth` (macro score 0 to 5), had no source in the script-first pipeline: the agent macro scan is gone, so every ticker showed them as one source, unverified. `src/jobs/macro.ts` now computes both from stored data with the rules in `src/data/macro-rules.ts`. The thresholds are placeholders for owner review, not a tested strategy. Each can be changed by environment variable without a code change.
+
+| Field | True | False | Unknown (null) |
+| --- | --- | --- | --- |
+| `dataTailwind` | 10-year yield (FRED `DGS10`) change over the last 20 observations is at or below 0 pp (`MACRO_YIELD_MAX_CHANGE_PP`) and the VIX close is below 25 (`MACRO_VIX_MAX`) | either test fails | yield or VIX missing, older than 5 calendar days before the date (`MACRO_MAX_AGE_DAYS`), or fewer than 21 yield observations |
+| `sectorRotationIntoGrowth` | average 20-session return of the 35 universe tickers (stored `daily_bars`) minus the SPY return over the same sessions is above 2 pp (`MACRO_ROTATION_MARGIN_PP`) | not above | SPY bars missing, too short or stale, or fewer than 80% of tickers (`MACRO_MIN_COVERAGE`) have a bar on SPY's last session |
+
+The window is 20 sessions (`MACRO_WINDOW_SESSIONS`, 5 to 60). A bad setting stops the job. If one input is missing the flag is unknown, even when the other input alone would make it false.
+
+Job. `node dist/jobs/macro.js [--date YYYY-MM-DD] [--no-fetch]` (`npm run macro`). The default date is the last completed weekday session in New York, like extract. It first refreshes its two inputs: `collectFredSeries` stores the last 40 `DGS10` observations as one document, and the existing VIX collector stores the Cboe close. Both documents are third-party data with `display_allowed: false`, so the page gets a flag and never the numbers. A missing `FRED_API_KEY` or a failed fetch is printed and skipped, and the rules then read what is stored and call old data stale. Then it writes, in one transaction:
+
+- one `macro_findings` row with `runnerName: data_rule`, the thresholds used and the reason text. Its run id is derived from the date, so a rerun replaces the row.
+- for each of the 35 tickers and both fields, a `consensus_findings` row with agreement `data_rule` (migration 012 adds the value), verified true for a known value, value null and unverified for unknown. The reason names the inputs and their dates. The evidence refs are the stored document urls (FRED series page and the Cboe page) for `dataTailwind`. `sectorRotationIntoGrowth` rests on our own price bars and cites no document.
+
+`DatabaseUniverseProvider.macro()` accepts `agree` and `data_rule` for these two fields. Reconcile skips any field that already has a `data_rule` row for the date, so agents cannot overwrite it, and carry-forward does not replace it. The CronJob `invest-buddy-macro` (suspended, 06:50 Tuesday to Saturday, 240 s deadline) runs before reconcile at 07:00. The judge's `confirmed()` in `src/engine/signals.ts` still counts only `agree` and `xbrl_override`; the macro fields are not among the key fields it reads.
+
 ## Carry-forward
 
 `CARRY_FORWARD=on` lets a partial scan score the whole universe. It is off by default; with the flag off, reconcile and daily run the same SQL and write the same rows as before migration 009. With it on:

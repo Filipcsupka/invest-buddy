@@ -56,7 +56,7 @@ export class DatabaseUniverseProvider implements UniverseProvider {
     const by = new Map(rows.rows.map((row) => [row.field,row]));
     const origin = this.provenance.get(ticker);
     if (origin) origin.fingerprintRows.push(...rows.rows);
-    const get = (field: string) => { const row = by.get(field); return row?.verified && row.agreement === "agree" ? row.value : null; };
+    const get = (field: string) => { const row = by.get(field); return row?.verified && (row.agreement === "agree" || row.agreement === "data_rule") ? row.value : null; };
     return { growthSectorRotation: get("sectorRotationIntoGrowth"), dataTailwind: get("dataTailwind") };
   }
   private async fundamentalsWithCarry(ticker: string): Promise<Fundamentals> {
@@ -98,7 +98,7 @@ export class DatabaseUniverseProvider implements UniverseProvider {
       if (state.state === "expired" && origin?.expiredFields && !origin.expiredFields.includes(row.field)) origin.expiredFields.push(row.field);
     }
     origin?.expiredFields?.sort();
-    const get = (field: string) => { const row = by.get(field); return row?.verified && row.agreement === "agree" ? row.value : null; };
+    const get = (field: string) => { const row = by.get(field); return row?.verified && (row.agreement === "agree" || row.agreement === "data_rule") ? row.value : null; };
     return { growthSectorRotation: get("sectorRotationIntoGrowth"), dataTailwind: get("dataTailwind") };
   }
   async latestScanDate() { const result = await this.pool.query<{ as_of: string }>("SELECT max(as_of)::text as_of FROM reconcile_runs"); return result.rows[0]?.as_of ?? null; }
