@@ -21,6 +21,7 @@ import { fileURLToPath } from "node:url";
 import { extractJson, fill, getToken, lastUsTradingDay, runCli } from "./run-scan.mjs";
 import { callAgentNoTools, addUsage } from "./run-extract.mjs";
 import { canonical, usageFromEnvelope } from "./extraction-log.mjs";
+import { reserveBudget, finishBudget } from "./ai-budget.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const OUT = process.env.SCAN_OUT_DIR || join(here, "out");
@@ -36,7 +37,7 @@ function usage(msg) {
   process.exit(msg ? 2 : 0);
 }
 export function parseArgs(argv, env = process.env) {
-  const o = { dryRun: false, force: false, model: env.JUDGE_MODEL || "sonnet", budgetUsd: 0.5, asOf: null, baseUrl: env.INGEST_BASE_URL || "http://web.invest.svc.cluster.local:3000", timeoutS: 300, inputFile: null, agent: "claude", maxSymbols: 12, agentMode: false, maxTurns: 8 };
+  const o = { dryRun: false, force: false, model: env.JUDGE_MODEL || "sonnet", budgetUsd: 0.5, asOf: null, baseUrl: env.INGEST_BASE_URL || "http://web.invest.svc.cluster.local:3000", timeoutS: 300, inputFile: null, symbolsFile: null, agent: "claude", maxSymbols: 12, agentMode: false, maxTurns: 8 };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const val = () => { if (i + 1 >= argv.length) usage(`missing value for ${a}`); return argv[++i]; };
@@ -51,6 +52,7 @@ export function parseArgs(argv, env = process.env) {
     else if (a === "--max-symbols") o.maxSymbols = Number(val());
     else if (a === "--max-turns") o.maxTurns = Number(val());
     else if (a === "--input-file") o.inputFile = val();
+    else if (a === "--symbols-file") o.symbolsFile = val();
     else if (a === "-h" || a === "--help") usage();
     else usage(`unknown argument ${a}`);
   }
@@ -296,7 +298,7 @@ async function web(baseUrl, token, path, init = {}) {
   return res.json();
 }
 const loadInput = (o, token, asOf) => (o.inputFile ? JSON.parse(readFileSync(o.inputFile, "utf8")) : web(o.baseUrl, token, `judge-input?${new URLSearchParams({ asOf, maxSymbols: String(o.maxSymbols) })}`));
-const checkSkip = async (o, token, params) => { try { return (await web(o.baseUrl, token, `ideas?${new URLSearchParams({ agent: o.agent, ...params })}`)).skip === true; } catch { return false; } };
+const checkSkip = async (o, token, params) => (await web(o.baseUrl, token, `ideas?${new URLSearchParams({ agent: o.agent, ...params })}`)).skip === true;
 const postRun = (o, token, body) => web(o.baseUrl, token, "ideas", { method: "POST", body: JSON.stringify(body) });
 
 async function main() {
@@ -307,19 +309,24 @@ async function main() {
   const logFile = join(OUT, `judge-${asOf}-${runId.slice(0, 8)}.log`);
   const log = (m) => { const line = `${new Date().toISOString()} ${m}`; console.error(line); appendFileSync(logFile, line + "\n"); };
   log(`judge ${runId} asOf=${asOf} model=${o.model} budget=$${o.budgetUsd} mode=${o.agentMode ? `agent(max ${o.maxTurns} turns)` : "single call, no tools"} maxSymbols=${o.maxSymbols} dryRun=${o.dryRun} force=${o.force} offline=${Boolean(o.inputFile)}`);
+  const gate = o.symbolsFile ? JSON.parse(readFileSync(o.symbolsFile, "utf8")) : null;
+  if (!gate && !o.force) { log("--symbols-file is required; use --force for a manual scheduled review"); process.exit(2); }
+  if (gate && !Array.isArray(gate.symbols)) { log("symbols file must contain a symbols array"); process.exit(2); }
+  if (gate && !gate.symbols.length) { log("no changed tickers; no model call"); return; }
   const offline = Boolean(o.inputFile) && o.dryRun;
   const token = offline ? null : getToken();
   if (!token && !offline) { log("no INGEST_TOKEN; aborting"); process.exit(2); }
   const record = Boolean(token) && !o.dryRun;
 
-  if (record && !o.force && await checkSkip(o, token, { asOf })) { log("SKIPPED one run per day: a judge run for this date is already stored; use --force to rerun"); return; }
   const input = await loadInput(o, token, asOf);
   if (!input.portfolio) log("no portfolio baseline: signals come from data alone; owner EUR bands stay 0");
-  const news = changedSignals(input.signals ?? [], input.previousIdeas);
+  const gatedSignals = (input.signals ?? []).filter((s) => !gate || gate.symbols.includes(s.symbol));
+  const news = o.force ? gatedSignals : changedSignals(gatedSignals, input.previousIdeas);
   log(`signals ${input.signals?.length ?? 0} (rules ${input.ruleConfigVersion}), changed ${news.length}${news.length ? `: ${news.map((s) => `${s.symbol} ${s.action} ${s.sizeTier}`).join(", ")}` : ""}`);
   if (!news.length) { log("no signal changed since the last stored idea; no model call"); return; }
   const prompt = readFileSync(join(here, "prompts", "judge.md"), "utf8");
   const hash = judgeHash({ input, prompt, model: o.model, agent: o.agent, agentMode: o.agentMode });
+  log(`judge input hash ${hash}; gate accessions ${JSON.stringify(gate?.accessions ?? {})}`);
   if (record && !o.force && await checkSkip(o, token, { asOf, inputHash: hash })) { log(`SKIPPED same input already judged and stored (input ${hash.slice(0, 12)}); use --force to rerun`); return; }
 
   const modelInput = buildModelInput(input, news);
@@ -346,7 +353,10 @@ async function main() {
       const budget = Number(remaining.toFixed(4));
       const sub = { ...modelInput, items: modelInput.items.filter((i) => pending.some((s) => s.symbol === i.signal.symbol)) };
       text = textFor(sub.items);
-      const r = o.agentMode ? await callAgentReadOnly(o, text, work, budget) : await callAgentNoTools({ agent: "claude", model: o.model, timeoutS: o.timeoutS, budgetUsd: budget }, text, work);
+      const budgetId = token ? await reserveBudget(o.baseUrl, token, "judge", budget) : null;
+      let r;
+      try { r = o.agentMode ? await callAgentReadOnly(o, text, work, budget) : await callAgentNoTools({ agent: "claude", model: o.model, timeoutS: o.timeoutS, budgetUsd: budget }, text, work); }
+      finally { if (budgetId) await finishBudget(o.baseUrl, token, budgetId, r?.usage, r?.costUsd); }
       calls++; spent = addUsage(spent, r.usage); cost += r.costUsd ?? 0; if (r.model) model = r.model;
       const out = normalizeOutput(extractJson(r.text));
       const errs = validateJudgeOutput(out);
@@ -362,6 +372,7 @@ async function main() {
     } catch (e) {
       error = e.message;
       log(`attempt ${attempt} failed: ${e.message}`);
+      if (e.exitCode === 4) { log("monthly AI budget reached; exit 4"); process.exit(4); }
       if (RATE_LIMIT.test(e.message)) { log("rate limit; stopping without retry"); break; }
     }
   }

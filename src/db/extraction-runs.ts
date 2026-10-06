@@ -9,6 +9,8 @@ export const extractionRunSchema = z.object({
   agent: z.enum(["claude", "codex"]),
   model: z.string().min(1).max(100),
   inputHash: z.string().regex(/^[0-9a-f]{64}$/),
+  accessions: z.array(z.string().regex(/^\d{10}-\d{2}-\d{6}$/)).max(100).optional(),
+  costUsd: z.number().nonnegative().nullable().optional(),
   status: z.enum(["pending", "ok", "failed", "skipped"]),
   usage: z.object({
     inputTokens: z.number().int().nonnegative().nullable(),
@@ -32,15 +34,15 @@ export async function hasOkExtraction(pool: Pick<pg.Pool, "query">, key: { symbo
 /** Insert or update the row for (symbol, as_of, agent, input_hash). A later ok never gets downgraded by a replayed failure. */
 export async function recordExtraction(pool: Pick<pg.Pool, "query">, run: ExtractionRun): Promise<void> {
   const u = run.usage ?? {};
-  await pool.query(`INSERT INTO extraction_runs (symbol,as_of,agent,model,input_hash,status,input_tokens,output_tokens,cache_read_tokens,cache_creation_tokens,turns,output,error,applied_at)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13,CASE WHEN $14::boolean THEN now() END)
+  await pool.query(`INSERT INTO extraction_runs (symbol,as_of,agent,model,input_hash,status,input_tokens,output_tokens,cache_read_tokens,cache_creation_tokens,turns,output,error,applied_at,cost_usd,accessions)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13,CASE WHEN $14::boolean THEN now() END,$15,$16::text[])
     ON CONFLICT (symbol,as_of,agent,input_hash) DO UPDATE SET
       model=EXCLUDED.model, status=EXCLUDED.status, input_tokens=EXCLUDED.input_tokens, output_tokens=EXCLUDED.output_tokens,
       cache_read_tokens=EXCLUDED.cache_read_tokens, cache_creation_tokens=EXCLUDED.cache_creation_tokens, turns=EXCLUDED.turns,
-      output=EXCLUDED.output, error=EXCLUDED.error, applied_at=EXCLUDED.applied_at, expires_at=now()+interval '30 days'
+      output=EXCLUDED.output, error=EXCLUDED.error, applied_at=EXCLUDED.applied_at,cost_usd=EXCLUDED.cost_usd,accessions=EXCLUDED.accessions,expires_at=now()+interval '30 days'
     WHERE extraction_runs.status <> 'ok' OR EXCLUDED.status = 'ok'`,
   [run.symbol, run.asOf, run.agent, run.model, run.inputHash, run.status, u.inputTokens ?? null, u.outputTokens ?? null, u.cacheReadTokens ?? null, u.cacheCreationTokens ?? null, u.turns ?? null,
-    run.output === undefined ? null : JSON.stringify(run.output), run.error ?? null, run.applied ?? false]);
+    run.output === undefined ? null : JSON.stringify(run.output), run.error ?? null, run.applied ?? false, run.costUsd ?? null, run.accessions ?? []]);
 }
 
 /** Maps the JSON envelope printed by `claude -p --output-format json` to the usage columns. Missing numbers stay null. */

@@ -163,6 +163,7 @@ async function callAgent(opts, prompt, work, kind) {
 
 export async function withRetry(fn, log, label) {
   try { return await fn(); } catch (e1) {
+    if (e1.exitCode === 4) throw e1;
     log(`${label}: attempt 1 failed: ${e1.message}`);
     try { return await fn(); } catch (e2) { log(`${label}: attempt 2 failed: ${e2.message}`); throw e2; }
   }

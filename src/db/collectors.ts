@@ -10,7 +10,8 @@ export interface Fact { symbol: string; key: string; asOf: string; value: unknow
 /** Keep a document through the longest evidence window of any field it can support. The windows are `freshnessDays` in evidence.ts. */
 export const documentRetentionDays = (docType: string) => /^(8-K|10-Q|10-K|20-F|6-K)(?:\b|\s)|EX-99\.1|XBRL revenue|EPS surprise/i.test(docType)
   ? Math.max(freshnessDays.revenueAccelerating, freshnessDays.epsBeat, freshnessDays.guidanceRaised)
-  : /^(4|13F)\b|insider/i.test(docType) ? freshnessDays.insiderOrInstitutionalBuying
+  : /^4\b/i.test(docType) ? Math.max(400, freshnessDays.insiderOrInstitutionalBuying)
+    : /^13F\b|insider/i.test(docType) ? freshnessDays.insiderOrInstitutionalBuying
     : Math.max(freshnessDays.productCatalyst, freshnessDays.narrativeChanged);
 /** `apiRequests` counts requests to metered APIs per source (alphavantage), so a daily cap can be checked across runs. */
 export interface CollectorRun { startedAt: string; sources: string[]; requested: number; succeeded: number; failures: { ticker: string; reason: string }[]; documentsWritten: number; factsWritten: number; stoppedReason: string | null; apiRequests?: Record<string, number> }

@@ -207,6 +207,12 @@ Run the command from the repo root. The Keychain item is readable from a login s
 
 ## Cost and limits
 
+### Change gate and monthly budget
+
+Run `npm run watch` to poll EDGAR submissions. It records each CIK and accession once, using the collector's four requests per second SEC limiter. Run `npm run detect -- --output /work/gate.json` after collection, then pass the file to both `run-extract.mjs --symbols-file /work/gate.json` and `run-judge.mjs --symbols-file /work/gate.json`. An empty `symbols` array ends both AI steps without a model call. A full manual review uses `--force`.
+
+The ingest API's `/api/ingest/ai-budget` route shows this month's charged tokens and dollars. `AI_MONTHLY_TOKEN_CAP` and `AI_MONTHLY_USD_CAP` default to 500000 tokens and USD 20. Each call reserves 20000 tokens and its CLI dollar limit before it starts; a denied reservation exits with code 4. A failed call with missing usage is charged at its reservation. Extraction logs and database rows include input hashes, accession numbers, tokens and cost. The watch, gate, extract and judge jobs still need a shared symbols file or equivalent handoff when their schedule is changed in infra.
+
 A run is about 36 agent calls (35 tickers plus macro). In the NVDA dry run above, Claude needed about 68 seconds and Codex about 132 seconds for the ticker call, so a full run at concurrency 3 should take roughly 15 to 30 minutes with the stricter v2 prompts. These calls count against your subscription usage window. If you hit the limit, calls fail, get listed in the log, and the exit code turns non-zero once more than 20 percent fail. Lower `--concurrency` or run a subset with `--only`. Payloads stay well under the 1 MB limit.
 
 ## Terms of service

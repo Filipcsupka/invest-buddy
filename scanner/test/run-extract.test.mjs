@@ -1,6 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseArgs, parseClaudeEnvelope, addUsage, postTicker } from "../run-extract.mjs";
+import { parseArgs, parseClaudeEnvelope, addUsage, postTicker, materialChange } from "../run-extract.mjs";
+import { spawnSync } from "node:child_process";
+import { chmodSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const envelope = (over = {}) => JSON.stringify({ type: "result", is_error: false, result: "{}", num_turns: 1, total_cost_usd: 0.012, usage: { input_tokens: 5, output_tokens: 6, cache_read_input_tokens: 7, cache_creation_input_tokens: 8 }, modelUsage: { "claude-haiku-4-5": {} }, permission_denials: [], ...over });
 
@@ -36,6 +40,40 @@ test("addUsage sums and keeps never-reported fields null", () => {
   const a = { inputTokens: 1, outputTokens: null, cacheReadTokens: null, cacheCreationTokens: null, turns: 1 };
   const b = { inputTokens: 2, outputTokens: null, cacheReadTokens: 3, cacheCreationTokens: null, turns: 1 };
   assert.deepEqual(addUsage(a, b), { inputTokens: 3, outputTokens: null, cacheReadTokens: 3, cacheCreationTokens: null, turns: 2 });
+});
+
+test("a quiet gate exits before token lookup or model call", () => {
+  const dir = mkdtempSync(join(tmpdir(), "extract-gate-"));
+  const file = join(dir, "gate.json"); writeFileSync(file, JSON.stringify({ symbols: [] }));
+  const run = spawnSync(process.execPath, [new URL("../run-extract.mjs", import.meta.url).pathname, "--symbols-file", file], { env: { ...process.env, INGEST_TOKEN: "", SCAN_OUT_DIR: dir }, encoding: "utf8" });
+  assert.equal(run.status, 0, run.stderr);
+  assert.match(run.stderr, /nothing to extract/);
+});
+
+test("haiku escalation is limited to material changes", () => {
+  assert.equal(materialChange({ fundamentals: { guidanceCut: true } }), true);
+  assert.equal(materialChange({ fundamentals: { revenueDeclining: true } }), true);
+  assert.equal(materialChange({ fundamentals: { guidanceCut: false, narrativeChanged: false }, evidence: [] }), false);
+});
+
+test("three gated tickers make three model calls", () => {
+  const dir = mkdtempSync(join(tmpdir(), "extract-three-"));
+  const bundles = join(dir, "bundles"); mkdirSync(bundles);
+  const symbols = ["NVDA", "AMD", "AVGO"];
+  for (const symbol of symbols) writeFileSync(join(bundles, `${symbol}.json`), JSON.stringify({ symbol, documents: [], facts: [{ key: "dummy", asOf: "2026-10-01", value: 1 }] }));
+  const gate = join(dir, "gate.json"); writeFileSync(gate, JSON.stringify({ symbols }));
+  const cli = join(dir, "claude");
+  writeFileSync(cli, `#!/usr/bin/env node
+const fs = require("fs"); const p = fs.readFileSync(0, "utf8"); const symbol = p.match(/Company: [^\\n]+ \\(([A-Z]+)\\)/)[1];
+fs.appendFileSync(${JSON.stringify(join(dir, "calls"))}, symbol + "\\n");
+const fundamentals = Object.fromEntries(["revenueAccelerating","revenueDeclining","epsBeat","guidanceRaised","guidanceCut","productCatalyst","insiderOrInstitutionalBuying","narrativeChanged"].map(k => [k, null]));
+process.stdout.write(JSON.stringify({ is_error:false, result:JSON.stringify({ symbol, fundamentals, evidence:[], confidence:"low" }), num_turns:1, total_cost_usd:0.01, usage:{input_tokens:10,output_tokens:10}, modelUsage:{haiku:{}} }));
+`);
+  chmodSync(cli, 0o755);
+  const run = spawnSync(process.execPath, [new URL("../run-extract.mjs", import.meta.url).pathname, "--dry-run", "--symbols-file", gate, "--bundle-dir", bundles, "--as-of", "2026-10-05"], { env: { ...process.env, PATH: `${dir}:${process.env.PATH}`, INGEST_TOKEN: "", SCAN_OUT_DIR: dir }, encoding: "utf8" });
+  assert.equal(run.status, 0, run.stderr);
+  assert.deepEqual(readFileSync(join(dir, "calls"), "utf8").trim().split("\n"), symbols);
+  assert.match(run.stderr, /totals: 3 model calls/);
 });
 
 test("postTicker stores one ticker per call with macro=skip and reports failure", async () => {

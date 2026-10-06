@@ -35,7 +35,7 @@ test("skip check and record use the route, and failures do not throw", async () 
     assert.match(calls[0][0], /extraction-runs\?symbol=NVDA&agent=claude&inputHash=a{64}$/);
     assert.equal(calls[1][1], "POST");
     globalThis.fetch = async () => { throw new Error("down"); };
-    assert.equal(await alreadyExtracted("http://x", "t", { symbol: "NVDA", agent: "claude", inputHash: "a" }), false);
+    await assert.rejects(alreadyExtracted("http://x", "t", { symbol: "NVDA", agent: "claude", inputHash: "a" }), /down/);
     const logs = []; await recordRun("http://x", "t", { symbol: "NVDA" }, (m) => logs.push(m)); assert.equal(logs.length, 1);
   } finally { globalThis.fetch = real; }
 });
