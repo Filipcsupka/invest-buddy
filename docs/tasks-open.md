@@ -81,6 +81,11 @@ Groups: A first live run, B web, C pipeline quality, D data and accounts, E oper
 - Do: check each page when `score_results` is empty or older than 3 days. `/api/health` already returns null dates for an empty database.
 - DoD: each page shows a clear "no data yet" or "stale since <date>" message, with a screenshot or test per page.
 
+### B6. Idea summary on the company page
+- Why: the old scan produced a short card per ticker, and that is what makes a WATCH or START useful: action and size band, what happened, why it matters, setup ratings (company, entry, catalyst), 3 to 5 numbers, the plan (when to start or add, when to stop adding, invalidation, opportunity cost) and evidence links. The judge output and `trade_ideas` already hold these fields.
+- Do: show the latest idea card on `/company/[ticker]` when the action is WATCH, START_POSITION or ADD (and above), with the date, the evidence links and an "unconfirmed" or "carried from <date>" label when set. Keep the EUR band behind the private flag from B3, since ADR-001 forbids public sizing. Hide the card when the latest action is HOLD and nothing changed.
+- DoD: the page renders the card from `trade_ideas` in `DATA_MODE=db`; a test covers WATCH, START and the hidden cases; no EUR amount shows when the flag is off.
+
 ## C. Pipeline quality
 
 ### C1. Run the database tests in CI
@@ -190,6 +195,11 @@ Design and sources: `docs/cadence-design.md`. This group replaces the daily extr
 ### F6. Tune the placeholders
 - Do: drawdown band, valuation band, turnover target (30% a year) and the insider cluster size are placeholders. Check them against `InvestingGuide.md` and your own rules.
 - DoD: owner signs off the values; they live in one config file with a comment on where each came from.
+
+### F7. Discovery of new names
+- Why: the old scan found names outside the fixed universe (for example EFXT after a 450 MW data-center contract, PCVX after a Phase 3 result, WULF after a power-capacity amendment) by following beneficiary chains. The script-first pipeline only covers the 35 tickers, so it can never propose a new name.
+- Do: a separate, low-frequency discovery step. Sources that cost no tokens first: EDGAR current-filings feed filtered to 8-K Items 1.01 and 2.02 (material agreements), big price and volume movers, 13F changes of a short list of managers, and a themes file (AI power, cooling, networking, biotech catalysts) with beneficiary chains. A cheap model ranks the shortlist; only the top few get a full bundle and a judge run. Run it weekly, plus the semi-annual re-screen from F5.
+- DoD: a run produces at most N candidates per week (N in config) with source links; a candidate that passes goes into the same extract and judge path as holdings; a test shows a ticker outside the universe can be added without code changes (universe from a table or file).
 
 ## Not planned
 

@@ -52,6 +52,10 @@ Guardrails: a monthly token budget with a hard stop, a log of processed accessio
 
 The thresholds above (drawdown band, 30% turnover target) are placeholders to tune, not sourced numbers.
 
+## Output and discovery
+
+The old scan produced one card per ticker and stayed silent when nothing changed. Our judge already stores the same fields (`trade_ideas`: verdict, what happened, why it matters, setup ratings, numbers, plan, evidence links, a `signature` compared with the previous idea). Two gaps remain: the company page does not show the card (task B6), and the pipeline cannot propose names outside the 35 tickers (task F7).
+
 ## What this changes in the repo
 
 See `docs/tasks-open.md`, group F. In short: replace the weekday schedule for extract and judge with a gated schedule, add the watch and gate step, add the budget guard, and move the full re-screen to twice a year.
