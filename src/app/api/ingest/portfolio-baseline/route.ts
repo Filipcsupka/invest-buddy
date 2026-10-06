@@ -1,3 +1,4 @@
+import { logIngestRequest, recordIngestError } from "../request-log";
 import { createHash, timingSafeEqual } from "node:crypto";
 import pg from "pg";
 import { isIsoDate } from "../../../../db/iso-date";
@@ -21,19 +22,19 @@ function gate(request: Request) {
 }
 
 /** Newest baseline on or before `?asOf=` (default today). Personal data, so it sits behind the ingest token like the rest of /api/ingest. */
-export async function GET(request: Request) {
+async function getHandler(request: Request) {
   const denied = gate(request);
   if (denied) return denied;
   const asOf = new URL(request.url).searchParams.get("asOf") ?? new Date().toISOString().slice(0, 10);
   if (!isIsoDate(asOf)) return Response.json({ error: "asOf must be YYYY-MM-DD" }, { status: 400 });
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
   try { return Response.json({ baseline: await latestBaseline(pool, asOf) }); }
-  catch { return Response.json({ error: "Database unavailable" }, { status: 503 }); }
+  catch (error) { recordIngestError(request, error); return Response.json({ error: "Database unavailable" }, { status: 503 }); }
   finally { await pool.end(); }
 }
 
 /** Stores or replaces the baseline for its date. A person calls this today; an interactive IBKR MCP session can call it later. */
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   const denied = gate(request);
   if (denied) return denied;
   const text = await readBoundedBody(request, limit);
@@ -44,6 +45,10 @@ export async function POST(request: Request) {
   if (!parsed.success) return Response.json({ error: "Invalid body" }, { status: 400 });
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
   try { await saveBaseline(pool, parsed.data); return Response.json({ recorded: true }); }
-  catch { return Response.json({ error: "Database unavailable" }, { status: 503 }); }
+  catch (error) { recordIngestError(request, error); return Response.json({ error: "Database unavailable" }, { status: 503 }); }
   finally { await pool.end(); }
 }
+
+export const GET = (request: Request) => logIngestRequest("/api/ingest/portfolio-baseline", request, () => getHandler(request));
+
+export const POST = (request: Request) => logIngestRequest("/api/ingest/portfolio-baseline", request, () => postHandler(request));

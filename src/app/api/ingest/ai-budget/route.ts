@@ -1,3 +1,4 @@
+import { logIngestRequest, recordIngestError } from "../request-log";
 import { createHash, timingSafeEqual } from "node:crypto";
 import pg from "pg";
 import { z } from "zod";
@@ -18,14 +19,14 @@ const bodySchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("reserve"), id: z.uuid(), kind: z.enum(["extract", "judge"]), tokens: z.number().int().positive().max(100000), usd: z.number().positive().max(10) }).strict(),
   z.object({ action: z.literal("finish"), id: z.uuid(), tokens: z.number().int().nonnegative().nullable(), usd: z.number().nonnegative().nullable() }).strict(),
 ]);
-export async function GET(request: Request) {
+async function getHandler(request: Request) {
   const denied = gate(request); if (denied) return denied;
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
   try { return Response.json({ month: new Date().toISOString().slice(0, 7), spent: await budgetTotal(pool), cap: caps() }); }
-  catch { return Response.json({ error: "Budget unavailable" }, { status: 503 }); }
+  catch (error) { recordIngestError(request, error); return Response.json({ error: "Budget unavailable" }, { status: 503 }); }
   finally { await pool.end(); }
 }
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   const denied = gate(request); if (denied) return denied;
   const text = await readBoundedBody(request, 2000);
   if (text === null) return Response.json({ error: "Payload too large" }, { status: 413 });
@@ -39,6 +40,10 @@ export async function POST(request: Request) {
       return Response.json(result, { status: result.allowed ? 200 : 429 });
     }
     return Response.json({ finished: await finishCall(pool, parsed.data) });
-  } catch { return Response.json({ error: "Budget unavailable" }, { status: 503 }); }
+  } catch (error) { recordIngestError(request, error); return Response.json({ error: "Budget unavailable" }, { status: 503 }); }
   finally { await pool.end(); }
 }
+
+export const GET = (request: Request) => logIngestRequest("/api/ingest/ai-budget", request, () => getHandler(request));
+
+export const POST = (request: Request) => logIngestRequest("/api/ingest/ai-budget", request, () => postHandler(request));

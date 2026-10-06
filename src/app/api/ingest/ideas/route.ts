@@ -1,3 +1,4 @@
+import { logIngestRequest, recordIngestError } from "../request-log";
 import { createHash, timingSafeEqual } from "node:crypto";
 import pg from "pg";
 import { hasOkJudge, hasOkJudgeForDay, ideasPostSchema, judgeRunSchema, recordJudge } from "../../../../db/ideas";
@@ -20,7 +21,7 @@ function gate(request: Request) {
 }
 
 /** Skip check. `?asOf=2026-10-05&agent=claude&inputHash=<64 hex>` returns `{ skip: true }` when an applied ok run with that input exists. Without `inputHash` it answers for the whole day: one run per day. */
-export async function GET(request: Request) {
+async function getHandler(request: Request) {
   const denied = gate(request);
   if (denied) return denied;
   const q = new URL(request.url).searchParams;
@@ -29,12 +30,12 @@ export async function GET(request: Request) {
   if (!parsed.success) return Response.json({ error: "Invalid query" }, { status: 400 });
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
   try { return Response.json({ skip: day ? await hasOkJudgeForDay(pool, parsed.data) : await hasOkJudge(pool, parsed.data) }); }
-  catch { return Response.json({ error: "Database unavailable" }, { status: 503 }); }
+  catch (error) { recordIngestError(request, error); return Response.json({ error: "Database unavailable" }, { status: 503 }); }
   finally { await pool.end(); }
 }
 
 /** Stores one judge run and the ideas that changed. The model never calls this; run-judge.mjs does, after validating the output. */
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   const denied = gate(request);
   if (denied) return denied;
   const text = await readBoundedBody(request, limit);
@@ -45,6 +46,10 @@ export async function POST(request: Request) {
   if (!parsed.success) return Response.json({ error: "Invalid body" }, { status: 400 });
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
   try { return Response.json({ recorded: true, ...(await recordJudge(pool, parsed.data)) }); }
-  catch { return Response.json({ error: "Database unavailable" }, { status: 503 }); }
+  catch (error) { recordIngestError(request, error); return Response.json({ error: "Database unavailable" }, { status: 503 }); }
   finally { await pool.end(); }
 }
+
+export const GET = (request: Request) => logIngestRequest("/api/ingest/ideas", request, () => getHandler(request));
+
+export const POST = (request: Request) => logIngestRequest("/api/ingest/ideas", request, () => postHandler(request));

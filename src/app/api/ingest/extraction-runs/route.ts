@@ -1,3 +1,4 @@
+import { logIngestRequest, recordIngestError } from "../request-log";
 import { createHash, timingSafeEqual } from "node:crypto";
 import pg from "pg";
 import universe from "../../../../../scanner/universe.json";
@@ -22,7 +23,7 @@ function gate(request: Request) {
 }
 
 /** Skip check: `?symbol=NVDA&agent=claude&inputHash=<64 hex>` returns `{ skip: true }` when an ok run with that input exists. */
-export async function GET(request: Request) {
+async function getHandler(request: Request) {
   const denied = gate(request);
   if (denied) return denied;
   const q = new URL(request.url).searchParams;
@@ -30,12 +31,12 @@ export async function GET(request: Request) {
   if (!parsed.success || !known(parsed.data.symbol)) return Response.json({ error: "Invalid query" }, { status: 400 });
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
   try { return Response.json({ skip: await hasOkExtraction(pool, parsed.data) }); }
-  catch { return Response.json({ error: "Database unavailable" }, { status: 503 }); }
+  catch (error) { recordIngestError(request, error); return Response.json({ error: "Database unavailable" }, { status: 503 }); }
   finally { await pool.end(); }
 }
 
 /** Records one attempt (ok, failed, skipped or pending) with token usage. Never stores prompts or bundles, only the model output. */
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   const denied = gate(request);
   if (denied) return denied;
   const text = await readBoundedBody(request, limit);
@@ -46,6 +47,10 @@ export async function POST(request: Request) {
   if (!parsed.success || !known(parsed.data.symbol)) return Response.json({ error: "Invalid body" }, { status: 400 });
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
   try { await recordExtraction(pool, parsed.data); return Response.json({ recorded: true }); }
-  catch { return Response.json({ error: "Database unavailable" }, { status: 503 }); }
+  catch (error) { recordIngestError(request, error); return Response.json({ error: "Database unavailable" }, { status: 503 }); }
   finally { await pool.end(); }
 }
+
+export const GET = (request: Request) => logIngestRequest("/api/ingest/extraction-runs", request, () => getHandler(request));
+
+export const POST = (request: Request) => logIngestRequest("/api/ingest/extraction-runs", request, () => postHandler(request));

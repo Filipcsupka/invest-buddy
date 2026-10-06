@@ -1,3 +1,4 @@
+import { runLoggedJob } from "./job-log";
 import pg from "pg";
 import { createHash } from "node:crypto";
 import { score } from "../engine";
@@ -55,7 +56,8 @@ async function main() {
     const provider = fixtureMode ? fixtureProvider : new DatabaseUniverseProvider(pool!, scoreDate ?? undefined);
     const result = await runDaily(provider, pool ? new PostgresScoreRepository(pool) : new MemoryScoreRepository(), scoreDate ?? undefined, fixtureMode ? "fixture" : "scan");
     process.stdout.write(`${result.inserted ? "Stored" : "Already stored"}: ${result.instrumentCount} instruments, ${result.alerts.length} state changes\n`);
+    return { instruments: result.instrumentCount, stateChanges: result.alerts.length, stored: result.inserted, failures: 0 };
   } finally { await pool?.end(); }
 }
 
-if (/(?:^|[/\\])daily\.(?:ts|js)$/.test(process.argv[1] ?? "")) main().catch((error) => { console.error(error); process.exitCode = 1; });
+if (/(?:^|[/\\])daily\.(?:ts|js)$/.test(process.argv[1] ?? "")) void runLoggedJob("daily", main);

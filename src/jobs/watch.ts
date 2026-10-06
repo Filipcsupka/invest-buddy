@@ -1,3 +1,4 @@
+import { runLoggedJob } from "./job-log";
 import pg from "pg";
 import universe from "../../scanner/universe.json";
 import { companyCiks } from "../collectors/edgar";
@@ -41,5 +42,6 @@ async function main() {
   } finally { await pool.end(); }
   process.stdout.write(`watch: ${count} new filings\n`);
   if (missing) process.exitCode = 1;
+  return { filings: count, missingCiks: missing, failures: missing };
 }
-if (/(?:^|[/\\])watch\.(?:ts|js)$/.test(process.argv[1] ?? "")) main().catch((e) => { console.error(e instanceof Error ? e.message : e); process.exitCode = 1; });
+if (/(?:^|[/\\])watch\.(?:ts|js)$/.test(process.argv[1] ?? "")) void runLoggedJob("watch", main);

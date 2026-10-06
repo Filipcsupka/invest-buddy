@@ -1,3 +1,4 @@
+import { runLoggedJob } from "./job-log";
 import pg from "pg";
 import universe from "../../scanner/universe.json";
 import type { MarketDataProvider } from "../data/providers";
@@ -65,10 +66,11 @@ async function main() {
     const result = await runPrices(new TwelveDataProvider({ apiKey }), repository, tickers, { dryRun });
     process.stdout.write(`Prices: ${result.succeeded}/${result.requested} tickers, ${result.barsWritten} bars written${dryRun ? " (dry run, nothing stored)" : ""}\n`);
     if (result.unmapped.length) process.stderr.write(`Unmapped symbols: ${result.unmapped.join(", ")}\n`);
-    for (const failure of result.failures) process.stderr.write(`Failed ${failure.ticker}: ${failure.reason}\n`);
-    if (result.stoppedReason) process.stderr.write(`Stopped: ${result.stoppedReason}\n`);
+    for (const failure of result.failures) process.stderr.write(`Failed ${failure.ticker}\n`);
+    if (result.stoppedReason) process.stderr.write("Stopped: source limit reached\n");
     process.exitCode = result.exitCode;
+    return { requested: result.requested, succeeded: result.succeeded, failures: result.failed, barsWritten: result.barsWritten };
   } finally { await pool?.end(); }
 }
 
-if (/(?:^|[/\\])prices\.(?:ts|js)$/.test(process.argv[1] ?? "")) main().catch((error) => { console.error(error instanceof Error ? error.message : error); process.exitCode = 1; });
+if (/(?:^|[/\\])prices\.(?:ts|js)$/.test(process.argv[1] ?? "")) void runLoggedJob("prices", main);

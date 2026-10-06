@@ -1,3 +1,4 @@
+import { runLoggedJob } from "./job-log";
 import { createHash } from "node:crypto";
 import pg from "pg";
 import universe from "../../scanner/universe.json";
@@ -131,7 +132,8 @@ async function main() {
     const result = await runMacro(pool, asOf, { fetch: !noFetch });
     const show = (name: string, item: MacroResult) => `${name}=${item.value === null ? "unknown" : item.value}`;
     process.stdout.write(`Macro ${asOf}: ${show("dataTailwind", result.dataTailwind)} ${show("sectorRotationIntoGrowth", result.sectorRotationIntoGrowth)}, ${result.rows} consensus rows\n${result.dataTailwind.reason}\n${result.sectorRotationIntoGrowth.reason}\n`);
-    for (const failure of result.failures) process.stderr.write(`Fetch failed ${failure}\n`);
+    if (result.failures.length) process.stderr.write(`Macro fetch failures: ${result.failures.length}\n`);
+    return { consensusRows: result.rows, failures: result.failures.length };
   } finally { await pool.end(); }
 }
-if (/(?:^|[/\\])macro\.(?:ts|js)$/.test(process.argv[1] ?? "")) main().catch((error) => { console.error(error instanceof Error ? error.message : error); process.exitCode = 1; });
+if (/(?:^|[/\\])macro\.(?:ts|js)$/.test(process.argv[1] ?? "")) void runLoggedJob("macro", main);
