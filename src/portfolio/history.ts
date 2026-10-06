@@ -1,4 +1,4 @@
-import { isoFlexDate } from "./eur";
+import { isoFlexDate, latestEurRates } from "./eur";
 import { parseFlexStatement, type FlexRaw } from "./flex";
 
 /** One stored NAV point. Private: only server code reads it, and only to compute indexed series. */
@@ -20,7 +20,7 @@ function num(raw: unknown): number | null {
  * NAV points from every ChangeInNAV row of a statement. Per-day rows (reportDate, or fromDate equal to toDate) give one
  * 'flex-daily' point at their end date. A period row (fromDate before toDate) gives only its two ends: the starting value
  * at fromDate and the ending value, with the period deposits, at toDate. Attributes are read defensively. Rows in a
- * currency other than EUR, or without usable values, are skipped.
+ * currency without a rate into EUR, or without usable values, are skipped.
  */
 export function navPointsFromRaw(raw: FlexRaw): NavPoint[] {
   const points = new Map<string, NavPoint>();
@@ -28,20 +28,22 @@ export function navPointsFromRaw(raw: FlexRaw): NavPoint[] {
     const old = points.get(point.date);
     if (!old || (old.source !== "flex-daily" && point.source === "flex-daily")) points.set(point.date, point);
   };
-  const single = raw.navRows.length === 1;
-  for (const row of raw.navRows) {
+  const single = raw.navEntries.length === 1;
+  for (const entry of raw.navEntries) {
+    const { row } = entry;
     const currency = String(row.currency ?? "").trim().toUpperCase();
-    if (currency && currency !== "EUR" && currency !== "BASE_SUMMARY") continue;
-    const rowTo = isoFlexDate(row.reportDate ?? row.toDate ?? row.date ?? (single ? raw.toDate : undefined));
-    const rowFrom = isoFlexDate(row.fromDate ?? (single ? raw.fromDate : undefined));
+    const rate = currency && currency !== "BASE_SUMMARY" ? latestEurRates(entry.rates).get(currency) : 1;
+    if (rate === undefined) continue;
+    const rowTo = isoFlexDate(row.reportDate ?? row.toDate ?? row.date ?? (entry.dailyStatement || single ? entry.toDate : undefined));
+    const rowFrom = isoFlexDate(row.fromDate ?? (single ? entry.fromDate : undefined));
     const end = num(row.endingValue);
     const start = num(row.startingValue);
     const deposits = num(row.depositsWithdrawals) ?? num(row.deposits) ?? 0;
     if (!rowTo || end === null || end <= 0) continue;
-    if (rowFrom && rowFrom < rowTo && !row.reportDate) {
-      put({ date: rowTo, navEur: end, depositsEur: deposits, source: "flex-summary" });
-      if (start !== null && start > 0) put({ date: rowFrom, navEur: start, depositsEur: 0, source: "flex-summary" });
-    } else put({ date: rowTo, navEur: end, depositsEur: deposits, source: "flex-daily" });
+    if (!entry.dailyStatement && rowFrom && rowFrom < rowTo && !row.reportDate) {
+      put({ date: rowTo, navEur: end * rate, depositsEur: deposits * rate, source: "flex-summary" });
+      if (start !== null && start > 0) put({ date: rowFrom, navEur: start * rate, depositsEur: 0, source: "flex-summary" });
+    } else put({ date: rowTo, navEur: end * rate, depositsEur: deposits * rate, source: "flex-daily" });
   }
   return [...points.values()].sort((a, b) => a.date.localeCompare(b.date));
 }

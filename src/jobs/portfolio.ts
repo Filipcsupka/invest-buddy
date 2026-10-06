@@ -13,6 +13,17 @@ export interface BaselineTarget { baseUrl: string; token: string; fetcher?: Fetc
 
 const defaultFetcher: Fetcher = (url, init) => fetch(url, { ...init, signal: AbortSignal.timeout(30_000) });
 
+function errorDetail(error: unknown): string {
+  if (!(error instanceof Error)) return "Unknown error";
+  let message = error.message;
+  for (const secret of [process.env.FLEX_TOKEN, process.env.FLEX_QUERY_ID, process.env.INGEST_TOKEN]) {
+    if (secret) message = message.split(secret).join("[redacted]");
+  }
+  if (message.includes("<")) message = "[XML omitted]";
+  message = message.replace(/https?:\/\/\S+/gi, "[URL]").replace(/\s+/g, " ").slice(0, 180);
+  return `${error.name}: ${message}`;
+}
+
 /**
  * Posts the Flex baseline to the ingest API. Returns a status word only.
  * The last stored monthly contribution is carried over, or stays null. If it cannot be read the post is skipped,
@@ -44,14 +55,14 @@ export async function runPortfolio(repository: PortfolioRepository, delayTrading
     await repository.save(snapshot);
     positions = snapshot.weights.length;
     log(`snapshot stored positions=${snapshot.weights.length}`);
-  } catch { failed = true; log("snapshot failed; previous snapshot retained"); }
+  } catch (error) { failed = true; log(`snapshot failed; previous snapshot retained (${errorDetail(error)})`); }
   if (history) {
     try {
       const points = navPointsFromXml(xml);
       await history.upsert(points);
       navPoints = points.length;
       log(`nav history upserted points=${points.length}`);
-    } catch { failed = true; log("nav history failed"); }
+    } catch (error) { failed = true; log(`nav history failed (${errorDetail(error)})`); }
   } else log("nav history not configured");
   if (target) {
     try {
@@ -59,7 +70,7 @@ export async function runPortfolio(repository: PortfolioRepository, delayTrading
       skippedPositions = result.skipped;
       log(`baseline ${result.status} positions=${result.positions} skippedPositions=${result.skipped}`);
       if (result.status === "rejected") failed = true;
-    } catch { failed = true; log("baseline failed"); }
+    } catch (error) { failed = true; log(`baseline failed (${errorDetail(error)})`); }
   } else log("baseline not configured");
   if (failed) throw new Error("Portfolio sync incomplete");
   return { positions, navPoints, skippedPositions, failures: 0 };

@@ -1,12 +1,14 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import { MemoryPortfolioRepository } from "../db/portfolio";
+import { MemoryNavHistoryRepository } from "../db/portfolio-history";
 import { postBaseline, runPortfolio } from "../jobs/portfolio";
 import { toEurPortfolio } from "./eur";
 import { parseFlexStatement } from "./flex";
 import { lastTradingDay, normalizeFlex, parseFlexPortfolio } from "./model";
 
 const fixture = new URL("./fixtures/flex-live.xml", import.meta.url);
+const multi = new URL("./fixtures/flex-multi.xml", import.meta.url);
 const provider = { bars: async () => [
   { date: "2026-09-01", open: 1, high: 1, low: 1, close: 100, volume: 1 },
   { date: "2026-09-30", open: 1, high: 1, low: 1, close: 104, volume: 1 },
@@ -69,6 +71,16 @@ describe("portfolio job baseline post", () => {
     });
   });
 
+  it("posts only the latest statement from a multi-statement response", async () => {
+    const calls: { url: string; init?: RequestInit }[] = [];
+    const result = await postBaseline(await readFile(multi, "utf8"), target(calls, null));
+    expect(result).toEqual({ status: "posted", positions: 1, skipped: 0 });
+    expect(JSON.parse(String(calls[1].init?.body))).toMatchObject({
+      asOf: "2026-09-04", cashEur: 18,
+      positions: [{ symbol: "NEW", quantity: 2, valueEur: 90, costEur: 72 }],
+    });
+  });
+
   it("sends null when nothing is stored and skips the post when the stored value cannot be read", async () => {
     const calls: { url: string; init?: RequestInit }[] = [];
     await postBaseline(await readFile(fixture, "utf8"), target(calls, null));
@@ -93,5 +105,24 @@ describe("portfolio job baseline post", () => {
     } finally { globalThis.fetch = original; delete process.env.FLEX_TOKEN; delete process.env.FLEX_QUERY_ID; }
     expect(lines.join("\n")).toMatch(/baseline posted positions=2 skippedPositions=1/);
     expect(lines.join("\n")).not.toMatch(/PRIVATE-ACCOUNT|AAAA|BBBB|TOKEN|990|1495/);
+  });
+
+  it("logs each step's error without exposing tokens, URLs or XML", async () => {
+    const lines: string[] = [];
+    const xml = await readFile(fixture, "utf8");
+    process.env.FLEX_TOKEN = "PRIVATE-TOKEN"; process.env.FLEX_QUERY_ID = "Q";
+    const original = globalThis.fetch;
+    try {
+      globalThis.fetch = (async () => new Response(xml)) as typeof fetch;
+      const repository = new MemoryPortfolioRepository();
+      repository.save = async () => { throw new Error("at https://example.test/?t=PRIVATE-TOKEN"); };
+      const history = new MemoryNavHistoryRepository();
+      history.upsert = async () => { throw new Error("<secret>account data</secret>"); };
+      await expect(runPortfolio(repository, 1, { baseUrl: "https://web.test", token: "PRIVATE-TOKEN", fetcher: async () => { throw new Error("request PRIVATE-TOKEN failed"); } }, (line) => lines.push(line), history)).rejects.toThrow("Portfolio sync incomplete");
+    } finally { globalThis.fetch = original; delete process.env.FLEX_TOKEN; delete process.env.FLEX_QUERY_ID; }
+    expect(lines.join("\n")).toMatch(/snapshot failed.*Error:.*\[URL\]/);
+    expect(lines.join("\n")).toMatch(/nav history failed.*Error: \[XML omitted\]/);
+    expect(lines.join("\n")).toMatch(/baseline failed.*Error: request \[redacted\] failed/);
+    expect(lines.join("\n")).not.toMatch(/PRIVATE-TOKEN|example\.test|account data/);
   });
 });
