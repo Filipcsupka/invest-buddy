@@ -2,17 +2,26 @@ import type pg from "pg";
 import type { ScoreResult } from "../engine";
 import { computeSignals, SIGNAL_RULES, type Signal, type SignalSymbolInput } from "../engine/signals";
 import { computeTechnicals, type Bar, type Technicals } from "../data/technicals";
+import { freshnessDays } from "../data/evidence";
 import { latestBaseline, type Baseline } from "./portfolio-baseline";
 import { latestIdeaPerSymbol, ideaSignature, type IdeaAction, type Idea, type SizeTier } from "./ideas";
 
 /** The benchmark every idea is compared against: the default home for money that has no better use. */
 export const BENCHMARK = { symbol: "CSPX", description: "S&P 500 UCITS ETF, the default home for money that has no better use" } as const;
 export const DEFAULT_MAX_SYMBOLS = 12;
-const MAX_EVIDENCE_PER_SYMBOL = 6;
+export const MAX_EVIDENCE_PER_SYMBOL = 8;
+/** Agreements that stand as verified facts. Their evidence refs may be cited. */
+const CITABLE_AGREEMENTS = new Set(["agree", "verified_single", "xbrl_override", "data_rule"]);
+/** Public SEC data. The XBRL facts url is not a stored source_documents row, but it is open government data and may be shown. */
+const SEC_PUBLIC_URL = /^https:\/\/data\.sec\.gov\/api\/xbrl\//;
+/** Primary documents behind the flags: the earnings release exhibit and the 10-Q. */
+export const PRIMARY_DOC_TYPES = ["8-K EX-99.1", "8-K EX-99.2", "10-Q"] as const;
 const BENCH_SPY = "SPY";
 
 export interface JudgeField { value: boolean | null; agreement: string; verified: boolean; carriedFrom: string | null; reason: string }
-export interface JudgeEvidence { url: string; field: string; publishedAt: string | null; quote: string | null }
+export interface JudgeEvidence { url: string; field: string; label: string | null; publishedAt: string | null; quote: string | null }
+/** A stored, display-allowed SEC document of the symbol. */
+export interface PrimaryDoc { url: string; docType: string; publishedAt: string }
 export interface JudgeSymbol {
   symbol: string; name: string; sector: string; tier: number | null;
   held: { valueEur: number; weightPercent: number } | null;
@@ -42,7 +51,7 @@ export interface JudgeInput {
 
 const round = (v: number, d = 2) => Number(v.toFixed(d));
 
-interface ConsensusRow { symbol: string; field: string; value: boolean | null; agreement: string; verified: boolean; reason: string; carried_from: string | null; evidence_refs: { url?: string; claim?: string; publishedAt?: string; quote?: string }[] }
+interface ConsensusRow { symbol: string; field: string; value: boolean | null; agreement: string; verified: boolean; reason: string; carried_from: string | null; evidence_refs: { url?: string; claim?: string; publishedAt?: string; fiscalPeriod?: string; quote?: string }[] }
 interface ScoreRow { ticker: string; name: string; sector: string; tier: number | null; audit: ScoreResult }
 
 /** Which symbols go to the judge: held names, names with an earlier idea, and names in the Setup or Watch state. Everything else is noise. Capped at `max`. */
@@ -51,20 +60,36 @@ export function pickSymbols(rows: ScoreRow[], held: Set<string>, previous: Set<s
   return rows.filter(wanted).sort((a, b) => Number(held.has(b.ticker)) - Number(held.has(a.ticker)) || b.audit.total - a.audit.total || a.ticker.localeCompare(b.ticker)).slice(0, max);
 }
 
-export function shapeSymbol(row: ScoreRow, consensus: ConsensusRow[], baseline: Baseline | null, invested: number, technicals: Technicals | null, displayUrls: Set<string> = new Set()): JudgeSymbol {
+const refLabel = (ref: { url?: string; fiscalPeriod?: string }): string | null =>
+  ref.url && SEC_PUBLIC_URL.test(ref.url) ? "SEC XBRL" : ref.fiscalPeriod?.startsWith("Form 4") ? "Form 4" : null;
+const docLabel = (docType: string): string => (docType === "10-Q" ? "10-Q" : "Earnings release");
+
+/**
+ * The links the judge may cite for one symbol: every verified finding's refs (agree, verified_single, xbrl_override, data_rule) whose url is a stored
+ * display-allowed document or public SEC XBRL data, plus the symbol's own earnings exhibit and 10-Q. Deduplicated by url, newest first, capped.
+ * Alpha Vantage, FRED and VIX urls are not display-allowed, so they never appear.
+ */
+export function collectEvidence(consensus: ConsensusRow[], displayUrls: Set<string>, primaryDocs: PrimaryDoc[] = []): JudgeEvidence[] {
+  const all: JudgeEvidence[] = [];
+  for (const c of [...consensus].sort((x, y) => x.field.localeCompare(y.field))) {
+    if (!c.verified || !CITABLE_AGREEMENTS.has(c.agreement)) continue;
+    for (const e of c.evidence_refs ?? []) {
+      if (!e.url || !(displayUrls.has(e.url) || SEC_PUBLIC_URL.test(e.url))) continue;
+      all.push({ url: e.url, field: c.field, label: refLabel(e), publishedAt: e.publishedAt ?? null, quote: e.quote ? e.quote.slice(0, 240) : null });
+    }
+  }
+  for (const d of primaryDocs) all.push({ url: d.url, field: "primarySource", label: docLabel(d.docType), publishedAt: d.publishedAt, quote: null });
+  const seen = new Set<string>();
+  const unique = all.filter((e) => !seen.has(e.url) && !!seen.add(e.url));
+  return unique.map((e, i) => ({ e, i })).sort((a, b) => (b.e.publishedAt ?? "").localeCompare(a.e.publishedAt ?? "") || a.i - b.i).map((x) => x.e).slice(0, MAX_EVIDENCE_PER_SYMBOL);
+}
+
+export function shapeSymbol(row: ScoreRow, consensus: ConsensusRow[], baseline: Baseline | null, invested: number, technicals: Technicals | null, displayUrls: Set<string> = new Set(), primaryDocs: PrimaryDoc[] = []): JudgeSymbol {
   const a = row.audit;
   const pos = baseline?.positions.find((p) => p.symbol === row.ticker);
   const fields: Record<string, JudgeField> = {};
-  const evidence: JudgeEvidence[] = [];
-  const seen = new Set<string>();
-  for (const c of [...consensus].sort((x, y) => x.field.localeCompare(y.field))) {
-    fields[c.field] = { value: c.value, agreement: c.agreement, verified: c.verified, carriedFrom: c.carried_from, reason: c.reason.slice(0, 200) };
-    for (const e of c.evidence_refs ?? []) {
-      if (!e.url || !displayUrls.has(e.url) || seen.has(e.url) || evidence.length >= MAX_EVIDENCE_PER_SYMBOL) continue;
-      seen.add(e.url);
-      evidence.push({ url: e.url, field: c.field, publishedAt: e.publishedAt ?? null, quote: e.quote ? e.quote.slice(0, 240) : null });
-    }
-  }
+  for (const c of consensus) fields[c.field] = { value: c.value, agreement: c.agreement, verified: c.verified, carriedFrom: c.carried_from, reason: c.reason.slice(0, 200) };
+  const evidence = collectEvidence(consensus, displayUrls, primaryDocs);
   const carried = Object.values(fields).map((f) => f.carriedFrom).filter((d): d is string => !!d).sort();
   return {
     symbol: row.ticker, name: row.name, sector: row.sector, tier: row.tier,
@@ -97,13 +122,22 @@ export async function buildJudgeInput(pool: Pick<pg.Pool, "query">, asOf: string
   const cleared = evidenceUrls.length ? await pool.query<{ url: string }>(`SELECT d.url FROM source_documents d
     WHERE d.url = ANY($1::text[]) AND d.meta->>'display_allowed' = 'true'`, [evidenceUrls]) : { rows: [] as { url: string }[] };
   const displayUrls = new Set(cleared.rows.map((row) => row.url));
+  // The symbol's own earnings exhibit and 10-Q are the primary sources behind the flags. Latest of each kind inside the 100 day field window, display-allowed only.
+  const docRows = picked.length ? await pool.query<{ symbol: string; doc_type: string; url: string; published_at: string }>(`SELECT DISTINCT ON (symbol, doc_type) symbol, doc_type, url, published_at::date::text AS published_at
+    FROM source_documents WHERE symbol = ANY($1) AND doc_type = ANY($2::text[]) AND meta->>'display_allowed' = 'true'
+    AND published_at::date <= $3::date AND published_at::date >= ($3::date - $4::int) ORDER BY symbol, doc_type, published_at DESC`, [tickers, [...PRIMARY_DOC_TYPES], asOf, freshnessDays.epsBeat]) : { rows: [] as { symbol: string; doc_type: string; url: string; published_at: string }[] };
+  const primaryFor = (symbol: string): PrimaryDoc[] => {
+    const docs = docRows.rows.filter((d) => d.symbol === symbol).map((d) => ({ url: d.url, docType: d.doc_type, publishedAt: d.published_at }));
+    const release = docs.find((d) => d.docType === "8-K EX-99.1") ?? docs.find((d) => d.docType === "8-K EX-99.2");
+    return [release, docs.find((d) => d.docType === "10-Q")].filter((d): d is PrimaryDoc => !!d);
+  };
   const barRows = picked.length ? await pool.query<{ ticker: string; bar_date: string; open: string; high: string; low: string; close: string; volume: string }>(
     `SELECT ticker, bar_date::text, open, high, low, close, volume FROM daily_bars WHERE ticker = ANY($1) AND bar_date <= $2 AND bar_date >= ($2::date - 420) ORDER BY ticker, bar_date`, [[...tickers, BENCH_SPY], asOf]) : { rows: [] };
   const bars = new Map<string, Bar[]>();
   for (const b of barRows.rows) (bars.get(b.ticker) ?? bars.set(b.ticker, []).get(b.ticker)!).push({ date: b.bar_date, open: Number(b.open), high: Number(b.high), low: Number(b.low), close: Number(b.close), volume: Number(b.volume) });
   const invested = (baseline?.positions ?? []).reduce((sum, p) => sum + p.valueEur, 0);
   const portfolio: JudgeInput["portfolio"] = baseline ? { asOf: baseline.asOf, source: baseline.source, currency: "EUR", cashEur: baseline.cashEur, monthlyContributionEur: baseline.monthlyContributionEur ?? null, investedEur: round(invested), positions: baseline.positions.map((p) => ({ symbol: p.symbol, valueEur: p.valueEur })) } : null;
-  const symbols = picked.map((r) => shapeSymbol(r, consensus.rows.filter((c) => c.symbol === r.ticker), baseline, invested, computeTechnicals(bars.get(r.ticker) ?? [], bars.get(BENCH_SPY) ?? null), displayUrls));
+  const symbols = picked.map((r) => shapeSymbol(r, consensus.rows.filter((c) => c.symbol === r.ticker), baseline, invested, computeTechnicals(bars.get(r.ticker) ?? [], bars.get(BENCH_SPY) ?? null), displayUrls, primaryFor(r.ticker)));
   return {
     asOf, generatedAt: now.toISOString(), ruleConfigVersion: SIGNAL_RULES.version, benchmark: BENCHMARK, portfolio, symbols,
     signals: signalsFor(symbols, portfolio),
