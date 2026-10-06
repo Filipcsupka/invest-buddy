@@ -52,6 +52,23 @@ Guardrails: a monthly token budget with a hard stop, a log of processed accessio
 
 The thresholds above (drawdown band, 30% turnover target) are placeholders to tune, not sourced numbers.
 
+## Principle: script what is mechanical, spend AI only on judgment and search
+
+The goal is the same card quality as the old scan at a fraction of the tokens.
+
+| Step | Who does it |
+|---|---|
+| Fetch filings, prices, facts, insider trades, event dates | script |
+| Detect what changed, apply the gate rules | script |
+| Numbers on the card (price, revenue, backlog, cash, share count) | script, from stored facts |
+| Action, size band, setup ratings | code (`signals.ts`) |
+| Reading a new filing or release and pulling the claims, with quotes | AI, cheap model, only on changed tickers |
+| Why it matters, the plan wording, beneficiary chains | AI, only when the action or ratings changed |
+| Finding new names outside the universe | script shortlist first, AI search only on the few that survive |
+| Suppressing unchanged ideas | script (signature compare) |
+
+Web search by the model is the most expensive part of the old scan, so it is reserved for discovery of new names and for gaps the scripts cannot fill (news, product catalysts, EPS estimates).
+
 ## Output and discovery
 
 The old scan produced one card per ticker and stayed silent when nothing changed. Our judge already stores the same fields (`trade_ideas`: verdict, what happened, why it matters, setup ratings, numbers, plan, evidence links, a `signature` compared with the previous idea). Two gaps remain: the company page does not show the card (task B6), and the pipeline cannot propose names outside the 35 tickers (task F7).

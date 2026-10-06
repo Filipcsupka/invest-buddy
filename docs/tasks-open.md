@@ -201,6 +201,10 @@ Design and sources: `docs/cadence-design.md`. This group replaces the daily extr
 - Do: a separate, low-frequency discovery step. Sources that cost no tokens first: EDGAR current-filings feed filtered to 8-K Items 1.01 and 2.02 (material agreements), big price and volume movers, 13F changes of a short list of managers, and a themes file (AI power, cooling, networking, biotech catalysts) with beneficiary chains. A cheap model ranks the shortlist; only the top few get a full bundle and a judge run. Run it weekly, plus the semi-annual re-screen from F5.
 - DoD: a run produces at most N candidates per week (N in config) with source links; a candidate that passes goes into the same extract and judge path as holdings; a test shows a ticker outside the universe can be added without code changes (universe from a table or file).
 
+### F8. Quality check against the old scans
+- Do: take the three old scan cards (EFXT START, PCVX WATCH, WULF START, 2026-10-05 and 06) as test cases. For each, collect the same inputs through the scripts (the filings and facts the old card cited) and run extract and judge. Compare action, band, setup ratings and the plan triggers with the old card, and count tokens and cost.
+- DoD: a table in `docs/` with old versus new per card (same action or not, which facts the scripts could not supply, tokens and dollars); gaps become tasks. The target is the same decisions at a fraction of the tokens.
+
 ## Not planned
 
 - Go or microservice rewrite. The workload is about 35 tickers a day and the jobs share types and logic with the web. Revisit only if one collector gets heavy or the pieces get different owners.
