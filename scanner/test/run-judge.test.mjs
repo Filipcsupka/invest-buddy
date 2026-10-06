@@ -6,7 +6,7 @@ import { chmodSync, mkdtempSync, readFileSync, readdirSync, writeFileSync, exist
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseArgs, validateJudgeOutput, normalizeOutput, changedSignals, mergeIdeas, buildModelInput, inventedFigures, judgeHash, agentModeArgs, parseAgentEnvelope, amountText } from "../run-judge.mjs";
+import { parseArgs, validateJudgeOutput, normalizeOutput, changedSignals, mergeIdeas, buildModelInput, inventedFigures, figureContext, judgeHash, agentModeArgs, parseAgentEnvelope, amountText } from "../run-judge.mjs";
 import { callAgentNoTools } from "../run-extract.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -106,6 +106,13 @@ test("evidence urls outside the input, invented figures and wrong symbols fail t
   assert.throws(() => merge([words("NVDA")]), /no idea for AMD/);
   assert.throws(() => merge([words("NVDA"), words("NVDA"), words("AMD", { evidence: [] })]), /second idea/);
   assert.throws(() => merge([words("NVDA", { evidence: [{ url: U1, label: "one" }] }), words("AMD", { evidence: [] })]), /fewer than two evidence links/);
+});
+
+test("index names are labels, and a skipped figure shows its context", () => {
+  const inp = { score: 19 };
+  assert.deepEqual(inventedFigures(["Outperforming the S&P 500 and the Nasdaq 100 and Russell 2000."], inp), []);
+  assert.deepEqual(inventedFigures(["Margin of 33 percent."], inp), [33]);
+  assert.match(figureContext(["Margin of 33 percent on revenue."], 33), /Margin of 33 percent/);
 });
 
 test("a buy with fewer than two cited links is topped up from the labelled input links", () => {
