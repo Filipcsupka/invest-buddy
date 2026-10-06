@@ -9,9 +9,25 @@ import { normalizeFlex, parseFlexPortfolio } from "./model";
 
 const daily = new URL("./fixtures/flex-daily.xml", import.meta.url);
 const live = new URL("./fixtures/flex-live.xml", import.meta.url);
+const multi = new URL("./fixtures/flex-multi.xml", import.meta.url);
 const provider = { bars: async () => [] };
 
 describe("NAV history from Flex", () => {
+  it("selects the latest statement and converts each available daily NAV with its own rate", async () => {
+    const xml = await readFile(multi, "utf8");
+    const eur = parseFlexPortfolio(xml);
+    expect(eur.asOf).toBe("2026-09-04");
+    expect(eur.fromDate).toBe("2026-09-01");
+    expect(eur.positions).toEqual([{ symbol: "NEW", quantity: 2, valueEur: 90, costEur: 72 }]);
+    expect(eur.cashEur).toBe(18);
+    expect((await normalizeFlex(xml, provider)).weights).toEqual([{ symbol: "NEW", weightPercent: 100 }]);
+    expect(navPointsFromXml(xml)).toEqual([
+      { date: "2026-09-01", navEur: 80, depositsEur: 0, source: "flex-daily" },
+      { date: "2026-09-02", navEur: 93.5, depositsEur: 0, source: "flex-daily" },
+      { date: "2026-09-04", navEur: 135, depositsEur: 9, source: "flex-daily" },
+    ]);
+  });
+
   it("imports every per-day ChangeInNAV row", async () => {
     const points = navPointsFromXml(await readFile(daily, "utf8"));
     expect(points.map((p) => p.date)).toEqual(["2026-09-01", "2026-09-02", "2026-09-03", "2026-09-04", "2026-09-07", "2026-09-08"]);
@@ -76,6 +92,21 @@ describe("indexed series", () => {
 });
 
 describe("history job", () => {
+  it("upserts a multi-statement response idempotently", async () => {
+    const history = new MemoryNavHistoryRepository();
+    const repository = new MemoryPortfolioRepository();
+    const xml = await readFile(multi, "utf8");
+    process.env.FLEX_TOKEN = "T"; process.env.FLEX_QUERY_ID = "Q";
+    const original = globalThis.fetch;
+    try {
+      globalThis.fetch = (async () => new Response(xml)) as typeof fetch;
+      await runPortfolio(repository, 1, undefined, () => {}, history);
+      await runPortfolio(repository, 1, undefined, () => {}, history);
+      expect(await history.all()).toHaveLength(3);
+      expect((await repository.latestPublished("2026-09-07"))?.asOf).toBe("2026-09-04");
+    } finally { globalThis.fetch = original; delete process.env.FLEX_TOKEN; delete process.env.FLEX_QUERY_ID; }
+  });
+
   it("upserts on every run, idempotently, and a summary never overwrites a daily row", async () => {
     const history = new MemoryNavHistoryRepository();
     process.env.FLEX_TOKEN = "T"; process.env.FLEX_QUERY_ID = "Q";

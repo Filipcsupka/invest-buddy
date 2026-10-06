@@ -66,6 +66,8 @@ export interface FlexRaw {
   navSummary?: Record<string, unknown>;
   /** Every ChangeInNAV row that carries values: nested dated rows, per-day breakout rows and the period summary. */
   navRows: Record<string, unknown>[];
+  /** NAV rows with the dates and conversion rates of their own statement. */
+  navEntries: { row: Record<string, unknown>; fromDate?: string; toDate?: string; rates: Record<string, unknown>[]; dailyStatement: boolean }[];
   fromDate?: string;
   toDate?: string;
 }
@@ -78,7 +80,8 @@ function rows(statement: Record<string, unknown>, wrapper: string, item: string)
 
 export function parseFlexStatement(xml: string): FlexRaw {
   const root = obj(parse(xml).FlexQueryResponse);
-  const statement = obj(obj(root.FlexStatements).FlexStatement);
+  const statements = list(obj(root.FlexStatements).FlexStatement);
+  const statement = [...statements].sort((a, b) => String(a.toDate ?? "").localeCompare(String(b.toDate ?? ""))).at(-1) ?? {};
   if (!Object.keys(statement).length) throw new Error("Flex statement missing");
   // ChangeInNAV is one element with attributes in the live shape, a wrapper of dated rows in the older one,
   // and a list of per-day elements when the query has "Breakout by Day" on.
@@ -93,6 +96,13 @@ export function parseFlexStatement(xml: string): FlexRaw {
     : flat.length > 1 ? { startingValue: byDate[0].startingValue, endingValue: byDate.at(-1)!.endingValue, depositsWithdrawals: String(byDate.reduce((sum, row) => sum + deposit(row), 0)) }
     : undefined;
   const rowDate = (row: Record<string, unknown>, key: "fromDate" | "toDate") => row[key] === undefined ? undefined : String(row[key]);
+  const navEntries = statements.flatMap((item) => {
+    const itemNodes = list(item.ChangeInNAV);
+    const itemRows = [...itemNodes.flatMap((node) => list(node.ChangeInNAV)), ...itemNodes.filter((node) => !("ChangeInNAV" in node) && Object.keys(node).length)];
+    const rates = rows(item, "ConversionRates", "ConversionRate");
+    return itemRows.map((row) => ({ row, fromDate: rowDate(item, "fromDate"), toDate: rowDate(item, "toDate"), rates, dailyStatement: statements.length > 1 }));
+  });
+  const earliest = [...statements].sort((a, b) => String(a.fromDate ?? a.toDate ?? "").localeCompare(String(b.fromDate ?? b.toDate ?? "")))[0];
   return {
     positions: rows(statement, "OpenPositions", "OpenPosition"),
     nav: nested,
@@ -100,7 +110,8 @@ export function parseFlexStatement(xml: string): FlexRaw {
     rates: rows(statement, "ConversionRates", "ConversionRate"),
     navSummary,
     navRows: [...nested, ...flat],
-    fromDate: statement.fromDate === undefined ? (flat.length > 1 ? rowDate(byDate[0], "fromDate") ?? dated(byDate[0]) : undefined) : String(statement.fromDate),
+    navEntries,
+    fromDate: statements.length > 1 ? rowDate(earliest, "fromDate") ?? rowDate(earliest, "toDate") : statement.fromDate === undefined ? (flat.length > 1 ? rowDate(byDate[0], "fromDate") ?? dated(byDate[0]) : undefined) : String(statement.fromDate),
     toDate: statement.toDate === undefined ? (flat.length > 1 ? dated(byDate.at(-1)!) || undefined : undefined) : String(statement.toDate),
   };
 }

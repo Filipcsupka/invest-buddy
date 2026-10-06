@@ -1,0 +1,24 @@
+<FlexQueryResponse queryName="synthetic-multi" type="AF">
+  <FlexStatements count="4">
+    <FlexStatement accountId="SYNTHETIC" fromDate="20260904" toDate="20260904" period="Last365CalendarDays" whenGenerated="20260905;050000">
+      <ChangeInNAV currency="USD" startingValue="130" depositsWithdrawals="10" endingValue="150" />
+      <CashReport><CashReportCurrency currency="USD" endingCash="20" /></CashReport>
+      <OpenPositions><OpenPosition currency="USD" symbol="NEW" position="2" positionValue="100" costBasisPrice="40" /></OpenPositions>
+      <ConversionRates><ConversionRate reportDate="20260904" fromCurrency="USD" toCurrency="EUR" rate="0.9" /></ConversionRates>
+    </FlexStatement>
+    <FlexStatement accountId="SYNTHETIC" fromDate="20260901" toDate="20260901" period="Last365CalendarDays" whenGenerated="20260902;050000">
+      <ChangeInNAV currency="USD" startingValue="90" depositsWithdrawals="0" endingValue="100" />
+      <CashReport><CashReportCurrency currency="USD" endingCash="10" /></CashReport>
+      <OpenPositions><OpenPosition currency="USD" symbol="OLD" position="1" positionValue="50" costBasisPrice="40" /></OpenPositions>
+      <ConversionRates><ConversionRate reportDate="20260901" fromCurrency="USD" toCurrency="EUR" rate="0.8" /></ConversionRates>
+    </FlexStatement>
+    <FlexStatement accountId="SYNTHETIC" fromDate="20260902" toDate="20260902" period="Last365CalendarDays" whenGenerated="20260903;050000">
+      <ChangeInNAV currency="USD" startingValue="100" depositsWithdrawals="0" endingValue="110" />
+      <ConversionRates><ConversionRate reportDate="20260902" fromCurrency="USD" toCurrency="EUR" rate="0.85" /></ConversionRates>
+    </FlexStatement>
+    <FlexStatement accountId="SYNTHETIC" fromDate="20260903" toDate="20260903" period="Last365CalendarDays" whenGenerated="20260904;050000">
+      <ChangeInNAV currency="USD" startingValue="110" depositsWithdrawals="0" endingValue="" />
+      <ConversionRates><ConversionRate reportDate="20260903" fromCurrency="USD" toCurrency="EUR" rate="0.87" /></ConversionRates>
+    </FlexStatement>
+  </FlexStatements>
+</FlexQueryResponse>
