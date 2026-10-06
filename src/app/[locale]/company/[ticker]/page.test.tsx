@@ -4,8 +4,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const universe = vi.fn();
 const scores = vi.fn();
 const idea = vi.fn();
+const portfolio = vi.fn();
 const eurOn = vi.fn();
-vi.mock("@/data/store", () => ({ instrumentUniverse: () => universe(), latestScores: () => scores() }));
+vi.mock("@/data/store", () => ({ instrumentUniverse: () => universe(), latestScores: () => scores(), latestPortfolio: () => portfolio() }));
 vi.mock("@/data/ideas-store", () => ({ companyIdea: () => idea(), ideasEnabled: () => eurOn() }));
 
 import Company, * as page from "./page";
@@ -13,7 +14,7 @@ import { instruments } from "@/data/fixtures";
 import { scoredUniverse } from "@/data/scored";
 import { sampleIdeas } from "@/ideas/fixtures";
 
-afterEach(() => { universe.mockReset(); scores.mockReset(); idea.mockReset(); eurOn.mockReset(); });
+afterEach(() => { universe.mockReset(); scores.mockReset(); idea.mockReset(); eurOn.mockReset(); portfolio.mockReset(); portfolio.mockResolvedValue(null); });
 const props = (ticker: string, locale = "en") => ({ params: Promise.resolve({ locale, ticker }) });
 const dbInstrument = { ticker: "ZZZZ", name: "Zed Corp", sector: "Cloud & SaaS", tier: null, source: "guide" as const };
 
@@ -28,6 +29,7 @@ describe("company page", () => {
     expect(instruments.some((i) => i.ticker === "ZZZZ")).toBe(false);
     universe.mockResolvedValue([dbInstrument]);
     scores.mockResolvedValue({ rows: [], sample: false, lastUpdated: null, stale: false });
+    portfolio.mockResolvedValue(null);
     const meta = await page.generateMetadata(props("zzzz"));
     expect(JSON.stringify(meta)).toContain("ZZZZ");
     expect(renderToStaticMarkup(await Company(props("ZZZZ")))).toContain("ZZZZ");
@@ -45,6 +47,7 @@ describe("company page", () => {
     const rows = (await scoredUniverse()).slice(0, 1).map((r) => ({ ...r, instrument: list[0] }));
     universe.mockResolvedValue(list);
     scores.mockResolvedValue({ rows, sample: false, lastUpdated: "2026-01-01", stale: false });
+    portfolio.mockResolvedValue(null);
     const html = renderToStaticMarkup(await Company(props("ZZZZ")));
     expect(html).toContain('href="/en/company/XXXX"');
     expect(html).toContain('href="/en/company/YYYY"');
@@ -56,8 +59,22 @@ describe("company page", () => {
     scores.mockResolvedValue({ rows, sample: opts.sample, lastUpdated: "2026-10-05", stale: false });
     idea.mockResolvedValue(opts.idea ?? null);
     eurOn.mockReturnValue(opts.eur ?? false);
+    portfolio.mockResolvedValue(null);
     return renderToStaticMarkup(await Company(props(rows[0].instrument.ticker, opts.locale)));
   }
+
+  it("marks published holdings and describes lower states without a purchase signal", async () => {
+    const [row] = await scoredUniverse();
+    universe.mockResolvedValue([row.instrument]);
+    scores.mockResolvedValue({ rows: [{ ...row, result: { ...row.result, state: "Ignore", total: 6 } }], sample: false, lastUpdated: "2026-10-05", stale: false });
+    idea.mockResolvedValue(null);
+    portfolio.mockResolvedValue({ weights: [{ symbol: row.instrument.ticker, weightPercent: 12 }] });
+    const html = renderToStaticMarkup(await Company(props(row.instrument.ticker, "sk")));
+    expect(html).toContain("V portfóliu, bez signálu na ďalší nákup");
+    expect(html).not.toContain("12 %");
+    portfolio.mockResolvedValue(null);
+    expect(renderToStaticMarkup(await Company(props(row.instrument.ticker, "sk")))).not.toContain("V portfóliu");
+  });
 
   describe("sources", () => {
     const RELEASE = "https://www.sec.gov/Archives/edgar/data/1/ex99.htm";
@@ -70,6 +87,7 @@ describe("company page", () => {
       scores.mockResolvedValue({ rows: [{ ...row, result }], sample: false, lastUpdated: "2026-10-05", stale: false });
       idea.mockResolvedValue(null);
       eurOn.mockReturnValue(false);
+      portfolio.mockResolvedValue(null);
       return renderToStaticMarkup(await Company(props(row.instrument.ticker, locale)));
     }
     it("shows a source under each rule and input, a link only for the stored release, and the summary", async () => {

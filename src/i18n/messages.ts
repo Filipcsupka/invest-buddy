@@ -11,8 +11,8 @@ const en = {
     siteName: "InvestBuddy",
     homeTitle: "InvestBuddy: rule-based stock screening you can audit",
     homeDescription: "A daily score for growth stocks built from published rules. Every ticker shows the rules it met, the rules it missed and the data behind them.",
-    dashboardTitle: "Dashboard",
-    dashboardDescription: "Today's sample universe grouped by rule state.",
+    dashboardTitle: "Stock screen",
+    dashboardDescription: "Search, filter and sort growth stocks grouped by rule state.",
     scannerTitle: "Scanner",
     scannerDescription: "Search, filter and sort every ticker in the sample universe by score and rule state.",
     companyTitle: "{ticker}, {name}",
@@ -84,7 +84,7 @@ const en = {
   nav: {
     label: "Main",
     home: "InvestBuddy home",
-    dashboard: "Dashboard",
+    dashboard: "Stock screen",
     scanner: "Scanner",
     trackRecord: "Track record",
     portfolio: "Portfolio",
@@ -213,7 +213,7 @@ const en = {
   home: {
     title: "Every score shows its working",
     lede: "InvestBuddy scores a fixed list of growth stocks each trading day with one published set of rules. Open any ticker to see which rules it met, which it missed and the data each rule read.",
-    primary: "Open today's dashboard",
+    primary: "Open today's stock screen",
     secondary: "Read the rules",
     specimenCaption: "Sample datasheet for {ticker}, session of {date}",
     specimenLink: "Open the full {ticker} screen",
@@ -228,7 +228,7 @@ const en = {
     recordLink: "View the track record",
   },
   dashboard: {
-    title: "Dashboard",
+    title: "Stock screen",
     lede: "Session of {date}. {count} scored with the same rules for every visitor.",
     summaryLabel: "Tickers per rule state",
     empty: "No ticker is in this state today.",
@@ -272,7 +272,7 @@ const en = {
     rejectionNone: "None triggered.",
     insufficientNote: "No score was calculated for this ticker.",
     inputsTitle: "Structured inputs",
-    back: "Back to the scanner",
+    back: "Back to the stock screen",
     methodLink: "How each rule is defined",
     inputs: {
       revenueAccelerating: "Revenue growth accelerating",
@@ -314,6 +314,8 @@ const en = {
     olderSnapshot: "Snapshot of {date}, {count}",
   },
   portfolio: {
+    held: "In portfolio",
+    heldNoSignal: "In portfolio, no signal for another purchase",
     title: "Owner's portfolio",
     lede: "A dated view of the positions held by the site owner. The figures here are sample data until a live feed is connected.",
     liveLede: "A delayed, dated view of the positions held by the site owner.",
@@ -354,7 +356,7 @@ const en = {
   errors: {
     notFoundTitle: "Page not found",
     notFoundBody: "The address may be mistyped, or the ticker is not in the sample universe.",
-    notFoundAction: "Open the scanner",
+    notFoundAction: "Open the stock screen",
     errorTitle: "This screen could not be loaded",
     errorBody: "Something failed while the page was being scored. Try again. If it keeps failing, the data source may be unavailable.",
     retry: "Try again",
@@ -410,8 +412,8 @@ const sk: Messages = {
     siteName: "InvestBuddy",
     homeTitle: "InvestBuddy: výber akcií podľa pravidiel, ktorý si overíte",
     homeDescription: "Denné skóre rastových akcií podľa zverejnených pravidiel. Pri každom tickeri vidíte, ktoré pravidlá splnil, ktoré nie a z akých údajov vychádzajú.",
-    dashboardTitle: "Prehľad",
-    dashboardDescription: "Dnešný ukážkový zoznam akcií rozdelený podľa stavu pravidiel.",
+    dashboardTitle: "Prehľad akcií",
+    dashboardDescription: "Rastové akcie podľa stavu pravidiel s vyhľadávaním, filtrovaním a radením.",
     scannerTitle: "Skener",
     scannerDescription: "Vyhľadávanie, filtrovanie a radenie všetkých tickerov z ukážkového zoznamu podľa skóre a stavu pravidiel.",
     companyTitle: "{ticker}, {name}",
@@ -483,7 +485,7 @@ const sk: Messages = {
   nav: {
     label: "Hlavná navigácia",
     home: "InvestBuddy, úvod",
-    dashboard: "Prehľad",
+    dashboard: "Prehľad akcií",
     scanner: "Skener",
     trackRecord: "História záznamov",
     portfolio: "Portfólio",
@@ -612,7 +614,7 @@ const sk: Messages = {
   home: {
     title: "Pri každom skóre vidíte celý výpočet",
     lede: "InvestBuddy každý obchodný deň hodnotí pevný zoznam rastových akcií podľa jednej zverejnenej sady pravidiel. Pri každom tickeri uvidíte, ktoré pravidlá splnil, ktoré nie a z akých údajov pravidlo vychádzalo.",
-    primary: "Otvoriť dnešný prehľad",
+    primary: "Otvoriť dnešný prehľad akcií",
     secondary: "Prečítať pravidlá",
     specimenCaption: "Ukážkový list pre {ticker}, obchodný deň {date}",
     specimenLink: "Otvoriť celý rozbor {ticker}",
@@ -627,7 +629,7 @@ const sk: Messages = {
     recordLink: "Pozrieť históriu záznamov",
   },
   dashboard: {
-    title: "Prehľad",
+    title: "Prehľad akcií",
     lede: "Obchodný deň {date}. Hodnotíme {count} rovnakými pravidlami pre každého návštevníka.",
     summaryLabel: "Počet tickerov podľa stavu pravidiel",
     empty: "Dnes v tomto stave nie je žiadny ticker.",
@@ -671,7 +673,7 @@ const sk: Messages = {
     rejectionNone: "Žiadne sa nespustilo.",
     insufficientNote: "Pre tento ticker sa skóre nevypočítalo.",
     inputsTitle: "Štruktúrované vstupy",
-    back: "Späť na skener",
+    back: "Späť na prehľad akcií",
     methodLink: "Ako je ktoré pravidlo definované",
     inputs: {
       revenueAccelerating: "Rast tržieb sa zrýchľuje",
@@ -713,6 +715,8 @@ const sk: Messages = {
     olderSnapshot: "Snímka z {date}, {count}",
   },
   portfolio: {
+    held: "V portfóliu",
+    heldNoSignal: "V portfóliu, bez signálu na ďalší nákup",
     title: "Portfólio prevádzkovateľa",
     lede: "Datovaný prehľad pozícií prevádzkovateľa stránky. Kým nebude pripojený živý zdroj, zobrazené údaje sú ukážkové.",
     liveLede: "Oneskorene zverejnený prehľad pozícií prevádzkovateľa stránky.",
@@ -753,7 +757,7 @@ const sk: Messages = {
   errors: {
     notFoundTitle: "Stránka sa nenašla",
     notFoundBody: "Adresa môže byť preklepnutá alebo ticker nie je v ukážkovom zozname.",
-    notFoundAction: "Otvoriť skener",
+    notFoundAction: "Otvoriť prehľad akcií",
     errorTitle: "Tento prehľad sa nepodarilo načítať",
     errorBody: "Pri hodnotení stránky sa niečo pokazilo. Skúste to znova. Ak chyba pretrváva, dátový zdroj môže byť nedostupný.",
     retry: "Skúsiť znova",

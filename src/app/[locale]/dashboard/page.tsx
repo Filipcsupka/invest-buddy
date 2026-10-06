@@ -1,18 +1,14 @@
-import Link from "next/link";
 import type { Metadata } from "next";
-import { Disclaimer } from "@/components/disclaimer";
-import { IconArrowRight } from "@/components/icons";
 import { OperatorDisclosure, SampleStamp } from "@/components/operator-disclosure";
-import { StateChip } from "@/components/score-badge";
-import { ScreenTable } from "@/components/screen-table";
-import { byScore, toRow, type ScreenRow } from "@/components/view-model";
-import { latestScores } from "@/data/store";
+import { ScannerTable } from "@/components/scanner-table";
+import { byScore, toRow } from "@/components/view-model";
+import { latestPortfolio, latestScores } from "@/data/store";
 import { DataStatus } from "@/components/data-status";
-export const dynamic = "force-dynamic";
 import { fill, formatDate, getMessages, plural } from "@/i18n";
 import { pageMetadata } from "@/i18n/metadata";
-import { stateOrder, type StateKey } from "@/i18n/rules";
 import { resolveLocale, type LocaleParams } from "../locale";
+
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: LocaleParams): Promise<Metadata> {
   const locale = await resolveLocale(params);
@@ -23,85 +19,28 @@ export async function generateMetadata({ params }: LocaleParams): Promise<Metada
 export default async function Dashboard({ params }: LocaleParams) {
   const locale = await resolveLocale(params);
   const m = getMessages(locale);
-  const data = await latestScores();
+  const [data, portfolio] = await Promise.all([latestScores(), latestPortfolio()]);
   const rows = data.rows.map((row) => toRow(locale, row)).sort(byScore);
-  const groups = new Map<StateKey, ScreenRow[]>(stateOrder.map((key) => [key, rows.filter((row) => row.state === key)]));
   const session = rows.find((row) => row.date)?.date ?? "";
-  const lower = [...(groups.get("wait") ?? []), ...(groups.get("ignore") ?? []), ...(groups.get("insufficient") ?? [])];
-
-  const section = (key: "setup" | "watch" | "broken", columns: ("sector" | "score" | "state" | "reason")[]) => {
-    const list = groups.get(key) ?? [];
-    const id = `disclaimer-${key}`;
-    if (!list.length && !data.sample) return null;
-    return (
-      <section className="board-section" aria-labelledby={`state-${key}`} key={key}>
-        <div className="board-head">
-          <h2 id={`state-${key}`}>
-            <StateChip state={key} label={m.states[key]} />
-            <span className="num board-count">{plural(locale, m.plurals.tickers, list.length)}</span>
-          </h2>
-          <p className="board-note">{m.dashboard.stateNotes[key]}</p>
-        </div>
-        {list.length ? (
-          <ScreenTable locale={locale} rows={list} columns={["company", ...columns]} disclaimerId={id} caption={<Disclaimer text={m.common.disclaimer} id={id} compact />} />
-        ) : (
-          <p className="empty-line">{m.dashboard.empty}</p>
-        )}
-      </section>
-    );
-  };
-
-  return (
-    <div className="frame page">
-      <header className="page-head">
-        <div className="page-title-row">
-          <h1 className="title">{m.dashboard.title}</h1>
-          {data.sample && <SampleStamp text={m.common.sample} />}
-        </div>
-        <p className="lede">{data.lastUpdated ? fill(m.dashboard.lede, { date: formatDate(locale, session), count: plural(locale, data.sample ? m.plurals.sampleTickers : m.plurals.tickers, rows.length) }) : m.common.noDataYet}</p>
-        <DataStatus locale={locale} lastUpdated={data.lastUpdated} stale={data.stale} />
-        <OperatorDisclosure text={m.common.operatorDisclosure} />
-      </header>
-
-      <table className="tally">
-        <caption className="visually-hidden">{m.dashboard.summaryLabel}</caption>
-        <tbody>
-          <tr>
-            {stateOrder
-              .filter((key) => key !== "insufficient" || (groups.get(key)?.length ?? 0) > 0)
-              .map((key) => (
-                <td key={key} data-state={key}>
-                  <a href={key === "wait" || key === "ignore" || key === "insufficient" ? "#lower" : `#state-${key}`} className="tally-cell">
-                    <span className="tally-label">{m.states[key]}</span>
-                    <span className="num tally-count">{groups.get(key)?.length ?? 0}</span>
-                  </a>
-                </td>
-              ))}
-          </tr>
-        </tbody>
-      </table>
-
-      {section("setup", ["sector", "score", "state"])}
-      {section("watch", ["sector", "score", "state"])}
-      {section("broken", ["score", "state", "reason"])}
-
-      <section className="board-section" aria-labelledby="lower">
-        <div className="board-head">
-          <h2 id="lower">{m.dashboard.lowerTitle}</h2>
-          <p className="board-note">{m.dashboard.lowerBody}</p>
-        </div>
-        <details className="disclosure-block">
-          <summary>{fill(m.dashboard.showLower, { count: plural(locale, m.plurals.tickers, lower.length) })}</summary>
-          <ScreenTable locale={locale} rows={lower} columns={["company", "sector", "score", "state"]} disclaimerId="disclaimer-lower" caption={<Disclaimer text={m.common.disclaimer} id="disclaimer-lower" compact />} />
-        </details>
-      </section>
-
-      <p className="page-foot">
-        <Link className="arrow-link" href={`/${locale}/scanner`}>
-          {m.dashboard.scannerLink}
-          <IconArrowRight />
-        </Link>
-      </p>
-    </div>
-  );
+  return <div className="frame page">
+    <header className="page-head">
+      <div className="page-title-row"><h1 className="title">{m.dashboard.title}</h1>{data.sample && <SampleStamp text={m.common.sample} />}</div>
+      <p className="lede">{data.lastUpdated ? fill(m.dashboard.lede, { date: formatDate(locale, session), count: plural(locale, data.sample ? m.plurals.sampleTickers : m.plurals.tickers, rows.length) }) : m.common.noDataYet}</p>
+      <DataStatus locale={locale} lastUpdated={data.lastUpdated} stale={data.stale} />
+      <OperatorDisclosure text={m.common.operatorDisclosure} />
+    </header>
+    <ScannerTable locale={locale} rows={rows} heldTickers={portfolio?.weights.filter((p) => p.weightPercent > 0).map((p) => p.symbol.toUpperCase()) ?? []} text={{
+      searchLabel: m.scanner.searchLabel, searchPlaceholder: m.scanner.searchPlaceholder,
+      filterLabel: m.scanner.filterLabel, allStates: m.scanner.allStates, clear: m.scanner.clear,
+      empty: m.scanner.empty, showing: m.scanner.showing, sortBy: m.table.sortBy,
+      disclaimer: m.common.disclaimer, extension: m.common.extension, noScore: m.common.noScore, noRejection: m.table.noRejection,
+      held: m.portfolio.held, heldNoSignal: m.portfolio.heldNoSignal,
+      columns: { ticker: m.table.ticker, sector: m.table.sector, score: m.table.score, rules: m.table.rules, state: m.table.state, criteria: m.table.criteria,
+        f: m.groups.fundamentalsShort, t: m.groups.technicalShort, m: m.groups.macroShort,
+        fName: m.groups.fundamentals, tName: m.groups.technical, mName: m.groups.macro },
+      states: m.states,
+      board: { summaryLabel: m.dashboard.summaryLabel, lowerTitle: m.dashboard.lowerTitle, lowerBody: m.dashboard.lowerBody,
+        showLower: m.dashboard.showLower, empty: m.dashboard.empty, stateNotes: m.dashboard.stateNotes },
+    }} />
+  </div>;
 }

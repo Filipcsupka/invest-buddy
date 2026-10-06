@@ -8,7 +8,7 @@ export function NavLinks({ locale, label, items }: { locale: string; label: stri
     <nav aria-label={label} className="nav-links">
       {items.map((item) => {
         const href = `/${locale}${item.href}`;
-        const current = pathname === href || pathname.startsWith(`${href}/`) || (item.href === "/scanner" && pathname.startsWith(`/${locale}/company/`));
+        const current = pathname === href || pathname.startsWith(`${href}/`) || (item.href === "/dashboard" && pathname.startsWith(`/${locale}/company/`));
         return (
           <Link key={item.href} href={href} aria-current={current ? "page" : undefined}>
             {item.text}

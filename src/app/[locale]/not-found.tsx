@@ -12,7 +12,7 @@ export default function NotFound() {
     <div className="frame page state-page">
       <h1 className="title">{m.errors.notFoundTitle}</h1>
       <p className="lede">{m.errors.notFoundBody}</p>
-      <Link className="button" href={`/${locale}/scanner`}>
+      <Link className="button" href={`/${locale}/dashboard`}>
         {m.errors.notFoundAction}
         <IconArrowRight />
       </Link>
