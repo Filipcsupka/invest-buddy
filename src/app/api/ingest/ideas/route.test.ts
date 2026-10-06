@@ -8,7 +8,7 @@ const hash = "d".repeat(64);
 const url = (over: Record<string, string> = {}) => `http://localhost/api/ingest/ideas?${new URLSearchParams({ asOf: "2026-10-05", agent: "claude", inputHash: hash, ...over })}`;
 const get = (u: string, token = "Bearer secret") => new Request(u, { headers: { authorization: token } });
 const post = (body: unknown, token = "Bearer secret") => new Request("http://localhost/api/ingest/ideas", { method: "POST", headers: { authorization: token }, body: typeof body === "string" ? body : JSON.stringify(body) });
-const idea = { symbol: "NVDA", action: "ADD", amountMinEur: 60, amountMaxEur: 90, verdict: "v", whatHappened: ["a", "b"], whyItMatters: ["c"], setup: { company: "Strong", entry: "Good", catalyst: "Neutral" }, numbers: [{ label: "a", value: "1" }, { label: "b", value: "2" }, { label: "c", value: "3" }], plan: { amountNow: "x", trigger: "t", invalidation: "i", opportunityCost: "o" }, evidence: [{ url: "https://sec.gov/x", label: "x" }], unconfirmed: false, signature: "ADD|Strong|Good|Neutral|60-90", ruleConfigVersion: "2026-10-05.1" };
+const idea = { symbol: "NVDA", action: "ADD", sizeTier: "ADD_THIRD", amountMinEur: 60, amountMaxEur: 90, verdict: "v", whatHappened: ["a", "b"], whyItMatters: ["c"], setup: { company: "Strong", entry: "Good", catalyst: "Neutral" }, numbers: [{ label: "a", value: "1" }, { label: "b", value: "2" }, { label: "c", value: "3" }], plan: { amountNow: "x", trigger: "t", invalidation: "i", opportunityCost: "o" }, evidence: [{ url: "https://sec.gov/x", label: "x" }], unconfirmed: false, signature: "ADD|Strong|Good|Neutral|ADD_THIRD", ruleConfigVersion: "2026-10-06.1" };
 const body = { run: { asOf: "2026-10-05", agent: "claude", model: "sonnet", inputHash: hash, status: "ok", usage: { inputTokens: 1 } }, ideas: [idea] };
 const original = { token: process.env.INGEST_TOKEN, db: process.env.DATABASE_URL };
 beforeEach(() => { process.env.INGEST_TOKEN = "secret"; process.env.DATABASE_URL = "postgresql://example"; store.skip = false; store.recorded.length = 0; });
@@ -37,6 +37,9 @@ describe("ideas route", () => {
     expect(store.recorded).toHaveLength(1);
     expect((await POST(post({ ...body, ideas: [{ ...idea, action: "BUY" }] }))).status).toBe(400);
     expect((await POST(post({ ...body, ideas: [{ ...idea, symbol: "nvda" }] }))).status).toBe(400);
+    expect((await POST(post({ ...body, ideas: [{ ...idea, sizeTier: "FULL" }] }))).status).toBe(400);
+    expect((await POST(post({ ...body, ideas: [{ ...idea, sizeTier: undefined }] }))).status).toBe(400);
+    expect((await POST(post({ ...body, ideas: [{ ...idea, action: "WATCH", sizeTier: "NONE", amountMinEur: 0, amountMaxEur: 0 }] }))).status).toBe(200);
     expect((await POST(post("{"))).status).toBe(400);
     expect((await POST(post({ ...body, run: { ...body.run, asOf: "2026-02-30" } }))).status).toBe(400);
     expect((await POST(post({ ...body, ideas: [{ ...idea, carriedFrom: "2026-02-30" }] }))).status).toBe(400);

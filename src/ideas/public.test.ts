@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { showsOnCompanyPage, stripEur, withoutEur } from "./public";
+import { hasBuySize, publicTier, showsOnCompanyPage, stripEur, withoutEur } from "./public";
 import { sampleIdeas } from "./fixtures";
 
 describe("public idea helpers", () => {
@@ -12,7 +12,17 @@ describe("public idea helpers", () => {
     expect(withoutEur("Add 50 € now.")).toBeNull();
     expect(withoutEur("Price fell 7.4% from the high.")).toBe("Price fell 7.4% from the high.");
   });
-  it("leaves no EUR anywhere in a stripped sample idea", () => {
-    for (const idea of sampleIdeas) expect(JSON.stringify(stripEur(idea))).not.toMatch(/EUR|€/);
+  it("leaves no EUR anywhere in a stripped sample idea and keeps the size tier", () => {
+    for (const idea of sampleIdeas) {
+      expect(JSON.stringify(stripEur(idea))).not.toMatch(/EUR|€/);
+      expect(stripEur(idea).sizeTier).toBe(idea.sizeTier);
+      expect([stripEur(idea).amountMinEur, stripEur(idea).amountMaxEur]).toEqual([0, 0]);
+    }
+  });
+  it("a buy size is any tier but NONE; an idea from before tiers has none", () => {
+    expect(hasBuySize(publicTier({ sizeTier: "STARTER" }))).toBe(true);
+    expect(hasBuySize(publicTier({ sizeTier: "NONE" }))).toBe(false);
+    expect(publicTier({ sizeTier: null })).toBeNull();
+    expect(hasBuySize(null)).toBe(false);
   });
 });

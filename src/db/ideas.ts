@@ -1,17 +1,22 @@
 import type pg from "pg";
 import { z } from "zod";
 import { isoDate } from "./iso-date";
+import { SIZE_TIERS, tierFits, type SizeTier } from "../engine/signals";
 
 export const ACTIONS = ["WATCH", "START_POSITION", "ADD", "HIGH_CONVICTION_ADD", "HOLD", "REDUCE", "THESIS_BROKEN", "CSPX_ALLOCATION"] as const;
 export type IdeaAction = (typeof ACTIONS)[number];
 export const RATINGS = ["Very strong", "Strong", "Good", "Neutral", "Weak"] as const;
 export type Rating = (typeof RATINGS)[number];
+export { SIZE_TIERS, type SizeTier };
 
 const text = (max: number) => z.string().trim().min(1).max(max);
 /** One idea as the judge writes it and as the ideas route accepts it. Mirrors scanner/schema/judge-output.schema.json. */
 const ideaObject = z.object({
   symbol: z.string().regex(/^[A-Z0-9.]{1,10}$/),
   action: z.enum(ACTIONS),
+  /** Public size: a share of a full position, never a currency amount. */
+  sizeTier: z.enum(SIZE_TIERS),
+  /** Owner view only: EUR band from the private baseline, 0 without one. */
   amountMinEur: z.number().nonnegative().max(1e7),
   amountMaxEur: z.number().nonnegative().max(1e7),
   verdict: text(240),
@@ -24,11 +29,16 @@ const ideaObject = z.object({
   unconfirmed: z.boolean(),
 }).strict();
 const amountsOrdered = (i: { amountMinEur: number; amountMaxEur: number }) => i.amountMaxEur >= i.amountMinEur;
-export const ideaSchema = ideaObject.refine(amountsOrdered, { message: "amountMaxEur must be at least amountMinEur" });
+const tierMatches = (i: { action: IdeaAction; sizeTier: SizeTier }) => tierFits(i.action, i.sizeTier);
+const tierMessage = { message: "sizeTier does not fit the action" };
+export const ideaSchema = ideaObject.refine(amountsOrdered, { message: "amountMaxEur must be at least amountMinEur" }).refine(tierMatches, tierMessage);
 export type Idea = z.infer<typeof ideaSchema>;
 
-/** The key that decides whether an idea is news: the deterministic action, the three ratings and the amount band. The judge's wording is not part of it. */
-export const ideaSignature = (i: { action: string; setup: Idea["setup"]; amountMinEur: number; amountMaxEur: number }) => `${i.action}|${i.setup.company}|${i.setup.entry}|${i.setup.catalyst}|${i.amountMinEur}-${i.amountMaxEur}`;
+/**
+ * The key that decides whether an idea is news: the deterministic action, the three ratings and the size tier. The judge's wording and
+ * the owner's EUR band are not part of it, so a change in the private baseline alone never makes an idea new.
+ */
+export const ideaSignature = (i: { action: string; setup: Idea["setup"]; sizeTier: SizeTier }) => `${i.action}|${i.setup.company}|${i.setup.entry}|${i.setup.catalyst}|${i.sizeTier}`;
 
 const count = z.number().int().nonnegative().nullable().optional();
 export const judgeRunSchema = z.object({
@@ -56,11 +66,12 @@ export const ideasPostSchema = z.object({
     ruleConfigVersion: z.string().min(1).max(40),
     conflictNote: z.string().min(1).max(300).nullable().optional(),
     downgradedFrom: z.enum(ACTIONS).nullable().optional(),
-  }).refine(amountsOrdered, { message: "amountMaxEur must be at least amountMinEur" })).max(40),
+  }).refine(amountsOrdered, { message: "amountMaxEur must be at least amountMinEur" }).refine(tierMatches, tierMessage)).max(40),
 });
 export type IdeasPost = z.infer<typeof ideasPostSchema>;
 
-export interface StoredIdea extends Idea { id: number; asOf: string; carriedFrom: string | null; conflictNote: string | null; downgradedFrom: IdeaAction | null; signature: string; ruleConfigVersion: string; model: string; createdAt: string }
+/** A stored idea. sizeTier is null for ideas stored before migration 011. */
+export interface StoredIdea extends Omit<Idea, "sizeTier"> { sizeTier: SizeTier | null; id: number; asOf: string; carriedFrom: string | null; conflictNote: string | null; downgradedFrom: IdeaAction | null; signature: string; ruleConfigVersion: string; model: string; createdAt: string }
 
 /** True when this exact input already produced a stored result for the same agent and date. A run that never stored its ideas does not skip. */
 export async function hasOkJudge(pool: Pick<pg.Pool, "query">, key: { asOf: string; agent: string; inputHash: string }): Promise<boolean> {
@@ -101,17 +112,17 @@ export async function recordJudge(pool: pg.Pool, body: IdeasPost): Promise<{ sto
 }
 
 async function insertIdea(client: Client, i: IdeasPost["ideas"][number], run: JudgeRun): Promise<number> {
-  const r = await client.query(`INSERT INTO trade_ideas (as_of,symbol,action,amount_min_eur,amount_max_eur,verdict,what_happened,why_it_matters,setup,numbers,plan,evidence_urls,unconfirmed,carried_from,signature,input_hash,agent,model,rule_config_version,conflict_note,downgraded_from)
-    VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9::jsonb,$10::jsonb,$11::jsonb,$12::jsonb,$13,$14,$15,$16,$17,$18,$19,$20,$21)
+  const r = await client.query(`INSERT INTO trade_ideas (as_of,symbol,action,amount_min_eur,amount_max_eur,verdict,what_happened,why_it_matters,setup,numbers,plan,evidence_urls,unconfirmed,carried_from,signature,input_hash,agent,model,rule_config_version,conflict_note,downgraded_from,size_tier)
+    VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9::jsonb,$10::jsonb,$11::jsonb,$12::jsonb,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
     ON CONFLICT (as_of,symbol,input_hash) DO NOTHING`,
   [run.asOf, i.symbol, i.action, i.amountMinEur, i.amountMaxEur, i.verdict, JSON.stringify(i.whatHappened), JSON.stringify(i.whyItMatters), JSON.stringify(i.setup), JSON.stringify(i.numbers), JSON.stringify(i.plan), JSON.stringify(i.evidence),
-    i.unconfirmed, i.carriedFrom ?? null, i.signature, run.inputHash, run.agent, run.model, i.ruleConfigVersion, i.conflictNote ?? null, i.downgradedFrom ?? null]);
+    i.unconfirmed, i.carriedFrom ?? null, i.signature, run.inputHash, run.agent, run.model, i.ruleConfigVersion, i.conflictNote ?? null, i.downgradedFrom ?? null, i.sizeTier]);
   return r.rowCount ?? 0;
 }
 
-interface IdeaRow { id: string; as_of: string; symbol: string; action: IdeaAction; amount_min_eur: string; amount_max_eur: string; verdict: string; what_happened: string[]; why_it_matters: string[]; setup: Idea["setup"]; numbers: Idea["numbers"]; plan: Idea["plan"]; evidence_urls: Idea["evidence"]; unconfirmed: boolean; carried_from: string | null; conflict_note: string | null; downgraded_from: IdeaAction | null; signature: string; rule_config_version: string; model: string; created_at: Date | string }
-export const mapIdea = (r: IdeaRow): StoredIdea => ({ id: Number(r.id), asOf: r.as_of, symbol: r.symbol, action: r.action, amountMinEur: Number(r.amount_min_eur), amountMaxEur: Number(r.amount_max_eur), verdict: r.verdict, whatHappened: r.what_happened, whyItMatters: r.why_it_matters, setup: r.setup, numbers: r.numbers, plan: r.plan, evidence: r.evidence_urls, unconfirmed: r.unconfirmed, carriedFrom: r.carried_from, conflictNote: r.conflict_note, downgradedFrom: r.downgraded_from, signature: r.signature, ruleConfigVersion: r.rule_config_version, model: r.model, createdAt: new Date(r.created_at).toISOString() });
-const COLUMNS = "id,as_of::text,symbol,action,amount_min_eur,amount_max_eur,verdict,what_happened,why_it_matters,setup,numbers,plan,evidence_urls,unconfirmed,carried_from::text,conflict_note,downgraded_from,signature,rule_config_version,model,created_at";
+interface IdeaRow { id: string; as_of: string; symbol: string; action: IdeaAction; size_tier: SizeTier | null; amount_min_eur: string; amount_max_eur: string; verdict: string; what_happened: string[]; why_it_matters: string[]; setup: Idea["setup"]; numbers: Idea["numbers"]; plan: Idea["plan"]; evidence_urls: Idea["evidence"]; unconfirmed: boolean; carried_from: string | null; conflict_note: string | null; downgraded_from: IdeaAction | null; signature: string; rule_config_version: string; model: string; created_at: Date | string }
+export const mapIdea = (r: IdeaRow): StoredIdea => ({ id: Number(r.id), asOf: r.as_of, symbol: r.symbol, action: r.action, sizeTier: r.size_tier ?? null, amountMinEur: Number(r.amount_min_eur), amountMaxEur: Number(r.amount_max_eur), verdict: r.verdict, whatHappened: r.what_happened, whyItMatters: r.why_it_matters, setup: r.setup, numbers: r.numbers, plan: r.plan, evidence: r.evidence_urls, unconfirmed: r.unconfirmed, carriedFrom: r.carried_from, conflictNote: r.conflict_note, downgradedFrom: r.downgraded_from, signature: r.signature, ruleConfigVersion: r.rule_config_version, model: r.model, createdAt: new Date(r.created_at).toISOString() });
+const COLUMNS = "id,as_of::text,symbol,action,size_tier,amount_min_eur,amount_max_eur,verdict,what_happened,why_it_matters,setup,numbers,plan,evidence_urls,unconfirmed,carried_from::text,conflict_note,downgraded_from,signature,rule_config_version,model,created_at";
 
 /** Unexpired ideas, newest first. */
 export async function listIdeas(pool: Pick<pg.Pool, "query">, limit = 50): Promise<StoredIdea[]> {

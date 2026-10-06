@@ -13,15 +13,15 @@ const here = dirname(fileURLToPath(import.meta.url));
 const SCRIPT = join(here, "..", "run-judge.mjs");
 const U1 = "https://www.sec.gov/Archives/edgar/data/1045810/nvda-8k-ex99.htm", U2 = "https://www.sec.gov/Archives/edgar/data/1045810/nvda-10q.htm", U3 = "https://www.sec.gov/Archives/edgar/data/2488/amd-8k.htm";
 
-const sig = (symbol, over = {}) => ({ symbol, action: "ADD", amountMinEur: 60, amountMaxEur: 90, ratings: { company: "Very strong", entry: "Strong", catalyst: "Good" }, points: { company: 6, entry: 4, catalyst: 2 }, unconfirmed: false, carriedFrom: null, confirmedFields: ["epsBeat", "revenueAccelerating"], reasons: ["Fundamentals hold and the entry is good."], ruleConfigVersion: "2026-10-05.1", signature: `${over.action ?? "ADD"}|Very strong|Strong|Good|${over.amountMinEur ?? 60}-${over.amountMaxEur ?? 90}`, ...over });
-const ctx = (symbol, evidence) => ({ symbol, name: symbol, sector: "AI", tier: 1, held: null, score: { total: 19, technical: 9, fundamentals: 7, macro: 3, state: "Setup met (>=18)", pullbackInUptrend: true, asOf: "2026-10-05" }, invalidReasons: [], technicals: { close: 120.5, belowHigh20Percent: 7.4, rsi14: 48.2, regime: "pullback" }, matchedRules: [], fields: {}, expiredFields: [], carriedFrom: null, evidence: evidence.map((url) => ({ url, field: "epsBeat", publishedAt: "2026-10-01", quote: "q" })) });
+const sig = (symbol, over = {}) => ({ symbol, action: "ADD", sizeTier: "ADD_THIRD", amountMinEur: 60, amountMaxEur: 90, ratings: { company: "Very strong", entry: "Strong", catalyst: "Good" }, points: { company: 6, entry: 4, catalyst: 2 }, unconfirmed: false, carriedFrom: null, confirmedFields: ["epsBeat", "revenueAccelerating"], reasons: ["Fundamentals hold and the entry is good."], ownerNotes: [], ruleConfigVersion: "2026-10-06.1", signature: `${over.action ?? "ADD"}|Very strong|Strong|Good|${over.sizeTier ?? "ADD_THIRD"}`, ...over });
+const ctx = (symbol, evidence, held = null) => ({ symbol, name: symbol, sector: "AI", tier: 1, held, score: { total: 19, technical: 9, fundamentals: 7, macro: 3, state: "Setup met (>=18)", pullbackInUptrend: true, asOf: "2026-10-05" }, invalidReasons: [], technicals: { close: 120.5, belowHigh20Percent: 7.4, rsi14: 48.2, regime: "pullback" }, matchedRules: [], fields: {}, expiredFields: [], carriedFrom: null, evidence: evidence.map((url) => ({ url, field: "epsBeat", publishedAt: "2026-10-01", quote: "q" })) });
 // Synthetic baseline, test only.
 const input = (over = {}) => ({
-  asOf: "2026-10-05", generatedAt: "2026-10-05T20:00:00.000Z", ruleConfigVersion: "2026-10-05.1",
+  asOf: "2026-10-05", generatedAt: "2026-10-05T20:00:00.000Z", ruleConfigVersion: "2026-10-06.1",
   benchmark: { symbol: "CSPX", description: "S&P 500 UCITS ETF" },
   portfolio: { asOf: "2026-10-05", source: "manual", currency: "EUR", cashEur: 600, monthlyContributionEur: 200, investedEur: 3030, positions: [{ symbol: "NVDA", valueEur: 540 }, { symbol: "CSPX", valueEur: 2100 }] },
-  symbols: [ctx("NVDA", [U1, U2]), ctx("AMD", [U3])],
-  signals: [sig("AMD", { action: "WATCH", amountMinEur: 0, amountMaxEur: 0, unconfirmed: true, carriedFrom: "2026-09-23", signature: "WATCH|Very strong|Strong|Good|0-0" }), sig("NVDA")],
+  symbols: [ctx("NVDA", [U1, U2], { valueEur: 540, weightPercent: 17.8 }), ctx("AMD", [U3])],
+  signals: [sig("AMD", { action: "WATCH", sizeTier: "NONE", amountMinEur: 0, amountMaxEur: 0, unconfirmed: true, carriedFrom: "2026-09-23" }), sig("NVDA")],
   previousIdeas: [], ...over,
 });
 const words = (symbol, over = {}) => ({
@@ -45,7 +45,7 @@ test("schema accepts wording, and the model cannot send action, amounts or ratin
   assert.deepEqual(validateJudgeOutput({ ideas: [] }), []);
   assert.deepEqual(validateJudgeOutput({ ideas: [words("NVDA", { downgrade: { reason: "r", evidenceUrl: U1 }, conflict: { reason: "r", evidenceUrl: U2 } })] }), []);
   const bad = (over) => validateJudgeOutput({ ideas: [words("NVDA", over)] });
-  for (const k of ["action", "amountMinEur", "setup"]) assert.match(bad({ [k]: "ADD" }).join(), /unknown field/, k);
+  for (const k of ["action", "sizeTier", "amountMinEur", "setup"]) assert.match(bad({ [k]: "ADD" }).join(), /unknown field/, k);
   assert.match(bad({ whatHappened: ["only one"] }).join(), /fewer than 2/);
   assert.match(bad({ numbers: [{ label: "a", value: "b" }] }).join(), /fewer than 3/);
   assert.match(bad({ evidence: [{ url: "http://insecure.example/x", label: "x" }] }).join(), /does not match/);
@@ -63,25 +63,39 @@ test("null downgrade and conflict count as absent, other deviations stay errors"
 
 test("only changed signals are news; no routine HOLD", () => {
   const nv = sig("NVDA");
-  const prev = [{ symbol: "NVDA", signature: nv.signature }, { symbol: "AMD", signature: "WATCH|A|B|C|0-0" }];
+  const prev = [{ symbol: "NVDA", signature: nv.signature }, { symbol: "AMD", signature: "WATCH|A|B|C|NONE" }];
   assert.deepEqual(changedSignals([nv], prev), []);
-  assert.equal(changedSignals([sig("NVDA", { signature: "ADD|Very strong|Strong|Good|60-95", amountMaxEur: 95 })], prev).length, 1, "a changed band is news");
-  assert.equal(changedSignals([sig("NVDA", { action: "HOLD", signature: "HOLD|x|y|z|0-0" })], prev).length, 1, "ADD to HOLD is a change");
-  assert.equal(changedSignals([sig("MSFT", { action: "HOLD", signature: "HOLD|x|y|z|0-0" })], prev).length, 0, "a first HOLD is noise");
+  assert.deepEqual(changedSignals([sig("NVDA", { amountMaxEur: 95 })], prev), [], "a changed owner band alone is not news");
+  assert.equal(changedSignals([sig("NVDA", { action: "HIGH_CONVICTION_ADD", sizeTier: "ADD_HALF" })], prev).length, 1, "a changed tier is news");
+  assert.equal(changedSignals([sig("NVDA", { action: "HOLD", sizeTier: "NONE" })], prev).length, 1, "ADD to HOLD is a change");
+  assert.equal(changedSignals([sig("MSFT", { action: "HOLD", sizeTier: "NONE" })], prev).length, 0, "a first HOLD is noise");
   assert.equal(changedSignals([sig("MSFT")], prev).length, 1, "a first ADD is news");
 });
 
-test("the merge keeps the fixed decision and builds the amount text", () => {
+test("the merge keeps the fixed decision, the tier and the private amount text", () => {
   const { ideas } = merge([words("NVDA"), words("AMD", { evidence: [], unconfirmed: false })]);
   const nvda = ideas.find((i) => i.symbol === "NVDA"), amd = ideas.find((i) => i.symbol === "AMD");
-  assert.deepEqual([nvda.action, nvda.amountMinEur, nvda.amountMaxEur, nvda.plan.amountNow], ["ADD", 60, 90, "EUR 60-90"]);
+  assert.deepEqual([nvda.action, nvda.sizeTier, nvda.amountMinEur, nvda.amountMaxEur, nvda.plan.amountNow], ["ADD", "ADD_THIRD", 60, 90, "EUR 60-90"]);
   assert.deepEqual(nvda.setup, { company: "Very strong", entry: "Strong", catalyst: "Good" });
-  assert.equal(nvda.signature, "ADD|Very strong|Strong|Good|60-90");
-  assert.equal(nvda.ruleConfigVersion, "2026-10-05.1");
+  assert.equal(nvda.signature, "ADD|Very strong|Strong|Good|ADD_THIRD");
+  assert.equal(nvda.ruleConfigVersion, "2026-10-06.1");
+  assert.equal(amd.sizeTier, "NONE");
   assert.equal(amd.plan.amountNow, "EUR 0");
   assert.equal(amd.carriedFrom, "2026-09-23");
   assert.equal(amd.unconfirmed, true, "the rules mark it unconfirmed and the model cannot clear that");
   assert.equal(amountText("ADD", 60.5, 90), "EUR 60.50-90");
+});
+
+test("the model input is data only: no portfolio, no EUR band, no held value, the tier in words", () => {
+  const m = buildModelInput(input(), input().signals);
+  assert.ok(!("portfolio" in m));
+  const text = JSON.stringify(m);
+  assert.doesNotMatch(text, /amountMinEur|amountMaxEur|cashEur|valueEur|weightPercent|ownerNotes/);
+  const nvda = m.items.find((i) => i.signal.symbol === "NVDA");
+  assert.deepEqual([nvda.signal.sizeTier, nvda.signal.size], ["ADD_THIRD", "add about 1/3 of a full position"]);
+  assert.ok(!("held" in nvda.context));
+  assert.doesNotThrow(() => merge([words("NVDA", { verdict: "Add about 1/3 of a full position on the dip." }), words("AMD", { evidence: [] })]), "the tier fraction is an input figure");
+  assert.throws(() => merge([words("NVDA", { verdict: "NVDA is 17.8 percent of the portfolio." }), words("AMD", { evidence: [] })]), /figures not in the input: 17.8/, "the owner's weight is not in the model input");
 });
 
 test("evidence urls outside the input, invented figures and wrong symbols fail the call", () => {
@@ -136,12 +150,12 @@ test("a downgrade only moves a buy to WATCH EUR 0 and keeps the signature; a con
   const down = { reason: "The cited 8-K reports a guidance cut.", evidenceUrl: U1 };
   const { ideas } = merge([words("NVDA", { downgrade: down, conflict: { reason: "Rules and the 10-Q disagree.", evidenceUrl: U2 } }), words("AMD", { evidence: [] })]);
   const nvda = ideas.find((i) => i.symbol === "NVDA");
-  assert.deepEqual([nvda.action, nvda.amountMinEur, nvda.amountMaxEur, nvda.plan.amountNow, nvda.downgradedFrom], ["WATCH", 0, 0, "EUR 0", "ADD"]);
-  assert.equal(nvda.signature, "ADD|Very strong|Strong|Good|60-90", "the signature stays the deterministic one, so tomorrow it is not new again");
+  assert.deepEqual([nvda.action, nvda.sizeTier, nvda.amountMinEur, nvda.amountMaxEur, nvda.plan.amountNow, nvda.downgradedFrom], ["WATCH", "NONE", 0, 0, "EUR 0", "ADD"]);
+  assert.equal(nvda.signature, "ADD|Very strong|Strong|Good|ADD_THIRD", "the signature stays the deterministic one, so tomorrow it is not new again");
   assert.equal(nvda.conflictNote, "Rules and the 10-Q disagree.");
   assert.equal(nvda.unconfirmed, true);
   assert.throws(() => merge([words("NVDA", { downgrade: { reason: "r", evidenceUrl: "https://example.com/other" } }), words("AMD", { evidence: [] })]), /cites a url not in the input/);
-  const i2 = input({ signals: [sig("NVDA", { action: "REDUCE", amountMinEur: 100, amountMaxEur: 200, signature: "REDUCE|a|b|c|100-200" })] });
+  const i2 = input({ signals: [sig("NVDA", { action: "REDUCE", sizeTier: "NONE", amountMinEur: 100, amountMaxEur: 200 })] });
   const r = merge([words("NVDA", { downgrade: down })], i2);
   assert.equal(r.ideas[0].action, "REDUCE", "a downgrade cannot remove a REDUCE");
   assert.match(r.notes[0], /downgrade ignored/);
@@ -152,7 +166,7 @@ test("hash ignores generatedAt and previousIdeas and follows rule version, input
   const h = judgeHash(base);
   assert.match(h, /^[0-9a-f]{64}$/);
   assert.equal(judgeHash({ ...base, input: input({ generatedAt: "later", previousIdeas: [{ symbol: "X" }] }) }), h);
-  assert.notEqual(judgeHash({ ...base, input: input({ ruleConfigVersion: "2026-10-06.1" }) }), h);
+  assert.notEqual(judgeHash({ ...base, input: input({ ruleConfigVersion: "2026-10-07.1" }) }), h);
   assert.notEqual(judgeHash({ ...base, input: input({ portfolio: { ...input().portfolio, cashEur: 601 } }) }), h);
   assert.notEqual(judgeHash({ ...base, prompt: "q" }), h);
   assert.notEqual(judgeHash({ ...base, model: "opus" }), h);
@@ -231,7 +245,7 @@ const both = [words("NVDA"), words("AMD", { evidence: [] })];
 
 test("end to end: one call for the changed signals, fixed decisions kept, tokens recorded, skips honoured", async () => {
   const s = stub(); s.respond(envelope(JSON.stringify({ ideas: [words("NVDA")], notes: "n" })));
-  const prev = [{ symbol: "AMD", signature: "WATCH|Very strong|Strong|Good|0-0" }];
+  const prev = [{ symbol: "AMD", signature: "WATCH|Very strong|Strong|Good|NONE" }];
   let web = await mockWeb({ inputOverride: input({ previousIdeas: prev }) });
   try {
     const r = await runJudge(["--as-of", "2026-10-05", "--base-url", web.base, "--budget-usd", "0.3", "--max-symbols", "7"], { s });
@@ -243,9 +257,10 @@ test("end to end: one call for the changed signals, fixed decisions kept, tokens
     const post = web.seen.posts[0];
     assert.deepEqual(post.ideas.map((i) => i.symbol), ["NVDA"], "AMD signal unchanged, so no alert and no model text asked for it");
     assert.equal(post.ideas[0].action, "ADD");
-    assert.equal(post.ideas[0].signature, "ADD|Very strong|Strong|Good|60-90");
+    assert.equal(post.ideas[0].signature, "ADD|Very strong|Strong|Good|ADD_THIRD");
+    assert.equal(post.ideas[0].sizeTier, "ADD_THIRD");
     assert.equal(post.run.status, "ok");
-    assert.equal(post.run.ruleConfigVersion, "2026-10-05.1");
+    assert.equal(post.run.ruleConfigVersion, "2026-10-06.1");
     assert.deepEqual(post.run.usage, { inputTokens: 11, outputTokens: 22, cacheReadTokens: 33, cacheCreationTokens: 44, turns: 1 });
     assert.equal(post.run.costUsd, 0.0123);
     assert.ok(web.seen.auth.every((a) => a === "Bearer test-token"));
@@ -255,20 +270,33 @@ test("end to end: one call for the changed signals, fixed decisions kept, tokens
 
 test("only the changed symbols reach the model, and an empty change list makes no call", async () => {
   const s = stub(); s.respond(envelope(JSON.stringify({ ideas: [words("NVDA")] })));
-  const prev = [{ symbol: "AMD", signature: "WATCH|Very strong|Strong|Good|0-0" }];
+  const prev = [{ symbol: "AMD", signature: "WATCH|Very strong|Strong|Good|NONE" }];
   let web = await mockWeb({ inputOverride: input({ previousIdeas: prev }) });
   try {
     await runJudge(["--as-of", "2026-10-05", "--base-url", web.base], { s });
     assert.ok(s.calls()[0].hasInput);
   } finally { await web.close(); }
   const s2 = stub();
-  web = await mockWeb({ inputOverride: input({ previousIdeas: [{ symbol: "AMD", signature: "WATCH|Very strong|Strong|Good|0-0" }, { symbol: "NVDA", signature: "ADD|Very strong|Strong|Good|60-90" }] }) });
+  web = await mockWeb({ inputOverride: input({ previousIdeas: [{ symbol: "AMD", signature: "WATCH|Very strong|Strong|Good|NONE" }, { symbol: "NVDA", signature: "ADD|Very strong|Strong|Good|ADD_THIRD" }] }) });
   try {
     const r = await runJudge(["--as-of", "2026-10-05", "--base-url", web.base], { s: s2 });
     assert.equal(r.code, 0);
     assert.equal(s2.calls().length, 0);
     assert.match(r.err, /no model call/);
     assert.equal(web.seen.posts.length, 0);
+  } finally { await web.close(); }
+});
+
+test("no portfolio baseline: the run goes on, the data-only signal is posted with owner amounts 0", async () => {
+  const s = stub(); s.respond(envelope(JSON.stringify({ ideas: both })));
+  const bare = input({ portfolio: null, signals: input().signals.map((x) => ({ ...x, amountMinEur: 0, amountMaxEur: 0 })) });
+  const web = await mockWeb({ inputOverride: bare });
+  try {
+    const r = await runJudge(["--as-of", "2026-10-05", "--base-url", web.base], { s });
+    assert.equal(r.code, 0, r.err);
+    assert.match(r.err, /no portfolio baseline: signals come from data alone/);
+    const nvda = web.seen.posts[0].ideas.find((i) => i.symbol === "NVDA");
+    assert.deepEqual([nvda.action, nvda.sizeTier, nvda.amountMinEur, nvda.amountMaxEur, nvda.plan.amountNow], ["ADD", "ADD_THIRD", 0, 0, "EUR 0"]);
   } finally { await web.close(); }
 });
 
@@ -300,7 +328,7 @@ test("a downgrade from the model is applied by the script, never an upgrade", as
     const r = await runJudge(["--as-of", "2026-10-05", "--base-url", web.base], { s });
     assert.equal(r.code, 0, r.err);
     const nvda = web.seen.posts[0].ideas.find((i) => i.symbol === "NVDA");
-    assert.deepEqual([nvda.action, nvda.amountMaxEur, nvda.downgradedFrom], ["WATCH", 0, "ADD"]);
+    assert.deepEqual([nvda.action, nvda.sizeTier, nvda.amountMaxEur, nvda.downgradedFrom], ["WATCH", "NONE", 0, "ADD"]);
   } finally { await web.close(); }
 });
 
@@ -368,7 +396,7 @@ test("agent mode: read-only tools, prepared files in the working directory, turn
     const call = s.calls()[0];
     assert.equal(flag(call.args, "--tools"), "Read,Grep,Glob");
     assert.match(flag(call.args, "--disallowedTools"), /Bash/);
-    assert.deepEqual(call.cwdFiles.sort(), ["facts.json", "ideas-history.json", "portfolio.json", "signals.json", "technicals.json"]);
+    assert.deepEqual(call.cwdFiles.sort(), ["facts.json", "ideas-history.json", "signals.json", "technicals.json"]);
     assert.equal(web.seen.posts[0].run.usage.turns, 4);
     assert.match(r.err, /agent\(max 6 turns\)/);
   } finally { await web.close(); }
