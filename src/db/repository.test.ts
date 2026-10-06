@@ -1,7 +1,9 @@
+import pg from "pg";
 import { describe, expect, it } from "vitest";
 import { score } from "../engine";
 import { fixtureBars, fixtureFundamentals, fixtureMacro, instruments } from "../data/fixtures";
 import { MemoryScoreRepository } from "./memory";
+import { PostgresScoreRepository } from "./postgres";
 import { stateChange } from "./types";
 
 const instrument = instruments[0];
@@ -43,4 +45,28 @@ it("replaces a changed daily score and updates its alert without duplication", a
   expect((await repository.saveDaily(next.asOf, "fixture", [{ instrument, result: changed, fingerprint: "c" }])).inserted).toBe(true);
   expect(await repository.alerts(next.asOf)).toMatchObject([{ previousState: "Watch", currentState: "Setup met (>=18)" }]);
   expect(await repository.scores(next.asOf)).toMatchObject([{ state: "Setup met (>=18)" }]);
+});
+
+it.skipIf(!process.env.TEST_DATABASE_URL)("stores a scored instrument with its sector in Postgres", async () => {
+  const pool = new pg.Pool({ connectionString: process.env.TEST_DATABASE_URL });
+  const repository = new PostgresScoreRepository(pool);
+  const ticker = "C1DBTEST";
+  const asOf = "2025-08-08";
+  const dbInstrument = { ...instrument, ticker };
+  const dbResult = { ...result(asOf, "Watch"), ticker };
+  try {
+    expect(await repository.saveDaily(asOf, "fixture", [{ instrument: dbInstrument, result: dbResult }])).toMatchObject({ inserted: true, instrumentCount: 1 });
+    expect((await pool.query<{ sector: string }>("SELECT sector FROM instruments WHERE ticker=$1", [ticker])).rows[0].sector).toBe(dbInstrument.sector);
+    expect(await repository.scores(asOf)).toEqual([dbResult]);
+    expect(await repository.saveDaily(asOf, "fixture", [{ instrument: dbInstrument, result: dbResult }])).toMatchObject({ inserted: false, instrumentCount: 0 });
+  } finally {
+    await pool.query("DELETE FROM alerts WHERE ticker=$1", [ticker]);
+    await pool.query("DELETE FROM score_results WHERE ticker=$1", [ticker]);
+    await pool.query("DELETE FROM fundamentals_snapshots WHERE ticker=$1", [ticker]);
+    await pool.query("DELETE FROM macro_snapshots WHERE ticker=$1", [ticker]);
+    await pool.query("DELETE FROM daily_bars WHERE ticker=$1", [ticker]);
+    await pool.query("DELETE FROM ingest_runs WHERE as_of=$1", [asOf]);
+    await pool.query("DELETE FROM instruments WHERE ticker=$1", [ticker]);
+    await pool.end();
+  }
 });

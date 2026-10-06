@@ -9,6 +9,22 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: investbuddy
+          POSTGRES_PASSWORD: investbuddy
+          POSTGRES_DB: investbuddy_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U investbuddy -d investbuddy_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      TEST_DATABASE_URL: postgresql://investbuddy:investbuddy@localhost:5432/investbuddy_test
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -20,6 +36,9 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
+      - run: npm run migrate
+        env:
+          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
       - run: npm test
       - run: npm run build
       - run: npm run build:jobs
