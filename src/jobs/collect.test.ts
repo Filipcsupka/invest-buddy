@@ -62,6 +62,17 @@ describe("collectors", () => {
     expect([...repo.facts.values()]).toEqual([]);
   });
 
+  it("keeps collecting SEC documents when the press release feed times out", async () => {
+    const repo = new MemoryCollectorRepository();
+    const flaky = ((url: string) => url.includes("globenewswire") ? Promise.reject(new Error("The operation was aborted due to timeout")) : get(url)) as typeof get;
+    const result = await runCollect(repo, ["NVDA"], { since: "2026-09-01", sources: ["edgar", "rss"], get: flaky, now: () => new Date("2026-10-05T12:00:00Z") });
+    expect(result.succeeded).toBe(1);
+    expect(result.stoppedReason).toBeNull();
+    expect(result.failures).toEqual([{ ticker: "rss", reason: "The operation was aborted due to timeout" }]);
+    expect(result.exitCode).toBe(0);
+    expect([...repo.documents.values()].some((doc) => doc.source === "edgar")).toBe(true);
+  });
+
   it("marks edgar documents display_allowed and rss documents not, so only edgar reaches judge input", async () => {
     const repo = new MemoryCollectorRepository();
     await runCollect(repo, ["NVDA"], { since: "2026-09-01", sources: ["edgar", "rss"], get, now: () => new Date("2026-10-05T12:00:00Z") });

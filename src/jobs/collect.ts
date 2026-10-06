@@ -64,7 +64,14 @@ async function runLegacyCollect(repository: CollectorRepository, symbols: string
   let rss: CollectedDocument[] = [];
   try {
     if (sources.includes("edgar")) ciks = await companyCiks(get);
-    if (sources.includes("rss")) rss = await collectRss(companies, since, get);
+    // The press release feed is optional. A slow or blocked feed must not stop the SEC collection, so it is recorded as a failure of its own.
+    if (sources.includes("rss")) {
+      try { rss = await collectRss(companies, since, get); }
+      catch (error) {
+        if (!sources.includes("edgar") || error instanceof RateLimitLockout) throw error;
+        run.failures.push({ ticker: "rss", reason: error instanceof Error ? error.message : String(error) });
+      }
+    }
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     run.stoppedReason = reason;
@@ -100,7 +107,7 @@ async function runLegacyCollect(repository: CollectorRepository, symbols: string
     }
   }
   if (!options.dryRun) await repository.recordRun(run);
-  return { ...run, documentsParsed, factsComputed, exitCode: collectExitCode(run.stoppedReason, run.failures.length, symbols.length) };
+  return { ...run, documentsParsed, factsComputed, exitCode: collectExitCode(run.stoppedReason, run.failures.filter((failure) => failure.ticker !== "rss").length, symbols.length) };
 }
 
 /** A lockout or any other stop is always a failed run, whatever share of tickers had already finished. */
