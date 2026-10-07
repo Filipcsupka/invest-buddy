@@ -5,7 +5,7 @@ metadata:
   namespace: invest
 spec:
   suspend: true
-  # Web-search scan, replaced by collect, detect and extract. 05:30 runs before collect (05:35). If you resume it, move it between detect and reconcile.
+  # Web-search scan, replaced by collect, detect and extract. Its old 05:30 slot overlaps judge; review the schedule before resuming it.
   schedule: "30 5 * * 1-5"
   timeZone: Europe/Bratislava
   concurrencyPolicy: Forbid
@@ -79,7 +79,7 @@ metadata:
   namespace: invest
 spec:
   suspend: true
-  # Web-search scan, replaced by collect, detect and extract. 05:30 runs before collect (05:35). If you resume it, move it between detect and reconcile.
+  # Web-search scan, replaced by collect, detect and extract. Its old 05:30 slot overlaps judge; review the schedule before resuming it.
   schedule: "30 5 * * 1-5"
   timeZone: Europe/Bratislava
   concurrencyPolicy: Forbid

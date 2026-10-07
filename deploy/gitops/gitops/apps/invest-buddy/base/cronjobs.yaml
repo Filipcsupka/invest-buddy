@@ -12,16 +12,16 @@ metadata:
   name: invest-buddy-prices
   namespace: invest
 spec:
-  schedule: "0 5 * * 2-6"
+  schedule: "30 0 * * 2-6"
   timeZone: Europe/Bratislava
   concurrencyPolicy: Forbid
-  startingDeadlineSeconds: 1800
+  startingDeadlineSeconds: 300
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3
   jobTemplate:
     spec:
       backoffLimit: 1
-      activeDeadlineSeconds: 1800
+      activeDeadlineSeconds: 1500
       template:
         spec:
           restartPolicy: Never
@@ -74,10 +74,9 @@ metadata:
   name: invest-buddy-reconcile
   namespace: invest
 spec:
-  suspend: true
-  # Suspended until SEC_USER_AGENT holds a real contact (live mode refuses the placeholder) and extract runs.
-  # After macro (07:00, latest end 07:09) and before daily (07:25).
-  schedule: "10 7 * * 2-6"
+  suspend: false
+  # After macro (04:00, latest end 04:09) and before daily (04:25).
+  schedule: "10 4 * * 2-6"
   timeZone: Europe/Bratislava
   concurrencyPolicy: Forbid
   startingDeadlineSeconds: 300
@@ -139,10 +138,10 @@ metadata:
   name: invest-buddy-daily
   namespace: invest
 spec:
-  suspend: true
-  # Suspended with reconcile: daily scores what reconcile and extract produce. Unsuspend after SEC_USER_AGENT is set and extract has run.
-  # After reconcile (07:10, latest end 07:25). Its own latest end is 08:30, before judge.
-  schedule: "25 7 * * 2-6"
+  suspend: false
+  # Scores what reconcile and extract produce. After reconcile (04:10, latest end 04:25).
+  # Its latest end is 05:30, before judge.
+  schedule: "25 4 * * 2-6"
   timeZone: Europe/Bratislava
   concurrencyPolicy: Forbid
   startingDeadlineSeconds: 300

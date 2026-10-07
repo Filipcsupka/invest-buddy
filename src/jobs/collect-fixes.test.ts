@@ -197,13 +197,14 @@ describe("response size", () => {
 describe("M9 schedules", () => {
   const field = (job: string, name: string) => new RegExp(`${name}: "?([^"\\n]+)"?`).exec(cronjob(job))?.[1];
   it("runs collect after the prices job has finished and detect after collect has finished", () => {
-    expect(field("invest-buddy-collect", "schedule")).toBe("35 5 * * 2-6");
-    expect(field("invest-buddy-detect", "schedule")).toBe("10 6 * * 2-6");
+    expect(field("invest-buddy-collect", "schedule")).toBe("0 1 * * 2-6");
+    expect(field("invest-buddy-detect", "schedule")).toBe("35 1 * * 2-6");
     const prices = readFileSync(join(process.cwd(), "deploy/gitops/gitops/apps/invest-buddy/base/cronjobs.yaml"), "utf8").split(/^---$/m).find((doc) => doc.includes("name: invest-buddy-prices")) ?? "";
-    expect(/schedule: "([^"]+)"/.exec(prices)?.[1]).toBe("0 5 * * 2-6");
+    expect(/schedule: "([^"]+)"/.exec(prices)?.[1]).toBe("30 0 * * 2-6");
     const minutes = (cron: string) => { const [m, h] = cron.split(" "); return Number(h) * 60 + Number(m); };
     const deadline = (job: string) => Number(/activeDeadlineSeconds: (\d+)/.exec(job)?.[1]) / 60;
-    expect(minutes("35 5")).toBeGreaterThanOrEqual(minutes("0 5") + deadline(prices));
-    expect(minutes("10 6")).toBeGreaterThanOrEqual(minutes("35 5") + deadline(cronjob("invest-buddy-collect")));
+    const startWindow = (job: string) => Number(/startingDeadlineSeconds: (\d+)/.exec(job)?.[1]) / 60;
+    expect(minutes("0 1")).toBeGreaterThanOrEqual(minutes("30 0") + startWindow(prices) + deadline(prices));
+    expect(minutes("35 1")).toBeGreaterThanOrEqual(minutes("0 1") + startWindow(cronjob("invest-buddy-collect")) + deadline(cronjob("invest-buddy-collect")));
   });
 });
