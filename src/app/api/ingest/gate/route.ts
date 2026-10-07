@@ -21,13 +21,17 @@ export async function GET(request: Request) {
   if (!isIsoDate(date) || !["extract", "judge"].includes(stage ?? "")) return Response.json({ error: "Invalid gate request" }, { status: 400 });
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
   try {
-    const result = await pool.query<{ symbols: string[]; reasons: Record<string, string[]>; accessions: Record<string, string[]>; extracted_at: Date | null; judged_at: Date | null; revision: number }>(
-      "SELECT symbols,reasons,accessions,extracted_at,judged_at,revision FROM scheduled_gates WHERE gate_date=$1::date", [date]);
+    type GateRow = { gate_date: string; symbols: string[]; reasons: Record<string, string[]>; accessions: Record<string, string[]>; extracted_at: Date | null; judged_at: Date | null; revision: number };
+    const columns = "gate_date::text,symbols,reasons,accessions,extracted_at,judged_at,revision";
+    const pending = url.searchParams.has("date") ? null : await pool.query<GateRow>(
+      `SELECT ${columns} FROM scheduled_gates WHERE gate_date <= $1::date AND ${stage === "extract" ? "extracted_at IS NULL" : "judged_at IS NULL AND extracted_at IS NOT NULL"} ORDER BY gate_date LIMIT 1`, [date]);
+    const result = pending?.rows.length ? pending : await pool.query<GateRow>(
+      `SELECT ${columns} FROM scheduled_gates WHERE gate_date=$1::date`, [date]);
     if (!result.rows.length) return Response.json({ error: `No detect gate for ${date}` }, { status: 404 });
     const row = result.rows[0];
     if (stage === "judge" && !row.extracted_at) return Response.json({ error: "Extraction has not completed" }, { status: 409 });
     const consumed = stage === "extract" ? Boolean(row.extracted_at) : Boolean(row.judged_at);
-    return Response.json({ asOf: date, symbols: consumed ? [] : row.symbols, reasons: consumed ? {} : row.reasons, accessions: consumed ? {} : row.accessions, consumed, revision: row.revision });
+    return Response.json({ asOf: row.gate_date, symbols: consumed ? [] : row.symbols, reasons: consumed ? {} : row.reasons, accessions: consumed ? {} : row.accessions, consumed, revision: row.revision });
   } finally { await pool.end(); }
 }
 

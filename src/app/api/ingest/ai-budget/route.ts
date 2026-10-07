@@ -2,7 +2,8 @@ import { logIngestRequest, recordIngestError } from "../request-log";
 import { createHash, timingSafeEqual } from "node:crypto";
 import pg from "pg";
 import { z } from "zod";
-import { budgetTotal, caps, finishCall, reserveCall } from "../../../../db/ai-budget";
+import { finishCall, reserveCall } from "../../../../db/ai-budget";
+import { usageReport, recordUsageSample } from "../../../../db/ai-usage-report";
 import { readBoundedBody } from "../read-bounded-body";
 
 export const runtime = "nodejs";
@@ -16,13 +17,14 @@ function gate(request: Request) {
   return null;
 }
 const bodySchema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("reserve"), id: z.uuid(), kind: z.enum(["extract", "judge"]), tokens: z.number().int().positive().max(100000), usd: z.number().positive().max(10) }).strict(),
-  z.object({ action: z.literal("finish"), id: z.uuid(), tokens: z.number().int().nonnegative().nullable(), usd: z.number().nonnegative().nullable() }).strict(),
+  z.object({ action: z.literal("reserve"), id: z.uuid(), kind: z.enum(["extract", "judge"]), agent: z.enum(["claude", "codex"]), authSource: z.enum(["subscription", "api", "codex"]), model: z.string().min(1).max(100) }).strict(),
+  z.object({ action: z.literal("finish"), id: z.uuid(), tokens: z.number().int().nonnegative().nullable(), usd: z.number().nonnegative().nullable(), status: z.enum(["ok", "failed", "cutoff"]).optional(), window: z.string().max(40).nullable().optional(), resetAt: z.iso.datetime({ offset: true }).nullable().optional(), resetHint: z.string().max(120).nullable().optional(), inputTokens: z.number().int().nonnegative().nullable().optional(), outputTokens: z.number().int().nonnegative().nullable().optional(), cacheReadTokens: z.number().int().nonnegative().nullable().optional(), cacheCreationTokens: z.number().int().nonnegative().nullable().optional() }).strict(),
+  z.object({ action: z.literal("sample"), job: z.enum(["extract", "judge"]), runId: z.uuid(), phase: z.enum(["start", "check", "end"]), fiveHourPct: z.number().min(0).max(100), sevenDayPct: z.number().min(0).max(100), fiveHourResetAt: z.iso.datetime({ offset: true }).nullable(), sevenDayResetAt: z.iso.datetime({ offset: true }).nullable() }).strict(),
 ]);
 async function getHandler(request: Request) {
   const denied = gate(request); if (denied) return denied;
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
-  try { return Response.json({ month: new Date().toISOString().slice(0, 7), spent: await budgetTotal(pool), cap: caps() }); }
+  try { return Response.json(await usageReport(pool)); }
   catch (error) { recordIngestError(request, error); return Response.json({ error: "Budget unavailable" }, { status: 503 }); }
   finally { await pool.end(); }
 }
@@ -37,9 +39,11 @@ async function postHandler(request: Request) {
   try {
     if (parsed.data.action === "reserve") {
       const result = await reserveCall(pool, parsed.data);
-      return Response.json(result, { status: result.allowed ? 200 : 429 });
+      return Response.json(result);
     }
-    return Response.json({ finished: await finishCall(pool, parsed.data) });
+    if (parsed.data.action === "finish") return Response.json({ finished: await finishCall(pool, parsed.data) });
+    await recordUsageSample(pool, parsed.data);
+    return Response.json({ recorded: true });
   } catch (error) { recordIngestError(request, error); return Response.json({ error: "Budget unavailable" }, { status: 503 }); }
   finally { await pool.end(); }
 }

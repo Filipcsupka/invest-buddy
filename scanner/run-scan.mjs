@@ -107,11 +107,6 @@ function checkAuth(opts, log) {
   else log("claude auth: no token env var; relying on a local login (fine on a Mac, will fail in a container)");
 }
 
-// claude prints a JSON envelope on stdout even when it fails; show its result text, not the whole blob.
-function envelopeMessage(out) {
-  try { const e = JSON.parse(out); return String(e.result ?? e.subtype ?? out); } catch { return out.trim(); }
-}
-
 // ---------- agent call ----------
 export function agentEnv(source = process.env) {
   const allowed = new Set(["PATH", "HOME", "CODEX_HOME", "CLAUDE_CONFIG_DIR", "CLAUDE_CODE_OAUTH_TOKEN", "USER", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "CODEX_API_KEY", "LANG", "LANGUAGE", "LC_ALL", "TZ", "TMPDIR", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "all_proxy", "no_proxy"]);
@@ -129,7 +124,7 @@ export function runCli(cmd, args, input, { timeoutMs, cwd }) {
     child.on("close", (code) => {
       clearTimeout(timer);
       if (timedOut) return reject(new Error(`timeout after ${timeoutMs / 1000}s`));
-      if (code !== 0) return reject(new Error(`${cmd} exited ${code}: ${(err.trim() || envelopeMessage(out)).slice(0, 300)}`));
+      if (code !== 0) return reject(Object.assign(new Error(`${cmd} exited ${code}`), { stdout: out, stderr: err, code }));
       resolve({ out, err });
     });
     child.stdin.on("error", () => {});
@@ -163,7 +158,7 @@ async function callAgent(opts, prompt, work, kind) {
 
 export async function withRetry(fn, log, label) {
   try { return await fn(); } catch (e1) {
-    if (e1.exitCode === 4) throw e1;
+    if (e1.exitCode === 5) throw e1;
     log(`${label}: attempt 1 failed: ${e1.message}`);
     try { return await fn(); } catch (e2) { log(`${label}: attempt 2 failed: ${e2.message}`); throw e2; }
   }

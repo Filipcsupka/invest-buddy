@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseArgs, parseClaudeEnvelope, addUsage, postTicker, materialChange, loadRuntimeUniverse } from "../run-extract.mjs";
+import { parseArgs, parseClaudeEnvelope, addUsage, postTicker, materialChange, loadRuntimeUniverse, callAgentNoTools } from "../run-extract.mjs";
 import { spawnSync } from "node:child_process";
 import { chmodSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -8,14 +8,12 @@ import { join } from "node:path";
 
 const envelope = (over = {}) => JSON.stringify({ type: "result", is_error: false, result: "{}", num_turns: 1, total_cost_usd: 0.012, usage: { input_tokens: 5, output_tokens: 6, cache_read_input_tokens: 7, cache_creation_input_tokens: 8 }, modelUsage: { "claude-haiku-4-5": {} }, permission_denials: [], ...over });
 
-test("claude defaults to haiku, codex has no default, --force and --budget-usd parse", () => {
+test("claude defaults to haiku, codex has no default, and --force parses", () => {
   assert.equal(parseArgs([]).model, "haiku");
   assert.equal(parseArgs(["--model", "sonnet"]).model, "sonnet");
   assert.equal(parseArgs(["--agent", "codex"]).model, null);
   assert.equal(parseArgs([]).force, false);
   assert.equal(parseArgs(["--force"]).force, true);
-  assert.equal(parseArgs([]).budgetUsd, 0.5);
-  assert.equal(parseArgs(["--budget-usd", "0.1"]).budgetUsd, 0.1);
 });
 
 test("envelope gives text, model, usage and cost", () => {
@@ -32,7 +30,8 @@ test("more than one turn or a permission denial is rejected as tool use", () => 
 });
 
 test("error envelopes and non-JSON fail", () => {
-  assert.throws(() => parseClaudeEnvelope(envelope({ is_error: true, result: "rate limited" }), "haiku"), /claude error: rate limited/);
+  assert.throws(() => parseClaudeEnvelope(envelope({ is_error: true, result: "rate limited" }), "haiku"), (e) => e.exitCode === 5);
+  assert.throws(() => parseClaudeEnvelope(JSON.stringify({ type: "error", error: { type: "overloaded_error" } }), "haiku"), (e) => e.exitCode === 5);
   assert.throws(() => parseClaudeEnvelope("not json", "haiku"), /not JSON/);
 });
 
@@ -86,6 +85,34 @@ process.stdout.write(JSON.stringify({ is_error:false, result:JSON.stringify({ sy
   assert.equal(run.status, 0, run.stderr);
   assert.deepEqual(readFileSync(join(dir, "calls"), "utf8").trim().split("\n"), symbols);
   assert.match(run.stderr, /totals: 3 model calls/);
+});
+
+test("a fake Claude five-hour cutoff stops extraction with exit 5 and no retry", () => {
+  const dir = mkdtempSync(join(tmpdir(), "extract-cutoff-"));
+  const bundles = join(dir, "bundles"); mkdirSync(bundles);
+  writeFileSync(join(bundles, "NVDA.json"), JSON.stringify({ symbol: "NVDA", documents: [], facts: [{ key: "dummy", asOf: "2026-10-01", value: 1 }] }));
+  const gate = join(dir, "gate.json"); writeFileSync(gate, JSON.stringify({ symbols: ["NVDA"] }));
+  const cli = join(dir, "claude");
+  writeFileSync(cli, `#!/usr/bin/env node
+const fs = require("fs"); fs.appendFileSync(${JSON.stringify(join(dir, "calls"))}, "call\\n");
+process.stdout.write(JSON.stringify({ is_error: true, result: "5-hour usage limit reached; resets at 2026-10-07T15:00:00Z" }));
+`);
+  chmodSync(cli, 0o755);
+  const run = spawnSync(process.execPath, [new URL("../run-extract.mjs", import.meta.url).pathname, "--dry-run", "--symbols-file", gate, "--bundle-dir", bundles, "--as-of", "2026-10-05"], { env: { ...process.env, PATH: `${dir}:${process.env.PATH}`, INGEST_TOKEN: "", SCAN_OUT_DIR: dir }, encoding: "utf8" });
+  assert.equal(run.status, 5, run.stderr);
+  assert.match(run.stderr, /ANTHROPIC CUTOFF: 5h resets 2026-10-07T15:00:00.000Z after 0 tickers/);
+  assert.equal(readFileSync(join(dir, "calls"), "utf8").trim().split("\n").length, 1);
+});
+
+test("a nonzero Claude CLI exit with 429 on stderr is a cutoff", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "extract-429-"));
+  const cli = join(dir, "claude");
+  writeFileSync(cli, "#!/bin/sh\necho 'HTTP 429 too many requests' >&2\nexit 1\n");
+  chmodSync(cli, 0o755);
+  const oldPath = process.env.PATH;
+  process.env.PATH = `${dir}:${oldPath}`;
+  try { await assert.rejects(callAgentNoTools({ agent: "claude", model: "haiku", timeoutS: 5, budgetUsd: 0.5 }, "prompt", dir), (e) => e.exitCode === 5 && e.cutoff.window === "rate limit"); }
+  finally { process.env.PATH = oldPath; }
 });
 
 test("postTicker stores one ticker per call with macro=skip and reports failure", async () => {

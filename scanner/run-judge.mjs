@@ -6,7 +6,7 @@
 // a conflict, each with an evidence url from the input. The script validates the JSON against scanner/schema/judge-output.schema.json,
 // rejects figures that are not in the input, merges the fixed decision with the wording and posts it to /api/ingest/ideas.
 // The model never writes to the database or the web. No database credentials here.
-// Usage: node scanner/run-judge.mjs [--dry-run] [--force] [--model sonnet] [--budget-usd 0.5] [--as-of YYYY-MM-DD]
+// Usage: node scanner/run-judge.mjs [--dry-run] [--force] [--model sonnet] [--as-of YYYY-MM-DD]
 //        [--max-symbols 12] [--agent-mode] [--max-turns 8] [--base-url URL] [--timeout-s 300] [--input-file judge-input.json]
 //   --dry-run     call the model and write the result file, post nothing, record nothing
 //   --force       ignore the one-run-per-day and unchanged-input skips
@@ -22,23 +22,23 @@ import { extractJson, fill, getToken, lastUsTradingDay, runCli } from "./run-sca
 import { callAgentNoTools, addUsage } from "./run-extract.mjs";
 import { canonical, usageFromEnvelope } from "./extraction-log.mjs";
 import { reserveBudget, finishBudget } from "./ai-budget.mjs";
-import { readGate, consumeGate } from "./gate-db.mjs";
+import { readGate, consumeGate, gateTradingDay } from "./gate-db.mjs";
+import { attachClaudeUsage, attachCliUsage, cutoffError, cutoffLine, CUTOFF_EXIT_CODE } from "./anthropic-cutoff.mjs";
+import { createUsageMonitor, earlyStopLine } from "./claude-usage.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const OUT = process.env.SCAN_OUT_DIR || join(here, "out");
 export const BUY_ACTIONS = ["START_POSITION", "ADD", "HIGH_CONVICTION_ADD"];
 const DOWNGRADABLE = BUY_ACTIONS;
 const NO_EVIDENCE_OK = ["WATCH", "CSPX_ALLOCATION", "HOLD", "THESIS_BROKEN", "REDUCE"];
-const RATE_LIMIT = /rate.?limit|usage limit|too many requests|\b429\b|overloaded|quota/i;
-const MIN_ATTEMPT_USD = 0.01;
 
 function usage(msg) {
   if (msg) console.error(`error: ${msg}`);
-  console.error("usage: run-judge.mjs [--dry-run] [--force] [--symbols-file FILE | --gate-from-db] [--model NAME] [--budget-usd 0.5] [--as-of YYYY-MM-DD] [--max-symbols 12] [--agent-mode] [--max-turns 8] [--base-url URL] [--timeout-s 300] [--input-file FILE]");
+  console.error("usage: run-judge.mjs [--dry-run] [--force] [--symbols-file FILE | --gate-from-db] [--model NAME] [--as-of YYYY-MM-DD] [--max-symbols 12] [--agent-mode] [--max-turns 8] [--base-url URL] [--timeout-s 300] [--input-file FILE]");
   process.exit(msg ? 2 : 0);
 }
 export function parseArgs(argv, env = process.env) {
-  const o = { dryRun: false, force: false, model: env.JUDGE_MODEL || "sonnet", budgetUsd: 0.5, asOf: null, baseUrl: env.INGEST_BASE_URL || "http://web.invest.svc.cluster.local:3000", timeoutS: 300, inputFile: null, symbolsFile: null, gateFromDb: false, agent: "claude", maxSymbols: 12, agentMode: false, maxTurns: 8 };
+  const o = { dryRun: false, force: false, model: env.JUDGE_MODEL || "sonnet", asOf: null, baseUrl: env.INGEST_BASE_URL || "http://web.invest.svc.cluster.local:3000", timeoutS: 300, inputFile: null, symbolsFile: null, gateFromDb: false, agent: "claude", maxSymbols: 12, agentMode: false, maxTurns: 8 };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const val = () => { if (i + 1 >= argv.length) usage(`missing value for ${a}`); return argv[++i]; };
@@ -46,7 +46,6 @@ export function parseArgs(argv, env = process.env) {
     else if (a === "--force") o.force = true;
     else if (a === "--agent-mode") o.agentMode = true;
     else if (a === "--model") o.model = val();
-    else if (a === "--budget-usd") o.budgetUsd = Number(val());
     else if (a === "--as-of") o.asOf = val();
     else if (a === "--base-url") o.baseUrl = val().replace(/\/$/, "");
     else if (a === "--timeout-s") o.timeoutS = Number(val());
@@ -58,7 +57,6 @@ export function parseArgs(argv, env = process.env) {
     else if (a === "-h" || a === "--help") usage();
     else usage(`unknown argument ${a}`);
   }
-  if (!(o.budgetUsd > 0)) usage("--budget-usd must be positive");
   if (!(o.timeoutS > 0)) usage("--timeout-s must be positive");
   if (!Number.isInteger(o.maxSymbols) || o.maxSymbols < 1 || o.maxSymbols > 40) usage("--max-symbols must be 1 to 40");
   if (!Number.isInteger(o.maxTurns) || o.maxTurns < 1 || o.maxTurns > 30) usage("--max-turns must be 1 to 30");
@@ -269,13 +267,13 @@ export const READ_ONLY_TOOLS = "Read,Grep,Glob";
 export function parseAgentEnvelope(out, requested, maxTurns) {
   let env;
   try { env = JSON.parse(out); } catch { throw new Error("claude output is not JSON"); }
-  if (env.is_error) throw new Error(`claude error: ${String(env.result ?? env.subtype ?? "unknown").slice(0, 200)}`);
-  if (Number.isInteger(env.num_turns) && env.num_turns > maxTurns) throw new Error(`claude used ${env.num_turns} turns; the cap is ${maxTurns}`);
-  if (Array.isArray(env.permission_denials) && env.permission_denials.length) throw new Error("claude attempted a tool that is not allowed");
+  if (env.is_error || env.type === "error" || env.error) throw cutoffError(env) ?? attachClaudeUsage(new Error(`claude error: ${String(env.result ?? env.error?.message ?? env.subtype ?? "unknown").slice(0, 200)}`), env);
+  if (Number.isInteger(env.num_turns) && env.num_turns > maxTurns) throw attachClaudeUsage(new Error(`claude used ${env.num_turns} turns; the cap is ${maxTurns}`), env);
+  if (Array.isArray(env.permission_denials) && env.permission_denials.length) throw attachClaudeUsage(new Error("claude attempted a tool that is not allowed"), env);
   return { text: env.result, model: Object.keys(env.modelUsage ?? {})[0] || requested || "default", usage: usageFromEnvelope(env), costUsd: typeof env.total_cost_usd === "number" ? env.total_cost_usd : null };
 }
-export function agentModeArgs(o, budgetUsd) {
-  return ["-p", "--output-format", "json", "--no-session-persistence", "--permission-mode", "dontAsk", "--tools", READ_ONLY_TOOLS, "--allowedTools", READ_ONLY_TOOLS, "--disallowedTools", "Bash,Edit,Write,NotebookEdit,WebFetch,WebSearch", "--max-budget-usd", String(budgetUsd), "--model", o.model];
+export function agentModeArgs(o) {
+  return ["-p", "--output-format", "json", "--no-session-persistence", "--permission-mode", "dontAsk", "--tools", READ_ONLY_TOOLS, "--allowedTools", READ_ONLY_TOOLS, "--disallowedTools", "Bash,Edit,Write,NotebookEdit,WebFetch,WebSearch", "--model", o.model];
 }
 /** Writes the input files the agent may read: facts, technicals, ideas history, signals. No portfolio file: the wording is data only. Returns the file names. */
 export function writeAgentFiles(dir, input, modelInput) {
@@ -289,8 +287,10 @@ export function writeAgentFiles(dir, input, modelInput) {
   for (const [name, value] of Object.entries(files)) writeFileSync(join(dir, name), JSON.stringify(value, null, 1));
   return Object.keys(files);
 }
-async function callAgentReadOnly(o, prompt, work, budgetUsd) {
-  const { out } = await runCli("claude", agentModeArgs(o, budgetUsd), prompt, { timeoutMs: o.timeoutS * 1000, cwd: work });
+async function callAgentReadOnly(o, prompt, work) {
+  let out;
+  try { ({ out } = await runCli("claude", agentModeArgs(o), prompt, { timeoutMs: o.timeoutS * 1000, cwd: work })); }
+  catch (e) { throw cutoffError(e) ?? attachCliUsage(e); }
   return parseAgentEnvelope(out, o.model, o.maxTurns);
 }
 
@@ -306,15 +306,16 @@ const postRun = (o, token, body) => web(o.baseUrl, token, "ideas", { method: "PO
 
 async function main() {
   const o = parseArgs(process.argv.slice(2));
-  const asOf = o.asOf || lastUsTradingDay();
+  let asOf = o.asOf || lastUsTradingDay();
+  const offline = Boolean(o.inputFile) && o.dryRun && !o.gateFromDb;
+  let token = o.gateFromDb ? getToken() : null;
+  const gate = o.symbolsFile ? JSON.parse(readFileSync(o.symbolsFile, "utf8")) : o.gateFromDb ? await readGate(o.baseUrl, token, "judge") : null;
+  if (o.gateFromDb && !o.asOf) asOf = gateTradingDay(gate.asOf);
   const runId = randomUUID();
   mkdirSync(OUT, { recursive: true });
   const logFile = join(OUT, `judge-${asOf}-${runId.slice(0, 8)}.log`);
   const log = (m) => { const line = `${new Date().toISOString()} ${m}`; console.error(line); appendFileSync(logFile, line + "\n"); };
-  log(`judge ${runId} asOf=${asOf} model=${o.model} budget=$${o.budgetUsd} mode=${o.agentMode ? `agent(max ${o.maxTurns} turns)` : "single call, no tools"} maxSymbols=${o.maxSymbols} dryRun=${o.dryRun} force=${o.force} offline=${Boolean(o.inputFile)}`);
-  const offline = Boolean(o.inputFile) && o.dryRun && !o.gateFromDb;
-  let token = o.gateFromDb ? getToken() : null;
-  const gate = o.symbolsFile ? JSON.parse(readFileSync(o.symbolsFile, "utf8")) : o.gateFromDb ? await readGate(o.baseUrl, token, "judge") : null;
+  log(`judge ${runId} asOf=${asOf} model=${o.model} mode=${o.agentMode ? `agent(max ${o.maxTurns} turns)` : "single call, no tools"} maxSymbols=${o.maxSymbols} dryRun=${o.dryRun} force=${o.force} offline=${Boolean(o.inputFile)}`);
   if (!gate && !o.force) { log("--gate-from-db or --symbols-file is required; use --force for a manual scheduled review"); process.exit(2); }
   if (gate && !Array.isArray(gate.symbols)) { log("symbols file must contain a symbols array"); process.exit(2); }
   if (gate && !gate.symbols.length) { log("nothing changed; 0 model calls"); if (o.gateFromDb && !o.dryRun && !gate.consumed) await consumeGate(o.baseUrl, token, "judge", gate.asOf, gate.revision); return; }
@@ -345,22 +346,31 @@ async function main() {
     return fill(prompt, { AS_OF: asOf, INPUT: JSON.stringify(pi) });
   };
   let text = textFor(modelInput.items);
-  let spent = addUsage({}, {}), cost = 0, calls = 0, model = o.model, rawOutput = null, error = null;
+  let spent = addUsage({}, {}), cost = 0, calls = 0, model = o.model, rawOutput = null, error = null, cutoff = null, softStop = null;
+  const monitor = !offline && !process.env.ANTHROPIC_API_KEY ? createUsageMonitor({ baseUrl: o.baseUrl, ingestToken: token, job: "judge", runId, log }) : null;
+  if (monitor) softStop = await monitor.start();
   const good = new Map(), skipped = new Map(), notes = [];
   let pending = news;
   const t0 = Date.now();
   // At most two calls. A symbol whose wording still fails after the second call is skipped; the retry only asks for the symbols that failed.
   for (let attempt = 1; attempt <= 2 && pending.length; attempt++) {
-    const remaining = o.budgetUsd - cost;
-    if (remaining < MIN_ATTEMPT_USD) { error = `${error ?? "no result"}; cost cap $${o.budgetUsd} reached after $${cost.toFixed(4)}`; log(`cost cap reached (spent $${cost.toFixed(4)} of $${o.budgetUsd}); no further call`); break; }
+    if (softStop) break;
+    if (monitor) softStop = await monitor.check();
+    if (softStop) break;
     try {
-      const budget = Number(remaining.toFixed(4));
       const sub = { ...modelInput, items: modelInput.items.filter((i) => pending.some((s) => s.symbol === i.signal.symbol)) };
       text = textFor(sub.items);
-      const budgetId = token ? await reserveBudget(o.baseUrl, token, "judge", budget) : null;
-      let r;
-      try { r = o.agentMode ? await callAgentReadOnly(o, text, work, budget) : await callAgentNoTools({ agent: "claude", model: o.model, timeoutS: o.timeoutS, budgetUsd: budget }, text, work); }
-      finally { if (budgetId) await finishBudget(o.baseUrl, token, budgetId, r?.usage, r?.costUsd); }
+      const budgetId = token ? await reserveBudget(o.baseUrl, token, "judge", o.model) : null;
+      let r, callError;
+      try { r = o.agentMode ? await callAgentReadOnly(o, text, work) : await callAgentNoTools({ agent: "claude", model: o.model, timeoutS: o.timeoutS }, text, work); }
+      catch (e) { callError = e; throw e; }
+      finally {
+        if (budgetId) {
+          const state = callError?.cutoff ? { status: "cutoff", resetAt: callError.cutoff.resetAt, resetHint: callError.cutoff.resetHint, window: callError.cutoff.window } : callError ? { status: "failed" } : null;
+          const recorded = await finishBudget(o.baseUrl, token, budgetId, r?.usage ?? callError?.usage, r?.costUsd ?? callError?.costUsd, state);
+          if (!recorded) log("AI ledger unavailable");
+        }
+      }
       calls++; spent = addUsage(spent, r.usage); cost += r.costUsd ?? 0; if (r.model) model = r.model;
       const out = normalizeOutput(extractJson(r.text));
       const errs = validateJudgeOutput(out);
@@ -374,17 +384,19 @@ async function main() {
       if (pending.length) error = pending.map((s) => `${s.symbol}: ${merged.failed.get(s.symbol)}`).join("; ");
       for (const s of pending) skipped.set(s.symbol, merged.failed.get(s.symbol));
     } catch (e) {
+      if (e.exitCode === CUTOFF_EXIT_CODE) { cutoff = e.cutoff; break; }
       error = e.message;
       log(`attempt ${attempt} failed: ${e.message}`);
-      if (e.exitCode === 4) { log("monthly AI budget reached; exit 4"); process.exit(4); }
-      if (RATE_LIMIT.test(e.message)) { log("rate limit; stopping without retry"); break; }
     }
   }
+  if (monitor) await monitor.end();
   for (const s of pending) if (!skipped.has(s.symbol)) skipped.set(s.symbol, error ?? "no result");
   for (const s of news) if (good.has(s.symbol)) skipped.delete(s.symbol);
   const result = good.size ? { ideas: news.filter((s) => good.has(s.symbol)).map((s) => good.get(s.symbol)), notes } : null;
   if (result) for (const [sym, why] of skipped) log(`SKIPPED ${sym}: ${why}`);
   if (!process.env.SCAN_KEEP_WORK) rmSync(work, { recursive: true, force: true });
+  if (cutoff) { log(cutoffLine(cutoff, 0)); process.exit(CUTOFF_EXIT_CODE); }
+  if (softStop) { log(earlyStopLine(softStop)); process.exit(CUTOFF_EXIT_CODE); }
   const secs = Math.round((Date.now() - t0) / 1000);
   const totals = `${calls} model call(s), ${text.length} input chars, tokens in ${spent.inputTokens ?? "?"} out ${spent.outputTokens ?? "?"} cache read ${spent.cacheReadTokens ?? "?"} cache created ${spent.cacheCreationTokens ?? "?"}, turns ${spent.turns ?? "?"}${cost ? `, cost $${cost.toFixed(4)}` : ""}, ${secs}s${skipped.size ? `; skipped ${[...skipped.keys()].join(", ")}` : ""}`;
   const runBase = { asOf, runId, agent: o.agent, model, inputHash: hash, usage: spent, costUsd: cost || null, ruleConfigVersion: input.ruleConfigVersion };
