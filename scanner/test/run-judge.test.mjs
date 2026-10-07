@@ -34,10 +34,10 @@ const merge = (ideas, i = input(), n = i.signals) => mergeIdeas({ ideas }, n, bu
 
 test("defaults and flags", () => {
   const o = parseArgs([], {});
-  assert.deepEqual([o.model, o.budgetUsd, o.maxSymbols, o.agentMode, o.maxTurns, o.dryRun, o.force], ["sonnet", 0.5, 12, false, 8, false, false]);
+  assert.deepEqual([o.model, o.maxSymbols, o.agentMode, o.maxTurns, o.dryRun, o.force], ["sonnet", 12, false, 8, false, false]);
   assert.equal(parseArgs([], { JUDGE_MODEL: "opus" }).model, "opus");
-  const p = parseArgs(["--dry-run", "--force", "--model", "haiku", "--budget-usd", "0.2", "--as-of", "2026-10-02", "--max-symbols", "5", "--agent-mode", "--max-turns", "4"], {});
-  assert.deepEqual([p.dryRun, p.force, p.model, p.budgetUsd, p.asOf, p.maxSymbols, p.agentMode, p.maxTurns], [true, true, "haiku", 0.2, "2026-10-02", 5, true, 4]);
+  const p = parseArgs(["--dry-run", "--force", "--model", "haiku", "--as-of", "2026-10-02", "--max-symbols", "5", "--agent-mode", "--max-turns", "4"], {});
+  assert.deepEqual([p.dryRun, p.force, p.model, p.asOf, p.maxSymbols, p.agentMode, p.maxTurns], [true, true, "haiku", "2026-10-02", 5, true, 4]);
 });
 
 test("schema accepts wording, and the model cannot send action, amounts or ratings", () => {
@@ -217,11 +217,11 @@ test("hash ignores generatedAt and previousIdeas and follows rule version, input
 });
 
 test("agent mode allows read-only file tools only", () => {
-  const args = agentModeArgs({ model: "sonnet" }, 0.4);
+  const args = agentModeArgs({ model: "sonnet" });
   assert.equal(args[args.indexOf("--tools") + 1], "Read,Grep,Glob");
   assert.equal(args[args.indexOf("--allowedTools") + 1], "Read,Grep,Glob");
   assert.match(args[args.indexOf("--disallowedTools") + 1], /Bash.*Edit.*Write.*WebFetch.*WebSearch/);
-  assert.equal(args[args.indexOf("--max-budget-usd") + 1], "0.4");
+  assert.equal(args.includes("--max-budget-usd"), false);
   assert.ok(args.includes("--no-session-persistence"));
   const env = (o) => JSON.stringify({ is_error: false, result: "{}", num_turns: 3, total_cost_usd: 0.1, usage: {}, modelUsage: { m: {} }, permission_denials: [], ...o });
   assert.equal(parseAgentEnvelope(env(), "sonnet", 8).usage.turns, 3);
@@ -250,26 +250,26 @@ process.stdin.on("end", () => {
 }
 const flag = (args, name) => args[args.indexOf(name) + 1];
 
-test("the single call has no tools, a dollar cap and the requested model", async () => {
+test("the single call has no tools and the requested model", async () => {
   const s = stub(); s.respond(envelope("{}"));
   const old = process.env.PATH; process.env.PATH = `${s.dir}:${old}`;
-  try { await callAgentNoTools({ agent: "claude", model: "sonnet", timeoutS: 30, budgetUsd: 0.25 }, "prompt text", s.dir); } finally { process.env.PATH = old; }
+  try { await callAgentNoTools({ agent: "claude", model: "sonnet", timeoutS: 30 }, "prompt text", s.dir); } finally { process.env.PATH = old; }
   const { args } = s.calls()[0];
   assert.equal(flag(args, "--tools"), "", "--tools is followed by an empty string");
-  assert.equal(flag(args, "--max-budget-usd"), "0.25");
+  assert.equal(args.includes("--max-budget-usd"), false);
   assert.equal(flag(args, "--model"), "sonnet");
   assert.ok(!args.some((a) => /WebSearch|WebFetch|allowedTools|Read|Bash/i.test(a)), "no tool is named");
 });
 
 function mockWeb({ skipDay = false, skipHash = false, inputOverride = null } = {}) {
-  const seen = { posts: [], gets: [], auth: [] };
+  const seen = { posts: [], gets: [], auth: [], budgets: [] };
   const server = http.createServer((req, res) => {
     let body = ""; req.on("data", (c) => { body += c; });
     req.on("end", () => {
       seen.auth.push(req.headers.authorization);
       const send = (o, status = 200) => { res.writeHead(status, { "content-type": "application/json" }); res.end(JSON.stringify(o)); };
       if (req.method === "POST" && req.url === "/api/ingest/ideas") { seen.posts.push(JSON.parse(body)); return send({ recorded: true, stored: 1 }); }
-      if (req.method === "POST" && req.url === "/api/ingest/ai-budget") return send({ allowed: true });
+      if (req.method === "POST" && req.url === "/api/ingest/ai-budget") { seen.budgets.push(JSON.parse(body)); return send({ allowed: true }); }
       if (req.url.startsWith("/api/ingest/judge-input")) { seen.gets.push(req.url); return send(inputOverride ?? input()); }
       if (req.url.startsWith("/api/ingest/ideas?")) { seen.gets.push(req.url); return send({ skip: req.url.includes("inputHash") ? skipHash : skipDay }); }
       send({ error: "not found" }, 404);
@@ -294,10 +294,10 @@ test("end to end: one call for the changed signals, fixed decisions kept, tokens
   const prev = [{ symbol: "AMD", signature: "WATCH|Very strong|Strong|Good|NONE" }];
   let web = await mockWeb({ inputOverride: input({ previousIdeas: prev }) });
   try {
-    const r = await runJudge(["--as-of", "2026-10-05", "--base-url", web.base, "--budget-usd", "0.3", "--max-symbols", "7"], { s });
+    const r = await runJudge(["--as-of", "2026-10-05", "--base-url", web.base, "--max-symbols", "7"], { s });
     assert.equal(r.code, 0, r.err);
     assert.equal(s.calls().length, 1, "exactly one model call");
-    assert.equal(flag(s.calls()[0].args, "--max-budget-usd"), "0.3");
+    assert.equal(s.calls()[0].args.includes("--max-budget-usd"), false);
     assert.equal(flag(s.calls()[0].args, "--tools"), "");
     assert.ok(web.seen.gets.some((g) => g.includes("maxSymbols=7")));
     const post = web.seen.posts[0];
@@ -330,6 +330,18 @@ test("only the changed symbols reach the model, and an empty change list makes n
     assert.equal(s2.calls().length, 0);
     assert.match(r.err, /no model call/);
     assert.equal(web.seen.posts.length, 0);
+  } finally { await web.close(); }
+});
+
+test("a weekly JSON cutoff records reset time and leaves judge input pending", async () => {
+  const s = stub(); s.respond(envelope("Weekly usage limit reached. Resets at 2026-10-11T00:00:00Z", { is_error: true, subtype: "weekly_usage_limit" }));
+  const web = await mockWeb();
+  try {
+    const r = await runJudge(["--as-of", "2026-10-05", "--base-url", web.base], { s });
+    assert.equal(r.code, 5);
+    assert.match(r.err, /ANTHROPIC CUTOFF: weekly resets 2026-10-11T00:00:00.000Z after 0 tickers/);
+    assert.equal(web.seen.posts.length, 0);
+    assert.deepEqual([web.seen.budgets.at(-1).status, web.seen.budgets.at(-1).resetAt, web.seen.budgets.at(-1).inputTokens], ["cutoff", "2026-10-11T00:00:00.000Z", 11]);
   } finally { await web.close(); }
 });
 
@@ -418,24 +430,15 @@ test("a symbol fixed by the retry is stored and nothing is skipped", async () =>
   } finally { await web.close(); }
 });
 
-test("the cost cap shrinks the retry budget and stops a second call once spent", async () => {
+test("a second call is allowed regardless of reported cost", async () => {
   const bad = (cost) => envelope(JSON.stringify({ ideas: [words("NVDA", { verdict: "Cash left EUR 510." })] }), { total_cost_usd: cost });
-  let s = stub(); s.queue([bad(0.45), bad(0.01)]);
-  let web = await mockWeb();
+  const s = stub(); s.queue([bad(0.6), bad(0.01)]);
+  const web = await mockWeb();
   try {
-    await runJudge(["--as-of", "2026-10-05", "--base-url", web.base, "--budget-usd", "0.5"], { s });
-    assert.equal(s.calls().length, 2);
-    assert.equal(flag(s.calls()[0].args, "--max-budget-usd"), "0.5");
-    assert.equal(flag(s.calls()[1].args, "--max-budget-usd"), "0.05", "the second call only gets what is left");
-  } finally { await web.close(); }
-  s = stub(); s.queue([bad(0.6), bad(0.01)]);
-  web = await mockWeb();
-  try {
-    const r = await runJudge(["--as-of", "2026-10-05", "--base-url", web.base, "--budget-usd", "0.5"], { s });
+    const r = await runJudge(["--as-of", "2026-10-05", "--base-url", web.base], { s });
     assert.equal(r.code, 1);
-    assert.equal(s.calls().length, 1, "the cap stopped the second call");
-    assert.match(r.err, /cost cap reached/);
-    assert.match(web.seen.posts[0].run.error, /cost cap/);
+    assert.equal(s.calls().length, 2);
+    assert.equal(s.calls()[1].args.includes("--max-budget-usd"), false);
   } finally { await web.close(); }
 });
 
@@ -444,9 +447,10 @@ test("a rate limit is not retried", async () => {
   const web = await mockWeb();
   try {
     const r = await runJudge(["--as-of", "2026-10-05", "--base-url", web.base], { s });
-    assert.equal(r.code, 1);
+    assert.equal(r.code, 5);
     assert.equal(s.calls().length, 1);
-    assert.match(r.err, /rate limit; stopping/);
+    assert.match(r.err, /ANTHROPIC CUTOFF: rate limit resets unknown after 0 tickers/);
+    assert.equal(web.seen.posts.length, 0);
   } finally { await web.close(); }
 });
 
@@ -485,9 +489,10 @@ test("agent mode: read-only tools, prepared files in the working directory, turn
 test("dry run with an input file needs no token, posts nothing and writes the payload", async () => {
   const s = stub(); s.respond(envelope(JSON.stringify({ ideas: both })));
   const file = join(mkdtempSync(join(tmpdir(), "judge-in-")), "input.json"); writeFileSync(file, JSON.stringify(input()));
-  const r = await runJudge(["--as-of", "2026-10-05", "--dry-run", "--input-file", file], { s, env: { INGEST_TOKEN: "", HOME: "/nonexistent" } });
+  const r = await runJudge(["--as-of", "2026-10-05", "--dry-run", "--input-file", file], { s, env: { INGEST_TOKEN: "", CLAUDE_CODE_OAUTH_TOKEN: "synthetic-offline-token", HOME: "/nonexistent" } });
   assert.equal(r.code, 0, r.err);
   assert.match(r.err, /dry run: nothing posted/);
+  assert.doesNotMatch(r.err, /USAGE /);
   const name = readdirSync(r.out).find((n) => /^judge-payload-/.test(n));
   const payload = JSON.parse(readFileSync(join(r.out, name), "utf8"));
   assert.equal(payload.ideas.length, 2);

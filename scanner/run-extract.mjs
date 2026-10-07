@@ -5,7 +5,7 @@
 // Usage: node scanner/run-extract.mjs [--dry-run] [--only NVDA,AMD | --symbols-file detect.json] [--agent claude|codex]
 //        [--model NAME] [--concurrency 1..3] [--timeout-s 300] [--as-of YYYY-MM-DD] [--base-url http://web.invest.svc.cluster.local:3000]
 //        [--bundle-dir DIR]   (offline: read DIR/<SYMBOL>.json instead of calling the web)
-//        [--force]            (extract even when an applied run with the same input hash exists)  [--budget-usd 0.5]  (cap per model call, claude only)
+//        [--force]            (extract even when an applied run with the same input hash exists)
 // Model default is haiku for claude. Token use is recorded per ticker in extraction_runs and totalled at the end of the run.
 // In a container: command ["node", "/app/scanner/run-extract.mjs"] (the image entrypoint is run-scan.mjs).
 import { readFileSync, writeFileSync, appendFileSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
@@ -18,7 +18,9 @@ import { validateTicker, validatePayload } from "./validate.mjs";
 import { checkEvidence } from "./quotes.mjs";
 import { inputHash, usageFromEnvelope, alreadyExtracted, recordRun } from "./extraction-log.mjs";
 import { reserveBudget, finishBudget } from "./ai-budget.mjs";
-import { readGate, consumeGate } from "./gate-db.mjs";
+import { readGate, consumeGate, gateTradingDay } from "./gate-db.mjs";
+import { attachClaudeUsage, attachCliUsage, cutoffError, cutoffLine, CUTOFF_EXIT_CODE } from "./anthropic-cutoff.mjs";
+import { createUsageMonitor, earlyStopLine } from "./claude-usage.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const OUT = process.env.SCAN_OUT_DIR || join(here, "out");
@@ -26,17 +28,16 @@ const MAX_FAIL_RATIO = 0.2;
 
 function usage(msg) {
   if (msg) console.error(`error: ${msg}`);
-  console.error("usage: run-extract.mjs [--dry-run] [--force] [--only A,B | --symbols-file detect.json | --gate-from-db] [--agent claude|codex] [--model NAME] [--concurrency 1-3] [--timeout-s 300] [--budget-usd 0.5] [--as-of YYYY-MM-DD] [--base-url URL] [--bundle-dir DIR]");
+  console.error("usage: run-extract.mjs [--dry-run] [--force] [--only A,B | --symbols-file detect.json | --gate-from-db] [--agent claude|codex] [--model NAME] [--concurrency 1-3] [--timeout-s 300] [--as-of YYYY-MM-DD] [--base-url URL] [--bundle-dir DIR]");
   process.exit(msg ? 2 : 0);
 }
 export function parseArgs(argv) {
-  const o = { dryRun: false, force: false, budgetUsd: 0.5, only: null, symbolsFile: null, gateFromDb: false, agent: "claude", model: null, concurrency: 1, timeoutS: 300, asOf: null, baseUrl: process.env.INGEST_BASE_URL || "http://web.invest.svc.cluster.local:3000", bundleDir: null };
+  const o = { dryRun: false, force: false, only: null, symbolsFile: null, gateFromDb: false, agent: "claude", model: null, concurrency: 1, timeoutS: 300, asOf: null, baseUrl: process.env.INGEST_BASE_URL || "http://web.invest.svc.cluster.local:3000", bundleDir: null };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const val = () => { if (i + 1 >= argv.length) usage(`missing value for ${a}`); return argv[++i]; };
     if (a === "--dry-run") o.dryRun = true;
     else if (a === "--force") o.force = true;
-    else if (a === "--budget-usd") o.budgetUsd = Number(val());
     else if (a === "--only") o.only = val().split(",").map((s) => s.trim().toUpperCase()).filter(Boolean);
     else if (a === "--symbols-file") o.symbolsFile = val();
     else if (a === "--gate-from-db") o.gateFromDb = true;
@@ -54,7 +55,6 @@ export function parseArgs(argv) {
   if (!Number.isInteger(o.concurrency) || o.concurrency < 1) usage("--concurrency must be 1 to 3");
   o.concurrency = Math.min(o.concurrency, 3);
   if (!(o.timeoutS > 0)) usage("--timeout-s must be positive");
-  if (!(o.budgetUsd > 0)) usage("--budget-usd must be positive");
   if (o.agent === "claude" && !o.model) o.model = "haiku";
   if (o.asOf && !/^\d{4}-\d{2}-\d{2}$/.test(o.asOf)) usage("--as-of must be YYYY-MM-DD");
   if ([Boolean(o.only), Boolean(o.symbolsFile), o.gateFromDb].filter(Boolean).length > 1) usage("use one symbol source");
@@ -68,9 +68,9 @@ export function parseArgs(argv) {
 export function parseClaudeEnvelope(out, requested) {
   let env;
   try { env = JSON.parse(out); } catch { throw new Error("claude output is not JSON"); }
-  if (env.is_error) throw new Error(`claude error: ${String(env.result ?? env.subtype ?? "unknown").slice(0, 200)}`);
-  if (Number.isInteger(env.num_turns) && env.num_turns > 1) throw new Error(`claude used ${env.num_turns} turns; tool use is not allowed`);
-  if (Array.isArray(env.permission_denials) && env.permission_denials.length) throw new Error("claude attempted a tool call; tool use is not allowed");
+  if (env.is_error || env.type === "error" || env.error) throw cutoffError(env) ?? attachClaudeUsage(new Error(`claude error: ${String(env.result ?? env.error?.message ?? env.subtype ?? "unknown").slice(0, 200)}`), env);
+  if (Number.isInteger(env.num_turns) && env.num_turns > 1) throw attachClaudeUsage(new Error(`claude used ${env.num_turns} turns; tool use is not allowed`), env);
+  if (Array.isArray(env.permission_denials) && env.permission_denials.length) throw attachClaudeUsage(new Error("claude attempted a tool call; tool use is not allowed"), env);
   const used = Object.keys(env.modelUsage ?? {});
   return { text: env.result, model: used[0] || requested || "default", usage: usageFromEnvelope(env), costUsd: typeof env.total_cost_usd === "number" ? env.total_cost_usd : null };
 }
@@ -79,10 +79,11 @@ export function parseClaudeEnvelope(out, requested) {
 export async function callAgentNoTools(opts, prompt, work) {
   const timeoutMs = opts.timeoutS * 1000;
   if (opts.agent === "claude") {
-    // claude 2.1.289 has no --max-turns; --max-budget-usd is the cap, and parseClaudeEnvelope rejects num_turns > 1.
-    const args = ["-p", "--output-format", "json", "--no-session-persistence", "--permission-mode", "dontAsk", "--tools", "", "--max-budget-usd", String(opts.budgetUsd)];
+    const args = ["-p", "--output-format", "json", "--no-session-persistence", "--permission-mode", "dontAsk", "--tools", ""];
     if (opts.model) args.push("--model", opts.model);
-    const { out } = await runCli("claude", args, prompt, { timeoutMs, cwd: work });
+    let out;
+    try { ({ out } = await runCli("claude", args, prompt, { timeoutMs, cwd: work })); }
+    catch (e) { throw cutoffError(e) ?? attachCliUsage(e); }
     return parseClaudeEnvelope(out, opts.model);
   }
   const last = join(work, `last-${randomUUID()}.txt`);
@@ -153,7 +154,7 @@ async function main() {
   const unknown = (wanted ?? []).filter((s) => !universe.some((u) => u.symbol === s));
   if (unknown.length) usage(`not in instruments table: ${unknown.join(", ")}`);
   if (!selected.length) { console.error("nothing to extract"); return; }
-  const asOf = opts.asOf || lastUsTradingDay();
+  const asOf = opts.asOf || (opts.gateFromDb ? gateTradingDay(gate.asOf) : lastUsTradingDay());
   const runId = randomUUID();
   mkdirSync(OUT, { recursive: true });
   const logFile = join(OUT, `extract-${asOf}-${runId.slice(0, 8)}.log`);
@@ -164,10 +165,12 @@ async function main() {
   const prompt = readFileSync(join(here, "prompts", "ticker-extract.md"), "utf8");
   const work = mkdtempSync(join(tmpdir(), "investbuddy-extract-"));
   let model = opts.model || "default";
-  const failed = [], tickers = [], droppedAll = {}, skippedSymbols = [], postFailed = [];
-  let totals = emptyUsage(), totalCost = 0, calls = 0, inputChars = 0, budgetHit = false;
+  const failed = [], tickers = [], droppedAll = {}, skippedSymbols = [], postFailed = [], deferredSymbols = [];
+  let totals = emptyUsage(), totalCost = 0, calls = 0, inputChars = 0, cutoff = null, softStop = null;
+  const monitor = opts.agent === "claude" && !(opts.bundleDir && opts.dryRun) && !process.env.ANTHROPIC_API_KEY ? createUsageMonitor({ baseUrl: opts.baseUrl, ingestToken: token, job: "extract", runId, log }) : null;
+  if (monitor) softStop = await monitor.start();
   await pool(selected, opts.concurrency, async (u) => {
-    if (budgetHit) return;
+    if (cutoff) return;
     const t0 = Date.now();
     let spent = emptyUsage(), hash = null, tickerModel = opts.model || "default", tickerCost = 0;
     try {
@@ -180,14 +183,23 @@ async function main() {
         log(`${u.symbol}: SKIPPED same input already extracted and applied (input ${hash.slice(0, 12)}); use --force to rerun`);
         return;
       }
+      if (monitor && !softStop) softStop = await monitor.check();
+      if (softStop) { deferredSymbols.push(u.symbol); return; }
       const value = await withRetry(async () => {
         const text = fill(prompt, { SYMBOL: u.symbol, NAME: u.name, SECTOR: u.sector, AS_OF: asOf, BUNDLE: JSON.stringify(bundle) });
         inputChars += text.length;
         const invoke = async (model) => {
-          const id = token ? await reserveBudget(opts.baseUrl, token, "extract", opts.budgetUsd) : null;
-          let r;
+          const id = token ? await reserveBudget(opts.baseUrl, token, "extract", model, opts.agent) : null;
+          let r, callError;
           try { r = await callAgentNoTools({ ...opts, model }, text, work); }
-          finally { if (id) await finishBudget(opts.baseUrl, token, id, r?.usage, r?.costUsd); }
+          catch (e) { callError = e; throw e; }
+          finally {
+            if (id) {
+              const state = callError?.cutoff ? { status: "cutoff", resetAt: callError.cutoff.resetAt, resetHint: callError.cutoff.resetHint, window: callError.cutoff.window } : callError ? { status: "failed" } : null;
+              const recorded = await finishBudget(opts.baseUrl, token, id, r?.usage ?? callError?.usage, r?.costUsd ?? callError?.costUsd, state);
+              if (!recorded) log("AI ledger unavailable");
+            }
+          }
           calls++; spent = addUsage(spent, r.usage); tickerCost += r.costUsd ?? 0; totalCost += r.costUsd ?? 0;
           return r;
         };
@@ -219,7 +231,7 @@ async function main() {
       }
     } catch (e) {
       totals = addUsage(totals, spent);
-      if (e.exitCode === 4) budgetHit = true;
+      if (e.exitCode === CUTOFF_EXIT_CODE) { cutoff ??= e.cutoff; return; }
       log(`${u.symbol}: ${e.skip ? "SKIPPED" : "FAILED"} ${e.message}`);
       if (!e.skip || opts.gateFromDb) {
         failed.push({ symbol: u.symbol, reason: e.message });
@@ -227,7 +239,10 @@ async function main() {
       }
     }
   });
+  if (monitor) await monitor.end();
   if (!process.env.SCAN_KEEP_WORK) rmSync(work, { recursive: true, force: true });
+  if (cutoff) { log(cutoffLine(cutoff, tickers.length)); process.exit(CUTOFF_EXIT_CODE); }
+  if (softStop && deferredSymbols.length) { log(earlyStopLine(softStop)); process.exit(CUTOFF_EXIT_CODE); }
   const payload = {
     schemaVersion: 2, runId, asOf, generatedAt: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"), runner: { name: opts.agent, model, dataMode: opts.bundleDir ? "sample" : "real" }, tickers,
     macro: { sectorRotationIntoGrowth: null, dataTailwind: null, notes: "Macro not extracted in this script-first run; values unknown.", evidence: [], events: [] },
@@ -239,12 +254,10 @@ async function main() {
   log(`payload written ${payloadFile} (${tickers.length} tickers)`);
   const logTotals = () => log(`totals: ${calls} model calls, ${inputChars} input chars, tokens in ${totals.inputTokens ?? "?"} out ${totals.outputTokens ?? "?"} cache read ${totals.cacheReadTokens ?? "?"} cache created ${totals.cacheCreationTokens ?? "?"}, turns ${totals.turns ?? "?"}${totalCost ? `, cost $${totalCost.toFixed(4)}` : ""}; ok ${tickers.length}, skipped ${skippedSymbols.length}, failed ${failed.length}`);
   if (!opts.dryRun) {
-    if (!tickers.length) { logTotals(); log("no valid tickers; not posting"); if (opts.gateFromDb && !failed.length && !budgetHit) await consumeGate(opts.baseUrl, token, "extract", gate.asOf, gate.revision); process.exit(budgetHit ? 4 : failed.length ? 1 : 0); }
-    if (budgetHit) { logTotals(); log("monthly AI budget reached; exit 4"); process.exit(4); }
+    if (!tickers.length) { logTotals(); log("no valid tickers; not posting"); if (opts.gateFromDb && !failed.length) await consumeGate(opts.baseUrl, token, "extract", gate.asOf, gate.revision); process.exit(failed.length ? 1 : 0); }
     if (postFailed.length) { logTotals(); log(`not stored: ${postFailed.join(", ")}`); process.exit(3); }
   } else log("dry run: nothing posted, nothing recorded");
   logTotals();
-  if (budgetHit) { log("monthly AI budget reached; exit 4"); process.exit(4); }
   if (opts.gateFromDb && failed.length) { log("gate remains pending after failed extraction"); process.exit(1); }
   if (failed.length / selected.length > MAX_FAIL_RATIO) { log(`failure ratio exceeds ${MAX_FAIL_RATIO * 100}%: ${failed.map((f) => f.symbol).join(", ")}`); process.exit(1); }
   if (opts.gateFromDb && !opts.dryRun) await consumeGate(opts.baseUrl, token, "extract", gate.asOf, gate.revision);

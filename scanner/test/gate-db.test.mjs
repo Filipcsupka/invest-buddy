@@ -5,6 +5,12 @@ import { spawn } from "node:child_process";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { gateTradingDay } from "../gate-db.mjs";
+
+test("a pending scheduled gate keeps its original market date on a later retry", () => {
+  assert.equal(gateTradingDay("2026-10-06"), "2026-10-05");
+  assert.equal(gateTradingDay("2026-10-10"), "2026-10-09");
+});
 
 test("an empty database gate exits extract and judge with zero model calls", async () => {
   const requests = [];

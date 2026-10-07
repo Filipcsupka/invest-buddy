@@ -197,8 +197,8 @@ Design and sources: `docs/cadence-design.md`. This group replaces the daily extr
 - Status: app repo gate persistence, scanner `--gate-from-db`, and suspended CronJob args are implemented. The infra owner still needs to copy and enable the manifests; F5 owns the separate fixed review schedule.
 
 ### F4. Token budget guard
-- Do: a monthly token and dollar cap. Extract and judge stop with a clear exit code and a log line when the cap is reached. Log processed accession numbers and input hashes. Reprocessing is manual only (`--force`).
-- DoD: a test with a tiny cap stops the run; the monthly total is readable from the database.
+- Decision: the monthly token and dollar guard was dropped because the Claude subscription is limited by rolling five-hour and weekly usage windows. Extract and judge record per-call tokens and live window samples. Real cutoffs leave unfinished gate work for the next run; optional soft stops preserve daytime capacity.
+- DoD: cutoff and usage samples are readable through the owner ingest endpoint, and a stopped run retries unapplied work.
 
 ### F5. Fixed review calendar
 - Do: weekly digest of events; a re-score and a "thesis intact, weakened or broken" note after each earnings filing; a full re-screen in May and November (only time new additions are ranked); an annual thesis rewrite. Store the thesis note and the thesis-break checklist per holding.

@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run src && node --test scanner/test/*.test.mjs",
     "migrate": "tsx scripts/migrate.ts",
+    "ai-usage": "tsx scripts/ai-usage-report.ts",
     "daily": "tsx src/jobs/daily.ts",
     "prices": "tsx src/jobs/prices.ts",
     "reconcile": "tsx src/jobs/reconcile.ts",
