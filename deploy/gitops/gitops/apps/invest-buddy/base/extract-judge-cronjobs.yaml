@@ -4,9 +4,9 @@ metadata:
   name: invest-buddy-extract
   namespace: invest
 spec:
-  suspend: true
-  # After detect (06:10). Reads the persisted gate through the web; an empty gate exits without a model call. Latest end 07:00.
-  schedule: "25 6 * * 2-6"
+  suspend: false
+  # After detect (01:35). Reads the persisted gate through the web; an empty gate exits without a model call. Latest end 03:55 with a late start.
+  schedule: "50 1 * * 2-6"
   timeZone: Europe/Bratislava
   concurrencyPolicy: Forbid
   startingDeadlineSeconds: 300
@@ -16,7 +16,7 @@ spec:
     spec:
       # A quota or auth failure must not retry at once; the next scheduled run is the retry.
       backoffLimit: 0
-      activeDeadlineSeconds: 1800
+      activeDeadlineSeconds: 7200
       template:
         spec:
           restartPolicy: Never
@@ -81,9 +81,9 @@ metadata:
   name: invest-buddy-judge
   namespace: invest
 spec:
-  suspend: true
-  # After daily's latest end (08:30). Reads the extracted gate through the web and calls the model only for changed decisions. F5 will add a separate fixed review schedule.
-  schedule: "35 8 * * 2-6"
+  suspend: false
+  # After daily's latest end (05:30). Reads the extracted gate through the web and calls the model only for changed decisions. F5 will add a separate fixed review schedule.
+  schedule: "30 5 * * 2-6"
   timeZone: Europe/Bratislava
   concurrencyPolicy: Forbid
   startingDeadlineSeconds: 300
@@ -92,7 +92,7 @@ spec:
   jobTemplate:
     spec:
       backoffLimit: 0
-      activeDeadlineSeconds: 900
+      activeDeadlineSeconds: 3600
       template:
         spec:
           restartPolicy: Never

@@ -17,14 +17,14 @@ flowchart LR
   end
 
   subgraph pipeline[Weekday pipeline]
-    PRICES[prices<br/>05:00] --> COLLECT[collect<br/>05:35]
-    COLLECT --> DETECT[detect / gate<br/>06:10]
-    DETECT -- changed tickers --> EXTRACT[extract, AI haiku<br/>06:25]
-    EXTRACT --> MACRO[macro, no AI<br/>06:50]
-    MACRO --> RECONCILE[reconcile<br/>07:00]
-    RECONCILE --> DAILY[daily scoring<br/>07:15]
+    PRICES[prices<br/>00:30] --> COLLECT[collect<br/>01:00]
+    COLLECT --> DETECT[detect / gate<br/>01:35]
+    DETECT -- changed tickers --> EXTRACT[extract, AI haiku<br/>01:50]
+    EXTRACT --> MACRO[macro, no AI<br/>04:00]
+    MACRO --> RECONCILE[reconcile<br/>04:10]
+    RECONCILE --> DAILY[daily scoring<br/>04:25]
     DAILY --> DIGEST[digest<br/>07:30]
-    DAILY --> JUDGE[judge, AI sonnet<br/>07:45, only if changed]
+    DAILY --> JUDGE[judge, AI sonnet<br/>05:30, only if changed]
   end
 
   DISC[discovery<br/>Sat 09:30] -- candidates --> UNIV[(universe)]

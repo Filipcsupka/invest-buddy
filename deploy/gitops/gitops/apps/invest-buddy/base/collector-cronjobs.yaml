@@ -4,9 +4,9 @@ metadata:
   name: invest-buddy-collect
   namespace: invest
 spec:
-  suspend: true
-  # After invest-buddy-prices (05:00 Tue-Sat, 30 min deadline) so price facts use today's bars. Ends by 06:05 at the latest, before detect (06:10).
-  schedule: "35 5 * * 2-6"
+  suspend: false
+  # After prices (00:30 Tue-Sat, latest end 01:00). Ends by 01:35 before detect.
+  schedule: "0 1 * * 2-6"
   timeZone: Europe/Bratislava
   concurrencyPolicy: Forbid
   startingDeadlineSeconds: 300
@@ -84,7 +84,7 @@ metadata:
 spec:
   suspend: true
   # Weekly EPS surprise from Alpha Vantage EARNINGS. Free key: 25 requests a day; the source stops at 20 per run and per UTC day.
-  # Saturday 08:00 is a separate weekly source refresh; it may overlap daily scoring.
+  # Saturday 08:00 is a separate weekly source refresh after the weekday chain.
   schedule: "0 8 * * 6"
   timeZone: Europe/Bratislava
   concurrencyPolicy: Forbid
@@ -152,9 +152,9 @@ metadata:
   name: invest-buddy-detect
   namespace: invest
 spec:
-  suspend: true
-  # After collect's 1800 s deadline (05:35 + 30 min = 06:05) and before extract (06:25) and reconcile (07:00).
-  schedule: "10 6 * * 2-6"
+  suspend: false
+  # After collect's latest end (01:35) and before extract (01:50).
+  schedule: "35 1 * * 2-6"
   timeZone: Europe/Bratislava
   concurrencyPolicy: Forbid
   startingDeadlineSeconds: 300
@@ -250,3 +250,66 @@ spec:
                 limits:
                   cpu: 300m
                   memory: 384Mi
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: invest-buddy-discovery
+  namespace: invest
+spec:
+  suspend: false
+  # Weekly, Saturday after collect-alphavantage (08:00). Finds new tickers outside the universe, scores them with the same rules and stores candidates; promoted ones enter the universe for the next weekday chain.
+  schedule: "30 9 * * 6"
+  timeZone: Europe/Bratislava
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 1800
+      template:
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          nodeSelector:
+            kubernetes.io/hostname: k8s-worker-01
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: discovery
+              image: ghcr.io/filipcsupka/invest-buddy:latest
+              command: ["node", "dist/jobs/discovery.js"]
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-secrets
+                      key: DATABASE_URL
+                - name: SEC_USER_AGENT
+                  valueFrom:
+                    configMapKeyRef:
+                      name: invest-buddy-reconcile-config
+                      key: SEC_USER_AGENT
+                - name: TWELVE_DATA_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-market-secrets
+                      key: TWELVE_DATA_API_KEY
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 128Mi
+                limits:
+                  cpu: 300m
+                  memory: 512Mi

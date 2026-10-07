@@ -4,10 +4,10 @@ metadata:
   name: invest-buddy-macro
   namespace: invest
 spec:
-  suspend: true
-  # After extract's latest end (07:00) and before reconcile (07:10). Placeholder rules for dataTailwind and sectorRotationIntoGrowth, no AI.
-  # Reads stored daily bars from prices (05:00). Latest end 07:09 (start window 5 min plus 240 s).
-  schedule: "0 7 * * 2-6"
+  suspend: false
+  # After extract's latest end (03:55) and before reconcile (04:10). Placeholder rules for dataTailwind and sectorRotationIntoGrowth, no AI.
+  # Reads stored daily bars from prices (00:30). Latest end 04:09 (start window 5 min plus 240 s).
+  schedule: "0 4 * * 2-6"
   timeZone: Europe/Bratislava
   concurrencyPolicy: Forbid
   startingDeadlineSeconds: 300

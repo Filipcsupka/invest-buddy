@@ -1,10 +1,10 @@
-# Session handoff, 2026-10-06
+# Session handoff, updated 2026-10-07
 
 Read this first in the next session, then `docs/tasks-open.md` (task list with definitions of done). Product rules live in `~/Documents/ops-brain/projects/investing-platform/`.
 
 ## Where things stand
 
-The script-first pipeline runs end to end on the khtz cluster, by hand. `invest.filipcsupka.online` shows real data for 2026-10-05: scores, fundamentals, macro flags, source links, five ADD idea cards and the owner's position weights. Nothing runs on a schedule yet. Every CronJob except `prices` and `digest` is suspended, and every run today was a Job I created from a CronJob.
+The script-first pipeline runs end to end on the khtz cluster, by hand. `invest.filipcsupka.online` shows real data for 2026-10-05: scores, fundamentals, macro flags, source links, five ADD idea cards and the owner's position weights. The scheduled weekday chain is unsuspended in the app manifest proposal: prices 00:30, collect 01:00, detect 01:35, extract 01:50, macro 04:00, reconcile 04:10, daily 04:25 and judge 05:30, Tuesday to Saturday in Europe/Bratislava. Extract and judge use the daily gate, so unchanged symbols do not cause model calls. Digest remains at 07:30. These manifest edits are local until Filip copies them to infra; this paragraph does not describe live cluster state. The earlier full pass was run by hand.
 
 - Cluster: khtz (personal Hetzner k3s). Shell access: `export KUBECONFIG=~/.kube/khtz`. The `kubernetes` MCP tool uses context `default` and is read-only.
 - Deployed image: `sha-5a64bcf` (web and scanner), pinned in infra `gitops/apps/invest-buddy/overlays/prod/kustomization.yaml`.
@@ -53,7 +53,7 @@ Order for a full pass (asOf = last US session): `collect` (SEC filings, 100-day 
 ## Next steps, in order
 
 1. After the Flex change: run the portfolio job, check `/portfolio`.
-2. Build the change-driven gate (F1 to F3) and the token budget (F4) so extract and judge run only when something changed. Then unsuspend the chain: collect, macro, reconcile, daily first, extract and judge last (task A8).
+2. Copy and review the night schedule in infra after confirming migration 019 and the AI budget gate (F4). The app proposal has the weekday chain unsuspended, with extract and judge controlled by the daily gate. Check the first run before relying on its scores and ideas.
 3. Display bug: "Revenue growth from unknown to unknown" shows no numbers although the flag is confirmed. Add the XBRL growth figures to the field detail.
 4. Remaining unknown fundamentals: guidance, catalyst, narrative still show "one source" unless a verified quote exists. Check the policy and the prompt.
 5. Generic sizing matrix on the web (G3), owner view (G4), discovery of new names (F7), quality check against the three old scan cards (F8).
