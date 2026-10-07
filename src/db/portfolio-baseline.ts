@@ -3,9 +3,10 @@ import { z } from "zod";
 import { isoDate } from "./iso-date";
 
 /**
- * What the judge needs from the portfolio: positions and cash, in EUR. A person fills it by hand today
+ * Private portfolio baseline: positions and cash, in EUR. A person fills it by hand today
  * (POST /api/ingest/portfolio-baseline). An interactive IBKR MCP session can write the same shape later.
- * This is personal data. It is read only by the bearer-protected judge input and never shown on a public page.
+ * This is personal data. The bearer-protected judge input may use holdings for candidate selection;
+ * owner allocation reads it separately. It is never shown on a public page.
  */
 export const baselineSchema = z.object({
   asOf: isoDate(),

@@ -48,8 +48,8 @@ describe("judge input", () => {
     expect(JSON.stringify(input)).not.toContain("costEur");
     expect(JSON.stringify(input.symbols)).not.toMatch(/"bars"|"open"/);
     const sig = input.signals.find((x) => x.symbol === "NVDA")!;
-    expect(sig.action).toBe("HOLD");
-    expect(sig.signature).toMatch(/^HOLD\|/);
+    expect(sig.action).toBe("WATCH");
+    expect(sig.signature).toMatch(/^WATCH\|/);
   });
   it("does not pass a display_allowed=false or missing document to the judge", () => {
     const rows = [c("epsBeat", { evidence_refs: [{ url: "https://sec.gov/cleared" }, { url: "https://sec.gov/restricted" }, { url: "https://sec.gov/legacy" }] })];
@@ -90,6 +90,7 @@ describe("judge input", () => {
     const rows = ([row("A", "Setup met (>=18)", 19), row("B", "Watch", 16)] as unknown as (Parameters<typeof shapeSymbol>[0] & { ticker: string })[]).map((r) => shapeSymbol(r, [c("epsBeat", { symbol: r.ticker }), c("revenueAccelerating", { symbol: r.ticker })], sampleBaseline, 3030, null));
     const key = (s: ReturnType<typeof signalsFor>[number]) => [s.symbol, s.action, s.sizeTier, s.signature];
     expect(signalsFor(rows, null).map(key)).toEqual(signalsFor(rows, { ...sampleBaseline, investedEur: 3030 }).map(key));
+    expect(signalsFor(rows.map((s) => ({ ...s, held: { valueEur: 300, weightPercent: 10 } })), { ...sampleBaseline, investedEur: 3030 }).map(key)).toEqual(signalsFor(rows.map((s) => ({ ...s, held: null })), null).map(key));
     for (const s of signalsFor(rows, null)) {
       expect(s.signature).toBe(`${s.action}|${s.ratings.company}|${s.ratings.entry}|${s.ratings.catalyst}|${s.sizeTier}`);
       expect([s.amountMinEur, s.amountMaxEur]).toEqual([0, 0]);
