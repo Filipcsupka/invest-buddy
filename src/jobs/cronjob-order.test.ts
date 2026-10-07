@@ -15,21 +15,19 @@ const deadline = (name: string) => Number(/activeDeadlineSeconds: (\d+)/.exec(jo
 const startWindow = (name: string) => Number(/startingDeadlineSeconds: (\d+)/.exec(job(name))?.[1]) / 60;
 
 describe("daily pipeline order", () => {
-  const chain = ["collect", "detect", "extract", "reconcile", "daily", "judge"];
-  it("runs collect, detect, extract, reconcile, daily, judge in that order on the same weekdays", () => {
+  const chain = ["collect", "detect", "extract", "macro", "reconcile", "daily", "judge"];
+  it("runs the scheduled chain in order on the same weekdays", () => {
     const times = chain.map((name) => minutes(name));
     for (let i = 1; i < chain.length; i++) expect(times[i].at, `${chain[i]} after ${chain[i - 1]}`).toBeGreaterThan(times[i - 1].at);
     expect(new Set(times.map((t) => t.days))).toEqual(new Set(["2-6"]));
   });
   it("starts each step after the previous step's job deadline", () => {
     for (let i = 1; i < chain.length - 1; i++) {
-      if (chain[i] === "daily") continue; // daily has a 60 minute safety deadline; it normally ends within minutes
       expect(minutes(chain[i]).at, `${chain[i]} after ${chain[i - 1]} deadline`).toBeGreaterThanOrEqual(minutes(chain[i - 1]).at + deadline(chain[i - 1]));
     }
   });
   it("caps the start window so a late start plus the job deadline ends before the next step", () => {
-    // daily is excluded: its 60 minute safety deadline overlaps digest (07:30) and judge (07:45) by design; see deploy/README.md.
-    for (const [name, next] of [["collect", "detect"], ["detect", "extract"], ["extract", "reconcile"], ["reconcile", "daily"]]) {
+    for (const [name, next] of [["collect", "detect"], ["detect", "extract"], ["extract", "macro"], ["macro", "reconcile"], ["reconcile", "daily"], ["daily", "judge"]]) {
       expect(startWindow(name), `${name} start window`).toBeLessThanOrEqual(5);
       expect(minutes(name).at + startWindow(name) + deadline(name), `${name} latest end vs ${next}`).toBeLessThanOrEqual(minutes(next).at);
     }
@@ -39,8 +37,8 @@ describe("daily pipeline order", () => {
     for (const name of ["reconcile", "daily"]) expect(job(name), name).toMatch(/^\s{2}suspend: true$/m);
   });
   it("passes the documented models", () => {
-    expect(job("extract")).toContain('args: ["--agent", "claude", "--model", "haiku"]');
-    expect(job("judge")).toContain('args: ["--model", "sonnet"]');
+    expect(job("extract")).toContain('args: ["--agent", "claude", "--model", "haiku", "--gate-from-db"]');
+    expect(job("judge")).toContain('args: ["--model", "sonnet", "--gate-from-db"]');
   });
   it("keeps the new and unfinished steps suspended, and the old web-search scans too", () => {
     for (const name of ["collect", "detect", "extract", "judge", "scan-claude", "scan-codex"]) expect(job(name), name).toMatch(/^\s{2}suspend: true$/m);

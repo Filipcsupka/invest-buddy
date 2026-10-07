@@ -1,5 +1,6 @@
 import { expect, it } from "vitest";
-import { drawdownHit, gateSymbols, insiderCluster, parseArgs, relevantFiling, valuationHit } from "./detect";
+import pg from "pg";
+import { drawdownHit, gateSymbols, insiderCluster, parseArgs, persistGate, relevantFiling, valuationHit } from "./detect";
 
 it("gates 8-K items, 10-Q, 10-K and amendments, ignoring other forms", () => {
   for (const form of ["10-Q", "10-K", "10-Q/A", "10-K/A"]) expect(relevantFiling({ form, items: "" })).toBe(true);
@@ -32,4 +33,24 @@ it("validates detect arguments", () => {
   expect(parseArgs(["--output", "/tmp/gate.json", "--since", "2026-10-01"])).toEqual({ out: "/tmp/gate.json", since: "2026-10-01" });
   expect(() => parseArgs(["--since", "2026-02-30"])).toThrow();
   expect(() => parseArgs(["--bogus"])).toThrow();
+});
+
+it.skipIf(!process.env.TEST_DATABASE_URL)("persists the daily gate and reopens it only for new work", async () => {
+  const pool = new pg.Pool({ connectionString: process.env.TEST_DATABASE_URL });
+  const date = "2099-07-19";
+  try {
+    const first = await persistGate(pool, { asOf: date, symbols: ["NVDA"], reasons: { NVDA: ["10-Q"] }, accessions: { NVDA: ["0000000000-99-000001"] } });
+    expect(first.symbols).toEqual(["NVDA"]);
+    await pool.query("UPDATE scheduled_gates SET extracted_at=now(),judged_at=now() WHERE gate_date=$1", [date]);
+    await persistGate(pool, { asOf: date, symbols: ["NVDA"], reasons: { NVDA: ["10-Q"] }, accessions: { NVDA: ["0000000000-99-000001"] } });
+    expect((await pool.query("SELECT extracted_at,judged_at FROM scheduled_gates WHERE gate_date=$1", [date])).rows[0]).toMatchObject({ extracted_at: expect.any(Date), judged_at: expect.any(Date) });
+    const second = await persistGate(pool, { asOf: date, symbols: ["AMD"], reasons: { AMD: ["approved discovery candidate"] }, accessions: { AMD: [] } });
+    expect(second.symbols).toEqual(["AMD", "NVDA"]);
+    expect((await pool.query("SELECT extracted_at,judged_at FROM scheduled_gates WHERE gate_date=$1", [date])).rows[0]).toMatchObject({ extracted_at: null, judged_at: null });
+  } finally { await pool.query("DELETE FROM scheduled_gates WHERE gate_date=$1", [date]); await pool.end(); }
+});
+
+it("includes a promoted discovery name even without a filing", () => {
+  const gate = gateSymbols({ today: "2026-10-07", filings: [], insiders: [], drawdowns: [], valuations: [], newSymbols: ["F7ZZ"] }, ["NVDA", "F7ZZ"]);
+  expect(gate).toEqual({ symbols: ["F7ZZ"], reasons: { F7ZZ: ["approved discovery candidate awaiting first extraction"] } });
 });

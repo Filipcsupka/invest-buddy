@@ -76,3 +76,5 @@ The old scan produced one card per ticker and stayed silent when nothing changed
 ## What this changes in the repo
 
 See `docs/tasks-open.md`, group F. In short: replace the weekday schedule for extract and judge with a gated schedule, add the watch and gate step, add the budget guard, and move the full re-screen to twice a year.
+
+F3 status (2026-10-07): detect now stores one daily gate in `scheduled_gates`. The scheduled extractor reads its symbols and accessions through the protected ingest endpoint, then marks extraction complete. Judge reads that gate after extraction and marks its review complete. Empty gates exit before any model call. A promoted discovery instrument stays in the gate until its first applied extraction. The CronJobs remain suspended in this proposal; the fixed review calendar and separate review schedule belong to F5.

@@ -30,15 +30,42 @@ export function insiderCluster(rows: InsiderFiling[], today: string, count = GAT
 export const drawdownHit = (band: Band, threshold = GATE.drawdownPct) => band.current <= -threshold && band.previous > -threshold;
 export const valuationHit = (band: Band, threshold = GATE.valuationPe) => band.current <= threshold && band.previous > threshold;
 
-export function gateSymbols(input: { filings: Filing[]; insiders: InsiderFiling[]; drawdowns: Band[]; valuations: Band[]; today: string }, order: string[]) {
+export function gateSymbols(input: { filings: Filing[]; insiders: InsiderFiling[]; drawdowns: Band[]; valuations: Band[]; newSymbols?: string[]; today: string }, order: string[]) {
   const reasons: Record<string, string[]> = {};
   const add = (symbol: string, reason: string) => { (reasons[symbol] ??= []).push(reason); };
   for (const f of input.filings) if (relevantFiling(f)) add(f.symbol, `${f.form} ${f.accession}`);
   for (const symbol of insiderCluster(input.insiders, input.today)) add(symbol, "opportunistic insider buy cluster");
   for (const b of input.drawdowns) if (drawdownHit(b)) add(b.symbol, `drawdown band ${GATE.drawdownPct}%`);
   for (const b of input.valuations) if (valuationHit(b)) add(b.symbol, `valuation P/E band ${GATE.valuationPe}`);
+  for (const symbol of input.newSymbols ?? []) add(symbol, "approved discovery candidate awaiting first extraction");
   const symbols = order.filter((s) => reasons[s]);
   return { symbols, reasons: Object.fromEntries(symbols.map((s) => [s, reasons[s]])) };
+}
+
+export interface GatePayload { asOf: string; symbols: string[]; reasons: Record<string, string[]>; accessions: Record<string, string[]>; revision?: number }
+/** One durable gate per run date. A later detect adds new work without reopening an unchanged, consumed gate. */
+export async function persistGate(db: Pick<pg.Pool, "query">, gate: GatePayload): Promise<GatePayload> {
+  const result = await db.query<{ gate_date: string; symbols: string[]; reasons: Record<string, string[]>; accessions: Record<string, string[]>; revision: number }>(
+    `INSERT INTO scheduled_gates (gate_date,symbols,reasons,accessions) VALUES ($1::date,$2::text[],$3::jsonb,$4::jsonb)
+     ON CONFLICT (gate_date) DO UPDATE SET
+       symbols=ARRAY(SELECT DISTINCT unnest(scheduled_gates.symbols || EXCLUDED.symbols) ORDER BY 1),
+       reasons=scheduled_gates.reasons || EXCLUDED.reasons,
+       accessions=scheduled_gates.accessions || EXCLUDED.accessions,
+       revision=scheduled_gates.revision + CASE WHEN EXCLUDED.symbols <@ scheduled_gates.symbols AND scheduled_gates.accessions @> EXCLUDED.accessions THEN 0 ELSE 1 END,
+       extracted_at=CASE WHEN EXCLUDED.symbols <@ scheduled_gates.symbols AND scheduled_gates.accessions @> EXCLUDED.accessions THEN scheduled_gates.extracted_at ELSE NULL END,
+       judged_at=CASE WHEN EXCLUDED.symbols <@ scheduled_gates.symbols AND scheduled_gates.accessions @> EXCLUDED.accessions THEN scheduled_gates.judged_at ELSE NULL END,
+       detected_at=now()
+     RETURNING gate_date::text,symbols,reasons,accessions,revision`,
+    [gate.asOf, gate.symbols, JSON.stringify(gate.reasons), JSON.stringify(gate.accessions)],
+  );
+  const row = result.rows[0];
+  return { asOf: row.gate_date, symbols: row.symbols, reasons: row.reasons, accessions: row.accessions, revision: row.revision };
+}
+
+export async function unextractedDiscoverySymbols(db: Pick<pg.Pool, "query">): Promise<string[]> {
+  const result = await db.query<{ symbol: string }>(`SELECT i.ticker AS symbol FROM instruments i WHERE i.source='discovery' AND NOT EXISTS (
+    SELECT 1 FROM extraction_runs e WHERE e.symbol=i.ticker AND e.status='ok' AND e.applied_at IS NOT NULL)`);
+  return result.rows.map((row) => row.symbol);
 }
 
 export function parseArgs(args: string[]) {
@@ -76,10 +103,11 @@ async function main() {
       SELECT symbol,(value->>'pe')::numeric AS pe,lag((value->>'pe')::numeric) OVER (PARTITION BY symbol ORDER BY as_of) AS previous,
         row_number() OVER (PARTITION BY symbol ORDER BY as_of DESC) AS rn FROM collected_facts WHERE fact_key='valuation_pe')
       SELECT symbol,pe::text AS current,previous::text FROM ranked WHERE rn=1 AND previous IS NOT NULL`);
+    const newSymbols = await unextractedDiscoverySymbols(pool);
     const result = gateSymbols({ filings: filings.rows, insiders: docs.rows.map((r) => ({ symbol: r.symbol, accession: r.accession, date: r.date, ownerCik: r.owner_cik, trades: Array.isArray(r.trades) ? r.trades : [], isNew: r.is_new })),
       drawdowns: bars.rows.flatMap((r) => { const peak = Number(r.high); return peak > 0 ? [{ symbol: r.symbol, current: 100 * (Number(r.close) / peak - 1), previous: 100 * (Number(r.previous) / peak - 1) }] : []; }),
-      valuations: valuations.rows.map((r) => ({ symbol: r.symbol, current: Number(r.current), previous: Number(r.previous) })), today }, (await loadUniverse(pool)).map((u) => u.symbol));
-    const payload = { asOf: today, ...result, accessions: Object.fromEntries(result.symbols.map((symbol) => [symbol, [...new Set([...filings.rows.filter((f) => f.symbol === symbol && relevantFiling(f)).map((f) => f.accession), ...docs.rows.filter((d) => d.symbol === symbol && d.is_new && d.accession).map((d) => d.accession)])]])) };
+      valuations: valuations.rows.map((r) => ({ symbol: r.symbol, current: Number(r.current), previous: Number(r.previous) })), newSymbols, today }, (await loadUniverse(pool)).map((u) => u.symbol));
+    const payload = await persistGate(pool, { asOf: today, ...result, accessions: Object.fromEntries(result.symbols.map((symbol) => [symbol, [...new Set([...filings.rows.filter((f) => f.symbol === symbol && relevantFiling(f)).map((f) => f.accession), ...docs.rows.filter((d) => d.symbol === symbol && d.is_new && d.accession).map((d) => d.accession)])]])) });
     const json = JSON.stringify(payload) + "\n";
     if (out) writeFileSync(out, json);
     process.stdout.write(json);
