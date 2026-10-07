@@ -5,7 +5,7 @@ const evidence = z.object({ claim: z.string().regex(/^(fundamentals|macro)\.[A-Z
 const nullable = z.boolean().nullable();
 export const scanSchema = z.object({
   schemaVersion: z.literal(2), runId: z.uuid(), asOf: date, generatedAt: z.iso.datetime({ offset: true }),
-  runner: z.object({ name: z.enum(["claude", "codex"]), model: z.string().min(1).max(128) }).strict(),
+  runner: z.object({ name: z.enum(["claude", "codex"]), model: z.string().min(1).max(128), dataMode: z.enum(["real", "sample"]).optional() }).strict(),
   tickers: z.array(z.object({
     symbol: z.string().regex(/^[A-Z][A-Z0-9.-]{0,9}$/),
     fundamentals: z.object({

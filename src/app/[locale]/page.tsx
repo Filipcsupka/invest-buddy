@@ -70,7 +70,7 @@ export default async function Home({ params }: LocaleParams) {
           <h2 id="record">{m.home.recordTitle}</h2>
         </div>
         <div>
-          <p className="prose">{m.home.recordBody}</p>
+          <p className="prose">{data.sample ? m.home.recordSampleBody : m.home.recordBody}</p>
           <div className="actions">
             <Link className="button" href={`/${locale}/dashboard`}>
               {m.home.primary}

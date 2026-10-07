@@ -14,7 +14,7 @@ The runner never gets database credentials. It holds only a bearer token for the
   "runId": "uuid",
   "asOf": "2026-10-03",
   "generatedAt": "2026-10-04T05:30:00Z",
-  "runner": { "name": "claude", "model": "string" },
+  "runner": { "name": "claude", "model": "string", "dataMode": "real" },
   "tickers": [
     {
       "symbol": "NVDA",
@@ -55,6 +55,7 @@ The runner never gets database credentials. It holds only a bearer token for the
 ## v2 additions: two agents, cross-checked
 
 - `runner.name` is required and is `claude` or `codex`. Each agent posts its own run (own `runId`) for the same `asOf`. Superseding applies only within the same agent, symbol and `asOf`; the two agents never overwrite each other.
+- `runner.dataMode` is `real` for live extraction and `sample` for local samples or offline bundles. Older payloads may omit it, but only runs explicitly marked `real` can enter the permanent track record. The first score snapshot for a ticker and date stays immutable. Each judge invocation has its own run ID and can add an immutable event for that date, even when the input hash repeats.
 - Every evidence item for a `true` claim needs `publishedAt`, `fiscalPeriod` and `quote`, where `quote` is a sentence copied verbatim from the cited page.
 - Agents must not read each other's output. Neither posts consensus; the server computes it.
 - A reconcile job (not an agent) produces one consensus finding per symbol and field:

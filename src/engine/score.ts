@@ -1,6 +1,9 @@
 import { technicalIndicators } from "./indicators";
 import type { Fundamentals, Macro, OHLCV, RuleHit, ScoreInputs, ScoreResult } from "./types";
 
+/** Bump when the scoring rules change; each new record snapshot stores this value. */
+export const SCORE_RULES_VERSION = "2026-10-06.1";
+
 const finite = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
 const boolean = (value: unknown) => typeof value === "boolean" || value === null;
 

@@ -252,7 +252,7 @@ async function main() {
 
   const payload = {
     schemaVersion: 2, runId, asOf, generatedAt: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
-    runner: { name: opts.agent, model },
+    runner: { name: opts.agent, model, dataMode: "real" },
     tickers, macro,
   };
   const errs = validatePayload(payload);

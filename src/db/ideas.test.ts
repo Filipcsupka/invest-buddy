@@ -5,7 +5,7 @@ import { sampleIdeas } from "../ideas/fixtures";
 const hash = "c".repeat(64);
 const base = { symbol: "NVDA", action: "ADD", sizeTier: "ADD_THIRD", amountMinEur: 60, amountMaxEur: 90, verdict: "v", whatHappened: ["a", "b"], whyItMatters: ["c"], setup: { company: "Strong", entry: "Good", catalyst: "Neutral" }, numbers: [{ label: "a", value: "1" }, { label: "b", value: "2" }, { label: "c", value: "3" }], plan: { amountNow: "EUR 60-90", trigger: "t", invalidation: "i", opportunityCost: "o" }, evidence: [{ url: "https://sec.gov/x", label: "x" }], unconfirmed: false };
 const stored = { ...base, signature: "ADD|Strong|Good|Neutral|ADD_THIRD", ruleConfigVersion: "2026-10-06.1" };
-const run = { asOf: "2026-10-05", agent: "claude" as const, model: "sonnet", inputHash: hash, status: "ok" as const, usage: { inputTokens: 1, outputTokens: 2, cacheReadTokens: 3, cacheCreationTokens: 4, turns: 1 }, costUsd: 0.01 };
+const run = { asOf: "2026-10-05", runId: "11111111-1111-4111-8111-111111111111", agent: "claude" as const, model: "sonnet", inputHash: hash, status: "ok" as const, usage: { inputTokens: 1, outputTokens: 2, cacheReadTokens: 3, cacheCreationTokens: 4, turns: 1 }, costUsd: 0.01 };
 
 function fakePool(rowCount = 1) {
   const calls: { sql: string; params: unknown[] }[] = [];
@@ -60,15 +60,20 @@ describe("judge storage", () => {
     const r = await recordJudge(p as never, { run, ideas: [{ ...stored, carriedFrom: "2026-09-20" }] } as never);
     expect(r.stored).toBe(1);
     const sqls = p.calls.map((c) => c.sql.trim().split(/\s+/)[0]);
-    expect(sqls).toEqual(["BEGIN", "INSERT", "INSERT", "COMMIT"]);
-    const insert = p.calls[1];
+    expect(sqls).toEqual(["BEGIN", "SELECT", "INSERT", "INSERT", "INSERT", "COMMIT"]);
+    const insert = p.calls[2];
     expect(insert.sql).toContain("ON CONFLICT (as_of,symbol,input_hash) DO NOTHING");
     expect(insert.params).toContain("ADD|Strong|Good|Neutral|ADD_THIRD");
     expect(insert.sql).toContain("size_tier");
-    expect(insert.params.at(-1)).toBe("ADD_THIRD");
+    expect(insert.params.at(-2)).toBe("ADD_THIRD");
+    expect(insert.params.at(-1)).toBe(run.runId);
     expect(insert.params).toContain("2026-09-20");
-    expect(p.calls[2].sql).toContain("WHERE judge_runs.status <> 'ok' OR EXCLUDED.status = 'ok'");
-    expect(p.calls[2].params.slice(0, 11)).toEqual(["2026-10-05", "claude", "sonnet", hash, "ok", 1, 2, 3, 4, 1, 0.01]);
+    expect(p.calls[1].sql).toContain("pg_advisory_xact_lock");
+    expect(p.calls[3].sql).toContain("INSERT INTO record_signals");
+    expect(p.calls[3].params).toEqual(["NVDA", "2026-10-05", run.runId, "ADD_THIRD", "ADD", "2026-10-06.1"]);
+    expect(p.calls[3].sql).not.toContain("SELECT max(id) FROM record_signals");
+    expect(p.calls[4].sql).toContain("WHERE judge_runs.status <> 'ok' OR EXCLUDED.status = 'ok'");
+    expect(p.calls[4].params.slice(0, 11)).toEqual(["2026-10-05", "claude", "sonnet", hash, "ok", 1, 2, 3, 4, 1, 0.01]);
   });
   it("a failed run stores no ideas", async () => {
     const p = fakePool();
