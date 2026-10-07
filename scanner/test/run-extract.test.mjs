@@ -101,6 +101,9 @@ test("postTicker stores one ticker per call with macro=skip and reports failure"
     assert.equal(calls[0].url, "http://x/api/ingest/scan?macro=skip");
     assert.deepEqual(calls.map((c) => c.body.tickers.map((t) => t.symbol)), [["NVDA"], ["AMD"]]);
     assert.notEqual(calls[0].body.runId, calls[1].body.runId);
+    assert.equal(calls[0].body.runner.dataMode, "real");
+    assert.equal(await postTicker({ ...opts, bundleDir: "/tmp/sample" }, "t", { asOf: "2026-10-05", model: "m", output: out("TSLA") }, () => {}), true);
+    assert.equal(calls[2].body.runner.dataMode, "sample");
     assert.match(logs[1], /AMD: POST failed: HTTP 500/);
     globalThis.fetch = async () => { throw new Error("boom"); };
     assert.equal(await postTicker(opts, "t", { asOf: "2026-10-05", model: "m", output: out("X") }, (m) => logs.push(m)), false);

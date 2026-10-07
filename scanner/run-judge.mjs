@@ -383,7 +383,7 @@ async function main() {
   if (!process.env.SCAN_KEEP_WORK) rmSync(work, { recursive: true, force: true });
   const secs = Math.round((Date.now() - t0) / 1000);
   const totals = `${calls} model call(s), ${text.length} input chars, tokens in ${spent.inputTokens ?? "?"} out ${spent.outputTokens ?? "?"} cache read ${spent.cacheReadTokens ?? "?"} cache created ${spent.cacheCreationTokens ?? "?"}, turns ${spent.turns ?? "?"}${cost ? `, cost $${cost.toFixed(4)}` : ""}, ${secs}s${skipped.size ? `; skipped ${[...skipped.keys()].join(", ")}` : ""}`;
-  const runBase = { asOf, agent: o.agent, model, inputHash: hash, usage: spent, costUsd: cost || null, ruleConfigVersion: input.ruleConfigVersion };
+  const runBase = { asOf, runId, agent: o.agent, model, inputHash: hash, usage: spent, costUsd: cost || null, ruleConfigVersion: input.ruleConfigVersion };
   if (!result) {
     log(`FAILED ${error}; ${totals}`);
     if (record) await postRun(o, token, { run: { ...runBase, status: "failed", error: String(error).slice(0, 2000), ideaCount: 0 }, ideas: [] }).catch((e) => log(`could not record run: ${e.message}`));

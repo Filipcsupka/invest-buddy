@@ -120,7 +120,7 @@ export async function loadRuntimeUniverse(baseUrl, token) {
 /** Posts one ticker as its own scan (macro=skip: no macro result here, so the daily macro finding stays). Returns true when stored. */
 export async function postTicker(opts, token, { asOf, model, output }, log) {
   const payload = {
-    schemaVersion: 2, runId: randomUUID(), asOf, generatedAt: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"), runner: { name: opts.agent, model }, tickers: [output],
+    schemaVersion: 2, runId: randomUUID(), asOf, generatedAt: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"), runner: { name: opts.agent, model, dataMode: opts.bundleDir ? "sample" : "real" }, tickers: [output],
     macro: { sectorRotationIntoGrowth: null, dataTailwind: null, notes: "Macro not extracted in this script-first run; values unknown.", evidence: [], events: [] },
   };
   try {
@@ -225,7 +225,7 @@ async function main() {
   });
   if (!process.env.SCAN_KEEP_WORK) rmSync(work, { recursive: true, force: true });
   const payload = {
-    schemaVersion: 2, runId, asOf, generatedAt: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"), runner: { name: opts.agent, model }, tickers,
+    schemaVersion: 2, runId, asOf, generatedAt: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"), runner: { name: opts.agent, model, dataMode: opts.bundleDir ? "sample" : "real" }, tickers,
     macro: { sectorRotationIntoGrowth: null, dataTailwind: null, notes: "Macro not extracted in this script-first run; values unknown.", evidence: [], events: [] },
   };
   const errs = validatePayload(payload);

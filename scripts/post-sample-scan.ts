@@ -9,7 +9,7 @@ const evidence = (field: string) => ({ claim: `fundamentals.${field}`, url: sour
 async function main() {
   for (const name of ["claude", "codex"] as const) {
     const payload = scanSchema.parse({
-      schemaVersion: 2, runId: randomUUID(), asOf, generatedAt: new Date().toISOString(), runner: { name, model: "local-sample" },
+      schemaVersion: 2, runId: randomUUID(), asOf, generatedAt: new Date().toISOString(), runner: { name, model: "local-sample", dataMode: "sample" },
       tickers: [{ symbol: "NVDA", fundamentals: {
         revenueAccelerating: true, revenueDeclining: false, epsBeat: name === "claude", guidanceRaised: false, guidanceCut: false,
         productCatalyst: { present: false, kind: null, summary: null }, insiderOrInstitutionalBuying: null, narrativeChanged: null,

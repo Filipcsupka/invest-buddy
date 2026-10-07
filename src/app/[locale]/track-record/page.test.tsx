@@ -1,0 +1,36 @@
+import { renderToStaticMarkup } from "react-dom/server";
+import { afterEach, expect, it, vi } from "vitest";
+
+const history = vi.fn();
+const legacyHistory = vi.fn();
+vi.mock("@/db/track-record", () => ({ recordHistory: () => history() }));
+vi.mock("@/data/store", () => ({ scoreHistory: () => legacyHistory() }));
+import TrackRecord from "./page";
+
+const props = { params: Promise.resolve({ locale: "en" }) };
+const originalMode = process.env.DATA_MODE;
+afterEach(() => { process.env.DATA_MODE = originalMode; history.mockReset(); legacyHistory.mockReset(); });
+
+it("shows an honest empty live record without fixture data", async () => {
+  process.env.DATA_MODE = "db";
+  history.mockResolvedValue({ snapshotCount: 0, firstDate: null, lastDate: null, signals: [], buySignalCount: 0, hit30: { hits: 0, n: 0, rate: null } });
+  const html = renderToStaticMarkup(await TrackRecord(props));
+  expect(html).toContain("No real snapshots or signals");
+  expect(html).toContain("0 snapshots");
+  expect(html).not.toContain("Synthetic benchmark");
+  expect(html).not.toContain("Three dated snapshots");
+  expect(legacyHistory).not.toHaveBeenCalled();
+});
+
+it("shows measured returns and pending windows from stored signals", async () => {
+  process.env.DATA_MODE = "db";
+  history.mockResolvedValue({ snapshotCount: 1, firstDate: "2026-01-02", lastDate: "2026-01-02", buySignalCount: 1, hit30: { hits: 1, n: 1, rate: 1 },
+    signals: [{ id: 1, ticker: "NVDA", asOf: "2026-01-02", tier: "SETUP", state: "Setup met (>=18)", score: 20,
+      windows: { 30: { date: "2026-02-02", stock: 0.1, spy: 0.05, excess: 0.05 }, 90: null, 180: null } }] });
+  const html = renderToStaticMarkup(await TrackRecord(props));
+  expect(html).toContain("1 snapshot.");
+  expect(html).toContain("NVDA");
+  expect(html).toContain("vs SPY 5.0%");
+  expect(html).toContain("Pending");
+  expect(html).not.toContain("synthetic");
+});
