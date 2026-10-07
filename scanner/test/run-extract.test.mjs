@@ -47,7 +47,7 @@ test("a quiet gate exits before token lookup or model call", () => {
   const file = join(dir, "gate.json"); writeFileSync(file, JSON.stringify({ symbols: [] }));
   const run = spawnSync(process.execPath, [new URL("../run-extract.mjs", import.meta.url).pathname, "--symbols-file", file], { env: { ...process.env, INGEST_TOKEN: "", SCAN_OUT_DIR: dir }, encoding: "utf8" });
   assert.equal(run.status, 0, run.stderr);
-  assert.match(run.stderr, /nothing to extract/);
+  assert.match(run.stderr, /nothing changed; 0 model calls/);
 });
 
 test("the live extractor accepts an instrument supplied by the database universe endpoint", async () => {

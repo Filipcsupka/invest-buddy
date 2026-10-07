@@ -84,7 +84,7 @@ metadata:
 spec:
   suspend: true
   # Weekly EPS surprise from Alpha Vantage EARNINGS. Free key: 25 requests a day; the source stops at 20 per run and per UTC day.
-  # Saturday 08:00 is outside the Tuesday to Saturday chain (collect 05:35 to judge 07:45).
+  # Saturday 08:00 is a separate weekly source refresh; it may overlap daily scoring.
   schedule: "0 8 * * 6"
   timeZone: Europe/Bratislava
   concurrencyPolicy: Forbid

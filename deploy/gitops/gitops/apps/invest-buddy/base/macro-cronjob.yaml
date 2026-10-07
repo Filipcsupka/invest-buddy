@@ -5,9 +5,9 @@ metadata:
   namespace: invest
 spec:
   suspend: true
-  # After collect (05:35, ends by 06:05) and before reconcile (07:00). Placeholder rules for dataTailwind and sectorRotationIntoGrowth, no AI.
-  # Reads stored daily bars, so it needs prices (05:00). Starts while extract may still run; it does not depend on it. Latest end 06:59 (start window 5 min plus 240 s).
-  schedule: "50 6 * * 2-6"
+  # After extract's latest end (07:00) and before reconcile (07:10). Placeholder rules for dataTailwind and sectorRotationIntoGrowth, no AI.
+  # Reads stored daily bars from prices (05:00). Latest end 07:09 (start window 5 min plus 240 s).
+  schedule: "0 7 * * 2-6"
   timeZone: Europe/Bratislava
   concurrencyPolicy: Forbid
   startingDeadlineSeconds: 300

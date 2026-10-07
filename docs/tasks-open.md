@@ -194,6 +194,7 @@ Design and sources: `docs/cadence-design.md`. This group replaces the daily extr
 ### F3. Gated extract and judge schedule
 - Do: run extract on changed tickers only (haiku, escalate to sonnet when haiku flags a material change). Run judge when at least one ticker changed, and on the fixed schedule in F5. Change the CronJobs in infra (fewer runs, all weekdays stay for the watch step only).
 - DoD: a quiet week costs 0 model calls; a run with 3 changed tickers calls the model 3 times; counts and cost are logged per run.
+- Status: app repo gate persistence, scanner `--gate-from-db`, and suspended CronJob args are implemented. The infra owner still needs to copy and enable the manifests; F5 owns the separate fixed review schedule.
 
 ### F4. Token budget guard
 - Do: a monthly token and dollar cap. Extract and judge stop with a clear exit code and a log line when the cap is reached. Log processed accession numbers and input hashes. Reprocessing is manual only (`--force`).

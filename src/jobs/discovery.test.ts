@@ -101,6 +101,10 @@ describe("weekly discovery", () => {
       expect(await saveCandidates(pool, week, [{ ...candidate, symbol: "F7ZY" }], 1)).toHaveLength(0);
       await reviewCandidate(pool, symbol, true, gate);
       expect((await loadUniverse(pool)).find((row) => row.symbol === symbol)).toMatchObject({ name: "F7 Test", sector: "Biotech" });
+      const { unextractedDiscoverySymbols, gateSymbols } = await import("./detect");
+      const pending = await unextractedDiscoverySymbols(pool);
+      expect(pending).toContain(symbol);
+      expect(gateSymbols({ today: "2099-06-02", filings: [], insiders: [], drawdowns: [], valuations: [], newSymbols: pending }, (await loadUniverse(pool)).map((row) => row.symbol)).symbols).toContain(symbol);
       expect(JSON.parse(readFileSync(gate, "utf8")).symbols).toEqual([symbol]);
       unlinkSync(gate);
       await reviewCandidate(pool, symbol, true, gate);

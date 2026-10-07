@@ -18,6 +18,7 @@ import { validateTicker, validatePayload } from "./validate.mjs";
 import { checkEvidence } from "./quotes.mjs";
 import { inputHash, usageFromEnvelope, alreadyExtracted, recordRun } from "./extraction-log.mjs";
 import { reserveBudget, finishBudget } from "./ai-budget.mjs";
+import { readGate, consumeGate } from "./gate-db.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const OUT = process.env.SCAN_OUT_DIR || join(here, "out");
@@ -25,11 +26,11 @@ const MAX_FAIL_RATIO = 0.2;
 
 function usage(msg) {
   if (msg) console.error(`error: ${msg}`);
-  console.error("usage: run-extract.mjs [--dry-run] [--force] [--only A,B | --symbols-file detect.json] [--agent claude|codex] [--model NAME] [--concurrency 1-3] [--timeout-s 300] [--budget-usd 0.5] [--as-of YYYY-MM-DD] [--base-url URL] [--bundle-dir DIR]");
+  console.error("usage: run-extract.mjs [--dry-run] [--force] [--only A,B | --symbols-file detect.json | --gate-from-db] [--agent claude|codex] [--model NAME] [--concurrency 1-3] [--timeout-s 300] [--budget-usd 0.5] [--as-of YYYY-MM-DD] [--base-url URL] [--bundle-dir DIR]");
   process.exit(msg ? 2 : 0);
 }
 export function parseArgs(argv) {
-  const o = { dryRun: false, force: false, budgetUsd: 0.5, only: null, symbolsFile: null, agent: "claude", model: null, concurrency: 1, timeoutS: 300, asOf: null, baseUrl: process.env.INGEST_BASE_URL || "http://web.invest.svc.cluster.local:3000", bundleDir: null };
+  const o = { dryRun: false, force: false, budgetUsd: 0.5, only: null, symbolsFile: null, gateFromDb: false, agent: "claude", model: null, concurrency: 1, timeoutS: 300, asOf: null, baseUrl: process.env.INGEST_BASE_URL || "http://web.invest.svc.cluster.local:3000", bundleDir: null };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const val = () => { if (i + 1 >= argv.length) usage(`missing value for ${a}`); return argv[++i]; };
@@ -38,6 +39,7 @@ export function parseArgs(argv) {
     else if (a === "--budget-usd") o.budgetUsd = Number(val());
     else if (a === "--only") o.only = val().split(",").map((s) => s.trim().toUpperCase()).filter(Boolean);
     else if (a === "--symbols-file") o.symbolsFile = val();
+    else if (a === "--gate-from-db") o.gateFromDb = true;
     else if (a === "--agent") o.agent = val();
     else if (a === "--model") o.model = val();
     else if (a === "--concurrency") o.concurrency = Number(val());
@@ -55,7 +57,7 @@ export function parseArgs(argv) {
   if (!(o.budgetUsd > 0)) usage("--budget-usd must be positive");
   if (o.agent === "claude" && !o.model) o.model = "haiku";
   if (o.asOf && !/^\d{4}-\d{2}-\d{2}$/.test(o.asOf)) usage("--as-of must be YYYY-MM-DD");
-  if (o.only && o.symbolsFile) usage("use --only or --symbols-file, not both");
+  if ([Boolean(o.only), Boolean(o.symbolsFile), o.gateFromDb].filter(Boolean).length > 1) usage("use one symbol source");
   return o;
 }
 
@@ -134,13 +136,15 @@ export async function postTicker(opts, token, { asOf, model, output }, log) {
 
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
+  let token = opts.gateFromDb ? getToken() : null;
+  if (opts.gateFromDb && !token) { console.error("no INGEST_TOKEN; aborting"); process.exit(2); }
   let wanted = opts.only;
-  const gate = opts.symbolsFile ? JSON.parse(readFileSync(opts.symbolsFile, "utf8")) : null;
+  const gate = opts.symbolsFile ? JSON.parse(readFileSync(opts.symbolsFile, "utf8")) : opts.gateFromDb ? await readGate(opts.baseUrl, token, "extract") : null;
   if (gate) wanted = gate.symbols;
-  if (!wanted && !opts.force) usage("--symbols-file or --only is required; use --force for a manual full pass");
+  if (!wanted && !opts.force) usage("--gate-from-db, --symbols-file or --only is required; use --force for a manual full pass");
   if (gate && !Array.isArray(wanted)) usage("symbols file must contain a symbols array");
-  if (Array.isArray(wanted) && !wanted.length) { console.error("nothing to extract"); return; }
-  const token = opts.bundleDir && opts.dryRun ? null : getToken();
+  if (Array.isArray(wanted) && !wanted.length) { console.error("nothing changed; 0 model calls"); if (opts.gateFromDb && !opts.dryRun && !gate.consumed) await consumeGate(opts.baseUrl, token, "extract", gate.asOf, gate.revision); return; }
+  if (!token && !(opts.bundleDir && opts.dryRun)) token = getToken();
   if (!token && !(opts.bundleDir && opts.dryRun)) { console.error("no INGEST_TOKEN; aborting"); process.exit(2); }
   const universe = opts.bundleDir && opts.dryRun
     ? JSON.parse(readFileSync(join(here, "universe.json"), "utf8")).instruments
@@ -217,7 +221,7 @@ async function main() {
       totals = addUsage(totals, spent);
       if (e.exitCode === 4) budgetHit = true;
       log(`${u.symbol}: ${e.skip ? "SKIPPED" : "FAILED"} ${e.message}`);
-      if (!e.skip) {
+      if (!e.skip || opts.gateFromDb) {
         failed.push({ symbol: u.symbol, reason: e.message });
         if (logRuns && hash) await recordRun(opts.baseUrl, token, { symbol: u.symbol, asOf, agent: opts.agent, model: tickerModel, inputHash: hash, accessions: gate?.accessions?.[u.symbol] ?? [], status: "failed", usage: spent, costUsd: tickerCost, error: e.message.slice(0, 2000), applied: false }, log);
       }
@@ -235,12 +239,14 @@ async function main() {
   log(`payload written ${payloadFile} (${tickers.length} tickers)`);
   const logTotals = () => log(`totals: ${calls} model calls, ${inputChars} input chars, tokens in ${totals.inputTokens ?? "?"} out ${totals.outputTokens ?? "?"} cache read ${totals.cacheReadTokens ?? "?"} cache created ${totals.cacheCreationTokens ?? "?"}, turns ${totals.turns ?? "?"}${totalCost ? `, cost $${totalCost.toFixed(4)}` : ""}; ok ${tickers.length}, skipped ${skippedSymbols.length}, failed ${failed.length}`);
   if (!opts.dryRun) {
-    if (!tickers.length) { logTotals(); log("no valid tickers; not posting"); process.exit(budgetHit ? 4 : failed.length ? 1 : 0); }
+    if (!tickers.length) { logTotals(); log("no valid tickers; not posting"); if (opts.gateFromDb && !failed.length && !budgetHit) await consumeGate(opts.baseUrl, token, "extract", gate.asOf, gate.revision); process.exit(budgetHit ? 4 : failed.length ? 1 : 0); }
     if (budgetHit) { logTotals(); log("monthly AI budget reached; exit 4"); process.exit(4); }
     if (postFailed.length) { logTotals(); log(`not stored: ${postFailed.join(", ")}`); process.exit(3); }
   } else log("dry run: nothing posted, nothing recorded");
   logTotals();
   if (budgetHit) { log("monthly AI budget reached; exit 4"); process.exit(4); }
+  if (opts.gateFromDb && failed.length) { log("gate remains pending after failed extraction"); process.exit(1); }
   if (failed.length / selected.length > MAX_FAIL_RATIO) { log(`failure ratio exceeds ${MAX_FAIL_RATIO * 100}%: ${failed.map((f) => f.symbol).join(", ")}`); process.exit(1); }
+  if (opts.gateFromDb && !opts.dryRun) await consumeGate(opts.baseUrl, token, "extract", gate.asOf, gate.revision);
 }
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main().catch((e) => { console.error(`fatal: ${e.stack || e.message}`); process.exit(1); });

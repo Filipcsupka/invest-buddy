@@ -22,6 +22,7 @@ import { extractJson, fill, getToken, lastUsTradingDay, runCli } from "./run-sca
 import { callAgentNoTools, addUsage } from "./run-extract.mjs";
 import { canonical, usageFromEnvelope } from "./extraction-log.mjs";
 import { reserveBudget, finishBudget } from "./ai-budget.mjs";
+import { readGate, consumeGate } from "./gate-db.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const OUT = process.env.SCAN_OUT_DIR || join(here, "out");
@@ -33,11 +34,11 @@ const MIN_ATTEMPT_USD = 0.01;
 
 function usage(msg) {
   if (msg) console.error(`error: ${msg}`);
-  console.error("usage: run-judge.mjs [--dry-run] [--force] [--model NAME] [--budget-usd 0.5] [--as-of YYYY-MM-DD] [--max-symbols 12] [--agent-mode] [--max-turns 8] [--base-url URL] [--timeout-s 300] [--input-file FILE]");
+  console.error("usage: run-judge.mjs [--dry-run] [--force] [--symbols-file FILE | --gate-from-db] [--model NAME] [--budget-usd 0.5] [--as-of YYYY-MM-DD] [--max-symbols 12] [--agent-mode] [--max-turns 8] [--base-url URL] [--timeout-s 300] [--input-file FILE]");
   process.exit(msg ? 2 : 0);
 }
 export function parseArgs(argv, env = process.env) {
-  const o = { dryRun: false, force: false, model: env.JUDGE_MODEL || "sonnet", budgetUsd: 0.5, asOf: null, baseUrl: env.INGEST_BASE_URL || "http://web.invest.svc.cluster.local:3000", timeoutS: 300, inputFile: null, symbolsFile: null, agent: "claude", maxSymbols: 12, agentMode: false, maxTurns: 8 };
+  const o = { dryRun: false, force: false, model: env.JUDGE_MODEL || "sonnet", budgetUsd: 0.5, asOf: null, baseUrl: env.INGEST_BASE_URL || "http://web.invest.svc.cluster.local:3000", timeoutS: 300, inputFile: null, symbolsFile: null, gateFromDb: false, agent: "claude", maxSymbols: 12, agentMode: false, maxTurns: 8 };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const val = () => { if (i + 1 >= argv.length) usage(`missing value for ${a}`); return argv[++i]; };
@@ -53,6 +54,7 @@ export function parseArgs(argv, env = process.env) {
     else if (a === "--max-turns") o.maxTurns = Number(val());
     else if (a === "--input-file") o.inputFile = val();
     else if (a === "--symbols-file") o.symbolsFile = val();
+    else if (a === "--gate-from-db") o.gateFromDb = true;
     else if (a === "-h" || a === "--help") usage();
     else usage(`unknown argument ${a}`);
   }
@@ -62,6 +64,7 @@ export function parseArgs(argv, env = process.env) {
   if (!Number.isInteger(o.maxTurns) || o.maxTurns < 1 || o.maxTurns > 30) usage("--max-turns must be 1 to 30");
   if (!o.model) usage("--model must not be empty");
   if (o.asOf && !/^\d{4}-\d{2}-\d{2}$/.test(o.asOf)) usage("--as-of must be YYYY-MM-DD");
+  if (o.symbolsFile && o.gateFromDb) usage("use --symbols-file or --gate-from-db");
   return o;
 }
 
@@ -309,12 +312,13 @@ async function main() {
   const logFile = join(OUT, `judge-${asOf}-${runId.slice(0, 8)}.log`);
   const log = (m) => { const line = `${new Date().toISOString()} ${m}`; console.error(line); appendFileSync(logFile, line + "\n"); };
   log(`judge ${runId} asOf=${asOf} model=${o.model} budget=$${o.budgetUsd} mode=${o.agentMode ? `agent(max ${o.maxTurns} turns)` : "single call, no tools"} maxSymbols=${o.maxSymbols} dryRun=${o.dryRun} force=${o.force} offline=${Boolean(o.inputFile)}`);
-  const gate = o.symbolsFile ? JSON.parse(readFileSync(o.symbolsFile, "utf8")) : null;
-  if (!gate && !o.force) { log("--symbols-file is required; use --force for a manual scheduled review"); process.exit(2); }
+  const offline = Boolean(o.inputFile) && o.dryRun && !o.gateFromDb;
+  let token = o.gateFromDb ? getToken() : null;
+  const gate = o.symbolsFile ? JSON.parse(readFileSync(o.symbolsFile, "utf8")) : o.gateFromDb ? await readGate(o.baseUrl, token, "judge") : null;
+  if (!gate && !o.force) { log("--gate-from-db or --symbols-file is required; use --force for a manual scheduled review"); process.exit(2); }
   if (gate && !Array.isArray(gate.symbols)) { log("symbols file must contain a symbols array"); process.exit(2); }
-  if (gate && !gate.symbols.length) { log("no changed tickers; no model call"); return; }
-  const offline = Boolean(o.inputFile) && o.dryRun;
-  const token = offline ? null : getToken();
+  if (gate && !gate.symbols.length) { log("nothing changed; 0 model calls"); if (o.gateFromDb && !o.dryRun && !gate.consumed) await consumeGate(o.baseUrl, token, "judge", gate.asOf, gate.revision); return; }
+  if (!token && !offline) token = getToken();
   if (!token && !offline) { log("no INGEST_TOKEN; aborting"); process.exit(2); }
   const record = Boolean(token) && !o.dryRun;
 
@@ -323,11 +327,11 @@ async function main() {
   const gatedSignals = (input.signals ?? []).filter((s) => !gate || gate.symbols.includes(s.symbol));
   const news = o.force ? gatedSignals : changedSignals(gatedSignals, input.previousIdeas);
   log(`signals ${input.signals?.length ?? 0} (rules ${input.ruleConfigVersion}), changed ${news.length}${news.length ? `: ${news.map((s) => `${s.symbol} ${s.action} ${s.sizeTier}`).join(", ")}` : ""}`);
-  if (!news.length) { log("no signal changed since the last stored idea; no model call"); return; }
+  if (!news.length) { log("no signal changed since the last stored idea; no model call"); if (o.gateFromDb && !o.dryRun) await consumeGate(o.baseUrl, token, "judge", gate.asOf, gate.revision); return; }
   const prompt = readFileSync(join(here, "prompts", "judge.md"), "utf8");
   const hash = judgeHash({ input, prompt, model: o.model, agent: o.agent, agentMode: o.agentMode });
   log(`judge input hash ${hash}; gate accessions ${JSON.stringify(gate?.accessions ?? {})}`);
-  if (record && !o.force && await checkSkip(o, token, { asOf, inputHash: hash })) { log(`SKIPPED same input already judged and stored (input ${hash.slice(0, 12)}); use --force to rerun`); return; }
+  if (record && !o.force && !o.gateFromDb && await checkSkip(o, token, { asOf, inputHash: hash })) { log(`SKIPPED same input already judged and stored (input ${hash.slice(0, 12)}); use --force to rerun`); return; }
 
   const modelInput = buildModelInput(input, news);
   const work = mkdtempSync(join(tmpdir(), "investbuddy-judge-"));
@@ -399,6 +403,8 @@ async function main() {
   try {
     const res = await postRun(o, token, { run: { ...runBase, status: "ok", ideaCount: result.ideas.length, output: rawOutput }, ideas: result.ideas });
     log(`POST ok: ${JSON.stringify(res)}; ${totals}`);
+    if (o.gateFromDb && !skipped.size) await consumeGate(o.baseUrl, token, "judge", gate.asOf, gate.revision);
+    if (o.gateFromDb && skipped.size) { log("gate remains pending after partial judgement"); process.exitCode = 1; }
   } catch (e) { log(`POST failed: ${e.message}; ${totals}`); process.exit(3); }
 }
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main().catch((e) => { console.error(`fatal: ${e.stack || e.message}`); process.exit(1); });

@@ -5,7 +5,7 @@ metadata:
   namespace: invest
 spec:
   suspend: true
-  # After detect (06:10, 10 min deadline) and before reconcile (07:00). Reads every universe symbol's stored bundle and skips the ones whose input hash was already extracted, so no symbol list has to pass from detect. Ends by 06:55 at the latest.
+  # After detect (06:10). Reads the persisted gate through the web; an empty gate exits without a model call. Latest end 07:00.
   schedule: "25 6 * * 2-6"
   timeZone: Europe/Bratislava
   concurrencyPolicy: Forbid
@@ -34,7 +34,7 @@ spec:
             - name: extract
               image: ghcr.io/filipcsupka/invest-buddy-scanner:latest
               command: ["node", "/app/scanner/run-extract.mjs"]
-              args: ["--agent", "claude", "--model", "haiku"]
+              args: ["--agent", "claude", "--model", "haiku", "--gate-from-db"]
               securityContext:
                 allowPrivilegeEscalation: false
                 readOnlyRootFilesystem: true
@@ -82,8 +82,8 @@ metadata:
   namespace: invest
 spec:
   suspend: true
-  # Last in the chain: after daily (07:15). One model call for the symbols whose decision changed; the script skips an unchanged day.
-  schedule: "45 7 * * 2-6"
+  # After daily's latest end (08:30). Reads the extracted gate through the web and calls the model only for changed decisions. F5 will add a separate fixed review schedule.
+  schedule: "35 8 * * 2-6"
   timeZone: Europe/Bratislava
   concurrencyPolicy: Forbid
   startingDeadlineSeconds: 300
@@ -110,7 +110,7 @@ spec:
             - name: judge
               image: ghcr.io/filipcsupka/invest-buddy-scanner:latest
               command: ["node", "/app/scanner/run-judge.mjs"]
-              args: ["--model", "sonnet"]
+              args: ["--model", "sonnet", "--gate-from-db"]
               securityContext:
                 allowPrivilegeEscalation: false
                 readOnlyRootFilesystem: true
