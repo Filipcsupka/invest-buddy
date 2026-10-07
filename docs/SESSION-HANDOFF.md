@@ -4,13 +4,17 @@ Read this first in the next session, then `docs/tasks-open.md` (task list with d
 
 ## Where things stand
 
-The script-first pipeline runs end to end on the khtz cluster, by hand. `invest.filipcsupka.online` shows real data for 2026-10-05: scores, fundamentals, macro flags, source links, five ADD idea cards and the owner's position weights. The scheduled weekday chain is unsuspended in the app manifest proposal: prices 00:30, collect 01:00, detect 01:35, extract 01:50, macro 04:00, reconcile 04:10, daily 04:25 and judge 05:30, Tuesday to Saturday in Europe/Bratislava. Extract and judge use the daily gate, so unchanged symbols do not cause model calls. Digest remains at 07:30. These manifest edits are local until Filip copies them to infra; this paragraph does not describe live cluster state. The earlier full pass was run by hand.
+Read `docs/STATE-2026-10-07.md` first for the live snapshot (jobs, counts, tickers, what to check).
+
+The pipeline runs by itself at night on khtz, Tuesday to Saturday (Europe/Bratislava): prices 00:30, collect 01:00, detect 01:35, extract 01:50, macro 04:00, reconcile 04:10, daily 04:25, judge 05:30, digest 07:30, portfolio 06:00 UTC. Discovery runs Saturday 09:30. Extract and judge are AI steps behind the change gate, so unchanged tickers cost nothing. Backup, retention and the old scan jobs stay suspended. The first full load by hand is done, and the first real nightly run is the night of 2026-10-07 to 2026-10-08.
 
 - Cluster: khtz (personal Hetzner k3s). Shell access: `export KUBECONFIG=~/.kube/khtz`. The `kubernetes` MCP tool uses context `default` and is read-only.
-- Deployed image: `sha-5a64bcf` (web and scanner), pinned in infra `gitops/apps/invest-buddy/overlays/prod/kustomization.yaml`.
-- Database: Postgres in namespace `invest`, migrations 001 to 015 applied. Test data only, safe to wipe and rebuild.
-- Repos: app `Filipcsupka/invest-buddy` (this repo, branch `main`), infra `Filipcsupka/infra`. No open PRs in either.
+- Deployed image: pinned in infra `gitops/apps/invest-buddy/overlays/prod/kustomization.yaml`; check it equals the short sha of `main`.
+- Database: Postgres in namespace `invest`, migrations 001 to 020 applied. Test data only, safe to wipe and rebuild.
+- AI limits: the Claude token is a subscription. The real limits are the five-hour and weekly windows, not USD or tokens. There is no monthly budget. Jobs log `USAGE` lines and `ANTHROPIC CUTOFF`; report with `npm run ai-usage`.
+- Repos: app `Filipcsupka/invest-buddy` (this repo, branch `main`), infra `Filipcsupka/infra`.
 - Argo CD syncs infra every 60 s (`timeout.reconciliation: 60s`) with automated prune and self-heal.
+- Diagrams of the pipeline, deploy path and runtime: `docs/architecture.md`.
 
 ## How a change reaches the cluster
 
@@ -44,7 +48,7 @@ Order for a full pass (asOf = last US session): `collect` (SEC filings, 100-day 
 
 ## Needs the owner
 
-1. Edit the Flex query 1662148 in the IBKR portal (a private browser window works): General Configuration, Breakout by Day = Yes; Delivery Configuration, Period = Last 365 Calendar Days. Then run the portfolio job once to backfill the curve since inception. Until then `/portfolio` shows only weights and a note.
+1. Flex query 1662148 is set (Breakout by Day = Yes, Period = Last 365 Calendar Days) and the curve is backfilled (231 NAV points). The response has one statement per day; the parser handles that.
 2. Decide the ideas page (task B3): ADR-001 keeps EUR sizing out of the public product.
 3. Review placeholders (C5, F6): signal tier thresholds, macro thresholds (`MACRO_*`), insider net buy threshold (`INSIDER_MIN_NET_BUY_USD`), the fundamentals policy (`verified_single`), the sizing matrix in `docs/sizing-guide.md`.
 4. Lawyer check before any paid launch (G5).
@@ -52,12 +56,11 @@ Order for a full pass (asOf = last US session): `collect` (SEC filings, 100-day 
 
 ## Next steps, in order
 
-1. After the Flex change: run the portfolio job, check `/portfolio`.
-2. Copy and review the night schedule in infra after confirming migration 019 and the AI budget gate (F4). The app proposal has the weekday chain unsuspended, with extract and judge controlled by the daily gate. Check the first run before relying on its scores and ideas.
-3. Display bug: "Revenue growth from unknown to unknown" shows no numbers although the flag is confirmed. Add the XBRL growth figures to the field detail.
-4. Remaining unknown fundamentals: guidance, catalyst, narrative still show "one source" unless a verified quote exists. Check the policy and the prompt.
-5. Generic sizing matrix on the web (G3), owner view (G4), discovery of new names (F7), quality check against the three old scan cards (F8).
-6. Operations: Postgres backups (E1), job and log visibility (E5, E6), run the DB tests in CI (C1), schema and role split (C2).
+1. Observe the first nightly runs and go through the list in `docs/STATE-2026-10-07.md`.
+2. Alerts (E2): a failed night is only visible in logs and `/api/health`. Pick a delivery channel and build it.
+3. Diagnose the tickers with fundamentals or technical 0 (see the state file).
+4. F5 fixed review calendar, backups (E1), schema and role split (C2), page render logging.
+5. Owner decisions: placeholders (C5, F6), ideas page (B3), owner view access, lawyer check (G5).
 
 ## Pitfalls found
 
@@ -68,3 +71,8 @@ Order for a full pass (asOf = last US session): `collect` (SEC filings, 100-day 
 - Keep the `sleep` and long loops out of tool calls that time out; use background runs.
 - Alpha Vantage free tier is 25 requests a day. Third-party sources (Alpha Vantage, FRED, VIX, RSS) are never shown with links or raw numbers.
 - A hard reload in the IBKR portal did not work in Safari; a private window did.
+- With Breakout by Day, the Flex response holds one `FlexStatement` per day (261 for a year). Code that assumes one statement fails silently; the portfolio job now logs a short error class per step.
+- A CronJob's `activeDeadlineSeconds` also applies to a Job made from it by hand. Set it higher in the patched Job for a full manual pass (`.spec.activeDeadlineSeconds`).
+- A manual full extract needs `--force` (or `--only` with a ticker list). `--force` also skips the "already extracted" check, so resume with `--only` for the tickers that are not in `extraction_runs` yet.
+- The Claude pool launcher (`~/Documents/ops-brain/agent-tools/claude-pool`) refuses accounts whose managed credential expires within ten minutes. After the Mac sleeps, both accounts can be ineligible and Claude workers fail at `agent_readiness`; log in again to refresh them.
+- The repo once tracked a `node_modules` symlink because `.gitignore` had `node_modules/` (a trailing slash does not match a symlink). Fixed.
