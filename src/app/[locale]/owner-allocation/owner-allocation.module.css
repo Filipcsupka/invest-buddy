@@ -1,0 +1,22 @@
+.summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  margin: var(--s5) 0;
+  border-top: 1px solid var(--rule);
+}
+
+.summary > div {
+  padding: var(--s3) var(--s4) var(--s3) 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.summary dt {
+  color: var(--ink-2);
+  font-size: var(--t-sm);
+}
+
+.summary dd {
+  margin: var(--s2) 0 0;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}

@@ -244,6 +244,10 @@ Today `src/engine/signals.ts` ties the action to the portfolio: no baseline forc
 - Do: use "screening signal", "illustrative sizing guide", "you decide" and the owner's position disclosure. Before any paid launch ask a lawyer: whether BUY and ADD labels count as investment recommendations under MAR in the EU (SK, CZ), what disclosure is required, and the effect of any calculator that takes the reader's balance.
 - DoD: written answer from a lawyer; wording on the site matches it.
 
+### G6. Owner monthly allocation (implemented locally; owner values open)
+- Do: calculate each proposed order from the current free broker cash, including cash carried from earlier months. Use a tier share with an order floor and ceiling, keep a reserve for adds, rank competing signals by score, and enforce the existing per-name portfolio cap. Show the amount and its reason only in the flag-gated owner view. Carry unused cash forward; show a cash-drag note above the configured month threshold without forcing a trade. An add needs confirmed execution history so the one-add-per-ticker-per-month rule can be checked. Keep stop-loss sizing out of this long-term thesis process.
+- DoD: one documented placeholder config holds the owner and broker choices; the pure allocation function covers no signals, zero cash, cap and minimum limits, add history, and competing signals in tests. The private EN/SK view reads the Flex baseline and stored signals, while public pages expose no owner amounts. The owner confirms the tier shares, reserve, cap treatment, IBKR fee and minimum, and how executed adds will be recorded before using the suggestions.
+
 ## Not planned
 
 - Go or microservice rewrite. The workload is about 35 tickers a day and the jobs share types and logic with the web. Revisit only if one collector gets heavy or the pieces get different owners.

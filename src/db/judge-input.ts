@@ -42,7 +42,7 @@ export interface JudgeInput {
   benchmark: typeof BENCHMARK;
   portfolio: (Omit<Baseline, "positions"> & { investedEur: number; positions: { symbol: string; valueEur: number; quantity?: number }[] }) | null;
   symbols: JudgeSymbol[];
-  /** Action, size tier and ratings for each symbol, from data only (src/engine/signals.ts). The owner EUR band is filled only when a baseline exists. The judge cannot change them, only downgrade to WATCH. */
+  /** Action, size tier and ratings for each symbol, from data only. Owner amounts are calculated separately for the private view. The judge can only downgrade to WATCH. */
   signals: JudgeSignal[];
   previousIdeas: JudgePrevious[];
 }
@@ -99,10 +99,11 @@ export function shapeSymbol(row: ScoreRow, consensus: ConsensusRow[], baseline: 
   };
 }
 
-/** Deterministic signals for the picked symbols. The baseline only marks held names and fills the private owner band. Cost basis is dropped before this call: profit and loss never decide an action. */
+/** Deterministic public signals. The owner's baseline is not an action or amount input; the private allocation page handles amounts. */
 export function signalsFor(symbols: JudgeSymbol[], portfolio: JudgeInput["portfolio"]): JudgeSignal[] {
-  const inputs: SignalSymbolInput[] = symbols.map((s) => ({ symbol: s.symbol, held: s.held ? { valueEur: s.held.valueEur } : null, score: { total: s.score.total, state: s.score.state }, fields: Object.fromEntries(Object.entries(s.fields).map(([k, f]) => [k, { value: f.value, agreement: f.agreement, verified: f.verified, carriedFrom: f.carriedFrom }])), expiredFields: s.expiredFields, technicals: s.technicals }));
-  const sigs = computeSignals(inputs, portfolio ? { cashEur: portfolio.cashEur, investedEur: portfolio.investedEur, positions: portfolio.positions, monthlyContributionEur: portfolio.monthlyContributionEur } : null);
+  void portfolio;
+  const inputs: SignalSymbolInput[] = symbols.map((s) => ({ symbol: s.symbol, held: null, score: { total: s.score.total, state: s.score.state }, fields: Object.fromEntries(Object.entries(s.fields).map(([k, f]) => [k, { value: f.value, agreement: f.agreement, verified: f.verified, carriedFrom: f.carriedFrom }])), expiredFields: s.expiredFields, technicals: s.technicals }));
+  const sigs = computeSignals(inputs, null);
   return sigs.map((s) => ({ ...s, signature: ideaSignature({ action: s.action, setup: s.ratings, sizeTier: s.sizeTier }) }));
 }
 
