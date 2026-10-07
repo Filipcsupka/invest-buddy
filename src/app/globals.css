@@ -12,6 +12,10 @@
   --ink-3: light-dark(#5d666d, #8d979c);
   --rule: light-dark(#c7cdcc, #2a3135);
   --rule-strong: light-dark(#7e878b, #5e686e);
+  --gain: light-dark(#13693a, #5fd391);
+  --gain-wash: light-dark(#d5ecdd, #123524);
+  --loss: light-dark(#a8261c, #ff8a7d);
+  --loss-wash: light-dark(#f4d9d5, #3d1b17);
   --signal: light-dark(#2340c4, #8fa3ff);
   --on-signal: light-dark(#ffffff, #0b0f1a);
   --signal-wash: light-dark(#dde3f8, #1c2547);
@@ -1856,11 +1860,30 @@ th[aria-sort] .sort .icon {
     color: #000;
   }
 }
- .portfolio-chart { height: 220px; border: 1px solid var(--rule); padding: 16px; background: var(--sheet); }
- .portfolio-chart svg { width: 100%; height: 100%; overflow: visible; }
- .portfolio-chart path { fill: none; stroke-width: 2; vector-effect: non-scaling-stroke; }
- .portfolio-nav-line { stroke: var(--ink); }
- .portfolio-benchmark-line { stroke: var(--ink-3); stroke-dasharray: 6 4; }
+ .kpi-row { display: grid; grid-template-columns: 1.6fr repeat(3, 1fr); gap: 1px; background: var(--rule); border: 1px solid var(--rule); margin-bottom: 24px; }
+ .kpi { display: flex; flex-direction: column; gap: 4px; padding: 16px 18px; background: var(--sheet); border-top: 4px solid var(--rule-strong); }
+ .kpi[data-tone="gain"] { border-top-color: var(--gain); background: linear-gradient(180deg, var(--gain-wash), var(--sheet) 70%); }
+ .kpi[data-tone="loss"] { border-top-color: var(--loss); background: linear-gradient(180deg, var(--loss-wash), var(--sheet) 70%); }
+ .kpi-label { font-size: var(--t-sm); color: var(--ink-2); text-transform: uppercase; letter-spacing: 0.04em; }
+ .kpi-value { font-size: 1.75rem; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+ .kpi-main .kpi-value { font-size: clamp(2.25rem, 1.4rem + 3vw, 3.5rem); }
+ .kpi[data-tone="gain"] .kpi-value { color: var(--gain); }
+ .kpi[data-tone="loss"] .kpi-value { color: var(--loss); }
+ .kpi-sub { font-size: var(--t-xs); color: var(--ink-3); min-height: 1em; }
+ @media (max-width: 760px) { .kpi-row { grid-template-columns: 1fr 1fr; } .kpi-main { grid-column: 1 / -1; } }
+ .performance-chart { border: 1px solid var(--rule); background: var(--sheet); padding: 8px 8px 4px; }
+ .performance-chart svg { display: block; width: 100%; height: auto; }
+ .pc-grid { stroke: var(--rule); stroke-width: 1; }
+ .pc-zero { stroke: var(--ink); stroke-width: 1.5; }
+ .pc-axis { fill: var(--ink-3); font-size: 12px; font-family: var(--sans); font-variant-numeric: tabular-nums; }
+ .pc-axis-zero { fill: var(--ink); font-weight: 700; }
+ .pc-area-gain { fill: var(--gain); fill-opacity: 0.18; stroke: none; }
+ .pc-area-loss { fill: var(--loss); fill-opacity: 0.2; stroke: none; }
+ .pc-line-portfolio { fill: none; stroke: var(--ink); stroke-width: 2.5; stroke-linejoin: round; }
+ .pc-line-bench { fill: none; stroke: var(--ink-3); stroke-width: 1.75; stroke-dasharray: 6 4; }
+ .pc-dot { stroke: var(--sheet); stroke-width: 2; fill: var(--ink); }
+ .pc-dot[data-tone="gain"] { fill: var(--gain); }
+ .pc-dot[data-tone="loss"] { fill: var(--loss); }
  .portfolio-legend { display: flex; gap: 24px; margin-top: 12px; font-size: var(--t-sm); }
  .portfolio-legend span::before { content: ""; display: inline-block; width: 18px; border-top: 2px solid var(--ink); vertical-align: middle; margin-right: 8px; }
  .portfolio-legend span + span::before { border-color: var(--ink-3); border-top-style: dashed; }

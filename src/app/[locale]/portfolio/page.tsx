@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { SampleStamp } from "@/components/operator-disclosure";
 import { latestPortfolio, portfolioIndexedSeries, stale } from "@/data/store";
-import type { IndexedPoint, IndexedSeries } from "@/portfolio/history";
+import type { IndexedSeries } from "@/portfolio/history";
 import { DataStatus } from "@/components/data-status";
+import { PerformanceChart, PerformanceKpis, summarize } from "@/components/portfolio-chart";
 import { fill, formatDate, formatNumber, getMessages } from "@/i18n";
 import { pageMetadata } from "@/i18n/metadata";
 import { resolveLocale, type LocaleParams } from "../locale";
@@ -15,17 +16,6 @@ const MIN_POINTS = 5;
 function fixtureSeries(series: { date: string; nav: number; benchmark: number }[]): IndexedSeries {
   const end = series.at(-1);
   return { points: series.map((p) => ({ date: p.date, portfolio: p.nav, benchmark: p.benchmark })), twrPercent: end ? Number((end.nav - 100).toFixed(2)) : null, benchmarkPercent: end ? Number((end.benchmark - 100).toFixed(2)) : null };
-}
-
-/** X follows the calendar, so gaps in the history show as gaps. */
-function linePath(points: IndexedPoint[], key: "portfolio" | "benchmark"): string {
-  const usable = points.filter((point) => point[key] != null);
-  const values = points.flatMap((point) => [point.portfolio, point.benchmark ?? point.portfolio]);
-  const min = Math.floor(Math.min(...values) - 1);
-  const max = Math.ceil(Math.max(...values) + 1);
-  const t0 = Date.parse(points[0].date);
-  const span = Math.max(1, Date.parse(points.at(-1)!.date) - t0);
-  return usable.map((point, i) => `${i === 0 ? "M" : "L"}${((Date.parse(point.date) - t0) / span) * 800},${160 - ((point[key]! - min) / (max - min)) * 140}`).join(" ");
 }
 
 export async function generateMetadata({ params }: LocaleParams): Promise<Metadata> {
@@ -44,6 +34,7 @@ export default async function PortfolioPage({ params }: LocaleParams) {
   const enough = points.length >= MIN_POINTS;
   const first = points[0]?.date ?? snapshot.asOf;
   const last = points.at(-1);
+  const summary = enough ? summarize(points) : null;
   return <div className="frame page">
     <header className="page-head">
       <div className="page-title-row"><h1 className="title">{m.portfolio.title}</h1>{snapshot.sample && <SampleStamp text={m.common.sample} />}</div>
@@ -55,12 +46,8 @@ export default async function PortfolioPage({ params }: LocaleParams) {
     <section className="sheet-section" aria-labelledby="portfolio-chart">
       <div className="section-head"><h2 id="portfolio-chart">{fill(m.portfolio.chartTitle, { date: formatDate(locale, first) })}</h2>{enough && <p className="muted small">{snapshot.sample ? m.portfolio.chartNote : m.portfolio.liveChartNote}</p>}</div>
       {enough && last ? <>
-        <div className="portfolio-chart" role="img" aria-label={`${m.portfolio.portfolioLine}: ${formatNumber(locale, last.portfolio, 1)}${last.benchmark != null ? `; ${m.portfolio.benchmarkLine}: ${formatNumber(locale, last.benchmark, 1)}` : ""}`}>
-          <svg viewBox="0 0 800 180" preserveAspectRatio="none" aria-hidden="true">
-            <path d={linePath(points, "portfolio")} className="portfolio-nav-line" />
-            {points.some((point) => point.benchmark != null) && <path d={linePath(points, "benchmark")} className="portfolio-benchmark-line" />}
-          </svg>
-        </div>
+        {summary && <PerformanceKpis locale={locale} summary={summary} text={{ current: m.portfolio.kpiCurrent, since: m.portfolio.kpiSince, benchmark: m.portfolio.kpiBenchmark, difference: m.portfolio.kpiDifference, ahead: m.portfolio.kpiAhead, behind: m.portfolio.kpiBehind, drawdown: m.portfolio.kpiDrawdown }} />}
+        <PerformanceChart locale={locale} points={points} label={m.portfolio.chartAria} />
         <div className="portfolio-legend"><span>{m.portfolio.portfolioLine}</span><span>{m.portfolio.benchmarkLine}</span></div>
       </> : <p className="notice">{fill(m.portfolio.historyBuilding, { date: formatDate(locale, first), n: points.length })}</p>}
       {indexed?.twrPercent != null && <p className="muted small">{formatDate(locale, first)} – {formatDate(locale, last!.date)} · {m.portfolio.twrSince}: {formatNumber(locale, indexed.twrPercent, 2)} %{indexed.benchmarkPercent != null && <> · {m.portfolio.benchmarkSince}: {formatNumber(locale, indexed.benchmarkPercent, 2)} %</>}</p>}
