@@ -1,0 +1,174 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: invest-buddy-review-calendar
+  namespace: invest
+spec:
+  suspend: false
+  # Saturday after discovery ends. Reviews at most six symbols due for a 30-day review.
+  schedule: "0 11 * * 6"
+  timeZone: Europe/Bratislava
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      # A quota or auth failure must not retry at once; the next scheduled run is the retry.
+      backoffLimit: 0
+      activeDeadlineSeconds: 6000
+      template:
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          nodeSelector:
+            kubernetes.io/hostname: k8s-worker-01
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            fsGroup: 10001
+            seccompProfile:
+              type: RuntimeDefault
+          initContainers:
+            - name: extract
+              image: ghcr.io/filipcsupka/invest-buddy-scanner:latest
+              command: ["node", "/app/scanner/run-extract.mjs"]
+              args: ["--agent", "claude", "--model", "haiku", "--review-calendar", "/tmp/review-symbols.json", "--force"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              env:
+                - name: INGEST_BASE_URL
+                  value: http://web.invest.svc.cluster.local:3000
+                - name: AI_DAILY_TOKEN_CEILING
+                  value: "0"
+                - name: INGEST_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-secrets
+                      key: INGEST_TOKEN
+                - name: CLAUDE_CODE_OAUTH_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-scanner-secrets
+                      key: CLAUDE_CODE_OAUTH_TOKEN
+              volumeMounts:
+                - name: tmp
+                  mountPath: /tmp
+                - name: scanner-home
+                  mountPath: /home/scanner
+                - name: scan-out
+                  mountPath: /app/scanner/out
+              resources:
+                requests:
+                  cpu: 250m
+                  memory: 256Mi
+                limits:
+                  cpu: "2"
+                  memory: 1Gi
+            - name: reconcile
+              image: ghcr.io/filipcsupka/invest-buddy:latest
+              command: ["node", "dist/jobs/reconcile.js"]
+              env:
+                - name: DATA_MODE
+                  value: db
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-secrets
+                      key: DATABASE_URL
+                - name: SEC_USER_AGENT
+                  valueFrom:
+                    configMapKeyRef:
+                      name: invest-buddy-reconcile-config
+                      key: SEC_USER_AGENT
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+                - name: tmp
+                  mountPath: /tmp
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 128Mi
+                limits:
+                  cpu: "1"
+                  memory: 512Mi
+            - name: daily
+              image: ghcr.io/filipcsupka/invest-buddy:latest
+              command: ["node", "dist/jobs/daily.js"]
+              env:
+                - name: DATA_MODE
+                  value: db
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-secrets
+                      key: DATABASE_URL
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+                - name: tmp
+                  mountPath: /tmp
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 128Mi
+                limits:
+                  cpu: "1"
+                  memory: 512Mi
+          containers:
+            - name: judge
+              image: ghcr.io/filipcsupka/invest-buddy-scanner:latest
+              command: ["node", "/app/scanner/run-judge.mjs"]
+              args: ["--model", "sonnet", "--symbols-file", "/tmp/review-symbols.json", "--force", "--max-symbols", "6"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              env:
+                - name: INGEST_BASE_URL
+                  value: http://web.invest.svc.cluster.local:3000
+                - name: AI_DAILY_TOKEN_CEILING
+                  value: "0"
+                - name: INGEST_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-secrets
+                      key: INGEST_TOKEN
+                - name: CLAUDE_CODE_OAUTH_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-scanner-secrets
+                      key: CLAUDE_CODE_OAUTH_TOKEN
+              volumeMounts:
+                - name: tmp
+                  mountPath: /tmp
+                - name: scanner-home
+                  mountPath: /home/scanner
+                - name: scan-out
+                  mountPath: /app/scanner/out
+              resources:
+                requests:
+                  cpu: 250m
+                  memory: 256Mi
+                limits:
+                  cpu: "2"
+                  memory: 1Gi
+          volumes:
+            - name: tmp
+              emptyDir: {}
+            - name: scanner-home
+              emptyDir: {}
+            - name: scan-out
+              emptyDir: {}

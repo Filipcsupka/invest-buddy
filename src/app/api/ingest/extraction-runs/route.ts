@@ -2,7 +2,7 @@ import { logIngestRequest, recordIngestError } from "../request-log";
 import { createHash, timingSafeEqual } from "node:crypto";
 import pg from "pg";
 import universe from "../../../../../scanner/universe.json";
-import { extractionRunSchema, hasOkExtraction, recordExtraction } from "../../../../db/extraction-runs";
+import { extractionRunSchema, hasOkExtraction, recordExtraction, reviewDueSymbols } from "../../../../db/extraction-runs";
 import { readBoundedBody } from "../read-bounded-body";
 
 export const runtime = "nodejs";
@@ -27,6 +27,14 @@ async function getHandler(request: Request) {
   const denied = gate(request);
   if (denied) return denied;
   const q = new URL(request.url).searchParams;
+  if (q.has("reviewDue")) {
+    const days = Number(q.get("reviewDue")), limit = Number(q.get("limit"));
+    if (!Number.isInteger(days) || days < 1 || days > 365 || !Number.isInteger(limit) || limit < 1 || limit > 12) return Response.json({ error: "Invalid query" }, { status: 400 });
+    const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+    try { return Response.json({ symbols: await reviewDueSymbols(pool, days, limit) }); }
+    catch (error) { recordIngestError(request, error); return Response.json({ error: "Database unavailable" }, { status: 503 }); }
+    finally { await pool.end(); }
+  }
   const parsed = extractionRunSchema.pick({ symbol: true, agent: true, inputHash: true }).safeParse({ symbol: q.get("symbol")?.toUpperCase(), agent: q.get("agent"), inputHash: q.get("inputHash") });
   if (!parsed.success || !known(parsed.data.symbol)) return Response.json({ error: "Invalid query" }, { status: 400 });
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });

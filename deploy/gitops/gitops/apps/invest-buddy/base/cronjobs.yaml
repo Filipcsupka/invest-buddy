@@ -269,6 +269,7 @@ metadata:
   name: invest-buddy-digest
   namespace: invest
 spec:
+  suspend: true
   schedule: "30 7 * * 2-6"
   timeZone: Europe/Bratislava
   concurrencyPolicy: Forbid
@@ -303,11 +304,6 @@ spec:
                     secretKeyRef:
                       name: invest-buddy-secrets
                       key: DATABASE_URL
-                - name: DIGEST_TO
-                  valueFrom:
-                    secretKeyRef:
-                      name: invest-buddy-secrets
-                      key: DIGEST_TO
               securityContext:
                 allowPrivilegeEscalation: false
                 readOnlyRootFilesystem: true

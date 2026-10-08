@@ -12,7 +12,10 @@ const RATING_KEY = { "Very strong": "Very strong", Strong: "Strong", Good: "Good
 export function IdeaCard({ idea: stored, locale, showAmounts = true, nested = false }: { idea: StoredIdea; locale: Locale; showAmounts?: boolean; nested?: boolean }) {
   const m = getMessages(locale).ideas;
   // ADR-001: without the flag no EUR amount or band is rendered, in any field.
-  const idea = showAmounts ? stored : stripEur(stored);
+  const translated = locale === "sk" ? stored.translations?.sk : undefined;
+  const selected = translated ? { ...stored, ...translated, conflictNote: translated.conflictNote ?? translated.conflictReason ?? stored.conflictNote, plan: { ...stored.plan, ...translated.plan } } : stored;
+  const idea = showAmounts ? selected : stripEur(selected);
+  const englishFallback = locale !== "en" && (!translated || Boolean(stored.conflictNote && translated.conflictNote == null && translated.conflictReason == null) || Boolean(stored.downgradedFrom && stored.translations?.en?.downgradeReason && !translated.downgradeReason));
   const H = nested ? "h3" : "h2";
   const L = nested ? "h4" : "h3";
   const id = `idea-${idea.id}`;
@@ -27,6 +30,7 @@ export function IdeaCard({ idea: stored, locale, showAmounts = true, nested = fa
         <H id={`${id}-title`} className={styles.headline}>{headline}</H>
         <p className={styles.meta}>
           <span>{fill(m.dated, { date: formatDate(locale, idea.asOf) })}</span>
+          {englishFallback && <span className="muted small">{m.shownInEnglish}</span>}
           {idea.unconfirmed && <span className={`stamp ${styles.flag}`} title={m.unconfirmedNote}>{m.unconfirmed}</span>}
           {idea.conflictNote && <span className={`stamp ${styles.flag}`}>{m.conflict}</span>}
           {idea.downgradedFrom && <span className={`stamp ${styles.flag}`}>{fill(m.downgraded, { action: idea.downgradedFrom })}</span>}
@@ -34,6 +38,7 @@ export function IdeaCard({ idea: stored, locale, showAmounts = true, nested = fa
         </p>
         {idea.verdict && <p className={styles.verdict}>{idea.verdict}</p>}
         {idea.conflictNote && <p className={styles.conflict}>{fill(m.conflictLabel, { note: idea.conflictNote })}</p>}
+        {idea.downgradedFrom && (locale === "sk" ? selected.translations?.sk?.downgradeReason ?? selected.translations?.en?.downgradeReason : selected.translations?.en?.downgradeReason) && <p className={styles.conflict}>{locale === "sk" ? selected.translations?.sk?.downgradeReason ?? selected.translations?.en?.downgradeReason : selected.translations?.en?.downgradeReason}</p>}
         {idea.unconfirmed && <p className="visually-hidden">{m.unconfirmedNote}</p>}
         {idea.carriedFrom && <p className="visually-hidden">{m.carriedNote}</p>}
       </header>

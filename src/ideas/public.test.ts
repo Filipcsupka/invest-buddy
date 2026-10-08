@@ -19,6 +19,10 @@ describe("public idea helpers", () => {
       expect([stripEur(idea).amountMinEur, stripEur(idea).amountMaxEur]).toEqual([0, 0]);
     }
   });
+  it("strips EUR from nested Slovak translations", () => {
+    const idea = { ...sampleIdeas[0], translations: { sk: { verdict: "Platí. Investuj EUR 80.", whatHappened: ["Pokles 7%. Suma EUR 50."], whyItMatters: ["EUR 50"], numbers: [{ label: "Suma", value: "EUR 50" }], plan: { amountNow: "EUR 50", trigger: "Pokles. Pridaj EUR 50.", invalidation: "EUR 10", opportunityCost: "Bez zmeny." }, evidence: [{ url: "https://example.com", label: "EUR 50" }], conflictNote: "EUR 40", downgradeReason: "EUR 30", conflictReason: "EUR 20" } } };
+    expect(JSON.stringify(stripEur(idea))).not.toMatch(/EUR|€/);
+  });
   it("a buy size is any tier but NONE; an idea from before tiers has none", () => {
     expect(hasBuySize(publicTier({ sizeTier: "STARTER" }))).toBe(true);
     expect(hasBuySize(publicTier({ sizeTier: "NONE" }))).toBe(false);

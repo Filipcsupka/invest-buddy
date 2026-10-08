@@ -29,6 +29,9 @@ describe("idea schema", () => {
   });
   it("lets the script add carriedFrom but nothing else", () => {
     expect(ideasPostSchema.safeParse({ run, ideas: [{ ...stored, carriedFrom: "2026-09-20", conflictNote: "c", downgradedFrom: "ADD" }] }).success).toBe(true);
+    const sk = { verdict: "Výrok", whatHappened: ["Prvý fakt", "Druhý fakt"], whyItMatters: ["Dôvod"], numbers: base.numbers, plan: base.plan, evidence: base.evidence };
+    expect(ideasPostSchema.safeParse({ run, ideas: [{ ...stored, translations: { sk } }] }).success).toBe(true);
+    expect(ideasPostSchema.safeParse({ run, ideas: [{ ...stored, translations: { sk: { ...sk, whatHappened: [] } } }] }).success).toBe(false);
     expect(ideasPostSchema.safeParse({ run, ideas: [{ ...stored, other: 1 }] }).success).toBe(false);
     expect(ideasPostSchema.safeParse({ run: { ...run, status: "done" }, ideas: [] }).success).toBe(false);
   });
@@ -65,8 +68,9 @@ describe("judge storage", () => {
     expect(insert.sql).toContain("ON CONFLICT (as_of,symbol,input_hash) DO NOTHING");
     expect(insert.params).toContain("ADD|Strong|Good|Neutral|ADD_THIRD");
     expect(insert.sql).toContain("size_tier");
-    expect(insert.params.at(-2)).toBe("ADD_THIRD");
-    expect(insert.params.at(-1)).toBe(run.runId);
+    expect(insert.params.at(-3)).toBe("ADD_THIRD");
+    expect(insert.params.at(-2)).toBe(run.runId);
+    expect(insert.params.at(-1)).toBeNull();
     expect(insert.params).toContain("2026-09-20");
     expect(p.calls[1].sql).toContain("pg_advisory_xact_lock");
     expect(p.calls[3].sql).toContain("INSERT INTO record_signals");

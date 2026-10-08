@@ -64,23 +64,25 @@ Groups: A first live run, B web, C pipeline quality, D data and accounts, E oper
 
 ## B. Web
 
-### B1. Real benchmark for `/track-record`
+### B1. Real benchmark for `/track-record` (partly done)
+- Status 2026-10-08: the fixture benchmark is hidden in db mode and a test fails if it renders there. A real SPY line on the page is not built yet (SPY bars exist in `daily_bars`).
 - Do: store a benchmark series (SPY or CSPX bars in `daily_bars`; migration 006 seeds a benchmark instrument) and replace `fixtureBenchmark()` in `src/app/[locale]/track-record/page.tsx`.
 - DoD: the page shows a real benchmark line in `DATA_MODE=db`; a test fails if the fixture benchmark appears in db mode.
 
-### B2. Portfolio page benchmark and sample check
+### B2. Portfolio page benchmark and sample check (done 2026-10-06)
+- Status 2026-10-08: confirmed; db mode builds the chart from `portfolio_nav_history` and SPY bars.
 - Do: trace what `benchmarkSample` does in `src/db/portfolio.ts` and `/portfolio`. Make live mode use real data or hide the block.
 - DoD: no fixture figure is reachable in `DATA_MODE=db`; test added.
 - Note (2026-10-06): done on branch `portfolio-history`. `benchmarkSample` is removed; db mode builds the chart from `portfolio_nav_history` (migration 015) and real SPY bars from `daily_bars`, and the SAMPLE badge shows only in fixture mode. The page still needs a deploy plus a migrate run.
 
-### B2a. Daily NAV in the Flex query
+### B2a. Daily NAV in the Flex query (done)
+- Status 2026-10-08: `portfolio_nav_history` holds 233 `flex-daily` rows from 2025-11-17 to 2026-10-07. Owner enabled Breakout by Day.
 - Do: in Flex Web Service query settings (General Configuration), set 'Breakout by Day' to Yes and the period to 365 days (or the longest the account allows), so the next portfolio run backfills `portfolio_nav_history`. Until then the page shows 'History builds from ...' and only gains two points per run.
 - DoD: `portfolio_nav_history` holds one `flex-daily` row per statement day since inception; `/portfolio` draws the line. Check that the report returns EUR base values (non-EUR rows are skipped).
 
-### B3. Decide the ideas page
-- Owner decision. ADR-001 forbids EUR sizing in the public product, and the ideas page shows EUR bands sized to one private portfolio.
-- Options: keep it hidden; put it behind auth or an IP allowlist and set `IDEAS_PAGE=on`; show ideas without EUR.
-- DoD: decision recorded as an ADR line, `IDEAS_PAGE` set or left unset in `web.yaml` to match, and a test for the chosen behaviour.
+### B3. Mark possible paywall segments (decided 2026-10-08)
+- Owner decision: do not gate content now. Mark detailed page sections that may become subscriber content when marketing starts; keep the basic screen and public methodology free.
+- The current markers render all content. See `docs/paywall-segments.md` for the segment list, company page recommendations, and the later gate design. ADR-001 still limits public output to informational screening and keeps owner EUR amounts private.
 
 ### B4. Sample stamp test (done 2026-10-08)
 - Do: add a test that the sample stamp and fixture labels never render with `DATA_MODE=db`.
@@ -90,7 +92,8 @@ Groups: A first live run, B web, C pipeline quality, D data and accounts, E oper
 - Do: check each page when `score_results` is empty or older than 3 days. `/api/health` already returns null dates for an empty database.
 - DoD: each page shows a clear "no data yet" or "stale since <date>" message, with a screenshot or test per page.
 
-### B6. Idea summary on the company page
+### B6. Idea summary on the company page (done; card now follows the page language, 2026-10-08)
+- Status: the card was already built. The judge now writes English and Slovak, stored in `trade_ideas.translations` (migration 021). `npm run backfill:idea-translations` fills the ideas stored before this change (dry run by default).
 - Why: the old scan produced a short card per ticker, and that is what makes a WATCH or START useful: action and size band, what happened, why it matters, setup ratings (company, entry, catalyst), 3 to 5 numbers, the plan (when to start or add, when to stop adding, invalidation, opportunity cost) and evidence links. The judge output and `trade_ideas` already hold these fields.
 - Do: show the latest idea card on `/company/[ticker]` when the action is WATCH, START_POSITION or ADD (and above), with the date, the evidence links and an "unconfirmed" or "carried from <date>" label when set. Keep the EUR band behind the private flag from B3, since ADR-001 forbids public sizing. Hide the card when the latest action is HOLD and nothing changed.
 - DoD: the page renders the card from `trade_ideas` in `DATA_MODE=db`; a test covers WATCH, START and the hidden cases; no EUR amount shows when the flag is off.
@@ -101,16 +104,17 @@ Groups: A first live run, B web, C pipeline quality, D data and accounts, E oper
 - Do: add a Postgres service to the `quality` job, run migrations and set `TEST_DATABASE_URL`. Today the retention and DB tests are skipped in CI, and a fixture bug (missing `sector`) sat unseen until a local run.
 - DoD: CI log shows 0 skipped DB tests.
 
-### C2. Postgres schema and role split
+### C2. Postgres schema and role split (open)
+- Status 2026-10-08: not started. The only database role is the superuser `invest`, and the web uses it.
 - Do: new migration with a `web_ro` role (`SELECT` on score, alert, instrument, idea, portfolio and bar tables) and a second writer connection (`INGEST_DATABASE_URL`) for the ingest routes. Collectors, prices and reconcile jobs keep a writer role. Add the sealed secrets through the approved flow. Raw `source_documents` stay unreadable by `web_ro`.
 - DoD: the web runs with `web_ro` and all pages work; an `INSERT` as `web_ro` fails; a test shows it.
 - Approval: new secrets and a live migration.
 
 ### C3. Daily job deadline and digest
-- Do: the daily CronJob has a 3600 s deadline and can overlap digest (07:30) and judge (07:45). Lower the deadline or move the later jobs. Decide whether `digest` stays unsuspended: it needs `DIGEST_TO`.
-- DoD: `cronjob-order.test.ts` covers daily with no exclusion; digest suspended or `DIGEST_TO` set.
+- Done in the app manifest: daily starts at 04:25, has a five-minute start window and a 60-minute deadline, so its latest end is 05:30 when judge starts. `cronjob-order.test.ts` checks this. Digest is suspended because `ConsoleMailer` only writes to the log; delivery and `DIGEST_TO` remain unset.
 
-### C4. Choose the scan and judge agent
+### C4. Choose the scan and judge agent (decided in practice: Claude subscription)
+- Status 2026-10-08: extract runs `--agent claude --model haiku` and judge `--model sonnet`, both on the subscription token. No Codex judge adapter exists. The unused `invest-buddy-codex-home` PVC is Pending and never bound.
 - Do: the web-search scan stays suspended. Pick the extract and judge agent: the subscription Claude CLI (works) or Codex (adapter for the judge is not built, needs the account token).
 - DoD: decision noted; if Codex, a judge adapter with tests and a CronJob arg.
 
@@ -120,8 +124,7 @@ Groups: A first live run, B web, C pipeline quality, D data and accounts, E oper
 - DoD: owner signs off or lists changes; golden tests updated.
 
 ### C6. Cost and quota guard for extract
-- Do: log tokens and cost per symbol in `extraction_runs`, add a daily token ceiling to the Job, and alert when the 5 h Claude limit passes a set share.
-- DoD: one run shows per-symbol cost in the table; the ceiling stops the Job with a clear exit code.
+- App change: per-symbol token and cost columns already exist in `extraction_runs` (migration 016), and Claude usage already logs the five-hour and seven-day percentages. The report now lists recent extraction rows. `AI_DAILY_TOKEN_CEILING` defaults to 0 (off); when set, extract checks completed subscription tokens for the UTC day before each model call and exits 5 at the ceiling, leaving the gate pending. Live proof of a stopped run remains open.
 
 ### C7. Foreign issuers
 - Do: ASML, SE, MELI and similar file 20-F and 6-K. Add collection for them or leave their SEC-based fields unknown with a stated reason.
@@ -165,7 +168,8 @@ Groups: A first live run, B web, C pipeline quality, D data and accounts, E oper
 - Do: alert when a CronJob fails or does not run, and when `/api/health` dates go stale.
 - DoD: a test alert fires and reaches you.
 
-### E3. Egress and NetworkPolicy
+### E3. Egress and NetworkPolicy (partly evidenced)
+- Status 2026-10-08: no NetworkPolicy exists in `invest`. Outbound HTTPS to SEC, FRED and Twelve Data works, as shown by the successful nightly collect, prices and macro Jobs. A deliberate test of a policy is still open.
 - Do: test outbound HTTPS from a Job on `k8s-worker-01` to sec.gov, data.sec.gov and the cited public pages. The infra repo has no NetworkPolicy resources.
 - DoD: results listed; a policy proposed only if you want one.
 
@@ -190,32 +194,35 @@ Groups: A first live run, B web, C pipeline quality, D data and accounts, E oper
 
 Design and sources: `docs/cadence-design.md`. This group replaces the daily extract and judge schedule. Do F1 before unsuspending extract or judge (A8).
 
-### F1. Watch step
+### F1. Watch step (done 2026-10-08)
+- Status: the job existed (`src/jobs/watch.ts`) but no CronJob ran it, so `filing_watch` stayed empty and new 10-Q and 8-K filings could not trigger the gate. `invest-buddy-watch` now runs Tue to Sat at 00:45 (no AI, ends before collect). Infra copy needed.
 - Do: a daily script (no AI) polls `data.sec.gov/submissions` for the 35 CIKs, stores new accession numbers per CIK (table or `collected_facts`), and keeps the 4 req/s limit. Second poll in earnings weeks.
 - DoD: a run lists new filings per ticker since the last run; a rerun with no new filings reports none; a test covers the dedupe by accession number.
 
-### F2. Gate step
+### F2. Gate step (done)
+- Status 2026-10-08: `detect` runs nightly and stores `scheduled_gates` (revision 1 for 2026-10-07, empty list, extract made 0 model calls). It depends on F1 for the filing rule.
 - Do: mark a ticker "changed" only for a new 8-K with Item 2.02, 4.02 or 5.02, a 10-Q, a 10-K or an amendment. Add an insider cluster rule (3 or more opportunistic Form 4 buys in 30 days, excluding same-month-every-year traders) and price band rules (drawdown and valuation, thresholds in config). Output is the `--symbols-file` for extract. This replaces `detect`, or extends it.
 - DoD: unit tests for each rule; the output for a day with no changes is an empty list and extract exits without a model call.
 
-### F3. Gated extract and judge schedule
+### F3. Gated extract and judge schedule (done)
+- Status 2026-10-08: live. Extract and judge both logged `nothing changed; 0 model calls` on the quiet night.
 - Do: run extract on changed tickers only (haiku, escalate to sonnet when haiku flags a material change). Run judge when at least one ticker changed, and on the fixed schedule in F5. Change the CronJobs in infra (fewer runs, all weekdays stay for the watch step only).
 - DoD: a quiet week costs 0 model calls; a run with 3 changed tickers calls the model 3 times; counts and cost are logged per run.
 - Status: app repo gate persistence, scanner `--gate-from-db`, and suspended CronJob args are implemented. The infra owner still needs to copy and enable the manifests; F5 owns the separate fixed review schedule.
 
-### F4. Token budget guard
+### F4. Token budget guard (done, guard dropped on purpose)
 - Decision: the monthly token and dollar guard was dropped because the Claude subscription is limited by rolling five-hour and weekly usage windows. Extract and judge record per-call tokens and live window samples. Real cutoffs leave unfinished gate work for the next run; optional soft stops preserve daytime capacity.
 - DoD: cutoff and usage samples are readable through the owner ingest endpoint, and a stopped run retries unapplied work.
 
 ### F5. Fixed review calendar
-- Do: weekly digest of events; a re-score and a "thesis intact, weakened or broken" note after each earnings filing; a full re-screen in May and November (only time new additions are ranked); an annual thesis rewrite. Store the thesis note and the thesis-break checklist per holding.
-- DoD: each item has a trigger or schedule in code or a CronJob, and the web shows the last review date per holding.
+- App change: a Saturday 11:00 review selects at most six symbols whose applied extraction or stored idea is older than 30 days, then runs extract, reconcile, daily scoring, and a forced judge in order. It runs after discovery and outside the weekday chain. The per-earnings thesis note, semi-annual re-screen, annual rewrite, stored checklist, and web review date remain open.
 
 ### F6. Tune the placeholders
 - Do: drawdown band, valuation band, turnover target (30% a year) and the insider cluster size are placeholders. Check them against `InvestingGuide.md` and your own rules.
 - DoD: owner signs off the values; they live in one config file with a comment on where each came from.
 
-### F7. Discovery of new names
+### F7. Discovery of new names (built, first run Saturday 2026-10-10)
+- Status 2026-10-08: CronJob live, `discovery_candidates` is empty until the first run. Check it on Saturday.
 - Why: the old scan found names outside the fixed universe (for example EFXT after a 450 MW data-center contract, PCVX after a Phase 3 result, WULF after a power-capacity amendment) by following beneficiary chains. The script-first pipeline only covers the 35 tickers, so it can never propose a new name.
 - Do: a separate, low-frequency discovery step. Sources that cost no tokens first: EDGAR current-filings feed filtered to 8-K Items 1.01 and 2.02 (material agreements), big price and volume movers, 13F changes of a short list of managers, and a themes file (AI power, cooling, networking, biotech catalysts) with beneficiary chains. A cheap model ranks the shortlist; only the top few get a full bundle and a judge run. Run it weekly, plus the semi-annual re-screen from F5.
 - DoD: a run produces at most N candidates per week (N in config) with source links; a candidate that passes goes into the same extract and judge path as holdings; a test shows a ticker outside the universe can be added without code changes (universe from a table or file).
@@ -240,11 +247,13 @@ Today `src/engine/signals.ts` ties the action to the portfolio: no baseline forc
 - Do: replace `amountMinEur/amountMaxEur` in the public idea with a tier: STARTER (about 1/3 of a full position), STANDARD (2/3), FULL, and for adds a fraction of a full position. Euro bands stay only in the owner's private view, computed from the baseline.
 - DoD: `trade_ideas` stores the tier; the public page and card show tier and wording, no euro amount; the private view still shows bands when the flag is on.
 
-### G3. Generic sizing matrix on the web
+### G3. Generic sizing matrix on the web (done)
+- Status 2026-10-08: `/sizing` page exists, EN and SK.
 - Do: a page or section "How to size this" with a matrix: signal tier by account size bucket (under 5k, 5 to 25k, 25 to 100k, over 100k EUR) and cash level (under 10%, 10 to 30%, over 30%). Percent of the reader's own portfolio per name, a hard cap per name, rules for adding (one add a month, never above the cap, no ADD above cap through drift), cash multiplier, and a line that the guide is illustrative and not advice. Starting numbers are in `docs/sizing-guide.md` and are placeholders.
 - DoD: EN and SK text; a pure function from (signal tier, account bucket, cash bucket) to percent with tests; a worked example on the page; no input of real balances is stored on the server.
 
-### G4. Owner view
+### G4. Owner view (built, flag off in production)
+- Status 2026-10-08: `/owner-allocation` is behind `OWNER_VIEW`, which is unset in production.
 - Do: the owner's baseline (EUR 200 a month, cash, positions) feeds a private view: the same matrix applied to the owner's account plus the monthly-contribution split (for example a starter as a share of the monthly contribution).
 - DoD: private page or flag-gated view; the judge no longer reads the baseline for the action.
 

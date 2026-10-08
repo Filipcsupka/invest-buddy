@@ -12,6 +12,20 @@ export { SIZE_TIERS, type SizeTier };
 
 const text = (max: number) => z.string().trim().min(1).max(max);
 /** One idea as the judge writes it and as the ideas route accepts it. Mirrors scanner/schema/judge-output.schema.json. */
+export const ideaTranslationSchema = z.object({
+  verdict: text(240),
+  whatHappened: z.array(text(300)).min(2).max(3),
+  whyItMatters: z.array(text(300)).min(1).max(2),
+  numbers: z.array(z.object({ label: text(60), value: text(80) }).strict()).min(3).max(5),
+  plan: z.object({ amountNow: text(200), trigger: text(300), invalidation: text(300), opportunityCost: text(300) }).strict(),
+  evidence: z.array(z.object({ url: z.string().url().max(500).startsWith("https://"), label: text(120) }).strict()).max(4),
+  conflictNote: text(300).nullable().optional(),
+  downgradeReason: text(300).optional(),
+  conflictReason: text(300).optional(),
+}).strict();
+export type IdeaTranslation = z.infer<typeof ideaTranslationSchema>;
+export const ideaTranslationsSchema = z.object({ sk: ideaTranslationSchema, en: z.object({ downgradeReason: text(300).nullable() }).strict().optional() }).strict();
+
 const ideaObject = z.object({
   symbol: z.string().regex(/^[A-Z0-9.]{1,10}$/),
   action: z.enum(ACTIONS),
@@ -67,13 +81,14 @@ export const ideasPostSchema = z.object({
     signature: z.string().min(1).max(160),
     ruleConfigVersion: z.string().min(1).max(40),
     conflictNote: z.string().min(1).max(300).nullable().optional(),
+    translations: ideaTranslationsSchema.nullable().optional(),
     downgradedFrom: z.enum(ACTIONS).nullable().optional(),
   }).refine(amountsOrdered, { message: "amountMaxEur must be at least amountMinEur" }).refine(tierMatches, tierMessage)).max(40),
 });
 export type IdeasPost = z.infer<typeof ideasPostSchema>;
 
 /** A stored idea. sizeTier is null for ideas stored before migration 011. */
-export interface StoredIdea extends Omit<Idea, "sizeTier"> { sizeTier: SizeTier | null; id: number; asOf: string; carriedFrom: string | null; conflictNote: string | null; downgradedFrom: IdeaAction | null; signature: string; ruleConfigVersion: string; model: string; createdAt: string }
+export interface StoredIdea extends Omit<Idea, "sizeTier"> { sizeTier: SizeTier | null; id: number; asOf: string; carriedFrom: string | null; conflictNote: string | null; downgradedFrom: IdeaAction | null; signature: string; ruleConfigVersion: string; model: string; createdAt: string; translations?: z.infer<typeof ideaTranslationsSchema> | null }
 
 /** True when this exact input already produced a stored result for the same agent and date. A run that never stored its ideas does not skip. */
 export async function hasOkJudge(pool: Pick<pg.Pool, "query">, key: { asOf: string; agent: string; inputHash: string }): Promise<boolean> {
@@ -115,11 +130,11 @@ export async function recordJudge(pool: pg.Pool, body: IdeasPost): Promise<{ sto
 }
 
 async function insertIdea(client: Client, i: IdeasPost["ideas"][number], run: JudgeRun): Promise<number> {
-  const r = await client.query(`INSERT INTO trade_ideas (as_of,symbol,action,amount_min_eur,amount_max_eur,verdict,what_happened,why_it_matters,setup,numbers,plan,evidence_urls,unconfirmed,carried_from,signature,input_hash,agent,model,rule_config_version,conflict_note,downgraded_from,size_tier,judge_run_id)
-    VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9::jsonb,$10::jsonb,$11::jsonb,$12::jsonb,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
+  const r = await client.query(`INSERT INTO trade_ideas (as_of,symbol,action,amount_min_eur,amount_max_eur,verdict,what_happened,why_it_matters,setup,numbers,plan,evidence_urls,unconfirmed,carried_from,signature,input_hash,agent,model,rule_config_version,conflict_note,downgraded_from,size_tier,judge_run_id,translations)
+    VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9::jsonb,$10::jsonb,$11::jsonb,$12::jsonb,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24::jsonb)
     ON CONFLICT (as_of,symbol,input_hash) DO NOTHING`,
   [run.asOf, i.symbol, i.action, i.amountMinEur, i.amountMaxEur, i.verdict, JSON.stringify(i.whatHappened), JSON.stringify(i.whyItMatters), JSON.stringify(i.setup), JSON.stringify(i.numbers), JSON.stringify(i.plan), JSON.stringify(i.evidence),
-    i.unconfirmed, i.carriedFrom ?? null, i.signature, run.inputHash, run.agent, run.model, i.ruleConfigVersion, i.conflictNote ?? null, i.downgradedFrom ?? null, i.sizeTier, run.runId]);
+    i.unconfirmed, i.carriedFrom ?? null, i.signature, run.inputHash, run.agent, run.model, i.ruleConfigVersion, i.conflictNote ?? null, i.downgradedFrom ?? null, i.sizeTier, run.runId, i.translations ? JSON.stringify(i.translations) : null]);
   if (judgeSignal(i.action)) {
     await client.query(`INSERT INTO record_signals (ticker,as_of,source,event_key,tier,state,score,rules_version,reference_close,spy_reference_close)
       SELECT $1,$2,'judge',$3,$4,$5,(SELECT score FROM record_snapshots WHERE ticker=$1 AND as_of=$2),$6,
@@ -132,9 +147,9 @@ async function insertIdea(client: Client, i: IdeasPost["ideas"][number], run: Ju
   return r.rowCount ?? 0;
 }
 
-interface IdeaRow { id: string; as_of: string; symbol: string; action: IdeaAction; size_tier: SizeTier | null; amount_min_eur: string; amount_max_eur: string; verdict: string; what_happened: string[]; why_it_matters: string[]; setup: Idea["setup"]; numbers: Idea["numbers"]; plan: Idea["plan"]; evidence_urls: Idea["evidence"]; unconfirmed: boolean; carried_from: string | null; conflict_note: string | null; downgraded_from: IdeaAction | null; signature: string; rule_config_version: string; model: string; created_at: Date | string }
-export const mapIdea = (r: IdeaRow): StoredIdea => ({ id: Number(r.id), asOf: r.as_of, symbol: r.symbol, action: r.action, sizeTier: r.size_tier ?? null, amountMinEur: Number(r.amount_min_eur), amountMaxEur: Number(r.amount_max_eur), verdict: r.verdict, whatHappened: r.what_happened, whyItMatters: r.why_it_matters, setup: r.setup, numbers: r.numbers, plan: r.plan, evidence: r.evidence_urls, unconfirmed: r.unconfirmed, carriedFrom: r.carried_from, conflictNote: r.conflict_note, downgradedFrom: r.downgraded_from, signature: r.signature, ruleConfigVersion: r.rule_config_version, model: r.model, createdAt: new Date(r.created_at).toISOString() });
-const COLUMNS = "id,as_of::text,symbol,action,size_tier,amount_min_eur,amount_max_eur,verdict,what_happened,why_it_matters,setup,numbers,plan,evidence_urls,unconfirmed,carried_from::text,conflict_note,downgraded_from,signature,rule_config_version,model,created_at";
+interface IdeaRow { translations: z.infer<typeof ideaTranslationsSchema> | null; id: string; as_of: string; symbol: string; action: IdeaAction; size_tier: SizeTier | null; amount_min_eur: string; amount_max_eur: string; verdict: string; what_happened: string[]; why_it_matters: string[]; setup: Idea["setup"]; numbers: Idea["numbers"]; plan: Idea["plan"]; evidence_urls: Idea["evidence"]; unconfirmed: boolean; carried_from: string | null; conflict_note: string | null; downgraded_from: IdeaAction | null; signature: string; rule_config_version: string; model: string; created_at: Date | string }
+export const mapIdea = (r: IdeaRow): StoredIdea => ({ id: Number(r.id), asOf: r.as_of, symbol: r.symbol, action: r.action, sizeTier: r.size_tier ?? null, amountMinEur: Number(r.amount_min_eur), amountMaxEur: Number(r.amount_max_eur), verdict: r.verdict, whatHappened: r.what_happened, whyItMatters: r.why_it_matters, setup: r.setup, numbers: r.numbers, plan: r.plan, evidence: r.evidence_urls, unconfirmed: r.unconfirmed, carriedFrom: r.carried_from, conflictNote: r.conflict_note, downgradedFrom: r.downgraded_from, signature: r.signature, ruleConfigVersion: r.rule_config_version, model: r.model, createdAt: new Date(r.created_at).toISOString(), translations: r.translations });
+const COLUMNS = "id,as_of::text,symbol,action,size_tier,amount_min_eur,amount_max_eur,verdict,what_happened,why_it_matters,setup,numbers,plan,evidence_urls,unconfirmed,carried_from::text,conflict_note,downgraded_from,signature,rule_config_version,model,created_at,translations";
 
 /** Unexpired ideas, newest first. */
 export async function listIdeas(pool: Pick<pg.Pool, "query">, limit = 50): Promise<StoredIdea[]> {

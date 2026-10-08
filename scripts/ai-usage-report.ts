@@ -8,7 +8,10 @@ async function main() {
   if (!url) throw new Error("DATABASE_URL is required");
   const pool = new pg.Pool({ connectionString: url });
   try {
-    console.log(JSON.stringify(await usageReport(pool), null, 2));
+    const report = await usageReport(pool);
+    const rows = await pool.query(`SELECT symbol,as_of::text AS as_of,model,status,input_tokens,output_tokens,cache_read_tokens,cache_creation_tokens,cost_usd,created_at
+      FROM extraction_runs WHERE created_at >= now() - interval '30 days' ORDER BY created_at DESC LIMIT 500`);
+    console.log(JSON.stringify({ ...report, extractionRuns: rows.rows }, null, 2));
   } finally {
     await pool.end();
   }

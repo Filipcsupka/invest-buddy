@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { Chart } from "@/components/chart";
 import { groupLabels, TitleBlock } from "@/components/datasheet";
 import { IdeaCard } from "@/components/idea-card";
+import { PaywallSegment } from "@/components/paywall-segment";
 import { Disclaimer } from "@/components/disclaimer";
 import { IconArrowLeft, IconArrowRight, IconCheck, IconCross } from "@/components/icons";
 import { OperatorDisclosure } from "@/components/operator-disclosure";
@@ -143,7 +144,7 @@ async function Company({ params }: Params) {
             <h2 id="idea">{m.company.ideaTitle}</h2>
             <p className="muted small">{m.company.ideaNote}</p>
           </div>
-          <IdeaCard idea={ideaRow.idea} locale={locale} showAmounts={ideasEnabled()} nested />
+          <PaywallSegment id="idea-card"><IdeaCard idea={ideaRow.idea} locale={locale} showAmounts={ideasEnabled()} nested /></PaywallSegment>
         </section>
       )}
 

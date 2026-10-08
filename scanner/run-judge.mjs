@@ -120,7 +120,7 @@ const FORM_NAME = /\b(?:6|8|10|20|40)-[KQF]\b|\b13[DFG]\b|\b(?:Form|Schedule|Ite
  * Real figures (prices, percentages, revenue, backlog, share counts) are not matched and stay checked.
  */
 const LABELS = [
-  /\b\d+(?:\.\d+)?[- ]?(?:day|week|month|year|quarter|session|trading[- ]day)s?\b/gi,
+  /\b\d+(?:\.\d+)?[- ]?(?:day|week|month|year|quarter|session|trading[- ]day)s?\b|\b\d+(?:\.\d+)?[- ]?(?:dňov\w*|týždňov\w*|mesačn\w*|ročn\w*)/gi,
   /\b\d+[dw]\b/gi,
   /\b[SE]?MA[- ]?\d+\b/gi,
   /\b(?:Q[1-4]|[1-4]Q|H[12])(?:[- ]?(?:FY)?\d{2,4})?\b/gi,
@@ -150,7 +150,7 @@ function collect(v, key, figures, dates) {
   if (v && typeof v === "object") for (const [k, x] of Object.entries(v)) collect(x, k, figures, dates);
 }
 /** Only named rule windows and the score denominator may appear without an input figure. */
-const ruleFigure = (text, value) => (value === 14 && /\bRSI\s*14\b/i.test(text)) || (value === 20 && /\b20[- ]day\b/i.test(text)) || (value === 25 && /\bof 25\b/i.test(text));
+const ruleFigure = (text, value) => (value === 14 && /\bRSI\s*14\b/i.test(text)) || (value === 20 && /\b20[- ]day\b/i.test(text)) || (value === 25 && /\b(?:of|z) 25\b/i.test(text));
 /** The words around the first offending figure, so a skip in the log shows what the model wrote. */
 export function figureContext(texts, figure) {
   const text = texts.map(String).join(" | ");
@@ -169,7 +169,7 @@ export function inventedFigures(texts, inputValue) {
   }
   return [...new Set(bad)];
 }
-const wording = (i) => [i.verdict, ...i.whatHappened, ...i.whyItMatters, ...i.numbers.flatMap((n) => [n.label, n.value]), i.plan.trigger, i.plan.invalidation, i.plan.opportunityCost, i.downgrade?.reason, i.conflict?.reason].filter(Boolean);
+export const wording = (i) => [i.verdict, ...i.whatHappened, ...i.whyItMatters, ...i.numbers.flatMap((n) => [n.label, n.value]), ...i.evidence.map((e) => e.label), i.plan.trigger, i.plan.invalidation, i.plan.opportunityCost, i.downgrade?.reason, i.conflict?.reason].filter(Boolean);
 
 // ---------- fixed decisions plus wording ----------
 const money = (n) => (Number.isInteger(n) ? String(n) : n.toFixed(2));
@@ -232,12 +232,26 @@ function mergeOne(idea, sig, modelInput, notes) {
     if (idea.evidence.length < 2 && !NO_EVIDENCE_OK.includes(sig.action)) {
       const have = new Set(idea.evidence.map((e) => e.url));
       const extra = (item?.context?.evidence ?? []).filter((e) => e.label && !have.has(e.url));
-      for (const e of extra) { if (idea.evidence.length >= 3) break; idea.evidence.push({ url: e.url, label: e.label }); notes.push(`${idea.symbol}: evidence link added from the input: ${e.label}`); }
+      for (const e of extra) { if (idea.evidence.length >= 3) break; idea.evidence.push({ url: e.url, label: e.label }); idea.sk.evidence.push({ url: e.url, label: { "Earnings release": "Výsledková správa", "SEC XBRL": "Výkaz SEC XBRL" }[e.label] ?? (/^(?:10-[KQ]|8-K|Form 4)$/.test(e.label) ? e.label : "Zdroj") }); notes.push(`${idea.symbol}: evidence link added from the input: ${e.label}`); }
     }
     if (idea.evidence.length < 2 && !NO_EVIDENCE_OK.includes(sig.action)) throw new Error(`${idea.symbol}: fewer than two evidence links for ${sig.action}`);
     for (const k of ["downgrade", "conflict"]) if (idea[k] && !urls.has(idea[k].evidenceUrl)) throw new Error(`${idea.symbol}: ${k} cites a url not in the input`);
-    const figures = inventedFigures(wording(idea), { item });
+    const figures = inventedFigures([...wording(idea), ...wording({ ...idea.sk, downgrade: { reason: idea.sk.downgradeReason }, conflict: { reason: idea.sk.conflictReason } })], { item });
     if (figures.length) throw new Error(`${idea.symbol}: figures not in the input: ${figures.slice(0, 5).join(", ")} (${figureContext(wording(idea), figures[0])})`);
+    const publicWording = [...wording(idea), ...wording({ ...idea.sk, downgrade: { reason: idea.sk.downgradeReason }, conflict: { reason: idea.sk.conflictReason } })].join(" ");
+    if (/\b(?:you should buy|you should sell|buy now|sell now|guaranteed return|price target|mal by si kúpiť|mal by si predať|kúp teraz|predaj teraz|garantovan\w* výnos|cieľov\w* cen\w*)\b/i.test(publicWording)) throw new Error(`${idea.symbol}: ADR-001 wording is not informational`);
+    if (idea.sk.evidence.length !== idea.evidence.length || idea.sk.evidence.some((e, idx) => e.url !== idea.evidence[idx].url)) throw new Error(`${idea.symbol}: Slovak evidence URLs differ from English`);
+    const sameFigures = (a, b) => JSON.stringify(figuresIn(stripLabels(String(a ?? ""))).sort((x, y) => x - y)) === JSON.stringify(figuresIn(stripLabels(String(b ?? ""))).sort((x, y) => x - y));
+    if (idea.sk.whatHappened.length !== idea.whatHappened.length || idea.sk.whyItMatters.length !== idea.whyItMatters.length) throw new Error(`${idea.symbol}: Slovak bullets differ from English`);
+    for (const [en, sk] of [[idea.verdict, idea.sk.verdict], ...idea.whatHappened.map((s, i) => [s, idea.sk.whatHappened[i]]), ...idea.whyItMatters.map((s, i) => [s, idea.sk.whyItMatters[i]]), ...["trigger", "invalidation", "opportunityCost"].map((key) => [idea.plan[key], idea.sk.plan[key]]), ...idea.evidence.map((e, i) => [e.label, idea.sk.evidence[i].label]), [idea.downgrade?.reason, idea.sk.downgradeReason], [idea.conflict?.reason, idea.sk.conflictReason]]) {
+      if (!sameFigures(en, sk)) throw new Error(`${idea.symbol}: Slovak prose figures differ from English`);
+    }
+    if (idea.sk.numbers.length !== idea.numbers.length) throw new Error(`${idea.symbol}: Slovak numbers differ from English`);
+    for (let idx = 0; idx < idea.numbers.length; idx++) {
+      const en = idea.numbers[idx], sk = idea.sk.numbers[idx];
+      if (!sameFigures(en.label, sk.label) || !sameFigures(en.value, sk.value)) throw new Error(`${idea.symbol}: Slovak numbers differ from English`);
+    }
+    if (Boolean(idea.downgrade) !== Boolean(idea.sk.downgradeReason) || Boolean(idea.conflict) !== Boolean(idea.sk.conflictReason)) throw new Error(`${idea.symbol}: Slovak reasons differ from English`);
     let { action, sizeTier, amountMinEur: min, amountMaxEur: max } = sig;
     let downgradedFrom = null;
     if (idea.downgrade) {
@@ -249,6 +263,7 @@ function mergeOne(idea, sig, modelInput, notes) {
       setup: sig.ratings, numbers: idea.numbers, plan: { amountNow: amountText(action, min, max), ...idea.plan }, evidence: idea.evidence,
       unconfirmed: sig.unconfirmed || idea.unconfirmed || downgradedFrom !== null, carriedFrom: sig.carriedFrom ?? null, signature: sig.signature, ruleConfigVersion: sig.ruleConfigVersion,
       conflictNote: idea.conflict?.reason ?? null, downgradedFrom,
+      translations: { en: { downgradeReason: idea.downgrade?.reason ?? null }, sk: { ...idea.sk, plan: { amountNow: amountText(action, min, max), ...idea.sk.plan }, conflictNote: idea.sk.conflictReason ?? null } },
     };
   }
 }

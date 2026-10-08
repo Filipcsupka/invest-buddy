@@ -2,7 +2,7 @@ import { logIngestRequest, recordIngestError } from "../request-log";
 import { createHash, timingSafeEqual } from "node:crypto";
 import pg from "pg";
 import { z } from "zod";
-import { finishCall, reserveCall } from "../../../../db/ai-budget";
+import { dailyTokenUsage, finishCall, reserveCall } from "../../../../db/ai-budget";
 import { usageReport, recordUsageSample } from "../../../../db/ai-usage-report";
 import { readBoundedBody } from "../read-bounded-body";
 
@@ -24,7 +24,10 @@ const bodySchema = z.discriminatedUnion("action", [
 async function getHandler(request: Request) {
   const denied = gate(request); if (denied) return denied;
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
-  try { return Response.json(await usageReport(pool)); }
+  try {
+    if (new URL(request.url).searchParams.get("report") === "daily") return Response.json({ tokens: await dailyTokenUsage(pool) });
+    return Response.json(await usageReport(pool));
+  }
   catch (error) { recordIngestError(request, error); return Response.json({ error: "Budget unavailable" }, { status: 503 }); }
   finally { await pool.end(); }
 }

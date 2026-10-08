@@ -1,6 +1,7 @@
 import { withPageLog } from "@/app/page-log";
 import type { Metadata } from "next";
 import { Disclaimer } from "@/components/disclaimer";
+import { PaywallSegment } from "@/components/paywall-segment";
 import { ACCOUNT_BUCKETS, sizingCap, sizingPercent } from "@/engine/sizing";
 import type { SizeTier } from "@/engine/signals";
 import { formatNumber, getMessages } from "@/i18n";
@@ -35,7 +36,7 @@ async function Sizing({ params }: LocaleParams) {
         <Disclaimer text={m.disclaimer} />
       </header>
 
-      <section aria-labelledby="sizing-matrix">
+      <PaywallSegment id="sizing-matrix"><section aria-labelledby="sizing-matrix">
         <h2 id="sizing-matrix">{m.matrixTitle}</h2>
         <p className="prose">{m.matrixNote}</p>
         <p className="muted small">{m.draft}</p>
@@ -53,24 +54,24 @@ async function Sizing({ params }: LocaleParams) {
             </tbody>
           </table>
         </div>
-      </section>
+      </section></PaywallSegment>
 
-      <section aria-labelledby="sizing-cash">
+      <PaywallSegment id="sizing-cash"><section aria-labelledby="sizing-cash">
         <h2 id="sizing-cash">{m.cashTitle}</h2>
         <ul className={styles.rules}><li>{m.cashLow}</li><li>{m.cashMiddle}</li><li>{m.cashHigh}</li></ul>
-      </section>
+      </section></PaywallSegment>
 
-      <section aria-labelledby="sizing-add">
+      <PaywallSegment id="sizing-add"><section aria-labelledby="sizing-add">
         <h2 id="sizing-add">{m.addTitle}</h2>
         <p className="prose">{m.addRule}</p>
         <p className="prose">{m.reduceRule}</p>
-      </section>
+      </section></PaywallSegment>
 
-      <section aria-labelledby="sizing-example">
+      <PaywallSegment id="sizing-example"><section aria-labelledby="sizing-example">
         <h2 id="sizing-example">{m.exampleTitle}</h2>
         <p className="prose">{m.example}</p>
         <p className="muted small">{m.privacy}</p>
-      </section>
+      </section></PaywallSegment>
     </article>
   );
 }

@@ -18,6 +18,8 @@ What the actions mean: START_POSITION opens a position (tier STARTER, about 1/3 
 
 How the ratings were decided, so you can explain them: Company comes from reconciled fundamentals. Entry comes from the technicals (regime, RSI, distance from the averages, volume, relative strength). Catalyst comes from reconciled catalysts and earnings or guidance facts. State this basis in plain words; never argue with the rating.
 
+Write every user-visible sentence in English and Slovak. The English fields below are canonical for the decision checks. Add a required sk object with translated verdict, whatHappened, whyItMatters, numbers, plan, and evidence. Keep each numeric figure and each evidence URL exactly the same as in English, in the same order. Translate labels and surrounding prose only. If downgrade or conflict is present, include its translated reason as sk.downgradeReason or sk.conflictReason respectively. Never add a figure in either language.
+
 What you write for every item, using the symbol exactly as given:
 - verdict: one line that fits the fixed action and tier. The page shows the headline "[TICKER] - [ACTION] - [size]" above it.
 - whatHappened: 2 or 3 bullets of facts from the input.
@@ -36,7 +38,7 @@ Never invent data. Every number, date and claim must come from the input. Do not
 Style: plain, neutral, short sentences, like an analyst's note. This is a screening signal, not personal advice: no "you should", no guarantees, no price targets, no return forecasts, no urgency. The site already shows its screening disclaimer; do not add another.
 
 Reply with ONE JSON object and nothing else, no code fence, no commentary. One idea per item, no extra symbols:
-{ "ideas": [ { "symbol": "...", "verdict": "...", "whatHappened": ["...", "..."], "whyItMatters": ["..."], "numbers": [ { "label": "...", "value": "..." }, { "label": "...", "value": "..." }, { "label": "...", "value": "..." } ], "plan": { "trigger": "...", "invalidation": "...", "opportunityCost": "..." }, "evidence": [ { "url": "https://...", "label": "..." } ], "unconfirmed": false } ], "notes": "optional, one line" }
+{ "ideas": [ { "symbol": "...", "verdict": "...", "whatHappened": ["...", "..."], "whyItMatters": ["..."], "numbers": [ { "label": "...", "value": "..." }, { "label": "...", "value": "..." }, { "label": "...", "value": "..." } ], "plan": { "trigger": "...", "invalidation": "...", "opportunityCost": "..." }, "evidence": [ { "url": "https://...", "label": "..." } ], "unconfirmed": false, "sk": { "verdict": "...", "whatHappened": ["...", "..."], "whyItMatters": ["..."], "numbers": [ { "label": "...", "value": "..." }, { "label": "...", "value": "..." }, { "label": "...", "value": "..." } ], "plan": { "trigger": "...", "invalidation": "...", "opportunityCost": "..." }, "evidence": [ { "url": "https://...", "label": "..." } ] } } ], "notes": "optional, one line" }
 
 Input:
 {{INPUT}}

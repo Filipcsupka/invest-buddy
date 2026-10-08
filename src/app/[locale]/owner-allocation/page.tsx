@@ -2,6 +2,7 @@ import { withPageLog } from "@/app/page-log";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { SampleStamp } from "@/components/operator-disclosure";
+import { PaywallSegment } from "@/components/paywall-segment";
 import { ownerAllocation, ownerViewEnabled } from "@/data/owner-allocation";
 import { fill, formatDate, formatNumber, getMessages } from "@/i18n";
 import { resolveLocale, type LocaleParams } from "../locale";
@@ -27,7 +28,7 @@ async function OwnerAllocationPage({ params }: LocaleParams) {
       <p className="notice">{m.disclaimer}</p>
     </header>
     {!data.baseline || !data.result ? <p className="empty-line">{m.noBaseline}</p> : <>
-      <section className="sheet-section" aria-labelledby="owner-cash">
+      <PaywallSegment id="owner-cash"><section className="sheet-section" aria-labelledby="owner-cash">
         <div className="section-head"><h2 id="owner-cash">{m.cashTitle}</h2><p className="muted small">{fill(m.asOf, { date: formatDate(locale, data.baseline.asOf) })}</p></div>
         <dl className={styles.summary}>
           <div><dt>{m.monthly}</dt><dd>{data.baseline.monthlyContributionEur == null ? m.unknown : euro(data.baseline.monthlyContributionEur)}</dd></div>
@@ -37,8 +38,8 @@ async function OwnerAllocationPage({ params }: LocaleParams) {
         </dl>
         {data.result.cashDrag && <p className="notice">{m.cashDrag}</p>}
         {data.baseline.monthlyContributionEur == null && <p className="muted small">{m.monthlyMissing}</p>}
-      </section>
-      <section className="sheet-section" aria-labelledby="owner-suggestions">
+      </section></PaywallSegment>
+      <PaywallSegment id="owner-suggestions"><section className="sheet-section" aria-labelledby="owner-suggestions">
         <h2 id="owner-suggestions">{m.suggestions}</h2>
         {data.result.suggestions.length ? <div className="table-scroll"><table className="screen">
           <thead><tr><th scope="col">{m.symbol}</th><th scope="col">{m.tier}</th><th scope="col">{m.amount}</th><th scope="col">{m.reason}</th></tr></thead>
@@ -47,7 +48,7 @@ async function OwnerAllocationPage({ params }: LocaleParams) {
           </tr>)}</tbody>
         </table></div> : <p className="empty-line">{m.noSignals}</p>}
         <p className="muted small">{m.historyNote}</p>
-      </section>
+      </section></PaywallSegment>
     </>}
   </article>;
 }

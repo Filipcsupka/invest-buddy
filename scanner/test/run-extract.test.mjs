@@ -5,6 +5,7 @@ import { spawnSync } from "node:child_process";
 import { chmodSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { dailyTokenCeiling } from "../ai-budget.mjs";
 
 const envelope = (over = {}) => JSON.stringify({ type: "result", is_error: false, result: "{}", num_turns: 1, total_cost_usd: 0.012, usage: { input_tokens: 5, output_tokens: 6, cache_read_input_tokens: 7, cache_creation_input_tokens: 8 }, modelUsage: { "claude-haiku-4-5": {} }, permission_denials: [], ...over });
 
@@ -14,6 +15,12 @@ test("claude defaults to haiku, codex has no default, and --force parses", () =>
   assert.equal(parseArgs(["--agent", "codex"]).model, null);
   assert.equal(parseArgs([]).force, false);
   assert.equal(parseArgs(["--force"]).force, true);
+});
+
+test("daily ceiling defaults off and rejects invalid values", () => {
+  assert.equal(dailyTokenCeiling({}), 0);
+  assert.equal(dailyTokenCeiling({ AI_DAILY_TOKEN_CEILING: "25000" }), 25000);
+  assert.throws(() => dailyTokenCeiling({ AI_DAILY_TOKEN_CEILING: "-1" }), /nonnegative integer/);
 });
 
 test("envelope gives text, model, usage and cost", () => {
@@ -47,6 +54,25 @@ test("a quiet gate exits before token lookup or model call", () => {
   const run = spawnSync(process.execPath, [new URL("../run-extract.mjs", import.meta.url).pathname, "--symbols-file", file], { env: { ...process.env, INGEST_TOKEN: "", SCAN_OUT_DIR: dir }, encoding: "utf8" });
   assert.equal(run.status, 0, run.stderr);
   assert.match(run.stderr, /nothing changed; 0 model calls/);
+});
+
+test("daily ceiling stops before a second model call with exit 5", () => {
+  const dir = mkdtempSync(join(tmpdir(), "extract-ceiling-"));
+  const bundles = join(dir, "bundles"); mkdirSync(bundles);
+  for (const symbol of ["NVDA", "AMD"]) writeFileSync(join(bundles, `${symbol}.json`), JSON.stringify({ symbol, documents: [], facts: [{ key: "dummy", asOf: "2026-10-01", value: 1 }] }));
+  const gate = join(dir, "gate.json"); writeFileSync(gate, JSON.stringify({ symbols: ["NVDA", "AMD"] }));
+  const cli = join(dir, "claude");
+  writeFileSync(cli, `#!/usr/bin/env node
+const fs = require("fs"); const p = fs.readFileSync(0, "utf8"); const symbol = p.match(/Company: [^\\n]+ \\(([A-Z]+)\\)/)[1];
+fs.appendFileSync(${JSON.stringify(join(dir, "calls"))}, symbol + "\\n");
+const fundamentals = Object.fromEntries(["revenueAccelerating","revenueDeclining","epsBeat","guidanceRaised","guidanceCut","productCatalyst","insiderOrInstitutionalBuying","narrativeChanged"].map(k => [k, null]));
+process.stdout.write(JSON.stringify({ is_error:false, result:JSON.stringify({ symbol, fundamentals, evidence:[], confidence:"low" }), num_turns:1, total_cost_usd:0.01, usage:{input_tokens:10,output_tokens:10}, modelUsage:{haiku:{}} }));
+`);
+  chmodSync(cli, 0o755);
+  const run = spawnSync(process.execPath, [new URL("../run-extract.mjs", import.meta.url).pathname, "--dry-run", "--symbols-file", gate, "--bundle-dir", bundles, "--as-of", "2026-10-05"], { env: { ...process.env, PATH: `${dir}:${process.env.PATH}`, INGEST_TOKEN: "", SCAN_OUT_DIR: dir, AI_DAILY_TOKEN_CEILING: "15" }, encoding: "utf8" });
+  assert.equal(run.status, 5, run.stderr);
+  assert.match(run.stderr, /DAILY TOKEN CEILING: 20\/15 tokens after 1 tickers/);
+  assert.equal(readFileSync(join(dir, "calls"), "utf8").trim().split("\n").length, 1);
 });
 
 test("the live extractor accepts an instrument supplied by the database universe endpoint", async () => {
@@ -135,4 +161,11 @@ test("postTicker stores one ticker per call with macro=skip and reports failure"
     globalThis.fetch = async () => { throw new Error("boom"); };
     assert.equal(await postTicker(opts, "t", { asOf: "2026-10-05", model: "m", output: out("X") }, (m) => logs.push(m)), false);
   } finally { globalThis.fetch = real; }
+});
+
+test("unknown token usage has a conservative local floor", async () => {
+  const { unknownUsageTokens } = await import("../run-extract.mjs");
+  assert.equal(unknownUsageTokens({}), 20000);
+  assert.equal(unknownUsageTokens({ AI_UNKNOWN_USAGE_TOKENS: "24000" }), 24000);
+  assert.throws(() => unknownUsageTokens({ AI_UNKNOWN_USAGE_TOKENS: "0" }));
 });
