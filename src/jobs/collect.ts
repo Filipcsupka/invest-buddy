@@ -144,6 +144,8 @@ export async function deriveFacts(symbol: string, docs: CollectedDocument[], ids
   return facts;
 }
 
+/** One line, no credentials: upstream error text can echo a request URL with a key. */
+export const safeReason = (reason: unknown) => String(reason).replace(/[\r\n]+/g, " ").replace(/([?&;](?:api_?key|key|token|access_token|secret)=)[^&\s]+/gi, "$1[redacted]").replace(/(bearer\s+)\S+/gi, "$1[redacted]").slice(0, 200);
 const SEC_SOURCES = ["edgar", "frames", "getcurrent", "13f"];
 /** A run that reaches SEC (no --source, or an SEC source in it) must have a real contact in SEC_USER_AGENT before anything else starts. */
 export function guardCollectUserAgent(names: string[] | undefined, env: Record<string, string | undefined>): void {
@@ -179,7 +181,7 @@ async function main() {
     const repository = pool ? new PostgresCollectorRepository(pool) : new MemoryCollectorRepository();
     const result = await runCollect(repository, symbols, { since, sources: names as SourceName[] | undefined, dryRun, cusips: pool ? new PostgresCusipStore(pool) : new MemoryCusipStore(), companies: activeCompanies });
     process.stdout.write(`Collect: ${result.succeeded}/${result.requested} tickers, ${result.documentsParsed} documents parsed, ${result.factsComputed} facts computed, ${result.documentsWritten} documents written, ${result.factsWritten} facts written${dryRun ? " (dry run, nothing stored)" : ""}\n`);
-    for (const failure of result.failures) process.stderr.write(`Failed ${failure.ticker}\n`);
+    for (const failure of result.failures) process.stderr.write(`Failed ${failure.ticker}: ${safeReason(failure.reason)}\n`);
     if (result.stoppedReason) process.stderr.write("Stopped: source limit reached\n");
     process.exitCode = result.exitCode;
     return { requested: result.requested, succeeded: result.succeeded, failures: result.failures.length, documentsWritten: result.documentsWritten, factsWritten: result.factsWritten };

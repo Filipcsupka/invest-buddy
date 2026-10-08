@@ -5,13 +5,13 @@
 #   command: ["node", "/app/scanner/run-extract.mjs"]   args: ["--symbols-file", "/work/detect.json"]  (see docs/data.md, Extraction)
 #   command: ["node", "/app/scanner/run-judge.mjs"]     (judge step, see docs/data.md, Judge)
 # Setting `command` replaces the ENTRYPOINT; `args` alone would be passed to run-scan.mjs.
-FROM node:22-slim
+FROM node:22-slim@sha256:c3de60bf2f9dd0ac6370e6117950ff62d6e339527e7472301c9c78a017978392
 ENV NODE_ENV=production \
     HOME=/home/scanner \
     CLAUDE_CONFIG_DIR=/home/scanner/.claude \
     CODEX_HOME=/home/scanner/.codex \
     DISABLE_AUTOUPDATER=1
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates bubblewrap \
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends ca-certificates bubblewrap \
     && rm -rf /var/lib/apt/lists/* \
     && npm install -g @anthropic-ai/claude-code @openai/codex && npm cache clean --force \
     && useradd --create-home --uid 10001 --shell /usr/sbin/nologin scanner

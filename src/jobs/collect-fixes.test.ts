@@ -7,7 +7,7 @@ import { plainText, document } from "../collectors/types";
 import { MemoryCollectorRepository, PostgresCollectorRepository, documentRetentionDays } from "../db/collectors";
 import { windowDaysFor } from "../db/bundle";
 import { freshnessDays } from "../data/evidence";
-import { collectExitCode, deriveFacts, runCollect } from "./collect";
+import { collectExitCode, deriveFacts, runCollect, safeReason } from "./collect";
 
 const dir = join(process.cwd(), "src/collectors/fixtures");
 const fixture = (name: string) => readFileSync(join(dir, name), "utf8");
@@ -206,5 +206,14 @@ describe("M9 schedules", () => {
     const startWindow = (job: string) => Number(/startingDeadlineSeconds: (\d+)/.exec(job)?.[1]) / 60;
     expect(minutes("0 1")).toBeGreaterThanOrEqual(minutes("30 0") + startWindow(prices) + deadline(prices));
     expect(minutes("35 1")).toBeGreaterThanOrEqual(minutes("0 1") + startWindow(cronjob("invest-buddy-collect")) + deadline(cronjob("invest-buddy-collect")));
+  });
+});
+
+describe("safeReason", () => {
+  it("strips keys, bearer tokens and newlines and caps the length", () => {
+    const text = safeReason(new Error("GET https://x.test/f?series=DGS10&api_key=abc123&x=1 failed\nBearer sk-secret"));
+    expect(text).not.toMatch(/abc123|sk-secret|\n/);
+    expect(text).toContain("api_key=[redacted]");
+    expect(safeReason("x".repeat(500)).length).toBe(200);
   });
 });

@@ -1,3 +1,4 @@
+import { withPageLog } from "@/app/page-log";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { Datasheet } from "@/components/datasheet";
@@ -15,7 +16,7 @@ export async function generateMetadata({ params }: LocaleParams): Promise<Metada
   return pageMetadata(locale, "", null, getMessages(locale).meta.homeDescription);
 }
 
-export default async function Home({ params }: LocaleParams) {
+async function Home({ params }: LocaleParams) {
   const locale = await resolveLocale(params);
   const m = getMessages(locale);
   const data = await latestScores();
@@ -39,7 +40,7 @@ export default async function Home({ params }: LocaleParams) {
             </Link>
           </div>
         </div>
-        {top ? <Datasheet locale={locale} instrument={top.instrument} result={top.result} sample={data.sample} /> : <DataStatus locale={locale} lastUpdated={data.lastUpdated} stale={data.stale} />}
+        {top ? <><Datasheet locale={locale} instrument={top.instrument} result={top.result} sample={data.sample} /><DataStatus locale={locale} lastUpdated={data.lastUpdated} stale={data.stale} /></> : <DataStatus locale={locale} lastUpdated={data.lastUpdated} stale={data.stale} />}
       </section>
 
       <section className="frame ledger" aria-labelledby="build">
@@ -85,3 +86,5 @@ export default async function Home({ params }: LocaleParams) {
     </>
   );
 }
+
+export default withPageLog("/", Home);

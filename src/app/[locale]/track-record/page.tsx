@@ -1,3 +1,4 @@
+import { withPageLog } from "@/app/page-log";
 import type { Metadata } from "next";
 import { Chart } from "@/components/chart";
 import { Disclaimer } from "@/components/disclaimer";
@@ -5,7 +6,7 @@ import { OperatorDisclosure, SampleStamp } from "@/components/operator-disclosur
 import { ScreenTable } from "@/components/screen-table";
 import { toRow, type ScreenRow } from "@/components/view-model";
 import { fixtureBenchmark } from "@/data/record";
-import { scoreHistory } from "@/data/store";
+import { scoreHistory, stale } from "@/data/store";
 import { recordHistory } from "@/db/track-record";
 import { DataStatus } from "@/components/data-status";
 export const dynamic = "force-dynamic";
@@ -19,7 +20,7 @@ export async function generateMetadata({ params }: LocaleParams): Promise<Metada
   return pageMetadata(locale, "/track-record", m.meta.trackRecordTitle, m.meta.trackRecordDescription);
 }
 
-export default async function TrackRecord({ params }: LocaleParams) {
+async function TrackRecord({ params }: LocaleParams) {
   const locale = await resolveLocale(params);
   const m = getMessages(locale);
   if (process.env.DATA_MODE !== "fixture") {
@@ -28,7 +29,7 @@ export default async function TrackRecord({ params }: LocaleParams) {
       <header className="page-head">
         <h1 className="title">{m.trackRecord.title}</h1>
         <p className="lede">{m.trackRecord.liveLede}</p>
-        <DataStatus locale={locale} lastUpdated={record.lastDate} stale={false} />
+        <DataStatus locale={locale} lastUpdated={record.lastDate} stale={stale(record.lastDate)} />
         <OperatorDisclosure text={m.common.operatorDisclosure} />
       </header>
       <p className="notice">{m.trackRecord.liveNote}</p>
@@ -106,3 +107,5 @@ export default async function TrackRecord({ params }: LocaleParams) {
     </div>
   );
 }
+
+export default withPageLog("/track-record", TrackRecord);

@@ -1,6 +1,6 @@
 # Reading application logs
 
-Web request logs and batch job lifecycle logs are JSON lines on standard output and standard error. Read them with `kubectl -n invest logs deployment/invest-buddy-web --since=1h` or `kubectl -n invest logs job/<job-name> --tail=100`. Use the `requestId` from a response's `x-request-id` header to find its ingest log line. Job start and end lines share a `runId`.
+Page renders, ingest requests and batch job lifecycle events are JSON lines on standard output and standard error. Read web lines with `kubectl -n invest logs deployment/invest-buddy-web --since=1h` and job lines with `kubectl -n invest logs job/<job-name> --tail=100`. Page and ingest responses carry an `x-request-id` header; use its `requestId` to find the matching log line. Page lines include route, locale, status and duration in milliseconds. A page `status: 200` means the page function returned; a failure while Next renders child components is logged separately as a 500 by the request error hook, so look for a 500 with the same request id. Render failures also include a fixed message and stack frames. Ingest failures include a reason. The logger omits request bodies, authorization headers and error messages that may contain secrets. Job start and end lines share a `runId`.
 
 Logs stay in the cluster's container logs. There is no application log archive or fixed retention period: kubelet rotation can remove older lines, and deleting a pod removes access through `kubectl logs`. Inspect a failed job before its pod is cleaned up.
 

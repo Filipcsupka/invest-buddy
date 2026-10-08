@@ -20,10 +20,19 @@ it("marks stale database-style prices insufficient and scores fresh prices", asy
   const bars = fixtureBars(instrument.ticker);
   const provider = { instruments: async () => [instrument], bars: async () => bars, fundamentals: async () => fixtureFundamentals(instrument.ticker), macro: async () => fixtureMacro(instrument.ticker) };
   const repository = new MemoryScoreRepository();
-  await runDaily(provider, repository, "2025-08-09");
-  expect((await repository.scores("2025-08-09"))[0]).toMatchObject({ state: "Insufficient/invalid data", invalidReasons: ["stale_prices"], total: 0 });
+  await runDaily(provider, repository, "2025-08-12");
+  expect((await repository.scores("2025-08-12"))[0]).toMatchObject({ state: "Insufficient/invalid data", invalidReasons: ["stale_prices"], total: 0 });
   await runDaily(provider, repository, "2025-08-08");
   expect((await repository.scores("2025-08-08"))[0].invalidReasons).not.toContain("stale_prices");
+});
+
+it("accepts Friday prices for a Monday score", async () => {
+  const { fixtureBars, fixtureFundamentals, fixtureMacro, instruments } = await import("../data/fixtures");
+  const instrument = instruments[0];
+  const provider = { instruments: async () => [instrument], bars: async () => fixtureBars(instrument.ticker), fundamentals: async () => fixtureFundamentals(instrument.ticker), macro: async () => fixtureMacro(instrument.ticker) };
+  const repository = new MemoryScoreRepository();
+  await runDaily(provider, repository, "2025-08-11");
+  expect((await repository.scores("2025-08-11"))[0].invalidReasons).not.toContain("stale_prices");
 });
 
 it("refreshes the same date when scoring inputs change", async () => {

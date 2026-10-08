@@ -1,3 +1,4 @@
+import { withPageLog } from "@/app/page-log";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Disclaimer } from "@/components/disclaimer";
@@ -16,7 +17,7 @@ export async function generateMetadata({ params }: LocaleParams): Promise<Metada
   return pageMetadata(locale, "/ideas", m.meta.ideasTitle, m.meta.ideasDescription);
 }
 
-export default async function Ideas({ params }: LocaleParams) {
+async function Ideas({ params }: LocaleParams) {
   const locale = await resolveLocale(params);
   if (!ideasEnabled()) notFound();
   const m = getMessages(locale);
@@ -42,3 +43,5 @@ export default async function Ideas({ params }: LocaleParams) {
     </div>
   );
 }
+
+export default withPageLog("/ideas", Ideas);

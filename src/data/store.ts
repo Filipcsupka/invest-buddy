@@ -11,7 +11,13 @@ import { buildIndexedSeries, type IndexedSeries } from "../portfolio/history";
 
 export interface StoreRow { instrument: Instrument; result: ScoreResult }
 export interface StoreData<T> { rows: T; sample: boolean; lastUpdated: string | null; stale: boolean }
-export const stale = (date: string | null) => !!date && Date.now() - Date.parse(`${date}T00:00:00Z`) > 4 * 86_400_000;
+/** Stale after 3 days. A Friday session is scored on Saturday and the next score comes Tuesday morning, so a Friday date gets until Tuesday 06:00 UTC (4.25 days). */
+export const stale = (date: string | null, now = Date.now()) => {
+  if (!date) return false;
+  const day = Date.parse(`${date}T00:00:00Z`);
+  const limit = new Date(day).getUTCDay() === 5 ? 4.25 * 86_400_000 : 3 * 86_400_000;
+  return now - day > limit;
+};
 const fixtureMode = () => process.env.DATA_MODE === "fixture";
 function pool() { if (!process.env.DATABASE_URL) return null; return new pg.Pool({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 3000 }); }
 export async function latestScores(): Promise<StoreData<StoreRow[]>> {
@@ -46,7 +52,10 @@ export async function scoreHistory(): Promise<StoreData<StoreRow[]>> {
 export async function latestPortfolio() {
   if (fixtureMode()) return samplePortfolio;
   const db = pool(); if (!db) return null;
-  try { return await new PostgresPortfolioRepository(db).latestPublished(new Date().toISOString().slice(0, 10)); }
+  try {
+    const snapshot = await new PostgresPortfolioRepository(db).latestPublished(new Date().toISOString().slice(0, 10));
+    return snapshot?.sample ? null : snapshot;
+  }
   finally { await db.end(); }
 }
 

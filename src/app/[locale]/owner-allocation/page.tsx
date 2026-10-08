@@ -1,3 +1,4 @@
+import { withPageLog } from "@/app/page-log";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { SampleStamp } from "@/components/operator-disclosure";
@@ -13,7 +14,7 @@ export async function generateMetadata({ params }: LocaleParams): Promise<Metada
   return { title: getMessages(locale).ownerAllocation.title, robots: { index: false, follow: false } };
 }
 
-export default async function OwnerAllocationPage({ params }: LocaleParams) {
+async function OwnerAllocationPage({ params }: LocaleParams) {
   const locale = await resolveLocale(params);
   if (!ownerViewEnabled()) notFound();
   const m = getMessages(locale).ownerAllocation;
@@ -50,3 +51,5 @@ export default async function OwnerAllocationPage({ params }: LocaleParams) {
     </>}
   </article>;
 }
+
+export default withPageLog("/owner-allocation", OwnerAllocationPage);

@@ -1,3 +1,4 @@
+import { withPageLog } from "@/app/page-log";
 import type { Metadata } from "next";
 import { Disclaimer } from "@/components/disclaimer";
 import { ACCOUNT_BUCKETS, sizingCap, sizingPercent } from "@/engine/sizing";
@@ -13,7 +14,7 @@ export async function generateMetadata({ params }: LocaleParams): Promise<Metada
   return pageMetadata(locale, "/sizing", m.meta.sizingTitle, m.meta.sizingDescription);
 }
 
-export default async function Sizing({ params }: LocaleParams) {
+async function Sizing({ params }: LocaleParams) {
   const locale = await resolveLocale(params);
   const m = getMessages(locale).sizing;
   const accounts = [m.under5, m.five25, m.twentyfive100, m.over100];
@@ -73,3 +74,7 @@ export default async function Sizing({ params }: LocaleParams) {
     </article>
   );
 }
+
+export default withPageLog("/sizing", Sizing);
+
+export const dynamic = "force-dynamic";

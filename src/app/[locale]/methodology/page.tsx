@@ -1,3 +1,4 @@
+import { withPageLog } from "@/app/page-log";
 import type { Metadata } from "next";
 import { Disclaimer } from "@/components/disclaimer";
 import { RuleBook, StateScale } from "@/components/method";
@@ -11,7 +12,7 @@ export async function generateMetadata({ params }: LocaleParams): Promise<Metada
   return pageMetadata(locale, "/methodology", m.meta.methodologyTitle, m.meta.methodologyDescription);
 }
 
-export default async function Methodology({ params }: LocaleParams) {
+async function Methodology({ params }: LocaleParams) {
   const locale = await resolveLocale(params);
   const m = getMessages(locale);
   return (
@@ -41,8 +42,12 @@ export default async function Methodology({ params }: LocaleParams) {
 
       <section aria-labelledby="data">
         <h2 id="data">{m.methodology.dataTitle}</h2>
-        <p className="prose">{m.methodology.dataBody}</p>
+        <p className="prose">{process.env.DATA_MODE === "fixture" ? m.methodology.dataBody : m.methodology.dataBodyLive}</p>
       </section>
     </article>
   );
 }
+
+export default withPageLog("/methodology", Methodology);
+
+export const dynamic = "force-dynamic";

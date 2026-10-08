@@ -1,3 +1,4 @@
+import { withPageLog } from "@/app/page-log";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
@@ -39,12 +40,12 @@ async function load(params: Params["params"]) {
 }
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
-  const { locale, instrument } = await load(params);
+  const { locale, instrument, data } = await load(params);
   const m = getMessages(locale);
-  return pageMetadata(locale, `/company/${instrument.ticker}`, fill(m.meta.companyTitle, { ticker: instrument.ticker, name: instrument.name }), fill(m.meta.companyDescription, { ticker: instrument.ticker }));
+  return pageMetadata(locale, `/company/${instrument.ticker}`, fill(m.meta.companyTitle, { ticker: instrument.ticker, name: instrument.name }), fill(data.sample ? m.meta.companyDescription : m.meta.companyDescriptionLive, { ticker: instrument.ticker }));
 }
 
-export default async function Company({ params }: Params) {
+async function Company({ params }: Params) {
   const { locale, instrument, instruments, result, data } = await load(params);
   const m = getMessages(locale);
   const portfolio = await latestPortfolio();
@@ -110,7 +111,7 @@ export default async function Company({ params }: Params) {
           stamp={data.sample ? m.common.sample : undefined}
           fields={[
             { label: m.company.sector, value: sectorLabel(locale, instrument.sector) },
-            { label: m.company.source, value: instrument.source === "sample extension" ? m.common.extension : instrument.source === "discovery" ? m.common.discovery : m.common.guide },
+            { label: m.company.source, value: data.sample && instrument.source === "sample extension" ? m.common.extension : instrument.source === "discovery" ? m.common.discovery : m.common.guide },
             { label: m.company.session, value: <span className="num">{result.asOf ? formatDate(locale, result.asOf) : m.common.noScore}</span> },
           ]}
         />
@@ -242,3 +243,5 @@ export default async function Company({ params }: Params) {
     </div>
   );
 }
+
+export default withPageLog("/company/[ticker]", Company);

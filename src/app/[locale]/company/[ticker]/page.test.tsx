@@ -32,7 +32,23 @@ describe("company page", () => {
     portfolio.mockResolvedValue(null);
     const meta = await page.generateMetadata(props("zzzz"));
     expect(JSON.stringify(meta)).toContain("ZZZZ");
-    expect(renderToStaticMarkup(await Company(props("ZZZZ")))).toContain("ZZZZ");
+    expect(JSON.stringify(meta)).not.toContain("sample data");
+    const html = renderToStaticMarkup(await Company(props("ZZZZ")));
+    expect(html).toContain("ZZZZ");
+    expect(html).toContain("No data yet");
+    expect(html).not.toContain("SAMPLE DATA");
+  });
+
+  it("shows a dated stale notice for an old live score in both languages", async () => {
+    const [row] = await scoredUniverse();
+    universe.mockResolvedValue([row.instrument]);
+    scores.mockResolvedValue({ rows: [row], sample: false, lastUpdated: "2026-01-01", stale: true });
+    idea.mockResolvedValue(null);
+    for (const locale of ["en", "sk"]) {
+      const html = renderToStaticMarkup(await Company(props(row.instrument.ticker, locale)));
+      expect(html).toContain(locale === "en" ? "Stale since" : "Zastarané od");
+      expect(html).not.toMatch(/SAMPLE DATA|UKÁŽKOVÉ DÁTA|Synthetic series|Syntetický rad/);
+    }
   });
 
   it("404s a ticker missing from the universe, even if it is a fixture ticker", async () => {

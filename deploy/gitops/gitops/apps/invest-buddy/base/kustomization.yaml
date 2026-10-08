@@ -7,7 +7,6 @@ resources:
   - public-ingress-filter.yaml
   - postgres.yaml
   - codex-home-pvc.yaml
-  - scan-cronjob.yaml
   - cronjobs.yaml
   - collector-cronjobs.yaml
   - extract-judge-cronjobs.yaml

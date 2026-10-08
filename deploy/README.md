@@ -1,6 +1,6 @@
 # InvestBuddy deployment proposal
 
-This is a proposal for `~/moje/infra`, which Filip owns. No file in `deploy/gitops/` is live. Copying the proposal, committing it, pushing it, and syncing Argo CD each require owner approval. The app serves informational screening only.
+`~/moje/infra` (`Filipcsupka/infra`, `main`) is the source of truth for what runs. `deploy/gitops/gitops/apps/invest-buddy/` is a mirror kept so the schedule tests can read the manifests; change infra first, then copy the directory here (`rsync -a --delete <infra>/gitops/apps/invest-buddy/ deploy/gitops/gitops/apps/invest-buddy/`). Mirror last synced 2026-10-08. Other files under `deploy/gitops/` are first-rollout templates and are not live. Copying the proposal, committing it, pushing it, and syncing Argo CD each require owner approval. The app serves informational screening only.
 
 ## File map
 
@@ -16,7 +16,7 @@ The production overlay has placeholder tags for the web and scanner images. Repl
 
 ## Schedule and data path
 
-Both scan CronJobs are suspended. They remain at 05:30 Monday to Friday in `Europe/Bratislava`, overlapping the new judge slot. Keep them suspended; any future use needs a separate schedule review. Each uses `concurrencyPolicy: Forbid`, one retry, and a 40 minute job deadline. `invest-buddy-scan-claude` passes `--agent claude`; `invest-buddy-scan-codex` passes `--agent codex`. Both post to `http://web.invest.svc.cluster.local:3000/api/ingest/scan` with `INGEST_TOKEN` from `invest-buddy-secrets`. The Claude job reads `CLAUDE_CODE_OAUTH_TOKEN` from `invest-buddy-scanner-secrets`. The Codex job mounts `invest-buddy-codex-home` at `CODEX_HOME=/codex-home`. Its init container copies `auth.json` from `invest-buddy-codex-auth-seed` only when the volume is empty. A nonempty volume without `auth.json` fails the job instead of overwriting existing data. Run only one Codex job or auth rotation writer against that PVC at a time. Do not start a manual Codex job while a scheduled one is active.
+Both scan CronJobs were suspended and are removed in the cleanup branch. They ran at 05:30 Monday to Friday in `Europe/Bratislava`, overlapping the new judge slot. Keep them suspended; any future use needs a separate schedule review. Each uses `concurrencyPolicy: Forbid`, one retry, and a 40 minute job deadline. `invest-buddy-scan-claude` passes `--agent claude`; `invest-buddy-scan-codex` passes `--agent codex`. Both post to `http://web.invest.svc.cluster.local:3000/api/ingest/scan` with `INGEST_TOKEN` from `invest-buddy-secrets`. The Claude job reads `CLAUDE_CODE_OAUTH_TOKEN` from `invest-buddy-scanner-secrets`. The Codex job mounts `invest-buddy-codex-home` at `CODEX_HOME=/codex-home`. Its init container copies `auth.json` from `invest-buddy-codex-auth-seed` only when the volume is empty. A nonempty volume without `auth.json` fails the job instead of overwriting existing data. Run only one Codex job or auth rotation writer against that PVC at a time. Do not start a manual Codex job while a scheduled one is active.
 
 `invest-buddy-prices` runs `node dist/jobs/prices.js` at 00:30 Tuesday to Saturday in `Europe/Bratislava`, after the US close of the previous evening. Saturday covers Friday's session. It fetches 260 daily bars for the 35 universe symbols plus the SPY benchmark from Twelve Data (36 requests, throttled to 7 per minute, so about six minutes) and reads `TWELVE_DATA_API_KEY` from `invest-buddy-market-secrets`. The job exits non-zero when more than 10% of tickers fail and records each run in `price_ingest_runs`. The Basic plan allows 8 requests per minute and 800 per day; the free tier is for the private beta only and a data licence is needed before a paid launch. There is no Monday price or scoring run. Tuesday's run uses Monday's US session, and Saturday's run uses Friday's. `daily.ts` currently requires a bar dated exactly to the scoring date, so scores may stay `stale_prices` until the planned 3 calendar day freshness rule is added there.
 
@@ -36,11 +36,11 @@ The daily order, Tuesday to Saturday in Bratislava time, is prices 00:30, collec
 | collect-alphavantage | Refresh weekly EPS surprise | Sat 08:00 | suspended | Filip |
 | discovery | Find candidates outside the universe | Sat 09:30 | active | Filip |
 | retention | Expire old source data | Daily 03:00 | suspended | Filip |
-| portfolio | Import Flex baseline | Tue–Sat 06:00 UTC | suspended | Filip |
-| scan-claude, scan-codex | Legacy web search scans | Mon–Fri 05:30 | suspended | Filip |
-| backup | Save database offsite | Daily 02:30 | active | Filip |
+| portfolio | Import Flex baseline, one NAV point per day | Tue–Sat 06:00 UTC | active | Filip |
+| scan-claude, scan-codex | Legacy web search scans | removed from infra 2026-10-08 (branch `invest-buddy-cleanup-0810`, pending merge) | removed | Filip |
+| backup | Save database offsite | Daily 02:30 | suspended until E1 (secrets, restore test) | Filip |
 
-The digest needs `DIGEST_TO`. The portfolio CronJob stays suspended. Its 06:00 UTC Tuesday through Saturday schedule, Flex Query fields, token egress, SPY provider, market holidays, and IBKR publication terms need review before it is enabled. A failed fetch keeps the prior snapshot and date.
+The digest needs `DIGEST_TO` (mail goes to the log only until it is set). The portfolio CronJob is active. Its 06:00 UTC Tuesday through Saturday schedule, Flex Query fields, token egress, SPY provider, market holidays, and IBKR publication terms still need review; the job already runs. A failed fetch keeps the prior snapshot and date.
 
 The scan jobs use plain HTTP for the in-cluster ingest hop. This accepts the risk of token and payload exposure to an observer with access to cluster traffic. Keep the scanner and web in the single `invest` namespace, expose the ingest service as ClusterIP only, rotate `INGEST_TOKEN` through the approved sealed-secret flow, and block the public ingest route.
 

@@ -4,7 +4,8 @@ import { afterEach, expect, it, vi } from "vitest";
 const history = vi.fn();
 const legacyHistory = vi.fn();
 vi.mock("@/db/track-record", () => ({ recordHistory: () => history() }));
-vi.mock("@/data/store", () => ({ scoreHistory: () => legacyHistory() }));
+vi.mock("@/data/store", () => ({ scoreHistory: () => legacyHistory(), stale: (date: string | null) => !!date && date < "2026-10-01" }));
+vi.mock("@/data/record", () => ({ fixtureBenchmark: () => { throw new Error("Fixture benchmark reached in db mode"); } }));
 import TrackRecord from "./page";
 
 const props = { params: Promise.resolve({ locale: "en" }) };
@@ -20,6 +21,7 @@ it("shows an honest empty live record without fixture data", async () => {
   expect(html).not.toContain("Synthetic benchmark");
   expect(html).not.toContain("Three dated snapshots");
   expect(legacyHistory).not.toHaveBeenCalled();
+  expect(html).toContain("No data yet");
 });
 
 it("shows measured returns and pending windows from stored signals", async () => {
@@ -33,4 +35,5 @@ it("shows measured returns and pending windows from stored signals", async () =>
   expect(html).toContain("vs SPY 5.0%");
   expect(html).toContain("Pending");
   expect(html).not.toContain("synthetic");
+  expect(html).toContain("Stale since");
 });

@@ -82,7 +82,7 @@ metadata:
   name: invest-buddy-collect-alphavantage
   namespace: invest
 spec:
-  suspend: true
+  suspend: false
   # Weekly EPS surprise from Alpha Vantage EARNINGS. Free key: 25 requests a day; the source stops at 20 per run and per UTC day.
   # Saturday 08:00 is a separate weekly source refresh after the weekday chain.
   schedule: "0 8 * * 6"

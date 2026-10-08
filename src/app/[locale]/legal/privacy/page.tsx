@@ -1,3 +1,4 @@
+import { withPageLog } from "@/app/page-log";
 import type { Metadata } from "next";
 import { getMessages } from "@/i18n";
 import { pageMetadata } from "@/i18n/metadata";
@@ -9,7 +10,7 @@ export async function generateMetadata({ params }: LocaleParams): Promise<Metada
   return pageMetadata(locale, "/legal/privacy", m.meta.privacyTitle, m.legal.privacyBody);
 }
 
-export default async function Privacy({ params }: LocaleParams) {
+async function Privacy({ params }: LocaleParams) {
   const locale = await resolveLocale(params);
   const m = getMessages(locale);
   return (
@@ -24,3 +25,7 @@ export default async function Privacy({ params }: LocaleParams) {
     </article>
   );
 }
+
+export default withPageLog("/legal/privacy", Privacy);
+
+export const dynamic = "force-dynamic";

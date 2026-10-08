@@ -1,3 +1,4 @@
+import { withPageLog } from "@/app/page-log";
 import type { Metadata } from "next";
 import { OperatorDisclosure, SampleStamp } from "@/components/operator-disclosure";
 import { ScannerTable } from "@/components/scanner-table";
@@ -16,7 +17,7 @@ export async function generateMetadata({ params }: LocaleParams): Promise<Metada
   return pageMetadata(locale, "/dashboard", m.meta.dashboardTitle, m.meta.dashboardDescription);
 }
 
-export default async function Dashboard({ params }: LocaleParams) {
+async function Dashboard({ params }: LocaleParams) {
   const locale = await resolveLocale(params);
   const m = getMessages(locale);
   const [data, portfolio] = await Promise.all([latestScores(), latestPortfolio()]);
@@ -25,7 +26,7 @@ export default async function Dashboard({ params }: LocaleParams) {
   return <div className="frame page">
     <header className="page-head">
       <div className="page-title-row"><h1 className="title">{m.dashboard.title}</h1>{data.sample && <SampleStamp text={m.common.sample} />}</div>
-      <p className="lede">{data.lastUpdated ? fill(m.dashboard.lede, { date: formatDate(locale, session), count: plural(locale, data.sample ? m.plurals.sampleTickers : m.plurals.tickers, rows.length) }) : m.common.noDataYet}</p>
+      {data.lastUpdated && <p className="lede">{fill(m.dashboard.lede, { date: formatDate(locale, session), count: plural(locale, data.sample ? m.plurals.sampleTickers : m.plurals.tickers, rows.length) })}</p>}
       <DataStatus locale={locale} lastUpdated={data.lastUpdated} stale={data.stale} />
       <OperatorDisclosure text={m.common.operatorDisclosure} />
     </header>
@@ -44,3 +45,5 @@ export default async function Dashboard({ params }: LocaleParams) {
     }} />
   </div>;
 }
+
+export default withPageLog("/dashboard", Dashboard);
