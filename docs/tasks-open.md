@@ -34,25 +34,29 @@ Groups: A first live run, B web, C pipeline quality, D data and accounts, E oper
 - DoD: `collector_runs` has a row with no unexplained failures; `source_documents` has rows for at least 10 symbols with `meta.display_allowed` set (true for edgar and sec, false for rss); a note lists each source that failed or was skipped and why (missing key, 429, egress).
 - Approval: yes.
 
-### A5. Live extraction check
+### A5. Live extraction check (done 2026-10-07)
+- Note: first full extract ran on all tickers (72 `extraction_runs` rows with status ok across 36 tickers, about 2.9 USD on the CLI meter, per `docs/STATE-2026-10-07.md`).
 - Depends on: A4.
 - Do: re-run one live NVDA extraction with the keyword-window excerpts. The first live run left 7 of 8 fields null.
 - DoD: at least 5 of 8 fields filled, every positive claim passes the quote check, the token use and cost are noted here.
 - Approval: model usage on the subscription token.
 
-### A6. Detect, extract and the web
+### A6. Detect, extract and the web (done 2026-10-07)
+- Note: manual chain ran (`ib-*-manual-10071013`, all Complete); scores for 2026-10-06 are stored and the web renders them.
 - Depends on: A5.
 - Do: run detect, then extract for all symbols, then reconcile and daily by hand. Unsuspend reconcile and daily last, as the deploy README says.
 - DoD: `scan_findings`, `consensus_findings` and `score_results` hold rows from this run; `/api/health` shows today's scan, reconcile and score dates; `/en/dashboard` and `/en/company/NVDA` render those scores with no sample stamp.
 - Approval: yes for each Job.
 
-### A7. Judge run
+### A7. Judge run (done 2026-10-07)
+- Note: `judge-manual-8` and `ib-judge-manual-10071013` Complete; ten ideas stored for 2026-10-06. Two earlier manual extract Jobs and one judge Job failed on 2026-10-07 and were re-run.
 - Depends on: A6.
 - Do: one manual judge Job. Check that edgar-backed evidence reaches the judge input (finding fixed on 2026-10-05).
 - DoD: `judge_runs` has a row, `trade_ideas` has ideas that each have at least two evidence links, and the figure check passes. `/ideas` stays hidden until B3 is decided.
 - Approval: yes.
 
-### A8. Switch on the schedule
+### A8. Switch on the schedule (schedule on 2026-10-08, 1 of 3 clean nights so far)
+- Note: all scheduled steps are unsuspended. The 2026-10-08 night (prices, collect, detect, extract, macro, reconcile, daily, judge, digest, portfolio) finished with no failed Job. Collect ended `partial` because the RSS source failed with no reason in the log; the log line now prints the reason. Close A8 after two more clean nights.
 - Depends on: A6 and A7 each ran cleanly once.
 - Do: unsuspend collect, detect, extract, reconcile, daily and judge in infra one at a time, in schedule order, over several days.
 - DoD: three consecutive weekdays with no failed Job and a fresh `/api/health`.
@@ -78,11 +82,11 @@ Groups: A first live run, B web, C pipeline quality, D data and accounts, E oper
 - Options: keep it hidden; put it behind auth or an IP allowlist and set `IDEAS_PAGE=on`; show ideas without EUR.
 - DoD: decision recorded as an ADR line, `IDEAS_PAGE` set or left unset in `web.yaml` to match, and a test for the chosen behaviour.
 
-### B4. Sample stamp test
+### B4. Sample stamp test (done 2026-10-08)
 - Do: add a test that the sample stamp and fixture labels never render with `DATA_MODE=db`.
 - DoD: test in `src/`, runs in CI.
 
-### B5. Empty and stale states
+### B5. Empty and stale states (done 2026-10-08)
 - Do: check each page when `score_results` is empty or older than 3 days. `/api/health` already returns null dates for an empty database.
 - DoD: each page shows a clear "no data yet" or "stale since <date>" message, with a screenshot or test per page.
 
@@ -93,7 +97,7 @@ Groups: A first live run, B web, C pipeline quality, D data and accounts, E oper
 
 ## C. Pipeline quality
 
-### C1. Run the database tests in CI
+### C1. Run the database tests in CI (done, Postgres service and migrate step in `quality`)
 - Do: add a Postgres service to the `quality` job, run migrations and set `TEST_DATABASE_URL`. Today the retention and DB tests are skipped in CI, and a fixture bug (missing `sector`) sat unseen until a local run.
 - DoD: CI log shows 0 skipped DB tests.
 
@@ -123,7 +127,7 @@ Groups: A first live run, B web, C pipeline quality, D data and accounts, E oper
 - Do: ASML, SE, MELI and similar file 20-F and 6-K. Add collection for them or leave their SEC-based fields unknown with a stated reason.
 - DoD: each foreign symbol has a documented behaviour and a test; no field is guessed.
 
-### C8. Price freshness rule
+### C8. Price freshness rule (rule done 2026-10-08; SQ to XYZ live check open)
 - Do: `daily.ts` needs a bar dated exactly the scoring date, so Monday scores stay `stale_prices` (no Monday price run). Add the planned 3 calendar day rule. Check the `SQ` to `XYZ` mapping against the live Twelve Data API.
 - DoD: Monday scores are not stale on a normal weekend; mapping confirmed with one live call.
 
@@ -165,16 +169,19 @@ Groups: A first live run, B web, C pipeline quality, D data and accounts, E oper
 - Do: test outbound HTTPS from a Job on `k8s-worker-01` to sec.gov, data.sec.gov and the cited public pages. The infra repo has no NetworkPolicy resources.
 - DoD: results listed; a policy proposed only if you want one.
 
-### E4. Tidy the infra repo copy
+### E4. Tidy the infra repo copy (done 2026-10-08, infra branch pending merge)
+- Note: infra `main` is the source of truth; `deploy/gitops/` is a mirror, synced and documented in `deploy/README.md`.
 - Do: the proposal in `deploy/gitops/` lost two live edits (backup and scan suspends). Sync the proposal with infra, or delete the proposal and treat infra as the source.
 - DoD: one source of truth, noted in `deploy/README.md`.
 
-### E5. Check every Job and CronJob, remove what is not needed
+### E5. Check every Job and CronJob, remove what is not needed (manifests done 2026-10-08; live deletes need approval)
+- Note: table updated in `deploy/README.md`. Infra branch `invest-buddy-cleanup-0810` removes `scan-claude`, `scan-codex` and the dead `AI_MONTHLY_*` env (Argo `prune: true`, so merge deletes the live objects). `invest-buddy-codex-home` PVC and the codex seed secret are kept until C4 is decided. Old `ib-*-manual-*` and `av-manual-1`, `judge-manual-8`, `ib-portfolio-manual-*` Jobs are still in the cluster.
 - Do: list every CronJob and Job in `invest` and in the manifests (`ib-*-manual-*` leftovers, `invest-buddy-scan-claude`, `invest-buddy-scan-codex`, `portfolio`, `digest`, `retention`, `backup`, `prices`, and the new collect, detect, extract, judge). For each: is it needed in its current form, who consumes its output, does it still match the script-first design. Remove what is dead (old manual Jobs, replaced scan jobs, unused PVC such as `invest-buddy-codex-home` if Codex stays unused).
 - DoD: a table in `deploy/README.md` with job, purpose, schedule, state and owner; dead objects deleted from the manifests and from the cluster through infra; `kubectl -n invest get cronjob,job` matches the table.
 - Approval: infra changes and cluster deletions.
 
-### E6. Logging and visibility
+### E6. Logging and visibility (done 2026-10-08, page render and ingest JSON logs; alerts remain E2)
+- Note: see `docs/logging.md` for where logs are read and kept. Collect now prints the failure reason per source.
 - Do: the web logs almost nothing, so a failure is invisible. Add structured logs (JSON, one line per request on the ingest routes and the pages: route, status, duration, request id; errors with a stack) and a log line at the start and end of every job (counts, durations, failures). Log failed ingests with the reason, never tokens or request bodies. Decide where logs go: `kubectl logs` only, or a collector (Loki is in `monitoring/` of the infra repo if it runs).
 - DoD: a failed ingest and a failed page render each leave a readable log line; one job run shows start, end and counts; a note says where to read logs and how long they are kept.
 - Related: E2 (alerts) builds on this.

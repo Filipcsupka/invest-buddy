@@ -200,7 +200,7 @@ metadata:
   name: invest-buddy-portfolio
   namespace: invest
 spec:
-  suspend: true
+  suspend: false
   schedule: "0 6 * * 2-6"
   timeZone: UTC
   concurrencyPolicy: Forbid

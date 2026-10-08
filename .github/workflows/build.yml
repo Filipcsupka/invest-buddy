@@ -3,10 +3,14 @@ on:
   pull_request:
   push:
     branches: [main]
+concurrency:
+  group: build-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 permissions: {}
 jobs:
   quality:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
     services:
@@ -33,7 +37,7 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-      - run: npm ci
+      - run: npm ci --ignore-scripts
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run migrate
@@ -43,10 +47,98 @@ jobs:
       - run: npm run build
       - run: npm run build:jobs
       - run: test -f dist/jobs/reconcile.js && test -f dist/jobs/collect.js && test -f dist/jobs/detect.js && test -f dist/jobs/retention.js
+      - run: npm audit --omit=dev --audit-level=high
+      - uses: imranismail/setup-kustomize@2ba527d4d055ab63514ba50a99456fc35684947f # v2
+        with:
+          kustomize-version: "5.4.3"
+      - name: Render and validate Kubernetes manifests
+        run: |
+          curl --fail --location --silent --show-error \
+            https://github.com/yannh/kubeconform/releases/download/v0.8.0/kubeconform-linux-amd64.tar.gz \
+            --output /tmp/kubeconform.tar.gz
+          echo '9bc2bffbf71f261128533edaf912153948b7ff238f9a531ae6d34466ec287883  /tmp/kubeconform.tar.gz' | sha256sum --check
+          tar -xzf /tmp/kubeconform.tar.gz -C /tmp kubeconform
+          kustomize build deploy/gitops/gitops/apps/invest-buddy/overlays/prod | /tmp/kubeconform -strict -summary -ignore-missing-schemas
 
-  image:
-    needs: quality
+  dependency-review:
+    # Needs the dependency graph, which is a GitHub Advanced Security feature on private repositories. Set repository variable GHAS_ENABLED=true after enabling it.
+    if: github.event_name == 'pull_request' && vars.GHAS_ENABLED == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  scan-images:
+    needs: [quality, secret-scan]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3
+      - name: Build web image for scanning
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          load: true
+          tags: invest-buddy:scan
+      - name: Scan web image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: invest-buddy:scan
+          format: table
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: HIGH,CRITICAL
+          vuln-type: os,library
+      - name: Build scanner image for scanning
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: scanner/Dockerfile
+          load: true
+          tags: invest-buddy-scanner:scan
+      - name: Scan scanner image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: invest-buddy-scanner:scan
+          format: table
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: HIGH,CRITICAL
+          vuln-type: os,library
+
+  publish-images:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: scan-images
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
     permissions:
       contents: read
       packages: write
@@ -56,34 +148,42 @@ jobs:
           persist-credentials: false
       - uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3
       - name: Log in to GHCR
-        if: github.event_name == 'push'
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Set image tag
+      - name: Set image tags
         id: image
         run: |
           echo "tag=ghcr.io/filipcsupka/invest-buddy:sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
           echo "scanner_tag=ghcr.io/filipcsupka/invest-buddy-scanner:sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
-      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+      - name: Publish web image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
-          push: ${{ github.event_name == 'push' }}
+          push: true
           tags: ${{ steps.image.outputs.tag }}
-      - name: Build and publish scanner
+          sbom: true
+          provenance: mode=max
+      - name: Publish scanner image
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           file: scanner/Dockerfile
-          push: ${{ github.event_name == 'push' }}
+          push: true
           tags: ${{ steps.image.outputs.scanner_tag }}
+          sbom: true
+          provenance: mode=max
 
   deploy-gitops:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.INFRA_BUMP == 'true'
-    needs: image
+    concurrency:
+      group: deploy-gitops
+      cancel-in-progress: false
+    needs: [scan-images, publish-images]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
@@ -119,4 +219,5 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add gitops/apps/invest-buddy/overlays/prod/kustomization.yaml
           git commit -m "Pin invest-buddy sha-${GITHUB_SHA::7}"
+          git pull --rebase origin main
           git push

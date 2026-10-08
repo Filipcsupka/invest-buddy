@@ -24,6 +24,7 @@ metadata:
   name: invest-buddy-backup
   namespace: invest
 spec:
+  suspend: true # enable after secrets / plan switch
   schedule: "30 2 * * *"
   timeZone: Europe/Bratislava
   concurrencyPolicy: Forbid

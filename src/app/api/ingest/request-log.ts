@@ -8,10 +8,14 @@ const failureReasons = new Set([
 ]);
 const caughtStacks = new WeakMap<Request, string>();
 
-function errorStack(error: unknown): string | undefined {
+export function errorStack(error: unknown): string | undefined {
   if (!(error instanceof Error)) return undefined;
   // Stack messages can contain submitted data. Keep only frame locations.
   return error.stack?.split("\n").slice(1).filter((line) => /^\s*at\s/.test(line)).join("\n");
+}
+
+export function writeHttpLog(entry: Record<string, unknown>, failed = false): void {
+  (failed ? process.stderr : process.stdout).write(`${JSON.stringify({ event: "http_request", ...entry })}\n`);
 }
 
 export function recordIngestError(request: Request, error: unknown): void {
@@ -34,11 +38,11 @@ export async function logIngestRequest(route: string, request: Request, handle: 
     }
     const stack = caughtStacks.get(request);
     caughtStacks.delete(request);
-    process.stdout.write(`${JSON.stringify({ event: "http_request", route, method: request.method, status: response.status, durationMs: Math.round(performance.now() - start), requestId, ...(reason ? { reason } : {}), ...(stack ? { stack } : {}) })}\n`);
+    writeHttpLog({ route, method: request.method, status: response.status, durationMs: Math.round(performance.now() - start), requestId, ...(reason ? { reason } : {}), ...(stack ? { stack } : {}) });
     return response;
   } catch (error) {
     caughtStacks.delete(request);
-    process.stderr.write(`${JSON.stringify({ event: "http_request", route, method: request.method, status: 500, durationMs: Math.round(performance.now() - start), requestId, reason: "Unhandled error", stack: errorStack(error) })}\n`);
+    writeHttpLog({ route, method: request.method, status: 500, durationMs: Math.round(performance.now() - start), requestId, reason: "Unhandled error", stack: errorStack(error) }, true);
     throw error;
   }
 }

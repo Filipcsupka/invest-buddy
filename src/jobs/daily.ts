@@ -27,7 +27,9 @@ export async function runDaily(provider: UniverseProvider, repository: ScoreRepo
   const records: ScoredInstrument[] = inputs.map(({ instrument, bars, fundamentals, macro }) => {
     const throughDate = bars.filter((bar) => bar.date <= date);
     const result = score({ ticker: instrument.ticker, bars: throughDate, fundamentals, macro });
-    if (throughDate.at(-1)?.date !== date) {
+    const latestBar = throughDate.at(-1)?.date;
+    const ageDays = latestBar ? (Date.parse(`${date}T00:00:00Z`) - Date.parse(`${latestBar}T00:00:00Z`)) / 86_400_000 : Infinity;
+    if (ageDays > 3) {
       result.state = "Insufficient/invalid data";
       result.invalidReasons = [...result.invalidReasons, "stale_prices"];
       result.technical = 0; result.fundamentals = 0; result.macro = 0; result.total = 0;

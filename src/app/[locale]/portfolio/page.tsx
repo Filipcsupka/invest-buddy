@@ -1,3 +1,4 @@
+import { withPageLog } from "@/app/page-log";
 import type { Metadata } from "next";
 import { SampleStamp } from "@/components/operator-disclosure";
 import { latestPortfolio, portfolioIndexedSeries, stale } from "@/data/store";
@@ -24,7 +25,7 @@ export async function generateMetadata({ params }: LocaleParams): Promise<Metada
   return pageMetadata(locale, "/portfolio", m.meta.portfolioTitle, m.meta.portfolioDescription);
 }
 
-export default async function PortfolioPage({ params }: LocaleParams) {
+async function PortfolioPage({ params }: LocaleParams) {
   const locale = await resolveLocale(params);
   const m = getMessages(locale);
   const snapshot = await latestPortfolio();
@@ -58,3 +59,5 @@ export default async function PortfolioPage({ params }: LocaleParams) {
     </section>
   </div>;
 }
+
+export default withPageLog("/portfolio", PortfolioPage);

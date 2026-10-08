@@ -4,6 +4,6 @@ export function DataStatus({ locale, lastUpdated, stale }: { locale: Locale; las
   return <>
     {!lastUpdated && <p className="notice">{m.noDataYet}</p>}
     {lastUpdated && <p className="muted small">{fill(m.lastUpdated, { date: formatDate(locale, lastUpdated) })}</p>}
-    {stale && <p className="notice" role="status">{m.staleData}</p>}
+    {stale && lastUpdated && <p className="notice" role="status">{fill(m.staleData, { date: formatDate(locale, lastUpdated) })}</p>}
   </>;
 }

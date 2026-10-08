@@ -4,13 +4,20 @@ const query = vi.fn();
 const end = vi.fn();
 vi.mock("pg", () => ({ default: { Pool: vi.fn(() => ({ query, end })) } }));
 
-import { instrumentUniverse } from "./store";
+import { instrumentUniverse, latestPortfolio } from "./store";
 import { instruments as fixtures } from "./fixtures";
 
 const env = { mode: process.env.DATA_MODE, url: process.env.DATABASE_URL };
 afterEach(() => {
   for (const [k, v] of [["DATA_MODE", env.mode], ["DATABASE_URL", env.url]] as const) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
   query.mockReset(); end.mockReset();
+});
+
+it("does not expose a stored fixture portfolio in db mode", async () => {
+  process.env.DATA_MODE = "db"; process.env.DATABASE_URL = "postgresql://x";
+  query.mockResolvedValue({ rows: [{ snapshot: { sample: true, asOf: "2025-08-08", weights: [], series: [{ benchmark: 1234 }] } }] });
+  expect(await latestPortfolio()).toBeNull();
+  expect(end).toHaveBeenCalled();
 });
 
 describe("instrumentUniverse", () => {

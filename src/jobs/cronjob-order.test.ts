@@ -3,7 +3,8 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const base = join(process.cwd(), "deploy/gitops/gitops/apps/invest-buddy/base");
-const files = ["scan-cronjob.yaml", "cronjobs.yaml", "collector-cronjobs.yaml", "extract-judge-cronjobs.yaml", "macro-cronjob.yaml"];
+const kustomized = readFileSync(join(base, "kustomization.yaml"), "utf8").split("\n").map((line) => /^\s+-\s+(\S+\.yaml)\s*$/.exec(line)?.[1]).filter((name): name is string => !!name);
+const files = kustomized;
 const docs = files.flatMap((file) => readFileSync(join(base, file), "utf8").split(/^---$/m)).filter((doc) => /kind: CronJob/.test(doc));
 const job = (name: string) => docs.find((doc) => new RegExp(`name: invest-buddy-${name}\\n`).test(doc)) ?? "";
 const minutes = (name: string) => {
@@ -53,9 +54,9 @@ describe("daily pipeline order", () => {
     expect(job("extract")).toContain('args: ["--agent", "claude", "--model", "haiku", "--gate-from-db"]');
     expect(job("judge")).toContain('args: ["--model", "sonnet", "--gate-from-db"]');
   });
-  it("runs the weekday chain while keeping the old scans suspended", () => {
+  it("runs the weekday chain and no longer defines the old scan jobs", () => {
     for (const name of chain) expect(job(name), name).not.toMatch(/^\s{2}suspend: true$/m);
-    for (const name of ["scan-claude", "scan-codex"]) expect(job(name), name).toMatch(/^\s{2}suspend: true$/m);
+    for (const name of ["scan-claude", "scan-codex"]) expect(job(name), name).toBe("");
   });
   it("hardens extract and judge like the scan job", () => {
     for (const name of ["extract", "judge"]) {
@@ -92,9 +93,9 @@ describe("daily pipeline order", () => {
     expect(doc).toContain("name: DATABASE_URL");
     for (const text of ["runAsNonRoot: true", "automountServiceAccountToken: false", "allowPrivilegeEscalation: false", "readOnlyRootFilesystem: true", 'drop: ["ALL"]', "type: RuntimeDefault", "concurrencyPolicy: Forbid"]) expect(doc).toContain(text);
   });
-  it("keeps the portfolio job suspended and gives it the ingest settings", () => {
+  it("runs the portfolio job and gives it the ingest settings", () => {
     const doc = job("portfolio");
-    expect(doc).toMatch(/^\s{2}suspend: true$/m);
+    expect(doc).not.toMatch(/^\s{2}suspend: true$/m);
     expect(doc).toContain("value: http://web.invest.svc.cluster.local:3000");
     expect(doc).toMatch(/name: INGEST_TOKEN\s+valueFrom:\s+secretKeyRef:\s+name: invest-buddy-secrets\s+key: INGEST_TOKEN/);
   });
