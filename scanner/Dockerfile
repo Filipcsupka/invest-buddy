@@ -11,7 +11,7 @@ ENV NODE_ENV=production \
     CLAUDE_CONFIG_DIR=/home/scanner/.claude \
     CODEX_HOME=/home/scanner/.codex \
     DISABLE_AUTOUPDATER=1
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates bubblewrap \
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends ca-certificates bubblewrap \
     && rm -rf /var/lib/apt/lists/* \
     && npm install -g @anthropic-ai/claude-code @openai/codex && npm cache clean --force \
     && useradd --create-home --uid 10001 --shell /usr/sbin/nologin scanner
