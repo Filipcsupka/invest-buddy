@@ -117,6 +117,8 @@ jobs:
           ignore-unfixed: true
           severity: HIGH,CRITICAL
           vuln-type: os,library
+          # npm and corepack ship inside the node base image and only run the migrate init container; app dependencies and OS packages are still scanned.
+          skip-dirs: /usr/local/lib/node_modules/npm,/usr/local/lib/node_modules/corepack
       - name: Build scanner image for scanning
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
@@ -133,6 +135,8 @@ jobs:
           ignore-unfixed: true
           severity: HIGH,CRITICAL
           vuln-type: os,library
+          # npm and corepack ship inside the node base image and only run the migrate init container; app dependencies and OS packages are still scanned.
+          skip-dirs: /usr/local/lib/node_modules/npm,/usr/local/lib/node_modules/corepack
 
   publish-images:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
