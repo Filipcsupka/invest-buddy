@@ -42,6 +42,27 @@ describe("idea card", () => {
     expect(html(watch, "sk")).toContain("NEPOTVRDENÉ");
     expect(html(watch, "sk")).toContain("KONFLIKT PRAVIDIEL");
   });
+  it("uses translated body in Slovak and canonical English in English", () => {
+    const translated = { ...add, translations: { sk: { verdict: "Slovenský verdikt", whatHappened: ["Slovenský fakt", "Druhý fakt"], whyItMatters: ["Slovenský dôvod"], numbers: [{ label: "Skóre", value: "19" }], plan: { ...add.plan, trigger: "Slovenský spúšťač" }, evidence: [{ url: "https://example.com/nvda-release", label: "Tlačová správa" }] } } };
+    expect(html(translated, "sk")).toContain("Slovenský verdikt");
+    expect(html(translated, "sk")).toContain("Slovenský spúšťač");
+    expect(html(translated, "en")).toContain(add.verdict);
+    expect(html(translated, "en")).not.toContain("Slovenský verdikt");
+    expect(html(add, "sk")).toContain("Zobrazené v angličtine");
+    expect(html(translated, "sk")).not.toContain("Zobrazené v angličtine");
+    expect(renderToStaticMarkup(<IdeaCard idea={translated} locale="sk" showAmounts={false} />)).not.toMatch(/EUR|€/);
+  });
+  it("keeps the English conflict when a translation omits it", () => {
+    const translated = { ...watch, translations: { sk: { verdict: "Preklad", whatHappened: watch.whatHappened, whyItMatters: watch.whyItMatters, numbers: watch.numbers, plan: watch.plan, evidence: watch.evidence } } };
+    const out = html(translated, "sk");
+    expect(out).toContain("Sample");
+    expect(out).toContain("Zobrazené v angličtine");
+  });
+  it("shows each language’s downgrade reason", () => {
+    const translated = { ...watch, translations: { en: { downgradeReason: "Guidance fell." }, sk: { verdict: "Preklad", whatHappened: watch.whatHappened, whyItMatters: watch.whyItMatters, numbers: watch.numbers, plan: watch.plan, evidence: watch.evidence, downgradeReason: "Výhľad klesol." } } };
+    expect(html(translated, "en")).toContain("Guidance fell.");
+    expect(html(translated, "sk")).toContain("Výhľad klesol.");
+  });
   it("escapes model text", () => {
     expect(html({ ...add, verdict: "<script>alert(1)</script>" })).not.toContain("<script>");
   });

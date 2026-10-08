@@ -216,3 +216,5 @@ Formula. Between consecutive stored dates, `r_t = (nav_t - nav_{t-1} - deposits_
 Benchmark. In `DATA_MODE=db` the SPY line comes from `daily_bars` (ticker `SPY`): the last close on or before each history date, indexed to 100 at the first date. If no bar exists on or before the first date the benchmark line is left out. The fixture series is used only in `DATA_MODE=fixture`, where the page keeps the SAMPLE DATA badge.
 
 Page. Title "Since <first date>". With fewer than 5 history points the page shows "History builds from <date>; the broker report currently provides only <n> points" instead of a line. The page shows indexed values and percentages only, never EUR amounts or the account id.
+
+The `AI_DAILY_TOKEN_CEILING` setting is currently enforced by extract only. Judge receives the setting in its CronJob but does not check it yet. Calls with missing token usage count against the daily ledger using `AI_UNKNOWN_USAGE_TOKENS` (default 20000).

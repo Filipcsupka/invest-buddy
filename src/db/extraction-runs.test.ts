@@ -1,11 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { extractionRunSchema, hasOkExtraction, recordExtraction, usageFromClaudeEnvelope } from "./extraction-runs";
+import { extractionRunSchema, hasOkExtraction, recordExtraction, reviewDueSymbols, usageFromClaudeEnvelope } from "./extraction-runs";
 
 const hash = "a".repeat(64);
 const run = { symbol: "NVDA", asOf: "2026-10-05", agent: "claude" as const, model: "haiku", inputHash: hash, status: "ok" as const };
 const pool = (rowCount = 1) => { const calls: { sql: string; params: unknown[] }[] = []; return { calls, query: async (sql: string, params: unknown[]) => { calls.push({ sql, params }); return { rowCount, rows: [] }; } } as never as { calls: typeof calls; query: never }; };
 
 describe("extraction runs", () => {
+  it("selects a bounded set of stale or never reviewed symbols", async () => {
+    const calls: { sql: string; params: unknown[] }[] = [];
+    const db = { query: async (sql: string, params: unknown[]) => { calls.push({ sql, params }); return { rows: [{ ticker: "NVDA" }] }; } };
+    expect(await reviewDueSymbols(db as never, 30, 6)).toEqual(["NVDA"]);
+    expect(calls[0].params).toEqual([30, 6]);
+    expect(calls[0].sql).toContain("applied_at IS NOT NULL");
+    expect(calls[0].sql).toContain("i.source <> 'benchmark'");
+    expect(calls[0].sql).toContain("max(created_at) AS attempted_at");
+    expect(calls[0].sql).toContain("ORDER BY a.attempted_at NULLS FIRST");
+  });
   it("skips only when an ok, applied, unexpired run with the same key exists", async () => {
     const hit = pool(1), miss = pool(0);
     expect(await hasOkExtraction(hit, { symbol: "NVDA", agent: "claude", inputHash: hash })).toBe(true);

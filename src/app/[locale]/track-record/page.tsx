@@ -9,6 +9,7 @@ import { fixtureBenchmark } from "@/data/record";
 import { scoreHistory, stale } from "@/data/store";
 import { recordHistory } from "@/db/track-record";
 import { DataStatus } from "@/components/data-status";
+import { PaywallSegment } from "@/components/paywall-segment";
 export const dynamic = "force-dynamic";
 import { fill, formatDate, formatNumber, formatPercent, getMessages, plural } from "@/i18n";
 import { pageMetadata } from "@/i18n/metadata";
@@ -39,7 +40,7 @@ async function TrackRecord({ params }: LocaleParams) {
         {record.hit30.n > 0 && <p>{fill(m.trackRecord.hitRate, { rate: formatPercent(locale, record.hit30.rate ?? 0), n: formatNumber(locale, record.hit30.n) })}</p>}
         {record.buySignalCount < 30 && <p className="muted small">{fill(m.trackRecord.smallSample, { n: formatNumber(locale, record.buySignalCount) })}</p>}
       </section>
-      <section className="sheet-section" aria-labelledby="signals">
+      <PaywallSegment id="track-record-signals"><section className="sheet-section" aria-labelledby="signals">
         <h2 id="signals">{m.trackRecord.signalsTitle}</h2>
         {record.signals.length === 0 ? <p className="muted">{record.snapshotCount === 0 ? m.trackRecord.empty : m.trackRecord.noSignals}</p> : <div className="table-scroll"><table className="screen">
           <thead><tr><th scope="col">{m.trackRecord.date}</th><th scope="col">{m.trackRecord.ticker}</th><th scope="col">{m.trackRecord.state}</th><th scope="col">{m.trackRecord.return30}</th><th scope="col">{m.trackRecord.return90}</th><th scope="col">{m.trackRecord.return180}</th></tr></thead>
@@ -49,7 +50,7 @@ async function TrackRecord({ params }: LocaleParams) {
           </tr>)}</tbody>
         </table></div>}
         <p className="muted small">{m.trackRecord.method}</p>
-      </section>
+      </section></PaywallSegment>
       <Disclaimer text={m.common.disclaimer} />
     </div>;
   }
@@ -72,7 +73,7 @@ async function TrackRecord({ params }: LocaleParams) {
 
       <p className="notice">{data.sample ? m.trackRecord.note : m.trackRecord.liveNote}</p>
 
-      {data.sample && <section className="sheet-section" aria-labelledby="benchmark">
+      {data.sample && <PaywallSegment id="track-record-benchmark"><section className="sheet-section" aria-labelledby="benchmark">
         <div className="section-head">
           <h2 id="benchmark">{m.trackRecord.benchmarkTitle}</h2>
           <p className="muted small">{m.trackRecord.benchmarkNote}</p>
@@ -83,9 +84,9 @@ async function TrackRecord({ params }: LocaleParams) {
           dipZone={false}
           labels={{ name: m.trackRecord.benchmarkName, aria: m.chart.label, close: m.trackRecord.benchmarkName, ma50: m.chart.ma50, ma200: m.chart.ma200, dip: m.chart.dip, last: m.chart.last }}
         />
-      </section>}
+      </section></PaywallSegment>}
 
-      <section className="sheet-section" aria-labelledby="log">
+      <PaywallSegment id="track-record-history"><section className="sheet-section" aria-labelledby="log">
         <h2 id="log">{m.trackRecord.logTitle}</h2>
         {byDate.map(({ date, rows: list }, i) => {
           const id = `disclaimer-${date}`;
@@ -103,7 +104,7 @@ async function TrackRecord({ params }: LocaleParams) {
             </details>
           );
         })}
-      </section>
+      </section></PaywallSegment>
     </div>
   );
 }

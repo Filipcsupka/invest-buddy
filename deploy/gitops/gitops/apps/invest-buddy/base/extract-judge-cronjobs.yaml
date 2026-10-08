@@ -43,6 +43,8 @@ spec:
               env:
                 - name: INGEST_BASE_URL
                   value: http://web.invest.svc.cluster.local:3000
+                - name: AI_DAILY_TOKEN_CEILING
+                  value: "0"
                 - name: INGEST_TOKEN
                   valueFrom:
                     secretKeyRef:

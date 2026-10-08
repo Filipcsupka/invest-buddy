@@ -105,4 +105,36 @@ describe("daily pipeline order", () => {
     expect(minutes("collect-alphavantage").at + startWindow("collect-alphavantage") + deadline("collect-alphavantage")).toBeLessThanOrEqual(minutes("discovery").at);
     expect(minutes("judge").at + startWindow("judge") + deadline("judge")).toBeLessThanOrEqual(minutes("collect-alphavantage").at);
   });
+  it("runs the fixed review after Saturday discovery and caps its work", () => {
+    expect(minutes("review-calendar")).toEqual({ at: 11 * 60, days: "6" });
+    expect(minutes("discovery").at + startWindow("discovery") + deadline("discovery")).toBeLessThanOrEqual(minutes("review-calendar").at);
+    const doc = job("review-calendar");
+    expect(doc).toContain("suspend: false");
+    expect(doc).toContain("name: AI_DAILY_TOKEN_CEILING");
+    expect(doc).toContain('args: ["--agent", "claude", "--model", "haiku", "--review-calendar", "/tmp/review-symbols.json", "--force"]');
+    expect(doc).toContain('args: ["--model", "sonnet", "--symbols-file", "/tmp/review-symbols.json", "--force", "--max-symbols", "6"]');
+    expect(doc.indexOf("name: extract")).toBeLessThan(doc.indexOf("name: reconcile"));
+    expect(doc.indexOf("name: reconcile")).toBeLessThan(doc.indexOf("name: daily"));
+    expect(doc.indexOf("name: daily")).toBeLessThan(doc.indexOf("name: judge"));
+    for (const text of ["runAsNonRoot: true", "automountServiceAccountToken: false", "allowPrivilegeEscalation: false", "readOnlyRootFilesystem: true", 'drop: ["ALL"]', "type: RuntimeDefault", "concurrencyPolicy: Forbid"]) expect(doc).toContain(text);
+  });
+  it("keeps digest suspended until delivery is configured", () => {
+    expect(job("digest")).toContain("suspend: true");
+    expect(minutes("daily").at + startWindow("daily") + deadline("daily")).toBeLessThanOrEqual(minutes("judge").at);
+  });
+});
+
+describe("watch step", () => {
+  it("polls SEC before collect and long before detect, with no AI and no source keys", () => {
+    const watch = minutes("watch");
+    expect(watch.days).toBe("2-6");
+    expect(watch.at + startWindow("watch") + deadline("watch")).toBeLessThanOrEqual(minutes("collect").at);
+    expect(watch.at).toBeLessThan(minutes("detect").at);
+    const doc = job("watch");
+    expect(doc).not.toMatch(/^\s{2}suspend: true$/m);
+    expect(doc).toContain('command: ["node", "dist/jobs/watch.js"]');
+    expect(doc).toContain("name: SEC_USER_AGENT");
+    expect(doc).not.toContain("FRED_API_KEY");
+    for (const text of ["runAsNonRoot: true", "automountServiceAccountToken: false", "allowPrivilegeEscalation: false", "readOnlyRootFilesystem: true", 'drop: ["ALL"]', "type: RuntimeDefault", "concurrencyPolicy: Forbid"]) expect(doc).toContain(text);
+  });
 });

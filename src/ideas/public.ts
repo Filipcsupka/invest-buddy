@@ -42,5 +42,17 @@ export function stripEur(idea: StoredIdea): StoredIdea {
     },
     evidence: idea.evidence.filter((e) => !EUR.test(e.label)),
     conflictNote: idea.conflictNote ? withoutEur(idea.conflictNote) : null,
+    translations: idea.translations ? { en: idea.translations.en ? { downgradeReason: idea.translations.en.downgradeReason ? withoutEur(idea.translations.en.downgradeReason) : null } : undefined, sk: {
+      ...idea.translations.sk,
+      verdict: withoutEur(idea.translations.sk.verdict) ?? "",
+      whatHappened: cleanList(idea.translations.sk.whatHappened),
+      whyItMatters: cleanList(idea.translations.sk.whyItMatters),
+      numbers: idea.translations.sk.numbers.filter((n) => !EUR.test(n.label) && !EUR.test(n.value)),
+      plan: { amountNow: "", trigger: withoutEur(idea.translations.sk.plan.trigger) ?? "", invalidation: withoutEur(idea.translations.sk.plan.invalidation) ?? "", opportunityCost: withoutEur(idea.translations.sk.plan.opportunityCost) ?? "" },
+      evidence: idea.translations.sk.evidence.filter((e) => !EUR.test(e.label)),
+      conflictNote: idea.translations.sk.conflictNote ? withoutEur(idea.translations.sk.conflictNote) : null,
+      downgradeReason: idea.translations.sk.downgradeReason ? withoutEur(idea.translations.sk.downgradeReason) ?? undefined : undefined,
+      conflictReason: idea.translations.sk.conflictReason ? withoutEur(idea.translations.sk.conflictReason) ?? undefined : undefined,
+    } } : idea.translations,
   };
 }

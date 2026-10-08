@@ -36,6 +36,9 @@ async function call(baseUrl, token, path, init) {
 export async function alreadyExtracted(baseUrl, token, key) {
   return (await call(baseUrl, token, `?${new URLSearchParams({ symbol: key.symbol, agent: key.agent, inputHash: key.inputHash })}`, { method: "GET" })).skip === true;
 }
+export async function reviewDue(baseUrl, token, days = 30, limit = 6) {
+  return (await call(baseUrl, token, `?${new URLSearchParams({ reviewDue: String(days), limit: String(limit) })}`, { method: "GET" })).symbols;
+}
 /** Best effort: a failed log write must not fail the extraction. */
 export async function recordRun(baseUrl, token, run, log = () => {}) {
   try { await call(baseUrl, token, "", { method: "POST", body: JSON.stringify(run) }); }

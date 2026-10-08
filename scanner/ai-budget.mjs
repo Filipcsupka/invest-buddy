@@ -18,3 +18,16 @@ export async function finishBudget(baseUrl, token, id, usage, costUsd, cutoff = 
   try { await call(baseUrl, token, { action: "finish", id, tokens, usd: costUsd ?? null, status: cutoff?.status ?? "ok", window: cutoff?.window ?? null, resetAt: cutoff?.resetAt ?? null, resetHint: cutoff?.resetHint ?? null, inputTokens: usage?.inputTokens ?? null, outputTokens: usage?.outputTokens ?? null, cacheReadTokens: usage?.cacheReadTokens ?? null, cacheCreationTokens: usage?.cacheCreationTokens ?? null }); return true; }
   catch { return false; }
 }
+export function dailyTokenCeiling(env = process.env) {
+  const value = env.AI_DAILY_TOKEN_CEILING ?? "0";
+  const ceiling = Number(value);
+  if (!Number.isSafeInteger(ceiling) || ceiling < 0) throw new Error("AI_DAILY_TOKEN_CEILING must be a nonnegative integer");
+  return ceiling;
+}
+export async function dailyTokens(baseUrl, token) {
+  const res = await fetch(`${url(baseUrl)}?report=daily`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(15_000) });
+  if (!res.ok) throw new Error(`daily AI usage unavailable: HTTP ${res.status}`);
+  const body = await res.json();
+  if (!Number.isSafeInteger(body.tokens) || body.tokens < 0) throw new Error("daily AI usage malformed");
+  return body.tokens;
+}

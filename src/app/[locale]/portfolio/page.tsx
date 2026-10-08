@@ -5,6 +5,7 @@ import { latestPortfolio, portfolioIndexedSeries, stale } from "@/data/store";
 import type { IndexedSeries } from "@/portfolio/history";
 import { DataStatus } from "@/components/data-status";
 import { PerformanceChart, PerformanceKpis, summarize } from "@/components/portfolio-chart";
+import { PaywallSegment } from "@/components/paywall-segment";
 import { fill, formatDate, formatNumber, getMessages } from "@/i18n";
 import { pageMetadata } from "@/i18n/metadata";
 import { resolveLocale, type LocaleParams } from "../locale";
@@ -44,7 +45,7 @@ async function PortfolioPage({ params }: LocaleParams) {
       <p className="muted">{fill(m.portfolio.asOf, { date: formatDate(locale, snapshot.asOf) })} · {m.portfolio.delay}</p>
       <DataStatus locale={locale} lastUpdated={snapshot.asOf} stale={stale(snapshot.asOf)} />
     </header>
-    <section className="sheet-section" aria-labelledby="portfolio-chart">
+    <PaywallSegment id="portfolio-performance"><section className="sheet-section" aria-labelledby="portfolio-chart">
       <div className="section-head"><h2 id="portfolio-chart">{fill(m.portfolio.chartTitle, { date: formatDate(locale, first) })}</h2>{enough && <p className="muted small">{snapshot.sample ? m.portfolio.chartNote : m.portfolio.liveChartNote}</p>}</div>
       {enough && last ? <>
         {summary && <PerformanceKpis locale={locale} summary={summary} text={{ current: m.portfolio.kpiCurrent, since: m.portfolio.kpiSince, benchmark: m.portfolio.kpiBenchmark, difference: m.portfolio.kpiDifference, ahead: m.portfolio.kpiAhead, behind: m.portfolio.kpiBehind, drawdown: m.portfolio.kpiDrawdown }} />}
@@ -52,11 +53,11 @@ async function PortfolioPage({ params }: LocaleParams) {
         <div className="portfolio-legend"><span>{m.portfolio.portfolioLine}</span><span>{m.portfolio.benchmarkLine}</span></div>
       </> : <p className="notice">{fill(m.portfolio.historyBuilding, { date: formatDate(locale, first), n: points.length })}</p>}
       {indexed?.twrPercent != null && <p className="muted small">{formatDate(locale, first)} – {formatDate(locale, last!.date)} · {m.portfolio.twrSince}: {formatNumber(locale, indexed.twrPercent, 2)} %{indexed.benchmarkPercent != null && <> · {m.portfolio.benchmarkSince}: {formatNumber(locale, indexed.benchmarkPercent, 2)} %</>}</p>}
-    </section>
-    <section className="sheet-section" aria-labelledby="portfolio-weights">
+    </section></PaywallSegment>
+    <PaywallSegment id="portfolio-weights"><section className="sheet-section" aria-labelledby="portfolio-weights">
       <h2 id="portfolio-weights">{m.portfolio.weightsTitle}</h2>
       <div className="table-scroll"><table className="data-table"><thead><tr><th scope="col">{m.portfolio.symbol}</th><th scope="col">{m.portfolio.weight}</th></tr></thead><tbody>{snapshot.weights.map((position) => <tr key={position.symbol}><th scope="row">{position.symbol}</th><td className="num">{formatNumber(locale, position.weightPercent, 1)} %</td></tr>)}</tbody></table></div>
-    </section>
+    </section></PaywallSegment>
   </div>;
 }
 

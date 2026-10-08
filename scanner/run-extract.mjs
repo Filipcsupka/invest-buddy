@@ -16,8 +16,8 @@ import { fileURLToPath } from "node:url";
 import { runCli, extractJson, fill, withRetry, pool, getToken, lastUsTradingDay } from "./run-scan.mjs";
 import { validateTicker, validatePayload } from "./validate.mjs";
 import { checkEvidence } from "./quotes.mjs";
-import { inputHash, usageFromEnvelope, alreadyExtracted, recordRun } from "./extraction-log.mjs";
-import { reserveBudget, finishBudget } from "./ai-budget.mjs";
+import { inputHash, usageFromEnvelope, alreadyExtracted, recordRun, reviewDue } from "./extraction-log.mjs";
+import { reserveBudget, finishBudget, dailyTokenCeiling, dailyTokens } from "./ai-budget.mjs";
 import { readGate, consumeGate, gateTradingDay } from "./gate-db.mjs";
 import { attachClaudeUsage, attachCliUsage, cutoffError, cutoffLine, CUTOFF_EXIT_CODE } from "./anthropic-cutoff.mjs";
 import { createUsageMonitor, earlyStopLine } from "./claude-usage.mjs";
@@ -32,7 +32,7 @@ function usage(msg) {
   process.exit(msg ? 2 : 0);
 }
 export function parseArgs(argv) {
-  const o = { dryRun: false, force: false, only: null, symbolsFile: null, gateFromDb: false, agent: "claude", model: null, concurrency: 1, timeoutS: 300, asOf: null, baseUrl: process.env.INGEST_BASE_URL || "http://web.invest.svc.cluster.local:3000", bundleDir: null };
+  const o = { dryRun: false, force: false, only: null, symbolsFile: null, gateFromDb: false, reviewCalendar: null, agent: "claude", model: null, concurrency: 1, timeoutS: 300, asOf: null, baseUrl: process.env.INGEST_BASE_URL || "http://web.invest.svc.cluster.local:3000", bundleDir: null };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const val = () => { if (i + 1 >= argv.length) usage(`missing value for ${a}`); return argv[++i]; };
@@ -41,6 +41,7 @@ export function parseArgs(argv) {
     else if (a === "--only") o.only = val().split(",").map((s) => s.trim().toUpperCase()).filter(Boolean);
     else if (a === "--symbols-file") o.symbolsFile = val();
     else if (a === "--gate-from-db") o.gateFromDb = true;
+    else if (a === "--review-calendar") o.reviewCalendar = val();
     else if (a === "--agent") o.agent = val();
     else if (a === "--model") o.model = val();
     else if (a === "--concurrency") o.concurrency = Number(val());
@@ -57,7 +58,7 @@ export function parseArgs(argv) {
   if (!(o.timeoutS > 0)) usage("--timeout-s must be positive");
   if (o.agent === "claude" && !o.model) o.model = "haiku";
   if (o.asOf && !/^\d{4}-\d{2}-\d{2}$/.test(o.asOf)) usage("--as-of must be YYYY-MM-DD");
-  if ([Boolean(o.only), Boolean(o.symbolsFile), o.gateFromDb].filter(Boolean).length > 1) usage("use one symbol source");
+  if ([Boolean(o.only), Boolean(o.symbolsFile), o.gateFromDb, Boolean(o.reviewCalendar)].filter(Boolean).length > 1) usage("use one symbol source");
   return o;
 }
 
@@ -135,14 +136,26 @@ export async function postTicker(opts, token, { asOf, model, output }, log) {
   } catch (e) { log(`${output.symbol}: POST error: ${e.message}`); return false; }
 }
 
+export function unknownUsageTokens(env = process.env) {
+  const value = Number(env.AI_UNKNOWN_USAGE_TOKENS ?? "20000");
+  if (!Number.isSafeInteger(value) || value <= 0) throw new Error("AI_UNKNOWN_USAGE_TOKENS must be a positive integer");
+  return value;
+}
+
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
-  let token = opts.gateFromDb ? getToken() : null;
+  let token = opts.gateFromDb || opts.reviewCalendar ? getToken() : null;
   if (opts.gateFromDb && !token) { console.error("no INGEST_TOKEN; aborting"); process.exit(2); }
   let wanted = opts.only;
   const gate = opts.symbolsFile ? JSON.parse(readFileSync(opts.symbolsFile, "utf8")) : opts.gateFromDb ? await readGate(opts.baseUrl, token, "extract") : null;
   if (gate) wanted = gate.symbols;
-  if (!wanted && !opts.force) usage("--gate-from-db, --symbols-file or --only is required; use --force for a manual full pass");
+  if (opts.reviewCalendar) {
+    if (!token) { console.error("no INGEST_TOKEN; aborting"); process.exit(2); }
+    wanted = await reviewDue(opts.baseUrl, token, 30, 6);
+    writeFileSync(opts.reviewCalendar, JSON.stringify({ symbols: wanted }) + "\n");
+    console.error(`fixed review: ${wanted.length} symbols due`);
+  }
+  if (!wanted && !opts.force) usage("--gate-from-db, --review-calendar, --symbols-file or --only is required; use --force for a manual full pass");
   if (gate && !Array.isArray(wanted)) usage("symbols file must contain a symbols array");
   if (Array.isArray(wanted) && !wanted.length) { console.error("nothing changed; 0 model calls"); if (opts.gateFromDb && !opts.dryRun && !gate.consumed) await consumeGate(opts.baseUrl, token, "extract", gate.asOf, gate.revision); return; }
   if (!token && !(opts.bundleDir && opts.dryRun)) token = getToken();
@@ -166,11 +179,13 @@ async function main() {
   const work = mkdtempSync(join(tmpdir(), "investbuddy-extract-"));
   let model = opts.model || "default";
   const failed = [], tickers = [], droppedAll = {}, skippedSymbols = [], postFailed = [], deferredSymbols = [];
-  let totals = emptyUsage(), totalCost = 0, calls = 0, inputChars = 0, cutoff = null, softStop = null;
+  let totals = emptyUsage(), totalCost = 0, calls = 0, inputChars = 0, cutoff = null, softStop = null, ceilingStop = null, unknownLocalTokens = 0;
+  const ceiling = dailyTokenCeiling();
+  if (ceiling && opts.concurrency > 1) throw new Error("AI_DAILY_TOKEN_CEILING requires --concurrency 1");
   const monitor = opts.agent === "claude" && !(opts.bundleDir && opts.dryRun) && !process.env.ANTHROPIC_API_KEY ? createUsageMonitor({ baseUrl: opts.baseUrl, ingestToken: token, job: "extract", runId, log }) : null;
   if (monitor) softStop = await monitor.start();
   await pool(selected, opts.concurrency, async (u) => {
-    if (cutoff) return;
+    if (cutoff || ceilingStop) return;
     const t0 = Date.now();
     let spent = emptyUsage(), hash = null, tickerModel = opts.model || "default", tickerCost = 0;
     try {
@@ -189,6 +204,10 @@ async function main() {
         const text = fill(prompt, { SYMBOL: u.symbol, NAME: u.name, SECTOR: u.sector, AS_OF: asOf, BUNDLE: JSON.stringify(bundle) });
         inputChars += text.length;
         const invoke = async (model) => {
+          if (ceiling) {
+            const used = token ? await dailyTokens(opts.baseUrl, token) : (totals.inputTokens ?? 0) + (totals.outputTokens ?? 0) + (totals.cacheReadTokens ?? 0) + (totals.cacheCreationTokens ?? 0) + unknownLocalTokens;
+            if (used >= ceiling) { ceilingStop = { used, ceiling }; throw Object.assign(new Error("daily token ceiling reached"), { exitCode: CUTOFF_EXIT_CODE }); }
+          }
           const id = token ? await reserveBudget(opts.baseUrl, token, "extract", model, opts.agent) : null;
           let r, callError;
           try { r = await callAgentNoTools({ ...opts, model }, text, work); }
@@ -200,6 +219,7 @@ async function main() {
               if (!recorded) log("AI ledger unavailable");
             }
           }
+          if (!token && (r.usage?.inputTokens == null || r.usage?.outputTokens == null)) unknownLocalTokens += unknownUsageTokens();
           calls++; spent = addUsage(spent, r.usage); tickerCost += r.costUsd ?? 0; totalCost += r.costUsd ?? 0;
           return r;
         };
@@ -231,6 +251,7 @@ async function main() {
       }
     } catch (e) {
       totals = addUsage(totals, spent);
+      if (ceilingStop) { deferredSymbols.push(u.symbol); return; }
       if (e.exitCode === CUTOFF_EXIT_CODE) { cutoff ??= e.cutoff; return; }
       log(`${u.symbol}: ${e.skip ? "SKIPPED" : "FAILED"} ${e.message}`);
       if (!e.skip || opts.gateFromDb) {
@@ -242,6 +263,7 @@ async function main() {
   if (monitor) await monitor.end();
   if (!process.env.SCAN_KEEP_WORK) rmSync(work, { recursive: true, force: true });
   if (cutoff) { log(cutoffLine(cutoff, tickers.length)); process.exit(CUTOFF_EXIT_CODE); }
+  if (ceilingStop) { log(`DAILY TOKEN CEILING: ${ceilingStop.used}/${ceilingStop.ceiling} tokens after ${tickers.length} tickers; remaining work pending`); process.exit(CUTOFF_EXIT_CODE); }
   if (softStop && deferredSymbols.length) { log(earlyStopLine(softStop)); process.exit(CUTOFF_EXIT_CODE); }
   const payload = {
     schemaVersion: 2, runId, asOf, generatedAt: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"), runner: { name: opts.agent, model, dataMode: opts.bundleDir ? "sample" : "real" }, tickers,

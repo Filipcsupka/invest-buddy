@@ -35,6 +35,10 @@ describe("ideas route", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ recorded: true, stored: 1 });
     expect(store.recorded).toHaveLength(1);
+    const sk = { verdict: "Výrok", whatHappened: ["Prvý", "Druhý"], whyItMatters: ["Dôvod"], numbers: idea.numbers, plan: idea.plan, evidence: idea.evidence };
+    expect((await POST(post({ ...body, ideas: [{ ...idea, translations: { sk } }] }))).status).toBe(200);
+    expect((await POST(post({ ...body, ideas: [{ ...idea, action: "WATCH", sizeTier: "NONE", amountMinEur: 0, amountMaxEur: 0, downgradedFrom: "ADD", conflictNote: "Conflict", translations: { sk: { ...sk, downgradeReason: "Zníženie", conflictReason: "Konflikt", conflictNote: "Konflikt" } } }] }))).status).toBe(200);
+    expect((await POST(post({ ...body, ideas: [{ ...idea, translations: { sk: { ...sk, plan: {} } } }] }))).status).toBe(400);
     expect((await POST(post({ ...body, ideas: [{ ...idea, action: "BUY" }] }))).status).toBe(400);
     expect((await POST(post({ ...body, ideas: [{ ...idea, symbol: "nvda" }] }))).status).toBe(400);
     expect((await POST(post({ ...body, ideas: [{ ...idea, sizeTier: "FULL" }] }))).status).toBe(400);

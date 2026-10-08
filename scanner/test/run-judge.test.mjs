@@ -24,12 +24,25 @@ const input = (over = {}) => ({
   signals: [sig("AMD", { action: "WATCH", sizeTier: "NONE", amountMinEur: 0, amountMaxEur: 0, unconfirmed: true, carriedFrom: "2026-09-23" }), sig("NVDA")],
   previousIdeas: [], ...over,
 });
-const words = (symbol, over = {}) => ({
+const words = (symbol, over = {}) => {
+  const result = ({
   symbol, verdict: "Fundamentals hold on a dip.", whatHappened: ["Price closed 7.4 percent under its 20-day high.", "EPS beat stated in the release."], whyItMatters: ["Dip qualifier met with a score of 19."],
   numbers: [{ label: "Score", value: "19 of 25" }, { label: "Below high", value: "7.4%" }, { label: "RSI", value: "48.2" }],
   plan: { trigger: "A fresh catalyst would raise the catalyst rating.", invalidation: "A guidance cut.", opportunityCost: "Versus CSPX and cash." },
-  evidence: [{ url: U1, label: "Release" }, { url: U2, label: "10-Q" }], unconfirmed: false, ...over,
-});
+  evidence: [{ url: U1, label: "Release" }, { url: U2, label: "10-Q" }], unconfirmed: false, sk: { verdict: "Fundamenty držia pri poklese.", whatHappened: ["Cena je 7.4 percent pod 20-dňovým maximom.", "Zisk prekonal očakávania."], whyItMatters: ["Pokles spĺňa podmienku pri skóre 19."], numbers: [{ label: "Skóre", value: "19 z 25" }, { label: "Pod maximom", value: "7.4%" }, { label: "RSI", value: "48.2" }], plan: { trigger: "Nový katalyzátor by zvýšil hodnotenie.", invalidation: "Zníženie výhľadu.", opportunityCost: "Oproti CSPX a hotovosti." }, evidence: [{ url: U1, label: "Správa" }, { url: U2, label: "10-Q" }] }, ...over,
+  });
+  if (!("sk" in over)) {
+    result.sk = { ...result.sk, evidence: result.evidence.map((e) => ({ url: e.url, label: e.label })),
+      ...(over.numbers ? { numbers: result.numbers } : {}),
+      ...(over.verdict ? { verdict: result.verdict } : {}),
+      ...(over.whatHappened ? { whatHappened: result.whatHappened } : {}),
+      ...(over.whyItMatters ? { whyItMatters: result.whyItMatters } : {}),
+      ...(over.plan ? { plan: result.plan } : {}),
+      ...(result.downgrade ? { downgradeReason: result.downgrade.reason } : {}),
+      ...(result.conflict ? { conflictReason: result.conflict.reason } : {}) };
+  }
+  return result;
+};
 const merge = (ideas, i = input(), n = i.signals) => mergeIdeas({ ideas }, n, buildModelInput(i, n));
 
 test("defaults and flags", () => {
@@ -51,6 +64,8 @@ test("schema accepts wording, and the model cannot send action, amounts or ratin
   assert.match(bad({ evidence: [{ url: "http://insecure.example/x", label: "x" }] }).join(), /does not match/);
   assert.match(bad({ downgrade: { reason: "r" } }).join(), /evidenceUrl: required/);
   assert.match(bad({ plan: { trigger: "t", invalidation: "i" } }).join(), /opportunityCost: required/);
+  assert.match(bad({ sk: undefined }).join(), /sk: expected object/);
+  assert.match(bad({ sk: { verdict: "x" } }).join(), /whatHappened: required/);
   assert.match(validateJudgeOutput({}).join(), /ideas: required/);
 });
 
@@ -106,6 +121,12 @@ test("evidence urls outside the input, invented figures and wrong symbols fail t
   assert.throws(() => merge([words("NVDA")]), /no idea for AMD/);
   assert.throws(() => merge([words("NVDA"), words("NVDA"), words("AMD", { evidence: [] })]), /second idea/);
   assert.throws(() => merge([words("NVDA", { evidence: [{ url: U1, label: "one" }] }), words("AMD", { evidence: [] })]), /fewer than two evidence links/);
+});
+
+test("Slovak wording rejects invented figures and changed number values", () => {
+  assert.throws(() => merge([words("NVDA", { sk: { ...words("NVDA").sk, verdict: "Výnos 999 percent." } }), words("AMD", { evidence: [] })]), /Slovak prose figures differ|figures not in the input/);
+  assert.throws(() => merge([words("NVDA", { sk: { ...words("NVDA").sk, numbers: [{ label: "Skóre", value: "999 z 25" }, ...words("NVDA").sk.numbers.slice(1)] } }), words("AMD", { evidence: [] })]), /figures not in the input/);
+  assert.throws(() => merge([words("NVDA", { sk: { ...words("NVDA").sk, evidence: [{ url: U2, label: "x" }, { url: U1, label: "y" }] } }), words("AMD", { evidence: [] })]), /Slovak evidence URLs differ/);
 });
 
 test("index names are labels, and a skipped figure shows its context", () => {
@@ -419,7 +440,9 @@ test("a symbol that still fails after the retry is skipped, the others are store
 
 test("a symbol fixed by the retry is stored and nothing is skipped", async () => {
   const s = stub();
-  s.queue([envelope(JSON.stringify({ ideas: [words("NVDA", { verdict: "Cash left EUR 510." }), words("AMD", { evidence: [] })] })), envelope(JSON.stringify({ ideas: [words("NVDA")] }))]);
+  const changedReason = words("NVDA", { conflict: { reason: "Guidance fell 7.4 percent.", evidenceUrl: U1 } });
+  changedReason.sk.conflictReason = "Výhľad klesol 19 percent.";
+  s.queue([envelope(JSON.stringify({ ideas: [changedReason, words("AMD", { evidence: [] })] })), envelope(JSON.stringify({ ideas: [words("NVDA", { conflict: { reason: "Guidance fell 7.4 percent.", evidenceUrl: U1 } })] }))]);
   const web = await mockWeb();
   try {
     const r = await runJudge(["--as-of", "2026-10-05", "--base-url", web.base], { s });
@@ -497,4 +520,20 @@ test("dry run with an input file needs no token, posts nothing and writes the pa
   const payload = JSON.parse(readFileSync(join(r.out, name), "utf8"));
   assert.equal(payload.ideas.length, 2);
   assert.equal(payload.run.status, "ok");
+});
+
+test("paired reason and evidence figures must match; identical figures pass", () => {
+  const reason = "Guidance fell 7.4 percent.";
+  const good = words("NVDA", { conflict: { reason, evidenceUrl: U1 }, evidence: [{ url: U1, label: "Release 7.4 percent" }, { url: U2, label: "10-Q" }] });
+  assert.doesNotThrow(() => merge([good, words("AMD", { evidence: [] })]));
+  const bad = structuredClone(good); bad.sk.conflictReason = "Výhľad klesol 19 percent.";
+  assert.throws(() => merge([bad, words("AMD", { evidence: [] })]), /Slovak prose figures differ/);
+  const badLabel = structuredClone(good); badLabel.sk.evidence[0].label = "Správa 19 percent";
+  assert.throws(() => merge([badLabel, words("AMD", { evidence: [] })]), /Slovak prose figures differ/);
+});
+
+test("ADR-001 wording is checked in both languages", () => {
+  assert.throws(() => merge([words("NVDA", { verdict: "You should buy now." }), words("AMD", { evidence: [] })]), /ADR-001/);
+  const sk = words("NVDA"); sk.sk.verdict = "Kúp teraz.";
+  assert.throws(() => merge([sk, words("AMD", { evidence: [] })]), /ADR-001/);
 });
