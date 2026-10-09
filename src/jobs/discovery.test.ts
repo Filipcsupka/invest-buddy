@@ -81,7 +81,7 @@ describe("weekly discovery", () => {
     }, { growthSectorRotation: null, dataTailwind: null }, null);
     expect(requested).toEqual(["STWI", "STWD"]);
     expect(result).toEqual({ screened: [], skippedCount: 2, skipped: [{ symbol: "BHR-PD", reason: "preferred-share symbol" }, { symbol: "STWI", reason: "symbol not accepted by Twelve Data" }],
-      failureCount: 1, failures: [{ symbol: "STWD", reason: "STWD: request failed (Error)" }] });
+      notPassed: [], failureCount: 1, failures: [{ symbol: "STWD", reason: "STWD: request failed (Error)" }] });
   });
 
   it("filters non-common symbols before the cut and fills the shortlist from lower ranks", () => {
@@ -116,7 +116,11 @@ describe("weekly discovery", () => {
     expect(screened).toHaveLength(1);
     expect(screened[0].ruleScore).toBeGreaterThanOrEqual(12);
     expect(screened[0]).toMatchObject({ signalDate: "2026-08-08", benchmarkClose: 500 });
-    expect(await screenCandidates([{ ...row, growth: { current: -10, prior: 20 } }], "2026-08-08", async () => bars, { growthSectorRotation: true, dataTailwind: true }, 500)).toEqual([]);
+    const notPassed: { symbol: string; reason: string }[] = [];
+    expect(await screenCandidates([{ ...row, growth: { current: -10, prior: 20 } }], "2026-08-08", async () => bars, { growthSectorRotation: true, dataTailwind: true }, 500, notPassed)).toEqual([]);
+    expect(notPassed).toHaveLength(1);
+    expect(notPassed[0].symbol).toBe(row.symbol);
+    expect(notPassed[0].reason).toMatch(/^(rejected|invalid data|score \d+ below 12)/);
   });
 
   it.skipIf(!process.env.TEST_DATABASE_URL)("promotes a reviewed name outside the original universe into the same runtime universe", async () => {

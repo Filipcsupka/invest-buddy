@@ -256,7 +256,8 @@ export function shortlistCandidates(rows: DiscoveryCandidate[], known: Set<strin
 }
 
 export async function screenCandidates(rows: DiscoveryCandidate[], date: string, barsFor: (symbol: string) => Promise<OHLCV[]>,
-  macro: { growthSectorRotation: boolean | null; dataTailwind: boolean | null }, benchmarkClose: number | null | ((date: string) => Promise<number | null>)): Promise<DiscoveryCandidate[]> {
+  macro: { growthSectorRotation: boolean | null; dataTailwind: boolean | null }, benchmarkClose: number | null | ((date: string) => Promise<number | null>),
+  notPassed: { symbol: string; reason: string }[] = []): Promise<DiscoveryCandidate[]> {
   const screened: DiscoveryCandidate[] = [];
   for (const row of rows) {
     const bars = (await barsFor(row.symbol)).filter((bar) => bar.date <= date);
@@ -267,11 +268,13 @@ export async function screenCandidates(rows: DiscoveryCandidate[], date: string,
       epsBeat: null, guidanceRaised: null, earningsMissAndGuidanceCut: null, productCatalyst: null,
       insiderOrInstitutionalAccumulation: null, noRevenue: growth ? false : null, memePump: null,
     }, macro });
-    if (result.invalidReasons.length || result.rejectionReasons.length || result.total < 12) continue;
+    if (result.invalidReasons.length) { notPassed.push({ symbol: row.symbol, reason: `invalid data: ${result.invalidReasons.join("; ")}` }); continue; }
+    if (result.rejectionReasons.length) { notPassed.push({ symbol: row.symbol, reason: `rejected: ${result.rejectionReasons.join("; ")}` }); continue; }
+    if (result.total < 12) { notPassed.push({ symbol: row.symbol, reason: `score ${result.total} below 12` }); continue; }
     const signalDate = result.asOf;
-    if (!signalDate || (Date.parse(`${date}T00:00:00Z`) - Date.parse(`${signalDate}T00:00:00Z`)) > 7 * 86400000) continue;
+    if (!signalDate || (Date.parse(`${date}T00:00:00Z`) - Date.parse(`${signalDate}T00:00:00Z`)) > 7 * 86400000) { notPassed.push({ symbol: row.symbol, reason: `signal date ${signalDate ?? "missing"} older than 7 days` }); continue; }
     const spyClose = typeof benchmarkClose === "function" ? await benchmarkClose(signalDate) : benchmarkClose;
-    if (spyClose === null) continue;
+    if (spyClose === null) { notPassed.push({ symbol: row.symbol, reason: `no SPY close for ${signalDate}` }); continue; }
     screened.push({ ...row, ruleScore: result.total, ruleState: result.state, signalDate, benchmarkClose: spyClose });
   }
   return screened.sort((a, b) => (b.ruleScore ?? 0) - (a.ruleScore ?? 0) || b.score - a.score || a.symbol.localeCompare(b.symbol));
@@ -282,16 +285,17 @@ export async function screenDiscoveryShortlist(rows: DiscoveryCandidate[], date:
   const screened: DiscoveryCandidate[] = [];
   const skipped: { symbol: string; reason: string }[] = [];
   const failures: { symbol: string; reason: string }[] = [];
+  const notPassed: { symbol: string; reason: string }[] = [];
   for (const row of rows) {
     const reason = nonCommonStockReason(row.symbol);
     if (reason) { skipped.push({ symbol: row.symbol, reason }); continue; }
-    try { screened.push(...await screenCandidates([row], date, barsFor, macro, benchmarkClose)); }
+    try { screened.push(...await screenCandidates([row], date, barsFor, macro, benchmarkClose, notPassed)); }
     catch (error) {
       if (error instanceof SymbolNotFoundError) { skipped.push({ symbol: row.symbol, reason: "symbol not accepted by Twelve Data" }); continue; }
       failures.push({ symbol: row.symbol, reason: error instanceof Error ? error.message : String(error) });
     }
   }
-  return { screened, skippedCount: skipped.length, skipped, failureCount: failures.length, failures };
+  return { screened, skippedCount: skipped.length, skipped, notPassed, failureCount: failures.length, failures };
 }
 
 export async function saveCandidates(db: pg.Pool, week: string, rows: DiscoveryCandidate[], max: number = DISCOVERY.maxCandidatesPerWeek): Promise<DiscoveryCandidate[]> {
@@ -406,7 +410,7 @@ async function main() {
     for (const failure of failures) process.stderr.write(`${failure.symbol}: screening failed: ${failure.reason}\n`);
     const selected = screened.sort((a, b) => (b.ruleScore ?? 0) - (a.ruleScore ?? 0) || b.score - a.score || a.symbol.localeCompare(b.symbol)).slice(0, DISCOVERY.maxCandidatesPerWeek);
     const saved = await saveCandidates(pool, week, selected);
-    process.stdout.write(`${JSON.stringify({ weekStart: week, sourceRows: summary, uniqueSymbols: new Set(sources.map((row) => row.symbol)).size, shortlisted: shortlist.length, candidates: saved, skippedCount, skipped, failureCount, failures })}\n`);
+    process.stdout.write(`${JSON.stringify({ weekStart: week, sourceRows: summary, uniqueSymbols: new Set(sources.map((row) => row.symbol)).size, shortlisted: shortlist.length, candidates: saved, notPassed: result.notPassed, skippedCount, skipped, failureCount, failures })}\n`);
   } finally { await pool.end(); }
 }
 if (/(?:^|[/\\])discovery\.(?:ts|js)$/.test(process.argv[1] ?? "")) main().catch((error) => { console.error(error instanceof Error ? error.message : error); process.exitCode = 1; });
