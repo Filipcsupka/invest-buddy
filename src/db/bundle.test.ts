@@ -87,6 +87,16 @@ describe("buildBundle", () => {
   });
 });
 
+describe("buildBundle foreign issuer", () => {
+  it("passes the filer status fact with its unknown-field reasons through to the bundle", async () => {
+    const value = { kind: "foreign_private_issuer", forms: ["20-F", "6-K"], unknown: [{ field: "revenueAccelerating", reason: "SEC quarterly revenue needs 10-Q filings; this issuer files 20-F and 6-K." }] };
+    const pool = { query: async (sql: string) => ({ rows: sql.includes("source_documents") ? [{ id: "1", url: "https://example.com/1", source: "edgar", doc_type: "6-K", published_at: new Date("2026-10-01T00:00:00Z"), meta: {}, body: "b" }] : [{ fact_key: "sec_filer_status", as_of: "2026-10-01", value, document_ids: ["1"] }] }) } as unknown as pg.Pool;
+    const bundle = await buildBundle(pool, "ASML", 100, new Date("2026-10-05T12:00:00Z"), undefined, "2026-10-05");
+    expect(bundle.facts).toEqual([{ key: "sec_filer_status", asOf: "2026-10-01", value, documentIds: [1] }]);
+    expect(bundle.documents.map((d) => d.docType)).toEqual(["6-K"]);
+  });
+});
+
 describe("scanner quote check windows", () => {
   it("match freshnessDays in evidence.ts", async () => {
     const path = "../../scanner/quotes.mjs";

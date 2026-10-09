@@ -2,7 +2,7 @@ import { documentRetentionDays } from "../db/collectors";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { collectEdgar, parseForm4 } from "../collectors/edgar";
+import { collectEdgar, foreignFilerStatus, parseForm4 } from "../collectors/edgar";
 import { collectFred } from "../collectors/fred";
 import { getText, resetSecLimiter, secSlot, RateLimitLockout } from "../collectors/http";
 import { parseRss } from "../collectors/rss";
@@ -59,7 +59,23 @@ describe("collectors", () => {
     const result = await runCollect(repo, ["ASML"], { since: "2026-09-01", sources: ["edgar"], get, now: () => new Date("2026-10-05T12:00:00Z") });
     expect(result.exitCode).toBe(0);
     expect([...repo.documents.values()].map((doc) => doc.docType)).toEqual(["6-K", "20-F"]);
-    expect([...repo.facts.values()]).toEqual([]);
+    const facts = [...repo.facts.values()];
+    expect(facts.map((fact) => [fact.key, fact.asOf])).toEqual([["sec_filer_status", "2026-10-01"]]);
+    expect(facts[0].value).toMatchObject({ kind: "foreign_private_issuer", forms: ["20-F", "6-K"] });
+    expect((facts[0].value as { unknown: { field: string }[] }).unknown.map((u) => u.field)).toEqual(["revenueAccelerating", "revenueDeclining", "earnings_8k", "insider_net_buy_90d"]);
+    expect(facts[0].expiresAt).toBe("2027-01-09T00:00:00.000Z");
+  });
+
+  it("treats a 20-F filer that also files Form 4 (SE) as foreign and keeps insider data", () => {
+    const status = foreignFilerStatus([{ docType: "20-F", publishedAt: "2026-04-17T00:00:00Z" }, { docType: "6-K", publishedAt: "2026-08-25T00:00:00Z" }, { docType: "4", publishedAt: "2026-10-09T00:00:00Z" }]);
+    expect(status?.asOf).toBe("2026-08-25");
+    expect(status?.value.unknown.map((u) => u.field)).toEqual(["revenueAccelerating", "revenueDeclining", "earnings_8k"]);
+  });
+
+  it("does not mark domestic filers (MELI files 10-K, 10-Q and 8-K) or an empty list as foreign", () => {
+    expect(foreignFilerStatus([{ docType: "10-Q", publishedAt: "2026-08-01T00:00:00Z" }, { docType: "8-K", publishedAt: "2026-08-02T00:00:00Z" }, { docType: "4", publishedAt: "2026-08-03T00:00:00Z" }])).toBeNull();
+    expect(foreignFilerStatus([{ docType: "10-K", publishedAt: "2026-02-01T00:00:00Z" }, { docType: "6-K", publishedAt: "2026-08-02T00:00:00Z" }])).toBeNull();
+    expect(foreignFilerStatus([])).toBeNull();
   });
 
   it("keeps collecting SEC documents when the press release feed times out", async () => {
