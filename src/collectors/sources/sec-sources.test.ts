@@ -49,6 +49,23 @@ describe("SEC XBRL frames", () => {
     for (const doc of output.documents) expect(doc.meta).toMatchObject({ display_allowed: true, license_note: expect.stringContaining("SEC") });
   });
 
+  it("treats a 404 for one concept and quarter as an empty frame and keeps the ranking", async () => {
+    const http = stubHttp((call) => {
+      if (call.url.includes("/SalesRevenueNet/")) throw new Error(`HTTP 404 at ${call.url}`);
+      return frameRoutes(call);
+    });
+    const output = await collectFrames(context(http, { symbols: ["PLTR"] }));
+    expect((output.facts[0].value as { eligible: number }).eligible).toBe(6);
+  });
+
+  it("still fails the source on other HTTP errors", async () => {
+    const http = stubHttp((call) => {
+      if (call.url.includes("/Revenues/")) throw new Error(`HTTP 500 at ${call.url}`);
+      return frameRoutes(call);
+    });
+    await expect(collectFrames(context(http, { symbols: ["PLTR"] }))).rejects.toThrow("HTTP 500");
+  });
+
   it("only emits facts for the selected symbols but still ranks the whole market", async () => {
     const output = await collectFrames(context(stubHttp(frameRoutes), { symbols: ["PLTR"] }));
     expect(output.facts.map((fact) => fact.symbol)).toEqual(["PLTR"]);
