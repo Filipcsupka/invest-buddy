@@ -9,8 +9,9 @@ import { collectExitCode, deriveFacts, runCollect } from "./collect";
 
 const dir = join(process.cwd(), "src/collectors/fixtures");
 const fixture = (name: string) => readFileSync(join(dir, name), "utf8");
-const deploy = readFileSync(join(process.cwd(), "deploy/gitops/gitops/apps/invest-buddy/base/collector-cronjobs.yaml"), "utf8");
-const cronjob = (name: string) => deploy.split(/^---$/m).find((doc) => doc.includes(`name: ${name}`)) ?? "";
+const base = join(process.cwd(), "deploy/gitops/gitops/apps/invest-buddy/base");
+const deploy = ["collector-cronjobs.yaml", "extract-cronjobs.yaml", "macro-cronjob.yaml", "cronjobs.yaml"].map((file) => readFileSync(join(base, file), "utf8")).join("\n---\n");
+const cronjob = (name: string) => deploy.split(/^---$/m).find((doc) => doc.includes(`name: ${name}\n`)) ?? "";
 const noWait = async () => {};
 const secEnv = () => vi.stubEnv("SEC_USER_AGENT", "InvestBuddy test test@example.invalid");
 
@@ -186,14 +187,20 @@ describe("response size", () => {
 
 describe("M9 schedules", () => {
   const field = (job: string, name: string) => new RegExp(`${name}: "?([^"\\n]+)"?`).exec(cronjob(job))?.[1];
-  it("runs collect after the prices job has finished and detect after collect has finished", () => {
+  it("runs prices, collect, macro, extraction, and reconciliation in order", () => {
     expect(field("invest-buddy-collect", "schedule")).toBe("35 5 * * 2-6");
-    expect(field("invest-buddy-detect", "schedule")).toBe("10 6 * * 2-6");
+    expect(field("invest-buddy-macro", "schedule")).toBe("5 6 * * 2-6");
+    expect(field("invest-buddy-extract", "schedule")).toBe("15 6 * * 3-6");
+    expect(field("invest-buddy-extract-weekly", "schedule")).toBe("15 6 * * 2");
+    expect(field("invest-buddy-reconcile", "schedule")).toBe("30 7 * * 2-6");
+    expect(cronjob("invest-buddy-extract-weekly")).toContain("--force-all");
     const prices = readFileSync(join(process.cwd(), "deploy/gitops/gitops/apps/invest-buddy/base/cronjobs.yaml"), "utf8").split(/^---$/m).find((doc) => doc.includes("name: invest-buddy-prices")) ?? "";
     expect(/schedule: "([^"]+)"/.exec(prices)?.[1]).toBe("0 5 * * 2-6");
     const minutes = (cron: string) => { const [m, h] = cron.split(" "); return Number(h) * 60 + Number(m); };
     const deadline = (job: string) => Number(/activeDeadlineSeconds: (\d+)/.exec(job)?.[1]) / 60;
     expect(minutes("35 5")).toBeGreaterThanOrEqual(minutes("0 5") + deadline(prices));
-    expect(minutes("10 6")).toBeGreaterThanOrEqual(minutes("35 5") + deadline(cronjob("invest-buddy-collect")));
+    expect(minutes("5 6")).toBeGreaterThanOrEqual(minutes("35 5") + deadline(cronjob("invest-buddy-collect")));
+    expect(minutes("15 6")).toBeGreaterThanOrEqual(minutes("5 6") + deadline(cronjob("invest-buddy-macro")));
+    expect(minutes("30 7")).toBeGreaterThanOrEqual(minutes("15 6") + deadline(cronjob("invest-buddy-extract-weekly")));
   });
 });

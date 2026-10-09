@@ -4,12 +4,12 @@ metadata:
   name: invest-buddy-collect
   namespace: invest
 spec:
-  suspend: true
-  # After invest-buddy-prices (05:00 Tue-Sat, 30 min deadline) so price facts use today's bars. Ends by 06:05 at the latest, before detect (06:10).
+  suspend: false
+  # Prices finish by 05:30; collect ends by 06:05 before macro and extraction.
   schedule: "35 5 * * 2-6"
   timeZone: Europe/Bratislava
   concurrencyPolicy: Forbid
-  startingDeadlineSeconds: 1800
+  startingDeadlineSeconds: 300
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3
   jobTemplate:
@@ -67,63 +67,10 @@ spec:
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: invest-buddy-detect
-  namespace: invest
-spec:
-  suspend: true
-  # After collect's 1800 s deadline (05:35 + 30 min = 06:05) and before reconcile (06:40 Tue-Sat).
-  schedule: "10 6 * * 2-6"
-  timeZone: Europe/Bratislava
-  concurrencyPolicy: Forbid
-  startingDeadlineSeconds: 1200
-  successfulJobsHistoryLimit: 3
-  failedJobsHistoryLimit: 3
-  jobTemplate:
-    spec:
-      backoffLimit: 1
-      activeDeadlineSeconds: 600
-      template:
-        spec:
-          restartPolicy: Never
-          automountServiceAccountToken: false
-          nodeSelector:
-            kubernetes.io/hostname: k8s-worker-01
-          securityContext:
-            runAsNonRoot: true
-            runAsUser: 1000
-            runAsGroup: 1000
-            seccompProfile:
-              type: RuntimeDefault
-          containers:
-            - name: detect
-              image: ghcr.io/filipcsupka/invest-buddy:latest
-              command: ["node", "dist/jobs/detect.js"]
-              env:
-                - name: DATABASE_URL
-                  valueFrom:
-                    secretKeyRef:
-                      name: invest-buddy-secrets
-                      key: DATABASE_URL
-              securityContext:
-                allowPrivilegeEscalation: false
-                readOnlyRootFilesystem: true
-                capabilities:
-                  drop: ["ALL"]
-              resources:
-                requests:
-                  cpu: 50m
-                  memory: 128Mi
-                limits:
-                  cpu: 300m
-                  memory: 384Mi
----
-apiVersion: batch/v1
-kind: CronJob
-metadata:
   name: invest-buddy-retention
   namespace: invest
 spec:
-  suspend: true
+  suspend: false
   schedule: "0 3 * * *"
   timeZone: Europe/Bratislava
   concurrencyPolicy: Forbid

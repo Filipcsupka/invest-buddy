@@ -4,6 +4,8 @@ metadata:
   name: invest-buddy-scan-claude
   namespace: invest
 spec:
+  # Replaced by macro and change-based extract jobs.
+  suspend: true
   schedule: "30 5 * * 1-5"
   timeZone: Europe/Bratislava
   concurrencyPolicy: Forbid
@@ -76,6 +78,8 @@ metadata:
   name: invest-buddy-scan-codex
   namespace: invest
 spec:
+  # Replaced by macro and change-based extract jobs.
+  suspend: true
   schedule: "30 5 * * 1-5"
   timeZone: Europe/Bratislava
   concurrencyPolicy: Forbid

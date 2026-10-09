@@ -74,7 +74,7 @@ metadata:
   name: invest-buddy-reconcile
   namespace: invest
 spec:
-  schedule: "40 6 * * 2-6"
+  schedule: "30 7 * * 2-6"
   timeZone: Europe/Bratislava
   concurrencyPolicy: Forbid
   startingDeadlineSeconds: 300
@@ -101,6 +101,8 @@ spec:
               image: ghcr.io/filipcsupka/invest-buddy:latest
               command: ["node", "dist/jobs/reconcile.js"]
               env:
+                - name: CARRY_FORWARD
+                  value: "on"
                 - name: DATABASE_URL
                   valueFrom:
                     secretKeyRef:
@@ -136,7 +138,7 @@ metadata:
   name: invest-buddy-daily
   namespace: invest
 spec:
-  schedule: "0 7 * * 2-6"
+  schedule: "45 7 * * 2-6"
   timeZone: Europe/Bratislava
   concurrencyPolicy: Forbid
   startingDeadlineSeconds: 1800
@@ -163,6 +165,8 @@ spec:
               image: ghcr.io/filipcsupka/invest-buddy:latest
               command: ["node", "dist/jobs/daily.js"]
               env:
+                - name: CARRY_FORWARD
+                  value: "on"
                 - name: DATA_MODE
                   value: db
                 - name: DATABASE_URL
@@ -257,7 +261,7 @@ metadata:
   name: invest-buddy-digest
   namespace: invest
 spec:
-  schedule: "30 7 * * 2-6"
+  schedule: "50 8 * * 2-6"
   timeZone: Europe/Bratislava
   concurrencyPolicy: Forbid
   startingDeadlineSeconds: 1800

@@ -8,12 +8,27 @@ The daily Claude scan ran 36 agent sessions that each searched and fetched pages
 
 ## Flow
 
-1. **Collect** (`collect` job, no AI). Fetch documents and facts from free sources for the universe. Store them in `source_documents` and `collected_facts`.
-2. **Detect** (`detect` job, no AI). List tickers that have new documents since their last extraction. Output is a JSON list for `--only`.
-3. **Extract** (phase B, AI, no tools). For each detected ticker, build an input bundle from stored documents (excerpts, not whole filings). The model returns the existing ticker scan JSON, with every positive claim carrying a stored-document URL and a quote. Output goes through the existing `POST /api/ingest/scan`, so reconcile and scoring stay unchanged.
-4. **Reconcile and score** (existing jobs). Quotes are checked against the stored document text.
-5. **Judge** (phase C, AI, no tools). Reads reconciled facts plus the portfolio baseline and writes trade ideas as structured JSON. A script stores it and the web reads it.
-6. **Retention** (`retention` job, no AI). Delete `source_documents` and `collected_facts` older than 30 days, except rows still cited by a current `consensus_findings` evidence reference.
+1. Prices and collect run without AI. Collect stores source documents and computed facts for the universe.
+2. Macro runs once each morning and posts only the macro finding. It uses Claude Sonnet with a 10-turn limit. If the installed Claude CLI lacks `--max-turns`, the runner limits the call to $0.50 and 300 seconds, then rejects a result above 10 turns. That CLI cannot stop exactly at turn 10.
+3. Detect runs inside the extract job as an init container. It writes a JSON symbol list to a shared volume. An empty list ends extraction successfully without a model call.
+4. Extract reads stored bundles for changed tickers, checks cited quotes, posts ticker findings with `macro=skip`, and records token use in `extraction_runs`. The normal run is capped at 12 tickers and $0.50 per model call. Tuesday runs a full sweep instead. The Haiku versus Sonnet comparison remains open; Sonnet is the configured default.
+5. Reconcile checks evidence and carries forward unscanned tickers. Daily scores the latest scan date. Digest follows daily.
+6. Retention removes expired source documents and collected facts that are no longer cited.
+
+All times use `Europe/Bratislava`. The jobs run Tuesday through Saturday unless noted.
+
+| Time | Job | Latest finish |
+|---|---|---|
+| 05:00 | prices | 05:30 |
+| 05:35 | collect | 06:10 |
+| 06:05 | macro | 06:15 |
+| 06:15 | extract (Wed–Sat, 40 min cap), weekly full sweep (Tue, 60 min cap) | 07:00 (Wed–Sat), 07:20 (Tue) |
+| 07:30 | reconcile | 07:40 |
+| 07:45 | daily | 08:45 |
+| 08:50 | digest | 09:20 |
+| 03:00 | retention | 03:10 |
+
+Tuesday's full sweep replaces the bounded extract run, so both jobs never work on the same ticker set at once. At this hour the last completed US trading session is the previous weekday. Macro and extract use that date; reconcile picks the newest `scan_runs.as_of`, daily scores the latest scan date, and digest reads the latest ingest date. The Tuesday sweep is therefore reconciled and scored that morning.
 
 ## Sources
 
@@ -69,6 +84,6 @@ Use: an interactive session fetches the portfolio baseline into a small file or 
 
 ## Phases
 
-- **A (this change, no AI):** migration, collectors, detect, retention, tests, image and CronJob manifests (suspended), run on the cluster as a one-off job.
-- **B:** extractor script and prompt with no tools, quote check, post to ingest, carry-forward of unscanned tickers in reconcile and daily.
-- **C:** judgement step, web page for trade ideas, IBKR baseline.
+- **A:** migration, collectors, detect, retention, tests, and job manifests.
+- **B:** extractor, quote checks, change-based schedules, macro run, and carry-forward.
+- **C:** judgement, trade ideas, and portfolio baseline. The judge CronJob and public-page decision remain open.

@@ -4,8 +4,8 @@ Context: the 05:30 Claude CronJob ran 36 `claude -p` sessions (35 tickers + macr
 
 Goal: both agents keep collecting facts, but only for tickers that changed, with a cheaper model and a turn cap. A separate judgement step turns reconciled facts into trade ideas.
 
-## 0. Stop the drain (blocked on infra repo)
-- [ ] Set `suspend: true` on `invest-buddy-scan-claude` in `Filipcsupka/infra` (`gitops/apps/invest-buddy/overlays/prod`). A live patch is reverted by Argo (`selfHeal: true`).
+## 0. Stop the drain (base manifest ready; infra rollout open)
+- [ ] Copy the base manifest change to `Filipcsupka/infra` and set `suspend: true` on `invest-buddy-scan-claude` (`gitops/apps/invest-buddy/overlays/prod`). A live patch is reverted by Argo (`selfHeal: true`).
 - [ ] Verify with `kubectl -n invest get cronjob` after sync.
 
 ## 1. Measure before changing
@@ -14,15 +14,15 @@ Goal: both agents keep collecting facts, but only for tickers that changed, with
 - [ ] Decide the Claude collector model from that result.
 
 ## 2. Cap the per-ticker loop
-- [ ] Add `--max-turns` (start around 10) to the claude args in `scanner/run-scan.mjs`.
+- [x] Add `--max-turns` to the Claude args in `scanner/run-scan.mjs`; the macro job uses 10.
 - [ ] Trim `scanner/prompts/ticker-scan.md`: earnings 8-K exhibit first, no full filings or PDFs.
 - [ ] Look at why CRWD took 431s and why CRWD and ASML failed `missing https evidence for fundamentals.productCatalyst` on the first try.
 
 ## 3. Change detector (no tokens)
-- [ ] New script that picks tickers to scan: new 8-K/10-Q/10-K/Form 4 on EDGAR since the last scan, earnings date passed, large price or volume move (use the prices job data).
-- [ ] Output a symbol list passed to `run-scan.mjs --only`.
-- [ ] Keep the macro scan daily (two fields depend on it).
-- [ ] Weekly full sweep of all 35 tickers on one weekday, to catch news-only catalysts.
+- [x] Add a script that picks tickers to scan: new 8-K/10-Q/10-K/Form 4 on EDGAR since the last scan, earnings date passed, large price or volume move (use the prices job data).
+- [x] Output a symbol list passed to `run-extract.mjs --symbols-file`.
+- [x] Keep the macro scan daily in a macro-only job (two fields depend on it).
+- [x] Schedule a Tuesday full sweep of all 35 tickers, to catch news-only catalysts.
 
 ## 4. Carry-forward in reconcile and daily
 - [x] Today `reconcile.ts` and `daily.ts` expect findings for every ticker per `as_of`. A partial scan leaves the rest missing. (`CARRY_FORWARD=on`, default off)
@@ -51,4 +51,4 @@ Goal: both agents keep collecting facts, but only for tickers that changed, with
 
 ## 7. Billing safety
 - [ ] Decide whether the cron stays on the subscription token or moves to its own key, so it stops sharing the 5h pool with interactive work.
-- [ ] Log token usage per run (CLI `usage` / `modelUsage`) in the run log so the next surprise shows up in the job output. Table `extraction_runs`, its route and `scanner/extraction-log.mjs` exist; `run-extract.mjs` does not call them yet. The judge already logs and stores its tokens, turns and cost in `judge_runs`.
+- [x] Log per-ticker token usage in `extraction_runs` and print a one-line total at the end of `run-extract.mjs`. The judge logs tokens, turns and cost in `judge_runs`.

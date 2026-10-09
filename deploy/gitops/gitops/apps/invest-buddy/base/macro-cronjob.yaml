@@ -1,0 +1,66 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: invest-buddy-macro
+  namespace: invest
+spec:
+  suspend: false
+  schedule: "5 6 * * 2-6"
+  timeZone: Europe/Bratislava
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 600
+      template:
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          nodeSelector:
+            kubernetes.io/hostname: k8s-worker-01
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            fsGroup: 10001
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: macro
+              image: ghcr.io/filipcsupka/invest-buddy-scanner:latest
+              command: ["node", "/app/scanner/run-scan.mjs"]
+              args: ["--macro-only", "--agent", "claude", "--model", "sonnet", "--max-turns", "10"]
+              env:
+                - name: INGEST_URL
+                  value: http://web.invest.svc.cluster.local:3000/api/ingest/scan
+                - name: INGEST_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-secrets
+                      key: INGEST_TOKEN
+                - name: CLAUDE_CODE_OAUTH_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-scanner-secrets
+                      key: CLAUDE_CODE_OAUTH_TOKEN
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
+              resources:
+                requests: {cpu: 250m, memory: 256Mi}
+                limits: {cpu: "2", memory: 1Gi}
+              volumeMounts:
+                - {name: tmp, mountPath: /tmp}
+                - {name: scanner-home, mountPath: /home/scanner}
+                - {name: scan-out, mountPath: /app/scanner/out}
+          volumes:
+            - name: tmp
+              emptyDir: {}
+            - name: scanner-home
+              emptyDir: {}
+            - name: scan-out
+              emptyDir: {}

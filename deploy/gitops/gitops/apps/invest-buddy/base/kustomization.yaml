@@ -10,4 +10,6 @@ resources:
   - scan-cronjob.yaml
   - cronjobs.yaml
   - collector-cronjobs.yaml
+  - extract-cronjobs.yaml
+  - macro-cronjob.yaml
   - backup-cronjob.yaml

@@ -1,0 +1,185 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: invest-buddy-extract
+  namespace: invest
+spec:
+  suspend: false
+  # Tuesday uses the weekly full sweep in this slot.
+  schedule: "15 6 * * 3-6"
+  timeZone: Europe/Bratislava
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 2400
+      template:
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          nodeSelector:
+            kubernetes.io/hostname: k8s-worker-01
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            fsGroup: 10001
+            seccompProfile:
+              type: RuntimeDefault
+          initContainers:
+            - name: detect
+              image: ghcr.io/filipcsupka/invest-buddy:latest
+              command: ["/bin/sh", "-ec", "node dist/jobs/detect.js --max 12 > /work/detect.json"]
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-secrets
+                      key: DATABASE_URL
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              resources:
+                requests: {cpu: 50m, memory: 128Mi}
+                limits: {cpu: 300m, memory: 384Mi}
+              volumeMounts:
+                - name: work
+                  mountPath: /work
+          containers:
+            - name: extract
+              image: ghcr.io/filipcsupka/invest-buddy-scanner:latest
+              command: ["node", "/app/scanner/run-extract.mjs"]
+              # Haiku versus Sonnet A/B is still open. Change --model after measurement.
+              args: ["--symbols-file", "/work/detect.json", "--agent", "claude", "--model", "sonnet", "--budget-usd", "0.5"]
+              env:
+                - name: INGEST_BASE_URL
+                  value: http://web.invest.svc.cluster.local:3000
+                - name: INGEST_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-secrets
+                      key: INGEST_TOKEN
+                - name: CLAUDE_CODE_OAUTH_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-scanner-secrets
+                      key: CLAUDE_CODE_OAUTH_TOKEN
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
+              resources:
+                requests: {cpu: 250m, memory: 256Mi}
+                limits: {cpu: "2", memory: 1Gi}
+              volumeMounts:
+                - {name: work, mountPath: /work}
+                - {name: tmp, mountPath: /tmp}
+                - {name: scanner-home, mountPath: /home/scanner}
+                - {name: scan-out, mountPath: /app/scanner/out}
+          volumes:
+            - name: work
+              emptyDir: {}
+            - name: tmp
+              emptyDir: {}
+            - name: scanner-home
+              emptyDir: {}
+            - name: scan-out
+              emptyDir: {}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: invest-buddy-extract-weekly
+  namespace: invest
+spec:
+  suspend: false
+  schedule: "15 6 * * 2"
+  timeZone: Europe/Bratislava
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      # 35 tickers / 3 concurrent x 300 s plus init, retries, and ingest.
+      activeDeadlineSeconds: 3600
+      template:
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          nodeSelector:
+            kubernetes.io/hostname: k8s-worker-01
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            fsGroup: 10001
+            seccompProfile:
+              type: RuntimeDefault
+          initContainers:
+            - name: detect
+              image: ghcr.io/filipcsupka/invest-buddy:latest
+              command: ["/bin/sh", "-ec", "node dist/jobs/detect.js --force-all > /work/detect.json"]
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-secrets
+                      key: DATABASE_URL
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              resources:
+                requests: {cpu: 50m, memory: 128Mi}
+                limits: {cpu: 300m, memory: 384Mi}
+              volumeMounts:
+                - name: work
+                  mountPath: /work
+          containers:
+            - name: extract
+              image: ghcr.io/filipcsupka/invest-buddy-scanner:latest
+              command: ["node", "/app/scanner/run-extract.mjs"]
+              # Haiku versus Sonnet A/B is still open. Change --model after measurement.
+              args: ["--symbols-file", "/work/detect.json", "--agent", "claude", "--model", "sonnet", "--budget-usd", "0.5"]
+              env:
+                - name: INGEST_BASE_URL
+                  value: http://web.invest.svc.cluster.local:3000
+                - name: INGEST_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-secrets
+                      key: INGEST_TOKEN
+                - name: CLAUDE_CODE_OAUTH_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-scanner-secrets
+                      key: CLAUDE_CODE_OAUTH_TOKEN
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
+              resources:
+                requests: {cpu: 250m, memory: 256Mi}
+                limits: {cpu: "2", memory: 1Gi}
+              volumeMounts:
+                - {name: work, mountPath: /work}
+                - {name: tmp, mountPath: /tmp}
+                - {name: scanner-home, mountPath: /home/scanner}
+                - {name: scan-out, mountPath: /app/scanner/out}
+          volumes:
+            - name: work
+              emptyDir: {}
+            - name: tmp
+              emptyDir: {}
+            - name: scanner-home
+              emptyDir: {}
+            - name: scan-out
+              emptyDir: {}

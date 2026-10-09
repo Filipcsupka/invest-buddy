@@ -17,15 +17,17 @@ const KEYCHAIN_SERVICE = "investbuddy-ingest";
 const MAX_FAIL_RATIO = 0.2;
 
 // ---------- args ----------
-function parseArgs(argv) {
-  const o = { dryRun: false, only: null, agent: "claude", model: null, concurrency: 3, timeoutS: 300, asOf: null, url: process.env.INGEST_URL || "http://web.invest.svc.cluster.local:3000/api/ingest/scan" };
+export function parseArgs(argv) {
+  const o = { dryRun: false, macroOnly: false, only: null, agent: "claude", model: null, maxTurns: null, concurrency: 3, timeoutS: 300, asOf: null, url: process.env.INGEST_URL || "http://web.invest.svc.cluster.local:3000/api/ingest/scan" };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const val = () => { if (i + 1 >= argv.length) usage(`missing value for ${a}`); return argv[++i]; };
     if (a === "--dry-run") o.dryRun = true;
+    else if (a === "--macro-only") o.macroOnly = true;
     else if (a === "--only") o.only = val().split(",").map((s) => s.trim().toUpperCase()).filter(Boolean);
     else if (a === "--agent") { o.agent = val(); if (!["claude", "codex"].includes(o.agent)) usage("--agent must be claude or codex"); }
     else if (a === "--model") o.model = val();
+    else if (a === "--max-turns") o.maxTurns = Number(val());
     else if (a === "--concurrency") o.concurrency = Number(val());
     else if (a === "--timeout-s") o.timeoutS = Number(val());
     else if (a === "--as-of") o.asOf = val();
@@ -37,12 +39,14 @@ function parseArgs(argv) {
   if (!Number.isInteger(o.concurrency) || o.concurrency < 1) usage("--concurrency must be 1 to 3");
   o.concurrency = Math.min(o.concurrency, 3);
   if (!(o.timeoutS > 0)) usage("--timeout-s must be positive");
+  if (o.maxTurns !== null && (!Number.isInteger(o.maxTurns) || o.maxTurns < 1)) usage("--max-turns must be a positive integer");
+  if (o.macroOnly && o.only) usage("--macro-only cannot be used with --only");
   if (o.asOf && !/^\d{4}-\d{2}-\d{2}$/.test(o.asOf)) usage("--as-of must be YYYY-MM-DD");
   return o;
 }
 function usage(msg) {
   if (msg) console.error(`error: ${msg}`);
-  console.error("usage: run-scan.mjs [--dry-run] [--only NVDA,AMD] [--agent claude|codex] [--model NAME] [--concurrency 1-3] [--timeout-s 300] [--as-of YYYY-MM-DD] [--url URL]");
+  console.error("usage: run-scan.mjs [--dry-run] [--macro-only | --only NVDA,AMD] [--agent claude|codex] [--model NAME] [--max-turns N] [--concurrency 1-3] [--timeout-s 300] [--as-of YYYY-MM-DD] [--url URL]");
   process.exit(msg ? 2 : 0);
 }
 
@@ -137,15 +141,29 @@ export function runCli(cmd, args, input, { timeoutMs, cwd }) {
   });
 }
 
+let claudeHasMaxTurns;
+function supportsClaudeMaxTurns() {
+  if (claudeHasMaxTurns === undefined) {
+    try { claudeHasMaxTurns = execFileSync("claude", ["--help"], { encoding: "utf8", timeout: 5000, env: agentEnv() }).includes("--max-turns"); }
+    catch { claudeHasMaxTurns = false; }
+  }
+  return claudeHasMaxTurns;
+}
+
 async function callAgent(opts, prompt, work, kind) {
   const timeoutMs = opts.timeoutS * 1000;
   if (opts.agent === "claude") {
     const args = ["-p", "--output-format", "json", "--no-session-persistence", "--permission-mode", "dontAsk", "--tools", "WebSearch,WebFetch", "--allowedTools", "WebSearch,WebFetch"];
     if (opts.model) args.push("--model", opts.model);
+    if (opts.maxTurns) {
+      if (supportsClaudeMaxTurns()) args.push("--max-turns", String(opts.maxTurns));
+      else args.push("--max-budget-usd", "0.5");
+    }
     const { out } = await runCli("claude", args, prompt, { timeoutMs, cwd: work });
     let env;
     try { env = JSON.parse(out); } catch { throw new Error("claude output is not JSON"); }
     if (env.is_error) throw new Error(`claude error: ${String(env.result ?? env.subtype ?? "unknown").slice(0, 200)}`);
+    if (opts.maxTurns && (!Number.isInteger(env.num_turns) || env.num_turns > opts.maxTurns)) throw new Error(`claude turn count ${env.num_turns ?? "missing"} exceeds or cannot verify cap ${opts.maxTurns}`);
     const model = opts.model || Object.keys(env.modelUsage ?? {})[0] || "default";
     return { text: env.result, model };
   }
@@ -181,7 +199,7 @@ export async function pool(items, limit, worker) {
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
   const universe = JSON.parse(readFileSync(join(here, "universe.json"), "utf8")).instruments;
-  let selected = universe;
+  let selected = opts.macroOnly ? [] : universe;
   if (opts.only) {
     const unknown = opts.only.filter((s) => !universe.some((u) => u.symbol === s));
     if (unknown.length) usage(`not in universe.json: ${unknown.join(", ")}`);
@@ -262,7 +280,8 @@ async function main() {
   log(`payload written ${payloadFile} (${tickers.length} tickers)`);
 
   if (!opts.dryRun) {
-    if (tickers.length === 0) { log("no valid tickers; not posting"); process.exit(1); }
+    if (tickers.length === 0 && !opts.macroOnly) { log("no valid tickers; not posting"); process.exit(1); }
+    if (opts.macroOnly && failed.some((f) => f.symbol === "macro")) { log("macro failed; not posting"); process.exit(1); }
     const body = JSON.stringify(payload);
     if (Buffer.byteLength(body) > 1_000_000) { log("payload over 1 MB; not posting"); process.exit(1); }
     try {

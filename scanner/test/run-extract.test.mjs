@@ -37,3 +37,18 @@ test("addUsage sums and keeps never-reported fields null", () => {
   const b = { inputTokens: 2, outputTokens: null, cacheReadTokens: 3, cacheCreationTokens: null, turns: 1 };
   assert.deepEqual(addUsage(a, b), { inputTokens: 3, outputTokens: null, cacheReadTokens: 3, cacheCreationTokens: null, turns: 2 });
 });
+
+test("empty detector list exits before auth, bundle, or model call", async () => {
+  const { mkdtempSync, writeFileSync, rmSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { spawnSync } = await import("node:child_process");
+  const dir = mkdtempSync(join(tmpdir(), "empty-detect-"));
+  try {
+    const symbolsFile = join(dir, "detect.json");
+    writeFileSync(symbolsFile, JSON.stringify({ asOf: "2026-10-09", symbols: [], reasons: {} }));
+    const result = spawnSync(process.execPath, [new URL("../run-extract.mjs", import.meta.url).pathname, "--symbols-file", symbolsFile], { encoding: "utf8", env: { ...process.env, INGEST_TOKEN: "", PATH: dir, SCAN_OUT_DIR: dir } });
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stderr, /nothing to extract/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
