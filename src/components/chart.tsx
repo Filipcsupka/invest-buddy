@@ -46,10 +46,10 @@ function path(points: (readonly [number, number] | null)[]): string {
  * dip zone under the 20-session high. Moving averages use the full history,
  * so each line starts at the first plotted session where its window is full.
  */
-export function Chart({ bars, locale, labels, count = 100, dipZone = true, animate = false }: { bars: OHLCV[]; locale: Locale; labels: Labels; count?: number; dipZone?: boolean; animate?: boolean }) {
+export function Chart({ bars, locale, labels, count = 100, dipZone = true, animate = false, averages = true }: { bars: OHLCV[]; locale: Locale; labels: Labels; count?: number; dipZone?: boolean; animate?: boolean; averages?: boolean }) {
   const closes = bars.map((bar) => bar.close);
-  const ma50 = movingAverages(closes, 50);
-  const ma200 = movingAverages(closes, 200);
+  const ma50 = averages ? movingAverages(closes, 50) : closes.map(() => null);
+  const ma200 = averages ? movingAverages(closes, 200) : closes.map(() => null);
   const start = Math.max(0, bars.length - count);
   const view = bars.slice(start);
   if (view.length < 2) return null;

@@ -49,6 +49,7 @@ async function TrackRecord({ params }: LocaleParams) {
           count={benchmark.length}
           locale={locale}
           dipZone={false}
+          averages={false}
           labels={{ name: "SPY", aria: m.chart.label, close: "SPY", ma50: m.chart.ma50, ma200: m.chart.ma200, dip: m.chart.dip, last: m.chart.last }}
         /> : <p className="notice">{m.common.noDataYet}</p>}
       </section></PaywallSegment>
