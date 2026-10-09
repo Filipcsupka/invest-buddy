@@ -54,7 +54,7 @@ What each stores:
 | `fed`, `treasury`, `bls`, `vix` | FOMC dates, H.15 yields, Treasury average rates, three BLS series (one query of the 25 per day), VIX history. |
 | `gnews`, `gdelt` | Headline, link, outlet and time only. Stored with symbol null and the tickers in `meta.symbols`, so `detect` does not rescan a ticker for each headline. |
 
-Every document carries `meta.license_note` and `meta.display_allowed`. It is true only for SEC, FDA (CC0), USAspending, Treasury, Fed and BLS data. Everything else is false until terms are checked. The Google News feed text allows personal, non-commercial use only.
+The list of sources and their licence class lives in `src/data/sources-registry.ts` and, after migration 022, in the `data_sources` table; `LICENSES` in `src/collectors/sources/common.ts` reads from it. Every document carries `meta.license_note` and `meta.display_allowed`. It is true only for SEC, FDA (CC0), USAspending, Treasury, Fed and BLS data. Everything else is false until terms are checked. The Google News feed text allows personal, non-commercial use only.
 
 ### Alpha Vantage EPS surprise
 
