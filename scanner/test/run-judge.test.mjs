@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs, validateJudgeOutput, normalizeOutput, changedSignals, mergeIdeas, buildModelInput, inventedFigures, figureContext, judgeHash, agentModeArgs, parseAgentEnvelope, amountText } from "../run-judge.mjs";
+import { figureValuesIn, sameFigureValues, sameProtectedTokens } from "../figure-tokens.mjs";
 import { callAgentNoTools } from "../run-extract.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -163,12 +164,81 @@ test("figures: digits in urls, dates, ids and accession numbers are not allowed 
   assert.deepEqual(inventedFigures(["see 2026-10-02"], inp), [2026, 10, 2]);
 });
 
-test("figures: the sign matters, ranges and windows are not signs", () => {
+test("figures: input magnitudes match either sign, ranges and windows are not signs", () => {
   const inp = { change: -5.2, up: 3.1, range: "EUR 60-90" };
   assert.deepEqual(inventedFigures(["fell -5.2 percent", "rose 3.1"], inp), []);
-  assert.deepEqual(inventedFigures(["rose 5.2 percent"], inp), [5.2]);
-  assert.deepEqual(inventedFigures(["fell -3.1 percent"], inp), [-3.1]);
+  assert.deepEqual(inventedFigures(["fell 5.2 percent"], inp), []);
+  assert.deepEqual(inventedFigures(["fell -3.1 percent"], inp), []);
+  assert.deepEqual(inventedFigures(["fell 5.3 percent"], inp), [5.3]);
   assert.deepEqual(inventedFigures(["EUR 60-90 and the 20-day high"], inp), []);
+});
+
+test("incident: decimal comma and grouped thousands keep bilingual figures equal", () => {
+  assert.deepEqual(figureValuesIn("RSI 70,7 and revenue 1\u202f200,50"), [70.7, 1200.5]);
+  assert.ok(sameFigureValues("RSI 70.7 and revenue 1,200.50", "RSI 70,7 and revenue 1\u00a0200,50"));
+  assert.ok(sameFigureValues("Revenue 1,200.50 and 50,000.12", "Tržby 1.200,50 a 50 000,12"));
+  assert.deepEqual(inventedFigures(["Revenue 1.200,50 and 50 000,12"], {}), [1200.5, 50000.12]);
+  assert.deepEqual(inventedFigures(["Revenue 1.234.567 and 1 234 567"], {}), [1234567]);
+  assert.equal(sameFigureValues("RSI 70.7", "RSI 70,8"), false);
+  const original = words("NVDA");
+  const sk = { ...original.sk, whatHappened: ["Cena je 7,4 percent pod 20-dňovým maximom.", original.sk.whatHappened[1]], numbers: [original.sk.numbers[0], { ...original.sk.numbers[1], value: "7,4%" }, { ...original.sk.numbers[2], value: "48,2" }] };
+  assert.doesNotThrow(() => merge([{ ...original, sk }, words("AMD", { evidence: [] })]));
+  assert.throws(() => merge([{ ...original, sk: { ...sk, whatHappened: ["Cena je 7,5 percent pod 20-dňovým maximom.", sk.whatHappened[1]] } }, words("AMD", { evidence: [] })]), /figures not in the input|Slovak prose figures differ/);
+});
+
+test("incident: AMD, AMZN, CRWD and TSLA bilingual fragments retain their figures", () => {
+  const fragments = [
+    ["AMD", "above the 200-day average and RSI at 70.7", "nad 200-dňovým priemerom a RSI na 70,7"],
+    ["AMZN", "price above its 20-, 50- and 200-day averages", "cena nad 20-, 50- a 200-dňovými priemermi"],
+    ["CRWD", "The stock fell 4.81% on the latest session", "Akcia v poslednej seanse klesla o 4,81%"],
+    ["TSLA", "the price 3.54% below its 200-day average and 60-day relative strength", "cena 3,54% pod 200-dňovým priemerom a 60-dňová relatívna sila"],
+  ];
+  for (const [symbol, en, sk] of fragments) {
+    assert.equal(sameFigureValues(en, sk), true, symbol);
+    assert.equal(sameProtectedTokens(en, sk), true, symbol);
+  }
+});
+
+test("incident: AMZN 20-, 50- and 200-day windows do not invent 50", () => {
+  const phrase = "regime, price above its 20-, 50- and 200-day averages and positive momentum";
+  assert.deepEqual(inventedFigures([phrase], {}), []);
+  assert.deepEqual(inventedFigures(["cena nad 20-, 50- a 200-dňovými priemermi"], {}), []);
+  assert.deepEqual(inventedFigures(["cena nad 20-, 50- a 200-dňové priemery"], {}), []);
+  assert.deepEqual(inventedFigures(["price above its 20-, 55- and 200-day averages"], {}), [20, 55]);
+  const original = words("NVDA");
+  const changed = { ...original.sk, whatHappened: ["Cena je 7.4 percent pod 50-dňovým maximom.", original.sk.whatHappened[1]] };
+  assert.throws(() => merge([{ ...original, sk: changed }, words("AMD", { evidence: [] })]), /Slovak prose figures differ/);
+});
+
+test("incident: CRWD 4.81 latest-session fall still needs an input figure", () => {
+  const phrase = "The stock fell 4.81% on the latest session and is rated Neutral.";
+  assert.deepEqual(inventedFigures([phrase], { technicals: { return1dPercent: -4.8 } }), [4.81]);
+  assert.deepEqual(inventedFigures([phrase], { technicals: { return1dPercent: -4.81 } }), []);
+});
+
+test("incident: TSLA signed MA distance, two-decimal rounding and 60-day window", () => {
+  const phrase = "The entry regime is downtrend, with the price 3.54% below its 200-day average and negative 60-day relative strength.";
+  assert.deepEqual(inventedFigures([phrase], { technicals: { vsMa200Percent: -3.543 } }), []);
+  assert.deepEqual(inventedFigures([phrase], { technicals: { vsMa200Percent: -3.55 } }), [3.54]);
+  assert.deepEqual(inventedFigures(["relative strength fell 60%"], {}), [60]);
+});
+
+test("incident: AMD 70.7 is one token and 0.7 context cannot point inside it", () => {
+  const phrase = "above the 200-day average and RSI at 70.7.";
+  assert.deepEqual(figureValuesIn(phrase), [200, 70.7]);
+  assert.deepEqual(inventedFigures([phrase], { technicals: { rsi14: 70.7 } }), []);
+  assert.equal(figureContext([phrase], 0.7), "no context");
+  assert.deepEqual(figureValuesIn("70.7, 0.7, 1,200.50, 50%"), [70.7, 0.7, 1200.5, 50]);
+  assert.deepEqual(inventedFigures(["RSI at 70.7 and a 0.7% fall"], { technicals: { rsi14: 70.7 } }), [0.7]);
+});
+
+test("scientific notation and changed indicator tokens cannot bypass the guard", () => {
+  assert.deepEqual(figureValuesIn("1e9 and 3.5E-2"), [1e9, 0.035]);
+  assert.deepEqual(inventedFigures(["Revenue reached 1e9"], { score: 1 }), [1e9]);
+  assert.equal(sameProtectedTokens("Q3 FY2026 RSI MA200 SPY", "Q4 FY2027 RSI MA50 SPY"), false);
+  const original = words("NVDA", { verdict: "Q3 FY2026 results above MA200, RSI stable versus SPY." });
+  const changed = { ...original.sk, verdict: "Q4 FY2027 výsledky nad MA50, RSI stabilné oproti SPY." };
+  assert.throws(() => merge([{ ...original, sk: changed }, words("AMD", { evidence: [] })]), /Slovak prose figures differ/);
 });
 
 test("figures: labels are not figures", () => {
@@ -183,6 +253,7 @@ test("figures: labels are not figures", () => {
   ok("Filed an 8-K and a 10-Q, Form 4, Item 2.02, 13D.");
   ok("Starter is about 1/3 of a full position, or 33% of a full position.");
   ok("1. First point\n2. Second point");
+  assert.deepEqual(inventedFigures(["the invented 999-day average"], inp), [999]);
 });
 
 test("figures: real figures next to labels are still caught", () => {
