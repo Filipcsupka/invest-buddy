@@ -56,6 +56,22 @@ The public host routes to the web, while its Traefik middleware rewrites `/api/i
 
 The web init container runs `npm run migrate` before each new web pod starts. It retries while PostgreSQL is unavailable. Migrations are recorded in `schema_migrations` and guarded by an advisory lock. Check schema compatibility with the rollback image before rollout.
 
+## Feature flags
+
+`src/config/flags.ts` is the one place flags are read. Each is a plain env var on the web Deployment with value `on` or `off`; unset or any other value uses the default. Restart the web pods after changing one.
+
+| Flag | Default | Effect |
+| --- | --- | --- |
+| `PAYWALL` | off | Paywall segments (see `docs/paywall-segments.md`). |
+| `AUTH` | off | Sign-in. |
+| `BILLING` | off | Payments. |
+| `WAITLIST` | off | Waitlist sign-up. |
+| `ADVICE_OUTPUT` | off | Action wording on idea cards and sizing. |
+| `IDEAS_PAGE` | off (on when `DATA_MODE=fixture`) | `/ideas` page and nav link. |
+| `OWNER_VIEW` | off | Private owner allocation view. |
+
+Only `IDEAS_PAGE` and `OWNER_VIEW` are read by code today; the others are declared for the tasks that add them.
+
 ## Operator disclosure banner
 
 The web hides the operator disclosure line until its text is set. It reads one plain environment variable per language and shows the text on the dashboard, company and track-record pages. Set it as a normal env var on the web Deployment (it is not a secret). Blank or unset keeps the line hidden.

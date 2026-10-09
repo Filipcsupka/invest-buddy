@@ -1,4 +1,5 @@
 import pg from "pg";
+import { flags } from "../config/flags";
 import { listIdeas, type StoredIdea } from "../db/ideas";
 import { symbolReviewDates } from "../db/extraction-runs";
 import { sampleIdeas } from "../ideas/fixtures";
@@ -8,7 +9,7 @@ import { showsOnCompanyPage } from "../ideas/public";
  * The signal and its size tier are public, but ideas also carry the owner's EUR band, which ADR-001 keeps out of the public product.
  * The ideas page renders that private view, so it and its nav link stay hidden unless IDEAS_PAGE=on, or the app runs on fixture data.
  */
-export const ideasEnabled = () => process.env.IDEAS_PAGE === "on" || process.env.DATA_MODE === "fixture";
+export const ideasEnabled = () => flags().IDEAS_PAGE;
 
 export interface IdeasData { rows: StoredIdea[]; sample: boolean }
 export async function latestIdeas(limit = 50): Promise<IdeasData> {
