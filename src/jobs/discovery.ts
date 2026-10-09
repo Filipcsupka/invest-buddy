@@ -230,6 +230,15 @@ export function rankCandidates(rows: DiscoveryCandidate[], known: Set<string>, l
   return [...grouped.values()].sort((a, b) => b.score - a.score || a.symbol.localeCompare(b.symbol)).slice(0, limit);
 }
 
+/** SEC tickers can include a security class. Skip explicit preferred, warrant, unit and right suffixes; plain symbols remain eligible. */
+export function nonCommonStockReason(symbol: string): string | null {
+  if (/[.-]P(?:R)?[A-Z]?$/.test(symbol)) return "preferred-share symbol";
+  if (/[.-]W(?:S|T)?$/.test(symbol) || /^[A-Z]{4}W$/.test(symbol)) return "warrant symbol";
+  if (/[.-]U$/.test(symbol) || /^[A-Z]{4}U$/.test(symbol)) return "unit symbol";
+  if (/[.-]R$/.test(symbol) || /^[A-Z]{4}R$/.test(symbol)) return "rights symbol";
+  return null;
+}
+
 export async function screenCandidates(rows: DiscoveryCandidate[], date: string, barsFor: (symbol: string) => Promise<OHLCV[]>,
   macro: { growthSectorRotation: boolean | null; dataTailwind: boolean | null }, benchmarkClose: number | null | ((date: string) => Promise<number | null>)): Promise<DiscoveryCandidate[]> {
   const screened: DiscoveryCandidate[] = [];
@@ -250,6 +259,20 @@ export async function screenCandidates(rows: DiscoveryCandidate[], date: string,
     screened.push({ ...row, ruleScore: result.total, ruleState: result.state, signalDate, benchmarkClose: spyClose });
   }
   return screened.sort((a, b) => (b.ruleScore ?? 0) - (a.ruleScore ?? 0) || b.score - a.score || a.symbol.localeCompare(b.symbol));
+}
+
+export async function screenDiscoveryShortlist(rows: DiscoveryCandidate[], date: string, barsFor: (symbol: string) => Promise<OHLCV[]>,
+  macro: { growthSectorRotation: boolean | null; dataTailwind: boolean | null }, benchmarkClose: number | null | ((date: string) => Promise<number | null>)) {
+  const screened: DiscoveryCandidate[] = [];
+  const skipped: { symbol: string; reason: string }[] = [];
+  const failures: { symbol: string; reason: string }[] = [];
+  for (const row of rows) {
+    const reason = nonCommonStockReason(row.symbol);
+    if (reason) { skipped.push({ symbol: row.symbol, reason }); continue; }
+    try { screened.push(...await screenCandidates([row], date, barsFor, macro, benchmarkClose)); }
+    catch (error) { failures.push({ symbol: row.symbol, reason: error instanceof Error ? error.message : String(error) }); }
+  }
+  return { screened, skippedCount: skipped.length, skipped, failureCount: failures.length, failures };
 }
 
 export async function saveCandidates(db: pg.Pool, week: string, rows: DiscoveryCandidate[], max: number = DISCOVERY.maxCandidatesPerWeek): Promise<DiscoveryCandidate[]> {
@@ -348,14 +371,11 @@ async function main() {
       const row = await pool.query<{ close: string }>("SELECT close FROM daily_bars WHERE ticker='SPY' AND bar_date=$1::date", [signalDate]);
       return row.rows[0] ? Number(row.rows[0].close) : null;
     };
-    const screened: DiscoveryCandidate[] = [];
-    for (const row of shortlist) {
-      try { screened.push(...await screenCandidates([row], date, barsFor, macro, benchmarkClose)); }
-      catch (error) { process.stderr.write(`${row.symbol}: screening failed: ${error instanceof Error ? error.message : String(error)}\n`); }
-    }
+    const { screened, skippedCount, skipped, failureCount, failures } = await screenDiscoveryShortlist(shortlist, date, barsFor, macro, benchmarkClose);
+    for (const failure of failures) process.stderr.write(`${failure.symbol}: screening failed: ${failure.reason}\n`);
     const selected = screened.sort((a, b) => (b.ruleScore ?? 0) - (a.ruleScore ?? 0) || b.score - a.score || a.symbol.localeCompare(b.symbol)).slice(0, DISCOVERY.maxCandidatesPerWeek);
     const saved = await saveCandidates(pool, week, selected);
-    process.stdout.write(`${JSON.stringify({ weekStart: week, candidates: saved })}\n`);
+    process.stdout.write(`${JSON.stringify({ weekStart: week, candidates: saved, skippedCount, skipped, failureCount, failures })}\n`);
   } finally { await pool.end(); }
 }
 if (/(?:^|[/\\])discovery\.(?:ts|js)$/.test(process.argv[1] ?? "")) main().catch((error) => { console.error(error instanceof Error ? error.message : error); process.exitCode = 1; });
