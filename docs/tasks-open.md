@@ -1,6 +1,6 @@
 # Open tasks
 
-State on 2026-10-06. A1 to A4 are done (see the notes under each). Each task can be picked up alone or given to one agent. "Approval" means the owner must say yes before the step runs (cluster, push, secrets, money). Pick the lowest open task in a group whose dependencies are done. Tick the box and add one line on what changed.
+State on 2026-10-09. Live state was read from khtz on 2026-10-09; see the open list in section H. A1 to A7 are done (see the notes under each). Each task can be picked up alone or given to one agent. "Approval" means the owner must say yes before the step runs (cluster, push, secrets, money). Pick the lowest open task in a group whose dependencies are done. Tick the box and add one line on what changed.
 
 Groups: A first live run, B web, C pipeline quality, D data and accounts, E operations, F cadence.
 
@@ -55,8 +55,8 @@ Groups: A first live run, B web, C pipeline quality, D data and accounts, E oper
 - DoD: `judge_runs` has a row, `trade_ideas` has ideas that each have at least two evidence links, and the figure check passes. `/ideas` stays hidden until B3 is decided.
 - Approval: yes.
 
-### A8. Switch on the schedule (schedule on 2026-10-08, 1 of 3 clean nights so far)
-- Note: all scheduled steps are unsuspended. The 2026-10-08 night (prices, collect, detect, extract, macro, reconcile, daily, judge, digest, portfolio) finished with no failed Job. Collect ended `partial` because the RSS source failed with no reason in the log; the log line now prints the reason. Close A8 after two more clean nights.
+### A8. Switch on the schedule (live; daily chain ran on schedule on 2026-10-08 and 2026-10-09)
+- Note: all scheduled steps are unsuspended. The 2026-10-08 night (prices, collect, detect, extract, macro, reconcile, daily, judge, digest, portfolio) finished with no failed Job. Collect ended `partial` because the RSS source failed with no reason in the log; the log line now prints the reason. Status 2026-10-09: collect, detect, extract, macro, reconcile and daily completed on schedule overnight (extract: 35 Haiku calls, 34 tickers ok, 0 failed, $0.31). The scheduled judge run at 05:30 failed its figure check (see H1) and was fixed by PR #57; no scheduled judge run on the fixed image has been seen yet. Close A8 after one clean scheduled judge run.
 - Depends on: A6 and A7 each ran cleanly once.
 - Do: unsuspend collect, detect, extract, reconcile, daily and judge in infra one at a time, in schedule order, over several days.
 - DoD: three consecutive weekdays with no failed Job and a fresh `/api/health`.
@@ -221,8 +221,8 @@ Design and sources: `docs/cadence-design.md`. This group replaces the daily extr
 - Do: drawdown band, valuation band, turnover target (30% a year) and the insider cluster size are placeholders. Check them against `InvestingGuide.md` and your own rules.
 - DoD: owner signs off the values; they live in one config file with a comment on where each came from.
 
-### F7. Discovery of new names (built, first run Saturday 2026-10-10)
-- Status 2026-10-08: CronJob live, `discovery_candidates` is empty until the first run. Check it on Saturday.
+### F7. Discovery of new names (built; first scheduled run Saturday 2026-10-10)
+- Status 2026-10-09: a one-off Job ran 2.5 minutes and returned no candidates, because the SEC frames source threw on a 404 for the retired `SalesRevenueNet` concept. Fixed in PR #59 (a 404 for one concept and quarter is now an empty frame). The fix is not yet built into a live image. Twelve Data also rejected two preferred-share symbols (BHR-PD, STWI). Check `discovery_candidates` after the Saturday run.
 - Why: the old scan found names outside the fixed universe (for example EFXT after a 450 MW data-center contract, PCVX after a Phase 3 result, WULF after a power-capacity amendment) by following beneficiary chains. The script-first pipeline only covers the 35 tickers, so it can never propose a new name.
 - Do: a separate, low-frequency discovery step. Sources that cost no tokens first: EDGAR current-filings feed filtered to 8-K Items 1.01 and 2.02 (material agreements), big price and volume movers, 13F changes of a short list of managers, and a themes file (AI power, cooling, networking, biotech catalysts) with beneficiary chains. A cheap model ranks the shortlist; only the top few get a full bundle and a judge run. Run it weekly, plus the semi-annual re-screen from F5.
 - DoD: a run produces at most N candidates per week (N in config) with source links; a candidate that passes goes into the same extract and judge path as holdings; a test shows a ticker outside the universe can be added without code changes (universe from a table or file).
@@ -264,6 +264,31 @@ Today `src/engine/signals.ts` ties the action to the portfolio: no baseline forc
 ### G6. Owner monthly allocation (implemented locally; owner values open)
 - Do: calculate each proposed order from the current free broker cash, including cash carried from earlier months. Use a tier share with an order floor and ceiling, keep a reserve for adds, rank competing signals by score, and enforce the existing per-name portfolio cap. Show the amount and its reason only in the flag-gated owner view. Carry unused cash forward; show a cash-drag note above the configured month threshold without forcing a trade. An add needs confirmed execution history so the one-add-per-ticker-per-month rule can be checked. Keep stop-loss sizing out of this long-term thesis process.
 - DoD: one documented placeholder config holds the owner and broker choices; the pure allocation function covers no signals, zero cash, cap and minimum limits, add history, and competing signals in tests. The private EN/SK view reads the Flex baseline and stored signals, while public pages expose no owner amounts. The owner confirms the tier shares, reserve, cap treatment, IBKR fee and minimum, and how executed adds will be recorded before using the suggestions.
+
+## H. Found on 2026-10-09 (not written down before)
+
+Evidence: `kubectl -n invest get cronjob,jobs`, `judge_runs`, `scheduled_gates` and the one-off Jobs run on 2026-10-09.
+
+### H1. Scheduled judge failed its figure check (fixed, unverified on the schedule)
+- The 05:30 judge on 2026-10-09 stored nothing: "Slovak prose figures differ from English" and "figures not in the input" (cost $0.20). PR #57 relaxed the check; a manual run on the fixed image stored 4 ideas ($0.12).
+- DoD: one scheduled judge run on the fixed image stores ideas (next: Saturday 05:30). Nothing alerts on a failed judge Job today, which is E2.
+
+### H2. Discovery returns no candidates (fixed in PR #59, not yet live)
+- See F7. DoD: after the Saturday run, `discovery_candidates` has rows or a logged reason for none.
+
+### H3. Weekly jobs have only run as one-off Jobs
+- Discovery and the review calendar ran as one-off Jobs on 2026-10-09 (review calendar: 6 tickers ok, 0 failed, $0.035). The scheduled runs are Saturday 09:30 and 11:00.
+- DoD: both Jobs complete on the schedule.
+
+### H4. Digest is suspended
+- `invest-buddy-digest` is suspended in infra and `ConsoleMailer` only logs (C3). DoD: owner picks a real mailer or leaves it off.
+
+### H5. Dependabot opens many major bumps
+- `.github/dependabot.yml` groups only minor and patch updates, so each major bump is its own PR (11 opened at once on 2026-10-08). Five CI-action bumps were merged on 2026-10-09; the Node, TypeScript, ESLint, vitest and `@types/node` majors were closed.
+- DoD: config limited to minor and patch, or a monthly grouped run.
+
+### H6. Judge one-off Jobs need a gate
+- The judge reads `scheduled_gates` and returns 404 "No detect gate" when the day's gate does not exist or was already judged. A manual judge Job outside that window fails by design; use `--symbols-file` or wait for the gate.
 
 ## Not planned
 
