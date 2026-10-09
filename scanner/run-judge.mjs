@@ -132,6 +132,7 @@ const LABELS = [
   /(?:^|\n)\s*\d+[.)](?=\s)|\(\d+\)|#\d+|\b(?:step|rank|ranked|item|point|number|no\.)\s+\d+\b(?!\.\d)/gi,
   /\b(?:S&P|SP|Nasdaq|NASDAQ|Russell|Dow|DJIA|FTSE|DAX|Stoxx|STOXX)[- ]?(?:Composite\s+)?\d{2,4}\b/g,
   /\b\d+\/\d+\b|\b\d+(?:\.\d+)?\s*(?:%|percent)\s+of\s+(?:a|the)\s+(?:full\s+)?position\b/gi,
+  /\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2}(?:st|nd|rd|th)?\b/g,
 ];
 const stripLabels = (text) => LABELS.reduce((t, re) => t.replace(re, (m, y) => (typeof y === "string" ? m.replace(y, " ") : " ")), text);
 const URL_TEXT = /https?:\/\/\S+/g;
@@ -167,7 +168,8 @@ export function inventedFigures(texts, inputValue) {
   const allowedMagnitudes = new Set([...allowed].flatMap((n) => [Math.abs(n), Math.round(Math.abs(n) * 100) / 100]));
   const bad = [];
   for (const t of texts) {
-    const text = String(t).replace(ISO_DATE, (d) => (dates.has(d) ? " " : d));
+    // The model sometimes writes non-breaking hyphens or en dashes (60\u2011day); the label patterns expect a plain hyphen.
+    const text = String(t).replace(/[\u2010-\u2015]/g, "-").replace(ISO_DATE, (d) => (dates.has(d) ? " " : d));
     for (const n of figuresIn(stripLabels(text))) {
       const value = Math.abs(n);
       if (!allowedMagnitudes.has(value) && !ruleFigure(text, value)) bad.push(n);
@@ -242,7 +244,8 @@ function mergeOne(idea, sig, modelInput, notes) {
     }
     if (idea.evidence.length < 2 && !NO_EVIDENCE_OK.includes(sig.action)) throw new Error(`${idea.symbol}: fewer than two evidence links for ${sig.action}`);
     for (const k of ["downgrade", "conflict"]) if (idea[k] && !urls.has(idea[k].evidenceUrl)) throw new Error(`${idea.symbol}: ${k} cites a url not in the input`);
-    const figures = inventedFigures([...wording(idea), ...wording({ ...idea.sk, downgrade: { reason: idea.sk.downgradeReason }, conflict: { reason: idea.sk.conflictReason } })], { item });
+    // English is the canonical text: every figure in it must come from the input. Slovak is checked to carry exactly the same figures as English below, so label forms like 52-týždňový or 60 dní need no separate rule.
+    const figures = inventedFigures(wording(idea), { item });
     if (figures.length) throw new Error(`${idea.symbol}: figures not in the input: ${figures.slice(0, 5).join(", ")} (${figureContext(wording(idea), figures[0])})`);
     const publicWording = [...wording(idea), ...wording({ ...idea.sk, downgrade: { reason: idea.sk.downgradeReason }, conflict: { reason: idea.sk.conflictReason } })].join(" ");
     if (/\b(?:you should buy|you should sell|buy now|sell now|guaranteed return|price target|mal by si kúpiť|mal by si predať|kúp teraz|predaj teraz|garantovan\w* výnos|cieľov\w* cen\w*)\b/i.test(publicWording)) throw new Error(`${idea.symbol}: ADR-001 wording is not informational`);

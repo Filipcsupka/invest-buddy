@@ -126,7 +126,7 @@ test("evidence urls outside the input, invented figures and wrong symbols fail t
 
 test("Slovak wording rejects invented figures and changed number values", () => {
   assert.throws(() => merge([words("NVDA", { sk: { ...words("NVDA").sk, verdict: "Výnos 999 percent." } }), words("AMD", { evidence: [] })]), /Slovak prose figures differ|figures not in the input/);
-  assert.throws(() => merge([words("NVDA", { sk: { ...words("NVDA").sk, numbers: [{ label: "Skóre", value: "999 z 25" }, ...words("NVDA").sk.numbers.slice(1)] } }), words("AMD", { evidence: [] })]), /figures not in the input/);
+  assert.throws(() => merge([words("NVDA", { sk: { ...words("NVDA").sk, numbers: [{ label: "Skóre", value: "999 z 25" }, ...words("NVDA").sk.numbers.slice(1)] } }), words("AMD", { evidence: [] })]), /Slovak numbers differ|figures not in the input/);
   assert.throws(() => merge([words("NVDA", { sk: { ...words("NVDA").sk, evidence: [{ url: U2, label: "x" }, { url: U1, label: "y" }] } }), words("AMD", { evidence: [] })]), /Slovak evidence URLs differ/);
 });
 
@@ -607,4 +607,19 @@ test("ADR-001 wording is checked in both languages", () => {
   assert.throws(() => merge([words("NVDA", { verdict: "You should buy now." }), words("AMD", { evidence: [] })]), /ADR-001/);
   const sk = words("NVDA"); sk.sk.verdict = "Kúp teraz.";
   assert.throws(() => merge([sk, words("AMD", { evidence: [] })]), /ADR-001/);
+});
+
+test("Slovak label forms and month-day dates are not invented figures (2026-10-09 incident)", () => {
+  const sk = (verdict) => ({ sk: { ...words("NVDA").sk, verdict } });
+  // 52-týždňový and 60 dní are Slovak window labels; "Aug 26" is a date. English is checked against the input, Slovak must carry the same figures.
+  const ok = merge([words("NVDA", { verdict: "Price is near its 52-week high after the Aug 26 release, 60 days of data.", ...sk("Cena je blízko 52-týždňového maxima po správe z Aug 26, 60 dní dát.") }), words("AMD", { evidence: [] })]);
+  assert.ok(ok);
+  // A changed Slovak figure is still rejected, and an invented English figure is still rejected.
+  assert.throws(() => merge([words("NVDA", { verdict: "Price is near its 52-week high.", ...sk("Cena je blízko 53-týždňového maxima.") }), words("AMD", { evidence: [] })]), /Slovak prose figures differ/);
+  assert.throws(() => merge([words("NVDA", { verdict: "Price fell 4.81% on the day.", ...sk("Cena klesla o 4.81% za deň.") }), words("AMD", { evidence: [] })]), /figures not in the input/);
+});
+
+test("window labels written with non-breaking hyphens or en dashes are labels, not figures", () => {
+  assert.deepEqual(inventedFigures(["and 60\u2011day relative strength", "over a 60\u2013day window", "20\u2011, 50\u2011 and 200\u2011day averages"], {}), []);
+  assert.deepEqual(inventedFigures(["Margin of 33 percent."], {}), [33]);
 });
