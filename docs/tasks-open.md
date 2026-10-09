@@ -328,6 +328,10 @@ Evidence: `kubectl -n invest get cronjob,jobs`, `judge_runs`, `scheduled_gates` 
 - Done in the `web-presentable` PR: empty operator disclosure no longer renders; live home and dashboard drop fixture labels; `/robots.txt` points to the sitemap; unavailable pages and unknown tickers return HTTP 404; stored signal and action codes have EN/SK labels.
 - Remains: publish real operator disclosure text when ready. Judge-written verdicts, event and rationale bullets, number labels, plan text, evidence labels, and conflict or downgrade explanations can still appear in English on SK pages when a Slovak translation is absent. The card marks that fallback; it does not invent a translation.
 
+## J. Q4 roadmap
+
+Owner decision 2026-10-09: the weeks to 2026-12-31 go to collecting data so history accumulates, owner portfolio features, a finished web with free and paid tiers built and tested (payment off), and a marketing and waitlist launch at the end of the year. This replaces the earlier plan to open a waitlist first (PR #83, closed). The plan, owner decisions, schedule and gates are in `docs/roadmap/README.md`; the tasks (D, W, EN, PL) are in the lane files next to it. After each merged roadmap task, add one status line here with the task ID, the PR and the live proof.
+
 ## Not planned
 
 - Go or microservice rewrite. The workload is about 35 tickers a day and the jobs share types and logic with the web. Revisit only if one collector gets heavy or the pieces get different owners.
