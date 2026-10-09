@@ -40,6 +40,22 @@ describe("company page", () => {
     expect(html).not.toContain("SAMPLE DATA");
   });
 
+  it("says so when a stock has no idea yet, and does not repeat the ticker as the name", async () => {
+    const [row] = await scoredUniverse();
+    const instrument = { ...row.instrument, name: row.instrument.ticker };
+    universe.mockResolvedValue([instrument]);
+    scores.mockResolvedValue({ rows: [{ ...row, instrument }], sample: false, lastUpdated: "2026-10-08", stale: false });
+    idea.mockResolvedValue(null);
+    for (const [locale, text] of [["en", "No trade idea for this stock yet"], ["sk", "zatiaľ nie je investičný nápad"]]) {
+      const html = renderToStaticMarkup(await Company(props(instrument.ticker, locale)));
+      expect(html).toContain(text);
+      expect(html).not.toContain("title-name");
+    }
+    const meta = await page.generateMetadata(props(instrument.ticker));
+    expect(JSON.stringify(meta)).not.toContain(`${instrument.ticker}, ${instrument.ticker}`);
+    expect(JSON.stringify(meta)).toContain('"url":"/og"');
+  });
+
   it("shows a dated stale notice for an old live score in both languages", async () => {
     const [row] = await scoredUniverse();
     universe.mockResolvedValue([row.instrument]);
@@ -181,8 +197,10 @@ describe("company page", () => {
       expect(html).toContain('href="https://example.com/nvda-release"');
       expect(html.match(/href="https:\/\/example\.com/g)).toHaveLength(2);
     });
-    it("is hidden when there is no idea to show (HOLD is filtered by companyIdea)", async () => {
-      expect(await render({ sample: false, idea: null })).not.toContain("Latest trade idea");
+    it("shows an empty-state line, no card, when there is no idea to show (HOLD is filtered by companyIdea)", async () => {
+      const html = await render({ sample: false, idea: null });
+      expect(html).toContain("No trade idea for this stock yet");
+      expect(html).not.toContain("Informational screening output");
     });
     it("shows no EUR amount in any field while the flag is off", async () => {
       const html = await render({ sample: false, eur: false, idea: withIdea(add) });

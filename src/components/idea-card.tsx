@@ -2,6 +2,7 @@ import { fill, formatDate, formatNumber, getMessages, type Locale } from "../i18
 import styles from "./idea-card.module.css";
 import type { StoredIdea } from "../db/ideas";
 import { hasBuySize, publicTier, stripEur } from "../ideas/public";
+import { localizeCodes, localizeEvidenceLabel } from "../ideas/localize";
 
 const RATING_KEY = { "Very strong": "Very strong", Strong: "Strong", Good: "Good", Neutral: "Neutral", Weak: "Weak" } as const;
 
@@ -14,7 +15,17 @@ export function IdeaCard({ idea: stored, locale, showAmounts = true, nested = fa
   // ADR-001: without the flag no EUR amount or band is rendered, in any field.
   const translated = locale === "sk" ? stored.translations?.sk : undefined;
   const selected = translated ? { ...stored, ...translated, conflictNote: translated.conflictNote ?? translated.conflictReason ?? stored.conflictNote, plan: { ...stored.plan, ...translated.plan } } : stored;
-  const idea = showAmounts ? selected : stripEur(selected);
+  const stripped = showAmounts ? selected : stripEur(selected);
+  const textLocale: Locale = translated ? locale : "en";
+  const t = (value: string) => localizeCodes(textLocale, value);
+  const idea = {
+    ...stripped,
+    verdict: t(stripped.verdict),
+    whatHappened: stripped.whatHappened.map(t),
+    whyItMatters: stripped.whyItMatters.map(t),
+    conflictNote: stripped.conflictNote ? t(stripped.conflictNote) : stripped.conflictNote,
+    plan: { ...stripped.plan, trigger: t(stripped.plan.trigger), invalidation: t(stripped.plan.invalidation), opportunityCost: t(stripped.plan.opportunityCost) },
+  };
   const englishFallback = locale !== "en" && (!translated || Boolean(stored.conflictNote && translated.conflictNote == null && translated.conflictReason == null) || Boolean(stored.downgradedFrom && stored.translations?.en?.downgradeReason && !translated.downgradeReason));
   const H = nested ? "h3" : "h2";
   const L = nested ? "h4" : "h3";
@@ -23,6 +34,7 @@ export function IdeaCard({ idea: stored, locale, showAmounts = true, nested = fa
   const action = m.actions[idea.action];
   const headline = showAmounts
     ? fill(m.headline, { symbol: idea.symbol, action, min: formatNumber(locale, idea.amountMinEur), max: formatNumber(locale, idea.amountMaxEur) })
+    : tier && idea.action === "ADD" && (tier === "ADD_THIRD" || tier === "ADD_HALF") ? fill(m.headlinePublic, { symbol: idea.symbol, action: m.tiersShort[tier] })
     : hasBuySize(tier) ? fill(m.headlineTier, { symbol: idea.symbol, action, size: m.tiersShort[tier] }) : fill(m.headlinePublic, { symbol: idea.symbol, action });
   const ratings: [string, keyof typeof idea.setup][] = [[m.company, "company"], [m.entry, "entry"], [m.catalyst, "catalyst"]];
   return (
@@ -31,7 +43,7 @@ export function IdeaCard({ idea: stored, locale, showAmounts = true, nested = fa
         <H id={`${id}-title`} className={styles.headline}>{headline}</H>
         <p className={styles.meta}>
           <span>{fill(m.dated, { date: formatDate(locale, idea.asOf) })}</span>
-          {englishFallback && <span className="muted small">{m.shownInEnglish}</span>}
+          {englishFallback && <span className={`stamp ${styles.flag}`}>{m.shownInEnglish}</span>}
           {idea.unconfirmed && <span className={`stamp ${styles.flag}`} title={m.unconfirmedNote}>{m.unconfirmed}</span>}
           {idea.conflictNote && <span className={`stamp ${styles.flag}`}>{m.conflict}</span>}
           {idea.downgradedFrom && <span className={`stamp ${styles.flag}`}>{fill(m.downgraded, { action: m.actions[idea.downgradedFrom] })}</span>}
@@ -84,7 +96,7 @@ export function IdeaCard({ idea: stored, locale, showAmounts = true, nested = fa
           <ul className={styles.links}>
             {idea.evidence.map((e) => (
               <li key={e.url}>
-                <a href={e.url} target="_blank" rel="noopener noreferrer">{e.label}<span className="visually-hidden"> ({m.externalLink})</span></a>
+                <a href={e.url} target="_blank" rel="noopener noreferrer">{localizeEvidenceLabel(textLocale, e.label)}<span className="visually-hidden"> ({m.externalLink})</span></a>
               </li>
             ))}
           </ul>

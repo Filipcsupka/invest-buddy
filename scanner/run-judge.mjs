@@ -228,6 +228,12 @@ export function mergeIdeas(output, news, modelInput, { collect = false } = {}) {
   else if (missing.length) throw new Error(`no idea for ${missing.join(", ")}`);
   return { ideas, notes, failed };
 }
+const RAW_CODE = /(?<![\w-])(WATCH|START_POSITION|HIGH_CONVICTION_ADD|THESIS_BROKEN|CSPX_ALLOCATION|ADD|HOLD|REDUCE|Very strong|Strong|Good|Neutral|Weak)(?![\w-])/;
+/** First stored action or rating code found in Slovak prose, or null. */
+export function slovakRawCode(texts) {
+  for (const t of texts) { const hit = RAW_CODE.exec(String(t ?? "")); if (hit) return hit[1]; }
+  return null;
+}
 function mergeOne(idea, sig, modelInput, notes) {
   {
     const item = modelInput.items.find((i) => i.signal.symbol === idea.symbol);
@@ -249,6 +255,9 @@ function mergeOne(idea, sig, modelInput, notes) {
     if (figures.length) throw new Error(`${idea.symbol}: figures not in the input: ${figures.slice(0, 5).join(", ")} (${figureContext(wording(idea), figures[0])})`);
     const publicWording = [...wording(idea), ...wording({ ...idea.sk, downgrade: { reason: idea.sk.downgradeReason }, conflict: { reason: idea.sk.conflictReason } })].join(" ");
     if (/\b(?:you should buy|you should sell|buy now|sell now|guaranteed return|price target|mal by si kúpiť|mal by si predať|kúp teraz|predaj teraz|garantovan\w* výnos|cieľov\w* cen\w*)\b/i.test(publicWording)) throw new Error(`${idea.symbol}: ADR-001 wording is not informational`);
+    // Slovak readers must not see stored codes: say "sledovať", not WATCH, and "silné", not Strong. Figures stay checked below.
+    const rawCode = slovakRawCode([idea.sk.verdict, ...idea.sk.whatHappened, ...idea.sk.whyItMatters, ...Object.values(idea.sk.plan), idea.sk.downgradeReason, idea.sk.conflictReason]);
+    if (rawCode) throw new Error(`${idea.symbol}: Slovak text keeps the English code ${rawCode}`);
     if (idea.sk.evidence.length !== idea.evidence.length || idea.sk.evidence.some((e, idx) => e.url !== idea.evidence[idx].url)) throw new Error(`${idea.symbol}: Slovak evidence URLs differ from English`);
     const sameFigures = (a, b) => sameFigureValues(String(a ?? ""), String(b ?? "")) && sameProtectedTokens(String(a ?? ""), String(b ?? ""));
     if (idea.sk.whatHappened.length !== idea.whatHappened.length || idea.sk.whyItMatters.length !== idea.whyItMatters.length) throw new Error(`${idea.symbol}: Slovak bullets differ from English`);
