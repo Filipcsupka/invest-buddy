@@ -229,8 +229,21 @@ Design and sources: `docs/cadence-design.md`. This group replaces the daily extr
 - DoD: a run produces at most N candidates per week (N in config) with source links; a candidate that passes goes into the same extract and judge path as holdings; a test shows a ticker outside the universe can be added without code changes (universe from a table or file).
 
 ### F8. Quality check against the old scans
+- Status 2026-10-09: offline part done in `docs/f8-old-vs-new-scans.md`. Only PCVX has old card data and its new output is Ignore, no idea. EFXT and WULF are not in `instruments`, so nothing exists to compare. The extract and judge re-run is still open.
 - Do: take the three old scan cards (EFXT START, PCVX WATCH, WULF START, 2026-10-05 and 06) as test cases. For each, collect the same inputs through the scripts (the filings and facts the old card cited) and run extract and judge. Compare action, band, setup ratings and the plan triggers with the old card, and count tokens and cost.
 - DoD: a table in `docs/` with old versus new per card (same action or not, which facts the scripts could not supply, tokens and dollars); gaps become tasks. The target is the same decisions at a fraction of the tokens.
+
+### F9. Old card data for EFXT and WULF
+- Do: the owner supplies the 2026-10-05 and 06 scan cards (action, band, ratings, triggers, filings cited), and for PCVX says whether the old action was START or WATCH. Store them in `docs/comparison-log.md`.
+- DoD: all three old cards are written down with their sources.
+
+### F10. Run EFXT and WULF through the pipeline
+- Do: add both to `instruments` (as discovery names), collect, extract and judge, then fill the old-versus-new table with action, band, ratings, plan triggers, tokens and cost. Needs model calls and a cluster write, so it needs approval.
+- DoD: rows for EFXT and WULF in `docs/f8-old-vs-new-scans.md` with real numbers.
+
+### F11. Clinical readouts and 424B5 for PCVX
+- Do: the catalyst rule misses clinical readouts, and the 424B5 financing is seen by the watch step but not stored as a document. This is already in the open list of `docs/comparison-log.md`; make it a task once the owner decides on a pre-revenue profile.
+- DoD: PCVX 2026-10-05 card inputs reach the extractor with the readout and the financing.
 
 ## G. Signals from data only, sizing as a generic guide
 
