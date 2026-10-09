@@ -103,7 +103,7 @@ jobs:
           persist-credentials: false
       - uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3
       - name: Build web image for scanning
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           load: true
@@ -120,7 +120,7 @@ jobs:
           # npm and corepack ship inside the node base image and only run the migrate init container; app dependencies and OS packages are still scanned.
           skip-dirs: /usr/local/lib/node_modules/npm,/usr/local/lib/node_modules/corepack
       - name: Build scanner image for scanning
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: scanner/Dockerfile
@@ -163,7 +163,7 @@ jobs:
           echo "tag=ghcr.io/filipcsupka/invest-buddy:sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
           echo "scanner_tag=ghcr.io/filipcsupka/invest-buddy-scanner:sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
       - name: Publish web image
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           push: true
@@ -171,7 +171,7 @@ jobs:
           sbom: true
           provenance: mode=max
       - name: Publish scanner image
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: scanner/Dockerfile
