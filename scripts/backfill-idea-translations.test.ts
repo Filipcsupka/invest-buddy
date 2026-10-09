@@ -22,4 +22,22 @@ describe("idea translation backfill", () => {
     expect(update).toHaveBeenCalledTimes(1);
     expect(lines).toEqual(["1 NVDA: failed", "2 AMD: updated"]);
   });
+  it("accepts Slovak decimal commas and grouped thousands but rejects changed figures", async () => {
+    const source = { ...row, verdict: "RSI 70.7; revenue 1,200.50", what_happened: ["Return 3.54%", "Volume 50,000.12"] };
+    const translated = { ...translation, verdict: "RSI 70,7; tržby 1.200,50", whatHappened: ["Výnos 3,54%", "Objem 50 000,12"] };
+    const update = vi.fn(async () => {}), lines: string[] = [];
+    expect(await processBackfillRows([source], true, async () => translated, update, (line) => lines.push(line))).toBe(0);
+    expect(update).toHaveBeenCalledOnce();
+    expect(await processBackfillRows([source], true, async () => ({ ...translated, verdict: "RSI 70,8; tržby 1.200,50" }), update, (line) => lines.push(line))).toBe(1);
+    expect(update).toHaveBeenCalledOnce();
+    expect(lines).toEqual(["1 NVDA: updated", "1 NVDA: verdict figures changed"]);
+  });
+  it("rejects changed quarter, fiscal and moving-average tokens", async () => {
+    const source = { ...row, verdict: "Q3 FY2026 above MA200, RSI steady versus SPY" };
+    const translated = { ...translation, verdict: "Q4 FY2027 nad MA50, RSI stabilné oproti SPY" };
+    const update = vi.fn(async () => {}), lines: string[] = [];
+    expect(await processBackfillRows([source], true, async () => translated, update, (line) => lines.push(line))).toBe(1);
+    expect(update).not.toHaveBeenCalled();
+    expect(lines).toEqual(["1 NVDA: verdict figures changed"]);
+  });
 });

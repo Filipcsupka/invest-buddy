@@ -25,6 +25,7 @@ import { reserveBudget, finishBudget } from "./ai-budget.mjs";
 import { readGate, consumeGate, gateTradingDay } from "./gate-db.mjs";
 import { attachClaudeUsage, attachCliUsage, cutoffError, cutoffLine, CUTOFF_EXIT_CODE } from "./anthropic-cutoff.mjs";
 import { createUsageMonitor, earlyStopLine } from "./claude-usage.mjs";
+import { figureValuesIn, sameFigureValues, sameProtectedTokens } from "./figure-tokens.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const OUT = process.env.SCAN_OUT_DIR || join(here, "out");
@@ -110,7 +111,6 @@ export function validateJudgeOutput(obj) {
 
 // ---------- no invented figures ----------
 // A minus counts as a sign only at the start of a figure (not in "60-90", "20-day" or "2026-10-05").
-const FIGURE = /(?:(?<![\w.)])([-\u2212])(?=\d))?(\d[\d,]*(?:\.\d+)?)/g;
 const ISO_DATE = /\b\d{4}-\d{2}-\d{2}\b/g;
 /** SEC form names such as 8-K and 10-Q are labels, not figures. */
 const FORM_NAME = /\b(?:6|8|10|20|40)-[KQF]\b|\b13[DFG]\b|\b(?:Form|Schedule|Items?)\s+\d+(?:\.\d+)?[A-Z]?\b/gi;
@@ -120,9 +120,10 @@ const FORM_NAME = /\b(?:6|8|10|20|40)-[KQF]\b|\b13[DFG]\b|\b(?:Form|Schedule|Ite
  * Real figures (prices, percentages, revenue, backlog, share counts) are not matched and stay checked.
  */
 const LABELS = [
-  /\b\d+(?:\.\d+)?[- ]?(?:day|week|month|year|quarter|session|trading[- ]day)s?\b|\b\d+(?:\.\d+)?[- ]?(?:dňov\w*|týždňov\w*|mesačn\w*|ročn\w*)/gi,
-  /\b\d+[dw]\b/gi,
-  /\b[SE]?MA[- ]?\d+\b/gi,
+  /\b(?:(?:5|20|50|60|200)\s*-\s*,?\s*(?:(?:and|a)\s+)?){1,4}(?:5|20|50|60|200)[- ](?:day\b|dňov[\p{L}]*(?![\p{L}\p{N}]))/giu,
+  /\b(?:1|5|10|14|20|30|50|60|90|100|200)[- ]?(?:day|session|trading[- ]day)s?\b|\b(?:2|52)[- ]?weeks?\b|\b12[- ]?months?\b|\b(?:3|10)[- ]?years?\b|\b(?:1|5|10|14|20|30|50|60|90|100|200)[- ]?dňov[\p{L}]*(?![\p{L}\p{N}])/giu,
+  /\b(?:1|5|10|14|20|30|50|60|90|100|200)d\b|\b(?:2|52)w\b/gi,
+  /\b[SE]?MA[- ]?(?:20|21|50|200)\b/gi,
   /\b(?:Q[1-4]|[1-4]Q|H[12])(?:[- ]?(?:FY)?\d{2,4})?\b/gi,
   /\b(?:FY|CY)[- ]?\d{2,4}\b|\bfiscal(?:\s+year)?\s+\d{2,4}\b/gi,
   /\b(?:in|since|by|during|through|until|from|for|of|to|calendar|year|between)\s+(20[0-3]\d)\b/gi,
@@ -136,7 +137,7 @@ const stripLabels = (text) => LABELS.reduce((t, re) => t.replace(re, (m, y) => (
 const URL_TEXT = /https?:\/\/\S+/g;
 /** Fields that hold identifiers, links or timestamps. Digits in them are not figures. */
 const NON_FIGURE_KEYS = /^(url|evidenceUrl|id|runId|accession\w*|signature|ruleConfigVersion|asOf|generatedAt|publishedAt|fiscalPeriod|filedAt|date|field)$|(Url|Id|At|Date)$/;
-export const figuresIn = (text) => [...String(text).replace(FORM_NAME, " ").matchAll(FIGURE)].map((m) => (m[1] ? -1 : 1) * Number(m[2].replace(/,/g, "")));
+export const figuresIn = (text) => figureValuesIn(String(text).replace(FORM_NAME, " "));
 /** Numbers in numeric fields and in free-text strings; never in URLs, dates, ids or accession numbers. */
 function collect(v, key, figures, dates) {
   if (typeof v === "number") { if (Number.isFinite(v)) figures.add(v); return; }
@@ -155,17 +156,22 @@ const ruleFigure = (text, value) => (value === 14 && /\bRSI\s*14\b/i.test(text))
 export function figureContext(texts, figure) {
   const text = texts.map(String).join(" | ");
   const needle = String(Math.abs(figure));
-  const i = text.indexOf(needle);
+  const re = new RegExp(`(?<![\\d.,])${needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?!\\d|[.,]\\d)`);
+  const i = text.search(re);
   return i < 0 ? "no context" : text.slice(Math.max(0, i - 30), i + needle.length + 30).replace(/\s+/g, " ");
 }
 /** Every figure in the model's wording must occur in the input it was given. Returns the offending figures. */
 export function inventedFigures(texts, inputValue) {
   const allowed = new Set(), dates = new Set();
   collect(inputValue, undefined, allowed, dates);
+  const allowedMagnitudes = new Set([...allowed].flatMap((n) => [Math.abs(n), Math.round(Math.abs(n) * 100) / 100]));
   const bad = [];
   for (const t of texts) {
     const text = String(t).replace(ISO_DATE, (d) => (dates.has(d) ? " " : d));
-    for (const n of figuresIn(stripLabels(text))) if (!allowed.has(n) && !ruleFigure(text, Math.abs(n))) bad.push(n);
+    for (const n of figuresIn(stripLabels(text))) {
+      const value = Math.abs(n);
+      if (!allowedMagnitudes.has(value) && !ruleFigure(text, value)) bad.push(n);
+    }
   }
   return [...new Set(bad)];
 }
@@ -241,7 +247,7 @@ function mergeOne(idea, sig, modelInput, notes) {
     const publicWording = [...wording(idea), ...wording({ ...idea.sk, downgrade: { reason: idea.sk.downgradeReason }, conflict: { reason: idea.sk.conflictReason } })].join(" ");
     if (/\b(?:you should buy|you should sell|buy now|sell now|guaranteed return|price target|mal by si kúpiť|mal by si predať|kúp teraz|predaj teraz|garantovan\w* výnos|cieľov\w* cen\w*)\b/i.test(publicWording)) throw new Error(`${idea.symbol}: ADR-001 wording is not informational`);
     if (idea.sk.evidence.length !== idea.evidence.length || idea.sk.evidence.some((e, idx) => e.url !== idea.evidence[idx].url)) throw new Error(`${idea.symbol}: Slovak evidence URLs differ from English`);
-    const sameFigures = (a, b) => JSON.stringify(figuresIn(stripLabels(String(a ?? ""))).sort((x, y) => x - y)) === JSON.stringify(figuresIn(stripLabels(String(b ?? ""))).sort((x, y) => x - y));
+    const sameFigures = (a, b) => sameFigureValues(String(a ?? ""), String(b ?? "")) && sameProtectedTokens(String(a ?? ""), String(b ?? ""));
     if (idea.sk.whatHappened.length !== idea.whatHappened.length || idea.sk.whyItMatters.length !== idea.whyItMatters.length) throw new Error(`${idea.symbol}: Slovak bullets differ from English`);
     for (const [en, sk] of [[idea.verdict, idea.sk.verdict], ...idea.whatHappened.map((s, i) => [s, idea.sk.whatHappened[i]]), ...idea.whyItMatters.map((s, i) => [s, idea.sk.whyItMatters[i]]), ...["trigger", "invalidation", "opportunityCost"].map((key) => [idea.plan[key], idea.sk.plan[key]]), ...idea.evidence.map((e, i) => [e.label, idea.sk.evidence[i].label]), [idea.downgrade?.reason, idea.sk.downgradeReason], [idea.conflict?.reason, idea.sk.conflictReason]]) {
       if (!sameFigures(en, sk)) throw new Error(`${idea.symbol}: Slovak prose figures differ from English`);

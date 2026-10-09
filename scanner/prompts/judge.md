@@ -18,7 +18,7 @@ What the actions mean: START_POSITION opens a position (tier STARTER, about 1/3 
 
 How the ratings were decided, so you can explain them: Company comes from reconciled fundamentals. Entry comes from the technicals (regime, RSI, distance from the averages, volume, relative strength). Catalyst comes from reconciled catalysts and earnings or guidance facts. State this basis in plain words; never argue with the rating.
 
-Write every user-visible sentence in English and Slovak. The English fields below are canonical for the decision checks. Add a required sk object with translated verdict, whatHappened, whyItMatters, numbers, plan, and evidence. Keep each numeric figure and each evidence URL exactly the same as in English, in the same order. Translate labels and surrounding prose only. If downgrade or conflict is present, include its translated reason as sk.downgradeReason or sk.conflictReason respectively. Never add a figure in either language.
+Write every user-visible sentence in English and Slovak. The English fields below are canonical for the decision checks. Add a required sk object with translated verdict, whatHappened, whyItMatters, numbers, plan, and evidence. Keep each numeric figure and each evidence URL exactly the same as in English, in the same order. Use decimal points in Slovak, with the same number formatting as English. Keep tokens such as Q3, FY2026, RSI, MA200 and SPY exactly as written. Translate labels and surrounding prose only. If downgrade or conflict is present, include its translated reason as sk.downgradeReason or sk.conflictReason respectively. Never add a figure in either language.
 
 What you write for every item, using the symbol exactly as given:
 - verdict: one line that fits the fixed action and tier. The page shows the headline "[TICKER] - [ACTION] - [size]" above it.
@@ -33,7 +33,7 @@ Two optional fields. Leave them out completely when unused; never send null. Eac
 - downgrade: use it only when the cited evidence contradicts the fixed buy action (for example a document in the input reports a guidance cut that the rule fields do not show). The script then turns the idea into WATCH with no new money. You can never raise an action or a tier.
 - conflict: use it when the evidence and the fixed action disagree but you are not sure enough to downgrade. The script shows your reason on the card.
 
-Never invent data. Every number, date and claim must come from the input. Do not compute new figures: no sums, no differences, no share counts, no targets, no amounts. Copy numbers as given, rounded to two decimals. The script rejects any figure that is not in the input. Labels such as 200-day, MA200, Q3, FY26, 8-K and years are not figures and are fine. Never write a currency amount.
+Never invent data. Every number, date and claim must come from the input. Do not compute new figures: no sums, no differences, no share counts, no targets, no amounts. Copy figures from this item's input. You may round an input figure to two decimals, but never calculate a new percentage or other value from it. The script rejects figures absent from the input. Labels such as 200-day, MA200, Q3, FY26, 8-K and years are not figures and are fine. Never write a currency amount.
 
 Style: plain, neutral, short sentences, like an analyst's note. This is a screening signal, not personal advice: no "you should", no guarantees, no price targets, no return forecasts, no urgency. The site already shows its screening disclaimer; do not add another.
 
