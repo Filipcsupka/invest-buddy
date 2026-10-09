@@ -69,13 +69,22 @@ const money = (value: number) => value >= 1e9 ? `$${round(value / 1e9)}B` : `$${
 const signed = (value: number) => `${value >= 0 ? "+" : ""}${value}`;
 const line = (growth: Growth) => `revenue ${money(growth.revenue)}, YoY ${signed(growth.yoyPercent)}%, prior-quarter YoY ${signed(growth.priorYoyPercent)}%, acceleration ${signed(growth.accelerationPp)} pp, QoQ ${signed(growth.qoqPercent)}%`;
 
+/** The SEC returns 404 for a concept with no filers in a quarter (SalesRevenueNet was retired). That is an empty frame, not a failed source. */
+async function fetchFrame(ctx: SourceContext, concept: string, quarter: Quarter) {
+  try { return parseFrame(await ctx.http.get(frameUrl(concept, quarter), { maxBytes: 60 * 1024 * 1024 })); }
+  catch (error) {
+    if (error instanceof Error && /^HTTP 404 at /.test(error.message)) return new Map<number, FrameValue>();
+    throw error;
+  }
+}
+
 export async function collectFrames(ctx: SourceContext): Promise<SourceOutput> {
   const quarter = latestQuarter(ctx.now);
   const labels = [quarter, shift(quarter, -1), shift(quarter, -4), shift(quarter, -5)];
   const byConcept = new Map<string, Map<string, Map<number, FrameValue>>>();
   for (const concept of REVENUE_CONCEPTS) {
     const frames = new Map<string, Map<number, FrameValue>>();
-    for (const wanted of labels) frames.set(label(wanted), parseFrame(await ctx.http.get(frameUrl(concept, wanted), { maxBytes: 60 * 1024 * 1024 })));
+    for (const wanted of labels) frames.set(label(wanted), await fetchFrame(ctx, concept, wanted));
     byConcept.set(concept, frames);
   }
   const tickers = await loadTickers(ctx.http);
