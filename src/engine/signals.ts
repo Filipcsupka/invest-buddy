@@ -13,7 +13,7 @@ import type { Technicals } from "../data/technicals";
  *  1. Rejection (revenue declining, guidance cut, or the rule engine's "Criteria broken"): THESIS_BROKEN for a held name, WATCH otherwise.
  *  2. Held, company rating Weak and a downtrend: REDUCE. A name that is not held goes on and ends as WATCH.
  *  3. Fewer than two confirmed key fields: WATCH, insufficient evidence.
- *  4. Buy conditions: rule score at least 15, company and entry at least Good, no downtrend. Not met: HOLD for a held name, WATCH otherwise.
+ *  4. Buy conditions: rule score at least 18 (Guide s6, s8; 15-17 is WATCH), company and entry at least Good, no downtrend. Not met: HOLD for a held name, WATCH otherwise.
  *  5. Conviction (score 18 or more, company, entry and catalyst at least Strong, a fresh confirmed EPS beat or guidance raise, no carried data):
  *       HIGH_CONVICTION_ADD, tier ADD_HALF (add about 1/2 of a full position).
  *     Good entry (entry at least Strong, or a pullback): ADD, tier ADD_THIRD (add about 1/3 of a full position).
@@ -25,9 +25,10 @@ import type { Technicals } from "../data/technicals";
  * The value stays in ACTIONS so older stored ideas still parse.
  */
 export const SIGNAL_RULES = {
-  version: "2026-10-06.1",
+  version: "2026-10-09.1",
   actionsOrder: ["HIGH_CONVICTION_ADD", "ADD", "START_POSITION"],
-  minScoreForBuy: 15,
+  /** InvestingGuide s6 and s8: score 18+ is the buy alert, 15-17 is WATCH (add on dip), 12-14 wait. Every buy action needs this score. */
+  minScoreForBuy: 18,
   convictionScore: 18,
   minConfirmedKeyFields: 2,
   keyFields: ["revenueAccelerating", "revenueDeclining", "epsBeat", "guidanceRaised", "guidanceCut", "productCatalyst"],
@@ -173,8 +174,14 @@ export function signalFor(s: SignalSymbolInput, rules: SignalRules = SIGNAL_RULE
     return sig;
   }
   if (keyConfirmed.length < rules.minConfirmedKeyFields) { sig.reasons.push(`Insufficient evidence: ${keyConfirmed.length} confirmed key fields, ${rules.minConfirmedKeyFields} needed.`); return sig; }
-  const buyable = s.score.total >= rules.minScoreForBuy && atLeast(r.ratings.company, "Good") && atLeast(r.ratings.entry, "Good") && regime !== "downtrend";
-  if (!buyable) { sig.reasons.push("Buy conditions are not met."); if (s.held) sig.action = "HOLD"; return sig; }
+  const setupOk = atLeast(r.ratings.company, "Good") && atLeast(r.ratings.entry, "Good") && regime !== "downtrend";
+  if (!setupOk || s.score.total < rules.minScoreForBuy) {
+    sig.reasons.push(setupOk
+      ? `Score ${s.score.total} is below the buy threshold of ${rules.minScoreForBuy}${s.score.total >= 15 ? "; 15 to 17 is WATCH, add on a dip" : ""}.`
+      : "Buy conditions are not met.");
+    if (s.held) sig.action = "HOLD";
+    return sig;
+  }
   const execution = confirmed(s, "epsBeat") === true || confirmed(s, "guidanceRaised") === true;
   const conviction = s.score.total >= rules.convictionScore && atLeast(r.ratings.company, "Strong") && atLeast(r.ratings.entry, "Strong") && atLeast(r.ratings.catalyst, "Strong") && execution && !sig.carriedFrom;
   if (conviction) { sig.action = "HIGH_CONVICTION_ADD"; sig.sizeTier = "ADD_HALF"; sig.reasons.push("Conviction conditions met."); return sig; }
