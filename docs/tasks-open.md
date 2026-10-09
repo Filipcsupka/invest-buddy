@@ -225,6 +225,7 @@ Design and sources: `docs/cadence-design.md`. This group replaces the daily extr
 
 ### F7. Discovery of new names (built; first scheduled run Saturday 2026-10-10)
 - Status 2026-10-09: a one-off Job ran 2.5 minutes and returned no candidates, because the SEC frames source threw on a 404 for the retired `SalesRevenueNet` concept. Fixed in PR #59 (a 404 for one concept and quarter is now an empty frame). The fix is not yet built into a live image. Twelve Data also rejected two preferred-share symbols (BHR-PD, STWI). Check `discovery_candidates` after the Saturday run.
+- Update 2026-10-09: PR #62 skips warrant, unit and preferred symbols, and PR #64 filters them before the shortlist is cut so it fills from lower-ranked names; a Twelve Data "symbol not accepted" answer is now a skip with a reason, not a failure. Both are merged, not yet seen on a scheduled run.
 - Why: the old scan found names outside the fixed universe (for example EFXT after a 450 MW data-center contract, PCVX after a Phase 3 result, WULF after a power-capacity amendment) by following beneficiary chains. The script-first pipeline only covers the 35 tickers, so it can never propose a new name.
 - Do: a separate, low-frequency discovery step. Sources that cost no tokens first: EDGAR current-filings feed filtered to 8-K Items 1.01 and 2.02 (material agreements), big price and volume movers, 13F changes of a short list of managers, and a themes file (AI power, cooling, networking, biotech catalysts) with beneficiary chains. A cheap model ranks the shortlist; only the top few get a full bundle and a judge run. Run it weekly, plus the semi-annual re-screen from F5.
 - DoD: a run produces at most N candidates per week (N in config) with source links; a candidate that passes goes into the same extract and judge path as holdings; a test shows a ticker outside the universe can be added without code changes (universe from a table or file).
@@ -288,12 +289,16 @@ Evidence: `kubectl -n invest get cronjob,jobs`, `judge_runs`, `scheduled_gates` 
 - The 05:30 judge on 2026-10-09 stored nothing: "Slovak prose figures differ from English" and "figures not in the input" (cost $0.20). PR #57 relaxed the check; a manual run on the fixed image stored 4 ideas ($0.12).
 - DoD: one scheduled judge run on the fixed image stores ideas (next: Saturday 05:30). Nothing alerts on a failed judge Job today, which is E2.
 
-### H2. Discovery returns no candidates (fixed in PR #59, not yet live)
+### H2. Discovery returns no candidates (fixed in PRs #59, #62 and #64, not yet seen on the schedule)
 - See F7. DoD: after the Saturday run, `discovery_candidates` has rows or a logged reason for none.
 
 ### H3. Weekly jobs have only run as one-off Jobs
 - Discovery and the review calendar ran as one-off Jobs on 2026-10-09 (review calendar: 6 tickers ok, 0 failed, $0.035). The scheduled runs are Saturday 09:30 and 11:00.
 - DoD: both Jobs complete on the schedule.
+
+### H7. Extraction usage was never stored (fixed in PR #65, not yet seen on the schedule)
+- Every extract run logged `could not record extraction run: extraction-runs HTTP 400`. Many tickers carry more than 100 accessions (AMD 137, MELI 198 in the 2026-10-09 run) and the route accepted at most 100. PR #65 raises the limit to 500.
+- DoD: after the next scheduled extract, `extraction_runs` has rows for the day and the job log has no `could not record` line.
 
 ### H4. Digest is suspended
 - `invest-buddy-digest` is suspended in infra and `ConsoleMailer` only logs (C3). DoD: owner picks a real mailer or leaves it off.
