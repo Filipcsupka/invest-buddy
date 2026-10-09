@@ -35,7 +35,7 @@ The old card's tokens and cost are not recorded anywhere I could find, so there 
 
 ## Why the pipeline cannot answer for EFXT and WULF today
 
-Neither ticker is in `instruments`, so the collector, watch, gate, extract and judge steps never touch them. Discovery (F7) has produced no candidates yet; the first scheduled run is Saturday 2026-10-10, and the 2026-10-09 one-off returned none. Whether the weekly run would surface EFXT or WULF is unknown, and neither is in the discovery theme file as a rule-based hit I could verify.
+Neither ticker is in `instruments`, so the collector, watch, gate, extract and judge steps never touch them. Discovery (F7) has produced no candidates yet; the first scheduled run is Saturday 2026-10-10, and the 2026-10-09 one-off returned none. WULF is listed in `src/jobs/discovery-themes.json` (AI power), so weekly discovery can pick it up; EFXT is not in that file. Whether the weekly run would surface either is unknown.
 
 ## Unknown
 
