@@ -94,3 +94,23 @@ export async function collectEdgar(symbol: string, cik: number, since: string, g
   }
   return docs;
 }
+
+export const FOREIGN_FILER_FACT = "sec_filer_status";
+export interface FilerStatus { kind: "foreign_private_issuer"; forms: string[]; unknown: { field: string; reason: string }[] }
+
+/**
+ * A foreign private issuer files 20-F and 6-K instead of 10-K, 10-Q and 8-K. Decided from the collected filings only, never from a symbol list.
+ * Returns null for a domestic filer or when no 20-F or 6-K was collected. Unknown fields carry the reason the bundle shows.
+ */
+export function foreignFilerStatus(docs: Pick<CollectedDocument, "docType" | "publishedAt">[]): { asOf: string; value: FilerStatus } | null {
+  const types = new Set(docs.map((doc) => doc.docType));
+  const foreign = docs.filter((doc) => doc.docType === "20-F" || doc.docType === "6-K");
+  if (!foreign.length || ["10-K", "10-Q", "8-K"].some((form) => types.has(form))) return null;
+  const unknown = [
+    { field: "revenueAccelerating", reason: "SEC quarterly revenue needs 10-Q filings; this issuer files 20-F and 6-K." },
+    { field: "revenueDeclining", reason: "SEC quarterly revenue needs 10-Q filings; this issuer files 20-F and 6-K." },
+    { field: "earnings_8k", reason: "No 8-K earnings exhibit; this issuer files 6-K." },
+    ...(types.has("4") ? [] : [{ field: "insider_net_buy_90d", reason: "No Form 4 collected; this issuer does not file Form 4." }]),
+  ];
+  return { asOf: foreign.map((doc) => doc.publishedAt.slice(0, 10)).sort().pop()!, value: { kind: "foreign_private_issuer", forms: [...new Set(foreign.map((doc) => doc.docType))].sort(), unknown } };
+}

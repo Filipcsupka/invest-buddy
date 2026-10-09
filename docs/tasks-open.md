@@ -124,9 +124,10 @@ Groups: A first live run, B web, C pipeline quality, D data and accounts, E oper
 ### C6. Cost and quota guard for extract
 - App change: per-symbol token and cost columns already exist in `extraction_runs` (migration 016), and Claude usage already logs the five-hour and seven-day percentages. The report now lists recent extraction rows. `AI_DAILY_TOKEN_CEILING` defaults to 0 (off); when set, extract checks completed subscription tokens for the UTC day before each model call and exits 5 at the ceiling, leaving the gate pending. Live proof of a stopped run remains open.
 
-### C7. Foreign issuers
+### C7. Foreign issuers (done 2026-10-09)
 - Do: ASML, SE, MELI and similar file 20-F and 6-K. Add collection for them or leave their SEC-based fields unknown with a stated reason.
 - DoD: each foreign symbol has a documented behaviour and a test; no field is guessed.
+- Done: live SEC check shows ASML and SE file 20-F and 6-K; MELI files 10-K, 10-Q and 8-K, so it is not foreign. Collection already stored 20-F and 6-K. New fact `sec_filer_status` lists the unknown SEC fields with reasons and reaches the bundle. See `docs/data.md`.
 
 ### C8. Price freshness rule (rule done 2026-10-08; SQ to XYZ live check open)
 - Do: `daily.ts` needs a bar dated exactly the scoring date, so Monday scores stay `stale_prices` (no Monday price run). Add the planned 3 calendar day rule. Check the `SQ` to `XYZ` mapping against the live Twelve Data API.

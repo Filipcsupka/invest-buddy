@@ -1,13 +1,13 @@
 import { runLoggedJob } from "./job-log";
 import pg from "pg";
 import universe from "../../scanner/universe.json";
-import { collectEdgar, companyCiks, type InsiderTrade } from "../collectors/edgar";
+import { collectEdgar, companyCiks, foreignFilerStatus, FOREIGN_FILER_FACT, type InsiderTrade } from "../collectors/edgar";
 import { collectRss } from "../collectors/rss";
 import { collectFred } from "../collectors/fred";
 import { RateLimitLockout } from "../collectors/http";
 import { requireSecUserAgent } from "../collectors/sec-user-agent";
 import type { CollectedDocument } from "../collectors/types";
-import { MemoryCollectorRepository, PostgresCollectorRepository, type CollectorRepository, type Fact, type CollectorRun } from "../db/collectors";
+import { documentRetentionDays, MemoryCollectorRepository, PostgresCollectorRepository, type CollectorRepository, type Fact, type CollectorRun } from "../db/collectors";
 import type { Company } from "../collectors/sources/common";
 import { DEFAULT_SYMBOL_MAP } from "../data/twelvedata";
 import { EXTRA_SOURCES, LEGACY_SOURCES, type SourceName } from "../collectors/types";
@@ -135,6 +135,9 @@ export async function deriveFacts(symbol: string, docs: CollectedDocument[], ids
   const earnings = docs.filter((doc) => doc.docType === "8-K EX-99.1").sort((a, b) => b.publishedAt.localeCompare(a.publishedAt))[0];
   // Keyed by the filing date, not the run date: the same earnings 8-K must not create a new row (and a new computed_at) every day.
   if (earnings) make("latest_earnings_8k", { date: earnings.publishedAt.slice(0, 10), documentId: ids.get(earnings.url) ?? null }, [earnings], earnings.publishedAt.slice(0, 10));
+  const filer = foreignFilerStatus(docs);
+  // Dated by the newest foreign filing, so it does not create a row per day. It lives as long as the 20-F and 6-K documents it comes from.
+  if (filer) facts.push({ symbol, key: FOREIGN_FILER_FACT, asOf: filer.asOf, value: filer.value, documentIds: docs.filter((doc) => doc.docType === "20-F" || doc.docType === "6-K").map((doc) => ids.get(doc.url)).filter((id): id is number => id !== undefined), expiresAt: new Date(Date.parse(`${filer.asOf}T00:00:00Z`) + documentRetentionDays("20-F") * 86400000).toISOString() });
   const bars = await repository.bars(symbol, 21);
   if (bars.length >= 6 && bars[5].close > 0) make("price_move_5d", { percent: (bars[0].close / bars[5].close - 1) * 100 }, [], bars[0].date);
   if (bars.length >= 21) {
