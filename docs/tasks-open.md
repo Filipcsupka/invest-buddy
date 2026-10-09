@@ -226,6 +226,7 @@ Design and sources: `docs/cadence-design.md`. This group replaces the daily extr
 ### F7. Discovery of new names (built; first scheduled run Saturday 2026-10-10)
 - Status 2026-10-09: a one-off Job ran 2.5 minutes and returned no candidates, because the SEC frames source threw on a 404 for the retired `SalesRevenueNet` concept. Fixed in PR #59 (a 404 for one concept and quarter is now an empty frame). The fix is not yet built into a live image. Twelve Data also rejected two preferred-share symbols (BHR-PD, STWI). Check `discovery_candidates` after the Saturday run.
 - Update 2026-10-09: PR #62 skips warrant, unit and preferred symbols, and PR #64 filters them before the shortlist is cut so it fills from lower-ranked names; a Twelve Data "symbol not accepted" answer is now a skip with a reason, not a failure. Both are merged, not yet seen on a scheduled run.
+- Manual run 2026-10-09 on image `sha-6121f94` (Job `prove-discovery-sat`, after #64): 0 failures, 0 candidates, 32 skipped (13 warrant, 7 unit, 6 rights, 5 preferred, 1 rejected by Twelve Data: STWI). The filter works, but after it only one real symbol reached screening, so the source pool is the open problem. The run log now prints rows per source (`sourceRows`, `uniqueSymbols`, `shortlisted`) so the next empty week shows which source returned nothing. Next: read those counts, then decide whether to widen the sources or lower the thresholds in `discovery-config.ts`; check what STWI is.
 - Why: the old scan found names outside the fixed universe (for example EFXT after a 450 MW data-center contract, PCVX after a Phase 3 result, WULF after a power-capacity amendment) by following beneficiary chains. The script-first pipeline only covers the 35 tickers, so it can never propose a new name.
 - Do: a separate, low-frequency discovery step. Sources that cost no tokens first: EDGAR current-filings feed filtered to 8-K Items 1.01 and 2.02 (material agreements), big price and volume movers, 13F changes of a short list of managers, and a themes file (AI power, cooling, networking, biotech catalysts) with beneficiary chains. A cheap model ranks the shortlist; only the top few get a full bundle and a judge run. Run it weekly, plus the semi-annual re-screen from F5.
 - DoD: a run produces at most N candidates per week (N in config) with source links; a candidate that passes goes into the same extract and judge path as holdings; a test shows a ticker outside the universe can be added without code changes (universe from a table or file).
@@ -285,19 +286,21 @@ Today `src/engine/signals.ts` ties the action to the portfolio: no baseline forc
 
 Evidence: `kubectl -n invest get cronjob,jobs`, `judge_runs`, `scheduled_gates` and the one-off Jobs run on 2026-10-09.
 
-### H1. Scheduled judge failed its figure check (fixed, unverified on the schedule)
+### H1. Scheduled judge failed its figure check (fixed; manual run on the live image passed 2026-10-09)
 - The 05:30 judge on 2026-10-09 stored nothing: "Slovak prose figures differ from English" and "figures not in the input" (cost $0.20). PR #57 relaxed the check; a manual run on the fixed image stored 4 ideas ($0.12).
+- Update 2026-10-09: Job `prove-review-sat` on `sha-6121f94` ran the judge forced for 6 tickers and stored 6 ideas ($0.16), all WATCH. The scheduled run is still the proof.
 - DoD: one scheduled judge run on the fixed image stores ideas (next: Saturday 05:30). Nothing alerts on a failed judge Job today, which is E2.
 
 ### H2. Discovery returns no candidates (fixed in PRs #59, #62 and #64, not yet seen on the schedule)
-- See F7. DoD: after the Saturday run, `discovery_candidates` has rows or a logged reason for none.
+- See F7. Manual run 2026-10-09: no errors, no candidates (the pool is almost all warrants, units, rights and preferreds). DoD: after the Saturday run, `discovery_candidates` has rows or a logged reason for none.
 
 ### H3. Weekly jobs have only run as one-off Jobs
 - Discovery and the review calendar ran as one-off Jobs on 2026-10-09 (review calendar: 6 tickers ok, 0 failed, $0.035). The scheduled runs are Saturday 09:30 and 11:00.
+- Manual run 2026-10-09 on `sha-6121f94`: both Jobs (`prove-discovery-sat`, `prove-review-sat`) completed; the review chain (extract 6 ok, reconcile, daily, judge) ran without errors.
 - DoD: both Jobs complete on the schedule.
 
 ### H7. Extraction usage was never stored (fixed in PR #65, not yet seen on the schedule)
-- Every extract run logged `could not record extraction run: extraction-runs HTTP 400`. Many tickers carry more than 100 accessions (AMD 137, MELI 198 in the 2026-10-09 run) and the route accepted at most 100. PR #65 raises the limit to 500.
+- Every extract run logged `could not record extraction run: extraction-runs HTTP 400`. Many tickers carry more than 100 accessions (AMD 137, MELI 198 in the 2026-10-09 run) and the route accepted at most 100. PR #65 raises the limit to 500. Manual review run 2026-10-09 on `sha-6121f94`: 0 "could not record extraction run" lines across 6 extracted tickers.
 - DoD: after the next scheduled extract, `extraction_runs` has rows for the day and the job log has no `could not record` line.
 
 ### H4. Digest is suspended

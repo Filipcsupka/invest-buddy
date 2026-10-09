@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import pg from "pg";
 import { describe, expect, it } from "vitest";
-import { edgarCandidates, frameCandidates, managerHoldingChanges, moverCandidates, nonCommonStockReason, ownershipCandidates, parse13fHoldings, rankCandidates, reviewCandidate, saveCandidates, saveDiscoveryPriceBars, screenCandidates, shortlistCandidates, screenDiscoveryShortlist, themeCandidates, weekStart, type DiscoveryCandidate } from "./discovery";
+import { edgarCandidates, frameCandidates, managerHoldingChanges, moverCandidates, nonCommonStockReason, ownershipCandidates, parse13fHoldings, rankCandidates, reviewCandidate, saveCandidates, saveDiscoveryPriceBars, screenCandidates, shortlistCandidates, sourceSummary, screenDiscoveryShortlist, themeCandidates, weekStart, type DiscoveryCandidate } from "./discovery";
 import { SymbolNotFoundError } from "../data/twelvedata";
 import { loadUniverse } from "../db/universe";
 
@@ -163,5 +163,11 @@ describe("weekly discovery", () => {
       const movers = await moverCandidates(pool, date);
       expect(movers.find((row) => row.symbol === "F7MV")).toMatchObject({ name: "Mover", sources: [{ kind: "price_volume" }] });
     } finally { await pool.query("ROLLBACK"); await pool.end(); }
+  });
+});
+
+describe("sourceSummary", () => {
+  it("reports rows per source and keeps a failed source visible", () => {
+    expect(sourceSummary([{ name: "edgar-8k", rows: [] }, { name: "13f", error: "HTTP 503" }])).toEqual([{ name: "edgar-8k", rows: 0 }, { name: "13f", rows: 0, error: "HTTP 503" }]);
   });
 });

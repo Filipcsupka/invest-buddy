@@ -239,6 +239,11 @@ export function nonCommonStockReason(symbol: string): string | null {
   return null;
 }
 
+/** Rows per source for the run log, so an empty week shows which source returned nothing or failed. */
+export function sourceSummary(results: { name: string; rows?: DiscoveryCandidate[]; error?: string }[]) {
+  return results.map(({ name, rows, error }) => error === undefined ? { name, rows: rows?.length ?? 0 } : { name, rows: 0, error });
+}
+
 /** Drop non-common symbols before the cut so the shortlist is filled from lower-ranked real candidates. Skips are reported once per symbol. */
 export function shortlistCandidates(rows: DiscoveryCandidate[], known: Set<string>, limit: number = DISCOVERY.maxCandidatesPerWeek) {
   const skipped = new Map<string, string>();
@@ -350,14 +355,23 @@ async function main() {
     previousWeek.setUTCDate(previousWeek.getUTCDate() - 7);
     const since = previousWeek.toISOString().slice(0, 10);
     const companies = (await pool.query<{ ticker: string; name: string }>("SELECT ticker,name FROM instruments WHERE source <> 'benchmark'")).rows.map((r) => ({ symbol: r.ticker, name: r.name }));
+    const names = ["growth-frames", "edgar-8k", "ownership", "13f", "biotech", "movers"];
     const gathered = await Promise.allSettled([
       marketwideGrowthCandidates(new Date(`${date}T12:00:00Z`), companies),
       edgarCandidates(getText, since), ownershipCandidates(getText, since), manager13fCandidates(getText, date, since),
       biotechCandidates(since, new Date(`${date}T12:00:00Z`)), moverCandidates(pool, date),
     ]);
-    const sources = [...themeCandidates()];
-    for (const result of gathered) if (result.status === "fulfilled") sources.push(...result.value);
-    else process.stderr.write(`Discovery source failed: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}\n`);
+    const themes = themeCandidates();
+    const sources = [...themes];
+    const summary = [{ name: "themes", rows: themes.length }];
+    gathered.forEach((result, index) => {
+      if (result.status === "fulfilled") { sources.push(...result.value); summary.push(...sourceSummary([{ name: names[index], rows: result.value }])); }
+      else {
+        const message = result.reason instanceof Error ? result.reason.message : String(result.reason);
+        process.stderr.write(`Discovery source failed: ${message}\n`);
+        summary.push(...sourceSummary([{ name: names[index], error: message }]));
+      }
+    });
     const { shortlist, skipped: filtered } = shortlistCandidates(sources, known, DISCOVERY.maxScreenedPerWeek);
     if (!process.env.TWELVE_DATA_API_KEY) throw new Error("TWELVE_DATA_API_KEY is required to apply the scoring rules to discovery candidates");
     const provider = new TwelveDataProvider({ apiKey: process.env.TWELVE_DATA_API_KEY });
@@ -392,7 +406,7 @@ async function main() {
     for (const failure of failures) process.stderr.write(`${failure.symbol}: screening failed: ${failure.reason}\n`);
     const selected = screened.sort((a, b) => (b.ruleScore ?? 0) - (a.ruleScore ?? 0) || b.score - a.score || a.symbol.localeCompare(b.symbol)).slice(0, DISCOVERY.maxCandidatesPerWeek);
     const saved = await saveCandidates(pool, week, selected);
-    process.stdout.write(`${JSON.stringify({ weekStart: week, candidates: saved, skippedCount, skipped, failureCount, failures })}\n`);
+    process.stdout.write(`${JSON.stringify({ weekStart: week, sourceRows: summary, uniqueSymbols: new Set(sources.map((row) => row.symbol)).size, shortlisted: shortlist.length, candidates: saved, skippedCount, skipped, failureCount, failures })}\n`);
   } finally { await pool.end(); }
 }
 if (/(?:^|[/\\])discovery\.(?:ts|js)$/.test(process.argv[1] ?? "")) main().catch((error) => { console.error(error instanceof Error ? error.message : error); process.exitCode = 1; });
