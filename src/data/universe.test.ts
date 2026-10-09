@@ -1,23 +1,25 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const query = vi.fn();
-const end = vi.fn();
-vi.mock("pg", () => ({ default: { Pool: vi.fn(() => ({ query, end })) } }));
+const end = vi.fn(async () => undefined);
+vi.mock("pg", () => ({ default: { Pool: vi.fn(() => ({ query, end, on: vi.fn() })) } }));
 
 import { instrumentUniverse, latestPortfolio } from "./store";
+import { closePool } from "../db/pool";
 import { instruments as fixtures } from "./fixtures";
 
 const env = { mode: process.env.DATA_MODE, url: process.env.DATABASE_URL };
 afterEach(() => {
   for (const [k, v] of [["DATA_MODE", env.mode], ["DATABASE_URL", env.url]] as const) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
-  query.mockReset(); end.mockReset();
+  query.mockReset();
+  return closePool().then(() => end.mockReset());
 });
 
 it("does not expose a stored fixture portfolio in db mode", async () => {
   process.env.DATA_MODE = "db"; process.env.DATABASE_URL = "postgresql://x";
   query.mockResolvedValue({ rows: [{ snapshot: { sample: true, asOf: "2025-08-08", weights: [], series: [{ benchmark: 1234 }] } }] });
   expect(await latestPortfolio()).toBeNull();
-  expect(end).toHaveBeenCalled();
+  expect(end).not.toHaveBeenCalled();
 });
 
 describe("instrumentUniverse", () => {
@@ -33,7 +35,7 @@ describe("instrumentUniverse", () => {
     query.mockResolvedValue({ rows });
     expect(await instrumentUniverse()).toEqual(rows);
     expect(query.mock.calls[0][0]).toContain("source <> 'benchmark'");
-    expect(end).toHaveBeenCalled();
+    expect(end).not.toHaveBeenCalled();
   });
 
   it("is empty in db mode without DATABASE_URL", async () => {

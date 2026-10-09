@@ -1,4 +1,5 @@
-import pg from "pg";
+import type pg from "pg";
+import { getPool } from "./pool";
 import { forwardReturn, hitRate, WINDOWS, type Close, type WindowDays } from "../track-record/measure";
 
 export interface RecordSignal {
@@ -62,8 +63,7 @@ export async function readRecord(pool: Pick<pg.Pool, "query">, today: string): P
 
 export async function recordHistory(): Promise<RecordHistory> {
   const empty: RecordHistory = { snapshotCount: 0, firstDate: null, lastDate: null, signals: [], buySignalCount: 0, hit30: { hits: 0, n: 0, rate: null } };
-  if (!process.env.DATABASE_URL) return empty;
-  const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 3000 });
-  try { return await readRecord(pool, new Date().toISOString().slice(0, 10)); }
-  finally { await pool.end(); }
+  const pool = getPool();
+  if (!pool) return empty;
+  return readRecord(pool, new Date().toISOString().slice(0, 10));
 }
