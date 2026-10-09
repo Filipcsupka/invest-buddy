@@ -9,7 +9,7 @@ export const extractionRunSchema = z.object({
   agent: z.enum(["claude", "codex"]),
   model: z.string().min(1).max(100),
   inputHash: z.string().regex(/^[0-9a-f]{64}$/),
-  accessions: z.array(z.string().regex(/^\d{10}-\d{2}-\d{6}$/)).max(100).optional(),
+  accessions: z.array(z.string().regex(/^\d{10}-\d{2}-\d{6}$/)).max(500).optional(),
   costUsd: z.number().nonnegative().nullable().optional(),
   status: z.enum(["pending", "ok", "failed", "skipped"]),
   usage: z.object({

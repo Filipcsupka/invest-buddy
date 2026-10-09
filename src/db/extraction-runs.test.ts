@@ -6,6 +6,11 @@ const run = { symbol: "NVDA", asOf: "2026-10-05", agent: "claude" as const, mode
 const pool = (rowCount = 1) => { const calls: { sql: string; params: unknown[] }[] = []; return { calls, query: async (sql: string, params: unknown[]) => { calls.push({ sql, params }); return { rowCount, rows: [] }; } } as never as { calls: typeof calls; query: never }; };
 
 describe("extraction runs", () => {
+  it("accepts a long accession history, as real tickers carry over 100", () => {
+    const accessions = Array.from({ length: 200 }, (_, i) => `0001628280-26-${String(i).padStart(6, "0")}`);
+    expect(extractionRunSchema.safeParse({ ...run, accessions }).success).toBe(true);
+    expect(extractionRunSchema.safeParse({ ...run, accessions: [...accessions, ...accessions, ...accessions] }).success).toBe(false);
+  });
   it("selects a bounded set of stale or never reviewed symbols", async () => {
     const calls: { sql: string; params: unknown[] }[] = [];
     const db = { query: async (sql: string, params: unknown[]) => { calls.push({ sql, params }); return { rows: [{ ticker: "NVDA" }] }; } };
