@@ -217,7 +217,7 @@ Design and sources: `docs/cadence-design.md`. This group replaces the daily extr
 - DoD: cutoff and usage samples are readable through the owner ingest endpoint, and a stopped run retries unapplied work.
 
 ### F5. Fixed review calendar
-- App change: a Saturday 11:00 review selects at most six symbols whose applied extraction or stored idea is older than 30 days, then runs extract, reconcile, daily scoring, and a forced judge in order. It runs after discovery and outside the weekday chain. The per-earnings thesis note, semi-annual re-screen, annual rewrite, stored checklist, and web review date remain open.
+- App change: a Saturday 11:00 review selects at most six symbols whose applied extraction or stored idea is older than 30 days, then runs extract, reconcile, daily scoring, and a forced judge in order. It runs after discovery and outside the weekday chain. The per-earnings thesis note, semi-annual re-screen, annual rewrite, and stored checklist remain open. The company page shows the last review date (the older of the applied extraction and the stored idea) and the next fixed review, 30 days later.
 
 ### F6. Tune the placeholders
 - Do: drawdown band, valuation band, turnover target (30% a year) and the insider cluster size are placeholders. Check them against `InvestingGuide.md` and your own rules.

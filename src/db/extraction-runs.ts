@@ -44,6 +44,17 @@ export async function reviewDueSymbols(pool: Pick<pg.Pool, "query">, days: numbe
   return result.rows.map((row) => row.ticker);
 }
 
+export const REVIEW_INTERVAL_DAYS = 30;
+
+/** Last review of one symbol: the older of the latest applied extraction and the latest stored idea, the same two dates reviewDueSymbols checks. Next review is 30 calendar days later. Null when either is missing. */
+export async function symbolReviewDates(pool: Pick<pg.Pool, "query">, symbol: string, days = REVIEW_INTERVAL_DAYS): Promise<{ lastReviewed: string; nextDue: string } | null> {
+  const result = await pool.query<{ last_reviewed: string | null; next_due: string | null }>(`SELECT LEAST(r.reviewed_at, j.judged_at)::text AS last_reviewed, (LEAST(r.reviewed_at, j.judged_at) + $2::integer)::text AS next_due
+    FROM (SELECT max(as_of) AS reviewed_at FROM extraction_runs WHERE symbol=$1 AND status='ok' AND applied_at IS NOT NULL) r,
+         (SELECT max(as_of) AS judged_at FROM trade_ideas WHERE symbol=$1) j`, [symbol, days]);
+  const row = result.rows[0];
+  return row?.last_reviewed && row.next_due ? { lastReviewed: row.last_reviewed, nextDue: row.next_due } : null;
+}
+
 /** Insert or update the row for (symbol, as_of, agent, input_hash). A later ok never gets downgraded by a replayed failure. */
 export async function recordExtraction(pool: Pick<pg.Pool, "query">, run: ExtractionRun): Promise<void> {
   const u = run.usage ?? {};
