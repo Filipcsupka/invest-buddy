@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import pg from "pg";
 import { describe, expect, it } from "vitest";
-import { edgarCandidates, frameCandidates, managerHoldingChanges, moverCandidates, ownershipCandidates, parse13fHoldings, rankCandidates, reviewCandidate, saveCandidates, saveDiscoveryPriceBars, screenCandidates, themeCandidates, weekStart, type DiscoveryCandidate } from "./discovery";
+import { edgarCandidates, frameCandidates, managerHoldingChanges, moverCandidates, nonCommonStockReason, ownershipCandidates, parse13fHoldings, rankCandidates, reviewCandidate, saveCandidates, saveDiscoveryPriceBars, screenCandidates, screenDiscoveryShortlist, themeCandidates, weekStart, type DiscoveryCandidate } from "./discovery";
 import { loadUniverse } from "../db/universe";
 
 const filingFeed = readFileSync(join(process.cwd(), "src/collectors/sources/fixtures/sec_getcurrent_8k.xml"), "utf8");
@@ -58,6 +58,29 @@ describe("weekly discovery", () => {
     expect(ranked[0].symbol).toBe("PCVX");
     expect(ranked[0].sources).toHaveLength(3);
     expect(weekStart("2026-10-06")).toBe("2026-10-05");
+  });
+
+  it("recognizes explicit non-common-stock ticker suffixes without rejecting plain symbols", () => {
+    expect(nonCommonStockReason("BHR-PD")).toBe("preferred-share symbol");
+    expect(nonCommonStockReason("BHR.PR")).toBe("preferred-share symbol");
+    expect(nonCommonStockReason("ABCDW")).toBe("warrant symbol");
+    expect(nonCommonStockReason("YHNA-WT")).toBe("warrant symbol");
+    expect(nonCommonStockReason("ABCDU")).toBe("unit symbol");
+    expect(nonCommonStockReason("ABCDR")).toBe("rights symbol");
+    expect(nonCommonStockReason("STWI")).toBeNull();
+    expect(nonCommonStockReason("BRK.B")).toBeNull();
+  });
+
+  it("summarizes skipped securities separately from genuine screening errors", async () => {
+    const candidate = (symbol: string): DiscoveryCandidate => ({ symbol, name: symbol, sector: "Growth", theme: null, score: 1, sources: [] });
+    const requested: string[] = [];
+    const result = await screenDiscoveryShortlist([candidate("BHR-PD"), candidate("STWI")], "2026-10-08", async (symbol) => {
+      requested.push(symbol);
+      throw new Error("symbol not accepted by Twelve Data");
+    }, { growthSectorRotation: null, dataTailwind: null }, null);
+    expect(requested).toEqual(["STWI"]);
+    expect(result).toEqual({ screened: [], skippedCount: 1, skipped: [{ symbol: "BHR-PD", reason: "preferred-share symbol" }],
+      failureCount: 1, failures: [{ symbol: "STWI", reason: "symbol not accepted by Twelve Data" }] });
   });
 
   it("uses the SEC frame growth screen across names outside the universe", () => {
