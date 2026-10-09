@@ -4,17 +4,18 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const universe = vi.fn();
 const scores = vi.fn();
 const idea = vi.fn();
+const review = vi.fn();
 const portfolio = vi.fn();
 const eurOn = vi.fn();
 vi.mock("@/data/store", () => ({ instrumentUniverse: () => universe(), latestScores: () => scores(), latestPortfolio: () => portfolio() }));
-vi.mock("@/data/ideas-store", () => ({ companyIdea: () => idea(), ideasEnabled: () => eurOn() }));
+vi.mock("@/data/ideas-store", () => ({ companyIdea: () => idea(), companyReview: () => review(), ideasEnabled: () => eurOn() }));
 
 import Company, * as page from "./page";
 import { instruments } from "@/data/fixtures";
 import { scoredUniverse } from "@/data/scored";
 import { sampleIdeas } from "@/ideas/fixtures";
 
-afterEach(() => { universe.mockReset(); scores.mockReset(); idea.mockReset(); eurOn.mockReset(); portfolio.mockReset(); portfolio.mockResolvedValue(null); });
+afterEach(() => { universe.mockReset(); scores.mockReset(); idea.mockReset(); review.mockReset(); review.mockResolvedValue(null); eurOn.mockReset(); portfolio.mockReset(); portfolio.mockResolvedValue(null); });
 const props = (ticker: string, locale = "en") => ({ params: Promise.resolve({ locale, ticker }) });
 const dbInstrument = { ticker: "ZZZZ", name: "Zed Corp", sector: "Cloud & SaaS", tier: null, source: "guide" as const };
 
@@ -49,6 +50,25 @@ describe("company page", () => {
       expect(html).toContain(locale === "en" ? "Stale since" : "Zastarané od");
       expect(html).not.toMatch(/SAMPLE DATA|UKÁŽKOVÉ DÁTA|Synthetic series|Syntetický rad/);
     }
+  });
+
+  it("shows the last review and the next fixed review in both languages, and hides them without data", async () => {
+    const [row] = await scoredUniverse();
+    universe.mockResolvedValue([row.instrument]);
+    scores.mockResolvedValue({ rows: [row], sample: false, lastUpdated: "2026-10-08", stale: false });
+    idea.mockResolvedValue(null);
+    review.mockResolvedValue({ lastReviewed: "2026-09-20", nextDue: "2026-10-20" });
+    const en = renderToStaticMarkup(await Company(props(row.instrument.ticker, "en")));
+    expect(en).toContain("Last reviewed");
+    expect(en).toContain("20 Sept 2026");
+    expect(en).toContain("Next scheduled review");
+    expect(en).toContain("20 Oct 2026");
+    const sk = renderToStaticMarkup(await Company(props(row.instrument.ticker, "sk")));
+    expect(sk).toContain("Naposledy preskúmané");
+    expect(sk).toContain("Ďalšia plánovaná kontrola");
+    review.mockResolvedValue(null);
+    const none = renderToStaticMarkup(await Company(props(row.instrument.ticker, "en")));
+    expect(none).not.toContain("Last reviewed");
   });
 
   it("404s a ticker missing from the universe, even if it is a fixture ticker", async () => {

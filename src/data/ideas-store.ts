@@ -1,5 +1,6 @@
 import pg from "pg";
 import { listIdeas, type StoredIdea } from "../db/ideas";
+import { symbolReviewDates } from "../db/extraction-runs";
 import { sampleIdeas } from "../ideas/fixtures";
 import { showsOnCompanyPage } from "../ideas/public";
 
@@ -25,4 +26,13 @@ export async function companyIdea(symbol: string): Promise<{ idea: StoredIdea; s
     const idea = data.rows.find((row) => row.symbol === symbol.toUpperCase());
     return idea && showsOnCompanyPage(idea) ? { idea, sample: data.sample } : null;
   } catch { return null; }
+}
+
+/** Review dates for the company page stamp. Hidden (null) on fixture data, without a database, or on a read failure. */
+export async function companyReview(symbol: string): Promise<{ lastReviewed: string; nextDue: string } | null> {
+  if (process.env.DATA_MODE === "fixture" || !process.env.DATABASE_URL) return null;
+  const db = new pg.Pool({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 3000 });
+  try { return await symbolReviewDates(db, symbol.toUpperCase()); }
+  catch { return null; }
+  finally { await db.end().catch(() => undefined); }
 }

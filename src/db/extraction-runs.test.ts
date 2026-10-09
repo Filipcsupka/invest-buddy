@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractionRunSchema, hasOkExtraction, recordExtraction, reviewDueSymbols, usageFromClaudeEnvelope } from "./extraction-runs";
+import { extractionRunSchema, hasOkExtraction, recordExtraction, reviewDueSymbols, symbolReviewDates, usageFromClaudeEnvelope } from "./extraction-runs";
 
 const hash = "a".repeat(64);
 const run = { symbol: "NVDA", asOf: "2026-10-05", agent: "claude" as const, model: "haiku", inputHash: hash, status: "ok" as const };
@@ -20,6 +20,18 @@ describe("extraction runs", () => {
     expect(calls[0].sql).toContain("i.source <> 'benchmark'");
     expect(calls[0].sql).toContain("max(created_at) AS attempted_at");
     expect(calls[0].sql).toContain("ORDER BY a.attempted_at NULLS FIRST");
+  });
+  it("reads the last review of one symbol and the date 30 days later", async () => {
+    const calls: { sql: string; params: unknown[] }[] = [];
+    const db = { query: async (sql: string, params: unknown[]) => { calls.push({ sql, params }); return { rows: [{ last_reviewed: "2026-09-20", next_due: "2026-10-20" }] }; } };
+    expect(await symbolReviewDates(db as never, "NVDA")).toEqual({ lastReviewed: "2026-09-20", nextDue: "2026-10-20" });
+    expect(calls[0].params).toEqual(["NVDA", 30]);
+    expect(calls[0].sql).toContain("applied_at IS NOT NULL");
+    expect(calls[0].sql).toContain("LEAST(r.reviewed_at, j.judged_at)");
+  });
+  it("returns no review dates when the extraction or the idea is missing", async () => {
+    const db = { query: async () => ({ rows: [{ last_reviewed: null, next_due: null }] }) };
+    expect(await symbolReviewDates(db as never, "NVDA")).toBeNull();
   });
   it("skips only when an ok, applied, unexpired run with the same key exists", async () => {
     const hit = pool(1), miss = pool(0);

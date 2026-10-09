@@ -13,7 +13,7 @@ import { StateChip } from "@/components/score-badge";
 import { ScoreMark } from "@/components/score-mark";
 import { SourceList } from "@/components/source-list";
 import { inputSources, ruleSources, sourceSummary } from "@/components/view-model";
-import { companyIdea, ideasEnabled } from "@/data/ideas-store";
+import { companyIdea, companyReview, ideasEnabled } from "@/data/ideas-store";
 import { instrumentUniverse, latestPortfolio, latestScores } from "@/data/store";
 import { DataStatus } from "@/components/data-status";
 export const dynamic = "force-dynamic";
@@ -79,6 +79,7 @@ async function Company({ params }: Params) {
   ];
   const sources = scored ? sourceSummary(locale, result) : null;
   const ideaRow = await companyIdea(instrument.ticker);
+  const review = await companyReview(instrument.ticker);
   const index = instruments.findIndex((item) => item.ticker === instrument.ticker);
   const prev = instruments[(index - 1 + instruments.length) % instruments.length];
   const next = instruments[(index + 1) % instruments.length];
@@ -114,6 +115,10 @@ async function Company({ params }: Params) {
             { label: m.company.sector, value: sectorLabel(locale, instrument.sector) },
             { label: m.company.source, value: data.sample && instrument.source === "sample extension" ? m.common.extension : instrument.source === "discovery" ? m.common.discovery : m.common.guide },
             { label: m.company.session, value: <span className="num">{result.asOf ? formatDate(locale, result.asOf) : m.common.noScore}</span> },
+            ...(review ? [
+              { label: m.company.lastReviewed, value: <span className="num">{formatDate(locale, review.lastReviewed)}</span> },
+              { label: m.company.nextReview, value: <span className="num">{formatDate(locale, review.nextDue)}</span> },
+            ] : []),
           ]}
         />
       </header>
