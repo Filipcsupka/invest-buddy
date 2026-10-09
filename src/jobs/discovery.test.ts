@@ -175,3 +175,11 @@ describe("sourceSummary", () => {
     expect(sourceSummary([{ name: "edgar-8k", rows: [] }, { name: "13f", error: "HTTP 503" }])).toEqual([{ name: "edgar-8k", rows: 0 }, { name: "13f", rows: 0, error: "HTTP 503" }]);
   });
 });
+
+describe("growth-first ranking", () => {
+  it("screens names with measured revenue growth before higher-scored filings-only names", () => {
+    const row = (symbol: string, score: number, growth?: { current: number; prior: number }): DiscoveryCandidate => ({ symbol, name: symbol, sector: "Growth", theme: null, score, sources: [], growth });
+    const ranked = rankCandidates([row("OWN", 5), row("GRO", 3, { current: 40, prior: 20 }), row("MOV", 4)], new Set(), 2);
+    expect(ranked.map((r) => r.symbol)).toEqual(["GRO", "OWN"]);
+  });
+});
