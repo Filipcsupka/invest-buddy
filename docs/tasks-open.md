@@ -64,10 +64,8 @@ Groups: A first live run, B web, C pipeline quality, D data and accounts, E oper
 
 ## B. Web
 
-### B1. Real benchmark for `/track-record` (partly done)
-- Status 2026-10-08: the fixture benchmark is hidden in db mode and a test fails if it renders there. A real SPY line on the page is not built yet (SPY bars exist in `daily_bars`).
-- Do: store a benchmark series (SPY or CSPX bars in `daily_bars`; migration 006 seeds a benchmark instrument) and replace `fixtureBenchmark()` in `src/app/[locale]/track-record/page.tsx`.
-- DoD: the page shows a real benchmark line in `DATA_MODE=db`; a test fails if the fixture benchmark appears in db mode.
+### B1. Real benchmark for `/track-record` (done 2026-10-09)
+- DB mode charts SPY `daily_bars` from the first through the last stored record date, indexed to 100 at the first available SPY bar. It shows the no-data state if fewer than two bars are available. The synthetic chart stays in fixture mode. Tests cover the series and DB rendering.
 
 ### B2. Portfolio page benchmark and sample check (done 2026-10-06)
 - Status 2026-10-08: confirmed; db mode builds the chart from `portfolio_nav_history` and SPY bars.

@@ -8,6 +8,7 @@ import { toRow, type ScreenRow } from "@/components/view-model";
 import { fixtureBenchmark } from "@/data/record";
 import { scoreHistory, stale } from "@/data/store";
 import { recordHistory } from "@/db/track-record";
+import { recordBenchmark } from "@/db/record-benchmark";
 import { DataStatus } from "@/components/data-status";
 import { PaywallSegment } from "@/components/paywall-segment";
 export const dynamic = "force-dynamic";
@@ -26,6 +27,7 @@ async function TrackRecord({ params }: LocaleParams) {
   const m = getMessages(locale);
   if (process.env.DATA_MODE !== "fixture") {
     const record = await recordHistory();
+    const benchmark = await recordBenchmark(record.firstDate, record.lastDate);
     return <div className="frame page">
       <header className="page-head">
         <h1 className="title">{m.trackRecord.title}</h1>
@@ -40,6 +42,16 @@ async function TrackRecord({ params }: LocaleParams) {
         {record.hit30.n > 0 && <p>{fill(m.trackRecord.hitRate, { rate: formatPercent(locale, record.hit30.rate ?? 0), n: formatNumber(locale, record.hit30.n) })}</p>}
         {record.buySignalCount < 30 && <p className="muted small">{fill(m.trackRecord.smallSample, { n: formatNumber(locale, record.buySignalCount) })}</p>}
       </section>
+      <PaywallSegment id="track-record-benchmark"><section className="sheet-section" aria-labelledby="benchmark">
+        <h2 id="benchmark">SPY</h2>
+        {benchmark.length >= 2 ? <Chart
+          bars={benchmark}
+          count={benchmark.length}
+          locale={locale}
+          dipZone={false}
+          labels={{ name: "SPY", aria: m.chart.label, close: "SPY", ma50: m.chart.ma50, ma200: m.chart.ma200, dip: m.chart.dip, last: m.chart.last }}
+        /> : <p className="notice">{m.common.noDataYet}</p>}
+      </section></PaywallSegment>
       <PaywallSegment id="track-record-signals"><section className="sheet-section" aria-labelledby="signals">
         <h2 id="signals">{m.trackRecord.signalsTitle}</h2>
         {record.signals.length === 0 ? <p className="muted">{record.snapshotCount === 0 ? m.trackRecord.empty : m.trackRecord.noSignals}</p> : <div className="table-scroll"><table className="screen">
