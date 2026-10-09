@@ -227,7 +227,9 @@ export function rankCandidates(rows: DiscoveryCandidate[], known: Set<string>, l
       previous.growth ??= row.growth;
     } else grouped.set(row.symbol, { ...row, sources: [...row.sources] });
   }
-  return [...grouped.values()].sort((a, b) => b.score - a.score || a.symbol.localeCompare(b.symbol)).slice(0, limit);
+  // Names with measured revenue growth (SEC frames) come first; ownership and mover filings alone are weaker evidence for a growth screen.
+  const growthFirst = (row: DiscoveryCandidate) => row.growth ? 1 : 0;
+  return [...grouped.values()].sort((a, b) => growthFirst(b) - growthFirst(a) || b.score - a.score || a.symbol.localeCompare(b.symbol)).slice(0, limit);
 }
 
 /** SEC tickers can include a security class. Skip explicit preferred, warrant, unit and right suffixes; plain symbols remain eligible. */
