@@ -29,6 +29,8 @@ export const SIGNAL_RULES = {
   actionsOrder: ["HIGH_CONVICTION_ADD", "ADD", "START_POSITION"],
   /** InvestingGuide s6 and s8: score 18+ is the buy alert, 15-17 is WATCH (add on dip), 12-14 wait. Every buy action needs this score. */
   minScoreForBuy: 18,
+  /** Guide section 8: an ADD alert needs score 15 or more; a BUY (START_POSITION) alert needs 18. */
+  minScoreForAdd: 15,
   convictionScore: 18,
   minConfirmedKeyFields: 2,
   keyFields: ["revenueAccelerating", "revenueDeclining", "epsBeat", "guidanceRaised", "guidanceCut", "productCatalyst"],
@@ -175,9 +177,9 @@ export function signalFor(s: SignalSymbolInput, rules: SignalRules = SIGNAL_RULE
   }
   if (keyConfirmed.length < rules.minConfirmedKeyFields) { sig.reasons.push(`Insufficient evidence: ${keyConfirmed.length} confirmed key fields, ${rules.minConfirmedKeyFields} needed.`); return sig; }
   const setupOk = atLeast(r.ratings.company, "Good") && atLeast(r.ratings.entry, "Good") && regime !== "downtrend";
-  if (!setupOk || s.score.total < rules.minScoreForBuy) {
+  if (!setupOk || s.score.total < rules.minScoreForAdd) {
     sig.reasons.push(setupOk
-      ? `Score ${s.score.total} is below the buy threshold of ${rules.minScoreForBuy}${s.score.total >= 15 ? "; 15 to 17 is WATCH, add on a dip" : ""}.`
+      ? `Score ${s.score.total} is below the add threshold of ${rules.minScoreForAdd}.`
       : "Buy conditions are not met.");
     if (s.held) sig.action = "HOLD";
     return sig;
@@ -186,6 +188,11 @@ export function signalFor(s: SignalSymbolInput, rules: SignalRules = SIGNAL_RULE
   const conviction = s.score.total >= rules.convictionScore && atLeast(r.ratings.company, "Strong") && atLeast(r.ratings.entry, "Strong") && atLeast(r.ratings.catalyst, "Strong") && execution && !sig.carriedFrom;
   if (conviction) { sig.action = "HIGH_CONVICTION_ADD"; sig.sizeTier = "ADD_HALF"; sig.reasons.push("Conviction conditions met."); return sig; }
   if (atLeast(r.ratings.entry, "Strong") || regime === "pullback") { sig.action = "ADD"; sig.sizeTier = "ADD_THIRD"; sig.reasons.push("Fundamentals hold and the entry is good."); return sig; }
+  if (s.score.total < rules.minScoreForBuy) {
+    sig.reasons.push(`Score ${s.score.total} is below the buy threshold of ${rules.minScoreForBuy}; 15 to 17 is WATCH, add on a dip.`);
+    if (s.held) sig.action = "HOLD";
+    return sig;
+  }
   sig.action = "START_POSITION";
   const { full, standard } = rules.startTiers;
   if (sig.unconfirmed) { sig.sizeTier = "STARTER"; sig.reasons.push("Buy conditions met; unconfirmed or carried data keeps it to a starter."); }

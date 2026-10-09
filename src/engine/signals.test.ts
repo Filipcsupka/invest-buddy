@@ -56,18 +56,23 @@ describe("actions from data only, no portfolio", () => {
     expect(one(sym("S", { technicals: flatEntry, fields: noExecution }))).toMatchObject({ action: "START_POSITION", sizeTier: "STANDARD" });
     expect(one(sym("S", { technicals: flatEntry, fields: starterFields, score: { total: 18, state: "Setup met (>=18)" } }))).toMatchObject({ action: "START_POSITION", sizeTier: "STARTER" });
   });
-  it("score boundary: 18 buys, 14, 15 and 17 are WATCH (Guide s6, s8)", () => {
+  it("score boundary: START needs 18, ADD needs 15 (Guide s6, s8), below 15 is WATCH", () => {
     expect(SIGNAL_RULES.minScoreForBuy).toBe(18);
+    expect(SIGNAL_RULES.minScoreForAdd).toBe(15);
     const at = (total: number, over: Partial<SignalSymbolInput> = {}) => one(sym("B", { score: { total, state: "x" }, ...over }));
-    for (const total of [14, 15, 17]) {
-      for (const over of [{}, { technicals: flatEntry }]) expect(at(total, over)).toMatchObject({ action: "WATCH", sizeTier: "NONE" });
+    expect(at(14)).toMatchObject({ action: "WATCH", sizeTier: "NONE" });
+    expect(at(14, { technicals: flatEntry })).toMatchObject({ action: "WATCH", sizeTier: "NONE" });
+    expect(at(14).reasons.join()).toMatch(/Score 14 is below the add threshold of 15\.$/);
+    for (const total of [15, 17]) {
+      expect(at(total, { technicals: flatEntry })).toMatchObject({ action: "WATCH", sizeTier: "NONE" });
+      expect(at(total, { technicals: flatEntry }).reasons.join()).toMatch(new RegExp(`Score ${total} is below the buy threshold of 18; 15 to 17 is WATCH`));
+      expect(at(total)).toMatchObject({ action: "ADD", sizeTier: "ADD_THIRD" });
     }
-    expect(at(17).reasons.join()).toMatch(/Score 17 is below the buy threshold of 18; 15 to 17 is WATCH/);
-    expect(at(14).reasons.join()).toMatch(/Score 14 is below the buy threshold of 18\.$/);
     expect(at(18, { technicals: flatEntry })).toMatchObject({ action: "START_POSITION" });
     expect(at(18, { fields: { ...sym("B").fields, epsBeat: f(null), guidanceRaised: f(null) } })).toMatchObject({ action: "ADD", sizeTier: "ADD_THIRD" });
     expect(at(18)).toMatchObject({ action: "HIGH_CONVICTION_ADD" });
-    expect(at(15, { held: { valueEur: 100 } })).toMatchObject({ action: "HOLD", sizeTier: "NONE" });
+    expect(at(14, { held: { valueEur: 100 } })).toMatchObject({ action: "HOLD", sizeTier: "NONE" });
+    expect(at(16, { technicals: flatEntry, held: { valueEur: 100 } })).toMatchObject({ action: "HOLD", sizeTier: "NONE" });
   });
   it("unconfirmed or carried data keeps a start to a starter", () => {
     const carried = sym("S", { technicals: flatEntry, fields: { ...sym("S").fields, revenueAccelerating: f(true, { carriedFrom: "2026-09-20" }) } });
