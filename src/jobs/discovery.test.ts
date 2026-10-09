@@ -3,8 +3,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import pg from "pg";
 import { describe, expect, it } from "vitest";
-import { edgarCandidates, frameCandidates, managerHoldingChanges, moverCandidates, nonCommonStockReason, ownershipCandidates, parse13fHoldings, rankCandidates, reviewCandidate, saveCandidates, saveDiscoveryPriceBars, screenCandidates, shortlistCandidates, sourceSummary, screenDiscoveryShortlist, themeCandidates, weekStart, type DiscoveryCandidate } from "./discovery";
-import { SymbolNotFoundError } from "../data/twelvedata";
+import { edgarCandidates, frameCandidates, managerHoldingChanges, moverCandidates, nonCommonStockReason, ownershipCandidates, parse13fHoldings, preScreenMa200, rankCandidates, reviewCandidate, saveCandidates, saveDiscoveryPriceBars, screenCandidates, shortlistCandidates, sourceSummary, screenDiscoveryShortlist, themeCandidates, weekStart, type DiscoveryCandidate } from "./discovery";
+import { DailyLimitError, SymbolNotFoundError } from "../data/twelvedata";
+import type { OHLCV } from "../engine/types";
 import { loadUniverse } from "../db/universe";
 
 const filingFeed = readFileSync(join(process.cwd(), "src/collectors/sources/fixtures/sec_getcurrent_8k.xml"), "utf8");
@@ -181,5 +182,45 @@ describe("growth-first ranking", () => {
     const row = (symbol: string, score: number, growth?: { current: number; prior: number }): DiscoveryCandidate => ({ symbol, name: symbol, sector: "Growth", theme: null, score, sources: [], growth });
     const ranked = rankCandidates([row("OWN", 5), row("GRO", 3, { current: 40, prior: 20 }), row("MOV", 4)], new Set(), 2);
     expect(ranked.map((r) => r.symbol)).toEqual(["GRO", "OWN"]);
+  });
+});
+
+describe("MA200 pre-screen", () => {
+  const row = (symbol: string, score = 1): DiscoveryCandidate => ({ symbol, name: symbol, sector: "Growth", theme: null, score, sources: [] });
+  const series = (last: number, base = 100): OHLCV[] => Array.from({ length: 220 }, (_, i) => {
+    const day = new Date(Date.UTC(2026, 0, 1 + i)).toISOString().slice(0, 10);
+    const close = i === 219 ? last : base;
+    return { date: day, open: close, high: close, low: close, close, volume: 1000 };
+  });
+  const asOf = "2026-12-31";
+
+  it("drops a name under MA200 before the cut and fills the slots from lower ranks", async () => {
+    const data: Record<string, OHLCV[]> = { AAA: series(80), BBB: series(120), CCC: series(130), DDD: series(140) };
+    const calls: string[] = [];
+    const result = await preScreenMa200(["AAA", "BBB", "CCC", "DDD"].map((s) => row(s)), asOf, async (s) => { calls.push(s); return data[s]; }, 2);
+    expect(result.kept.map((r) => r.symbol)).toEqual(["BBB", "CCC"]);
+    expect(result.dropped.map((r) => r.symbol)).toEqual(["AAA"]);
+    expect(result.calls).toBe(3);
+    expect(calls).toEqual(["AAA", "BBB", "CCC"]);
+  });
+
+  it("makes at most one call per ranked name, never more than the pool size", async () => {
+    const pool = Array.from({ length: 10 }, (_, i) => row(`S${i}`));
+    let calls = 0;
+    const result = await preScreenMa200(pool, asOf, async () => { calls++; return series(150); }, 24);
+    expect(calls).toBe(10);
+    expect(result.kept).toHaveLength(10);
+  });
+
+  it("keeps names it cannot judge, skips unknown symbols, and passes the rest through at the daily limit", async () => {
+    const result = await preScreenMa200([row("SHORT"), row("BAD"), row("LIM"), row("NEXT")], asOf, async (s) => {
+      if (s === "SHORT") return series(50).slice(-100);
+      if (s === "BAD") throw new SymbolNotFoundError(s, "nope");
+      throw new DailyLimitError();
+    }, 10);
+    expect(result.kept.map((r) => r.symbol)).toEqual(["SHORT", "LIM", "NEXT"]);
+    expect(result.skipped.map((r) => r.symbol)).toEqual(["BAD"]);
+    expect(result.stoppedByLimit).toBe(true);
+    expect(result.calls).toBe(3);
   });
 });
