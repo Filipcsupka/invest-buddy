@@ -129,11 +129,11 @@ Groups: A first live run, B web, C pipeline quality, D data and accounts, E oper
 - DoD: each foreign symbol has a documented behaviour and a test; no field is guessed.
 - Done: live SEC check shows ASML and SE file 20-F and 6-K; MELI files 10-K, 10-Q and 8-K, so it is not foreign. Collection already stored 20-F and 6-K. New fact `sec_filer_status` lists the unknown SEC fields with reasons and reaches the bundle. See `docs/data.md`.
 
-### C8. Price freshness rule (rule done 2026-10-08; SQ to XYZ live check open)
+### C8. Price freshness rule (done 2026-10-09)
 - Done: `daily.ts` accepts a latest bar up to 3 calendar days older than the scoring date, so Monday scores after a normal weekend are not `stale_prices`; older bars stay stale. Tests in `src/jobs/daily.test.ts` cover Friday to Monday and the day 3 / day 4 boundary.
 - Mapping in code: `DEFAULT_SYMBOL_MAP = { SQ: "XYZ" }` in `src/data/twelvedata.ts`; `marketTicker` in `src/collectors/sources/common.ts` and `collect.ts` reuse it for SEC and OpenFIGI.
-- Open (coordinator): one live Twelve Data call for `XYZ` to confirm the mapping. This worker has no API key.
-- DoD: Monday scores are not stale on a normal weekend (done); mapping confirmed with one live call (open).
+- Live check 2026-10-09: the nightly prices job stored 264 `daily_bars` for `SQ`, latest 2026-10-08, so the `SQ` to `XYZ` mapping works against Twelve Data.
+- DoD: Monday scores are not stale on a normal weekend; mapping confirmed live. Both done.
 
 ## D. Data and accounts (owner)
 
