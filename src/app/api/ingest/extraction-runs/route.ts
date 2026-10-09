@@ -1,7 +1,7 @@
 import { logIngestRequest, recordIngestError } from "../request-log";
 import { createHash, timingSafeEqual } from "node:crypto";
 import pg from "pg";
-import universe from "../../../../../scanner/universe.json";
+import { isKnownInstrument } from "../../../../db/universe";
 import { extractionRunSchema, hasOkExtraction, recordExtraction, reviewDueSymbols } from "../../../../db/extraction-runs";
 import { readBoundedBody } from "../read-bounded-body";
 
@@ -13,7 +13,6 @@ function authorized(header: string | null, token: string) {
   const b = createHash("sha256").update(token).digest();
   return timingSafeEqual(a, b) && supplied.length > 0;
 }
-const known = (symbol: string) => (universe.instruments as { symbol: string }[]).some((item) => item.symbol === symbol);
 function gate(request: Request) {
   const token = process.env.INGEST_TOKEN;
   if (!token) return Response.json({ error: "Ingest unavailable" }, { status: 503 });
@@ -36,9 +35,12 @@ async function getHandler(request: Request) {
     finally { await pool.end(); }
   }
   const parsed = extractionRunSchema.pick({ symbol: true, agent: true, inputHash: true }).safeParse({ symbol: q.get("symbol")?.toUpperCase(), agent: q.get("agent"), inputHash: q.get("inputHash") });
-  if (!parsed.success || !known(parsed.data.symbol)) return Response.json({ error: "Invalid query" }, { status: 400 });
+  if (!parsed.success) return Response.json({ error: "Invalid query" }, { status: 400 });
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
-  try { return Response.json({ skip: await hasOkExtraction(pool, parsed.data) }); }
+  try {
+    if (!await isKnownInstrument(pool, parsed.data.symbol)) return Response.json({ error: "Invalid query" }, { status: 400 });
+    return Response.json({ skip: await hasOkExtraction(pool, parsed.data) });
+  }
   catch (error) { recordIngestError(request, error); return Response.json({ error: "Database unavailable" }, { status: 503 }); }
   finally { await pool.end(); }
 }
@@ -52,9 +54,13 @@ async function postHandler(request: Request) {
   let raw: unknown;
   try { raw = JSON.parse(text); } catch { return Response.json({ error: "Invalid JSON" }, { status: 400 }); }
   const parsed = extractionRunSchema.safeParse(raw);
-  if (!parsed.success || !known(parsed.data.symbol)) return Response.json({ error: "Invalid body" }, { status: 400 });
+  if (!parsed.success) return Response.json({ error: "Invalid body" }, { status: 400 });
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
-  try { await recordExtraction(pool, parsed.data); return Response.json({ recorded: true }); }
+  try {
+    if (!await isKnownInstrument(pool, parsed.data.symbol)) return Response.json({ error: "Invalid body" }, { status: 400 });
+    await recordExtraction(pool, parsed.data);
+    return Response.json({ recorded: true });
+  }
   catch (error) { recordIngestError(request, error); return Response.json({ error: "Database unavailable" }, { status: 503 }); }
   finally { await pool.end(); }
 }

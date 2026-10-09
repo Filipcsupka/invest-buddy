@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-const store = vi.hoisted(() => ({ skip: false, recorded: [] as unknown[] }));
-vi.mock("pg", () => ({ default: { Pool: class { async end() {} } } }));
+const store = vi.hoisted(() => ({ skip: false, recorded: [] as unknown[], known: new Set(["NVDA", "MU"]) }));
+vi.mock("pg", () => ({ default: { Pool: class { async query(_sql: string, params: string[]) { const rows = store.known.has(params[0]) ? [{}] : []; return { rows, rowCount: rows.length }; } async end() {} } } }));
 vi.mock("../../../../db/extraction-runs", async (importOriginal) => ({ ...(await importOriginal<typeof import("../../../../db/extraction-runs")>()), hasOkExtraction: vi.fn(async () => store.skip), recordExtraction: vi.fn(async (_pool: unknown, run: unknown) => { store.recorded.push(run); }) }));
 import { GET, POST } from "./route";
 
@@ -24,6 +24,16 @@ describe("extraction-runs route", () => {
     expect(await (await GET(get(url()))).json()).toEqual({ skip: true });
     expect((await GET(get(url({ symbol: "ZZZZ" })))).status).toBe(400);
     expect((await GET(get(url({ inputHash: "x" })))).status).toBe(400);
+  });
+  it("accepts a symbol that is in the instruments table but not in universe.json", async () => {
+    expect((await GET(get(url({ symbol: "mu" })))).status).toBe(200);
+    const body = { symbol: "MU", asOf: "2026-10-09", agent: "claude", model: "haiku", inputHash: hash, status: "ok", applied: true };
+    expect((await POST(post(body))).status).toBe(200);
+    expect(store.recorded).toHaveLength(1);
+    store.known.delete("MU");
+    expect((await GET(get(url({ symbol: "MU" })))).status).toBe(400);
+    expect((await POST(post(body))).status).toBe(400);
+    store.known.add("MU");
   });
   it("records a run and rejects bad bodies", async () => {
     const body = { symbol: "NVDA", asOf: "2026-10-05", agent: "claude", model: "haiku", inputHash: hash, status: "ok", usage: { inputTokens: 1 } };
