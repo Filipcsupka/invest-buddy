@@ -56,6 +56,20 @@ The public host routes to the web, while its Traefik middleware rewrites `/api/i
 
 The web init container runs `npm run migrate` before each new web pod starts. It retries while PostgreSQL is unavailable. Migrations are recorded in `schema_migrations` and guarded by an advisory lock. Check schema compatibility with the rollback image before rollout.
 
+## Operator disclosure banner
+
+The web hides the operator disclosure line until its text is set. It reads one plain environment variable per language and shows the text on the dashboard, company and track-record pages. Set it as a normal env var on the web Deployment (it is not a secret). Blank or unset keeps the line hidden.
+
+```yaml
+env:
+  - name: OPERATOR_DISCLOSURE_EN
+    value: "<English disclosure text>"
+  - name: OPERATOR_DISCLOSURE_SK
+    value: "<Slovak disclosure text>"
+```
+
+The wording is the owner's to write. Restart the web pods after changing it.
+
 ## Seal the authentication secrets
 
 Run `claude setup-token` on the Mac while signed in. Store the token in the secret manager. Fetch and inspect the cluster Sealed Secrets certificate using the infra kubeconfig and the actual controller name and namespace. `kubeseal --fetch-cert` is read only. Seal locally for `invest`; never commit an unsealed Secret, paste the token in chat, or place it in a command argument. This example reads the value without showing it in shell history:

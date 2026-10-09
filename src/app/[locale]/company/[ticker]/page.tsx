@@ -43,7 +43,7 @@ async function load(params: Params["params"]) {
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { locale, instrument, data } = await load(params);
   const m = getMessages(locale);
-  return pageMetadata(locale, `/company/${instrument.ticker}`, fill(m.meta.companyTitle, { ticker: instrument.ticker, name: instrument.name }), fill(data.sample ? m.meta.companyDescription : m.meta.companyDescriptionLive, { ticker: instrument.ticker }));
+  return pageMetadata(locale, `/company/${instrument.ticker}`, instrument.name === instrument.ticker ? instrument.ticker : fill(m.meta.companyTitle, { ticker: instrument.ticker, name: instrument.name }), fill(data.sample ? m.meta.companyDescription : m.meta.companyDescriptionLive, { ticker: instrument.ticker }));
 }
 
 async function Company({ params }: Params) {
@@ -106,7 +106,7 @@ async function Company({ params }: Params) {
       <header className="company-head">
         <h1 className="title">
           <span className="title-ticker">{instrument.ticker}</span>
-          <span className="title-name">{instrument.name}</span>
+          {instrument.name !== instrument.ticker && <span className="title-name">{instrument.name}</span>}
         </h1>
         {held && <p><span className="tag">{state === "setup" || state === "watch" ? m.portfolio.held : m.portfolio.heldNoSignal}</span></p>}
         <TitleBlock
@@ -150,6 +150,14 @@ async function Company({ params }: Params) {
             <p className="muted small">{m.company.ideaNote}</p>
           </div>
           <PaywallSegment id="idea-card"><IdeaCard idea={ideaRow.idea} locale={locale} showAmounts={ideasEnabled()} nested /></PaywallSegment>
+        </section>
+      )}
+      {!ideaRow && (
+        <section className="sheet-section" aria-labelledby="idea">
+          <div className="section-head">
+            <h2 id="idea">{m.company.ideaTitle}</h2>
+          </div>
+          <p className="muted">{m.company.noIdea}</p>
         </section>
       )}
 

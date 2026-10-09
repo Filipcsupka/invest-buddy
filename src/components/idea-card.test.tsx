@@ -48,20 +48,29 @@ describe("idea card", () => {
     expect(html(translated, "sk")).toContain("Slovenský spúšťač");
     expect(html(translated, "en")).toContain(add.verdict);
     expect(html(translated, "en")).not.toContain("Slovenský verdikt");
-    expect(html(add, "sk")).toContain("Zobrazené v angličtine");
-    expect(html(translated, "sk")).not.toContain("Zobrazené v angličtine");
+    expect(html(add, "sk")).toContain("Preklad nie je dostupný");
+    expect(html(translated, "sk")).not.toContain("Preklad nie je dostupný");
     expect(renderToStaticMarkup(<IdeaCard idea={translated} locale="sk" showAmounts={false} />)).not.toMatch(/EUR|€/);
   });
   it("keeps the English conflict when a translation omits it", () => {
     const translated = { ...watch, translations: { sk: { verdict: "Preklad", whatHappened: watch.whatHappened, whyItMatters: watch.whyItMatters, numbers: watch.numbers, plan: watch.plan, evidence: watch.evidence } } };
     const out = html(translated, "sk");
     expect(out).toContain("Sample");
-    expect(out).toContain("Zobrazené v angličtine");
+    expect(out).toContain("Preklad nie je dostupný");
   });
   it("shows each language’s downgrade reason", () => {
     const translated = { ...watch, translations: { en: { downgradeReason: "Guidance fell." }, sk: { verdict: "Preklad", whatHappened: watch.whatHappened, whyItMatters: watch.whyItMatters, numbers: watch.numbers, plan: watch.plan, evidence: watch.evidence, downgradeReason: "Výhľad klesol." } } };
     expect(html(translated, "en")).toContain("Guidance fell.");
     expect(html(translated, "sk")).toContain("Výhľad klesol.");
+  });
+  it("replaces stored codes in Slovak judge text and keeps English fallback text untouched", () => {
+    const sk = { verdict: "WATCH, žiadne nové peniaze.", whatHappened: ["Fakt jedna", "Fakt dva"], whyItMatters: ["Entry je Strong."], numbers: add.numbers, plan: add.plan, evidence: [{ url: "https://example.com/nvda-release", label: "Earnings release" }] };
+    const out = html({ ...add, translations: { sk } }, "sk");
+    expect(out).toContain("Sledovať, žiadne nové peniaze.");
+    expect(out).toContain("Vstup je Silné.");
+    expect(out).toContain("Výsledková správa");
+    expect(out).not.toContain("WATCH");
+    expect(html({ ...add, whyItMatters: ["Entry is Strong."] }, "sk")).toContain("Entry is Strong.");
   });
   it("escapes model text", () => {
     expect(html({ ...add, verdict: "<script>alert(1)</script>" })).not.toContain("<script>");
@@ -71,14 +80,14 @@ describe("idea card", () => {
 describe("idea card without amounts (ADR-001)", () => {
   it("shows the tier and its wording in the headline and the plan, never EUR", () => {
     const out = renderToStaticMarkup(<IdeaCard idea={add} locale="en" showAmounts={false} />);
-    expect(out).toContain("NVDA - Add - Add 1/3<");
+    expect(out).toContain("NVDA - Add 1/3<");
     expect(out).toContain("Add about 1/3 of a full position");
     expect(out).toContain("Not an amount and not tailored to you.");
     expect(out).not.toMatch(/EUR|€|Amount now/);
     const watchOut = renderToStaticMarkup(<IdeaCard idea={watch} locale="en" showAmounts={false} />);
     expect(watchOut).toContain("AMD - Watch<");
     expect(watchOut).toContain("No new money");
-    expect(renderToStaticMarkup(<IdeaCard idea={add} locale="sk" showAmounts={false} />)).toContain("NVDA - Prikúpiť - Prikúpiť 1/3<");
+    expect(renderToStaticMarkup(<IdeaCard idea={add} locale="sk" showAmounts={false} />)).toContain("NVDA - Prikúpiť 1/3<");
   });
   it("an idea stored before tiers shows no size", () => {
     const out = renderToStaticMarkup(<IdeaCard idea={{ ...add, sizeTier: null }} locale="en" showAmounts={false} />);
@@ -87,7 +96,7 @@ describe("idea card without amounts (ADR-001)", () => {
   });
   it("drops the band, amountNow and every sentence naming EUR", () => {
     const out = renderToStaticMarkup(<IdeaCard idea={{ ...add, verdict: "Setup holds. Buy EUR 80 now.", numbers: [...add.numbers, { label: "Size", value: "EUR 80" }] }} locale="en" showAmounts={false} />);
-    expect(out).toContain("NVDA - Add - Add 1/3<");
+    expect(out).toContain("NVDA - Add 1/3<");
     expect(out).toContain("Setup holds.");
     expect(out).toContain("Opportunity cost");
     expect(out).not.toMatch(/EUR|€|Amount now|Cash left/);

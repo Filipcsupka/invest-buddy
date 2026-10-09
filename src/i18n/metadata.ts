@@ -11,6 +11,7 @@ export function pageMetadata(locale: Locale, path: string, title: string | null,
     title: title ?? { absolute: m.meta.homeTitle },
     description,
     alternates: { canonical: `/${locale}${path}`, languages: { ...languages, "x-default": `/en${path}` } },
-    openGraph: { title: title ?? m.meta.homeTitle, description, siteName: m.meta.siteName, locale: intlTag[locale].replace("-", "_"), type: "website", url: `/${locale}${path}` },
+    openGraph: { title: title ?? m.meta.homeTitle, description, siteName: m.meta.siteName, locale: intlTag[locale].replace("-", "_"), type: "website", url: `/${locale}${path}`, images: [{ url: "/og", width: 1200, height: 630, alt: m.meta.siteName }] },
+    twitter: { card: "summary_large_image", title: title ?? m.meta.homeTitle, description, images: ["/og"] },
   };
 }

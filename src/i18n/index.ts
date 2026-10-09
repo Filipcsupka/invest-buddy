@@ -13,8 +13,11 @@ export function isLocale(value: string): value is Locale {
   return (locales as readonly string[]).includes(value);
 }
 
+/** Operator disclosure text comes from OPERATOR_DISCLOSURE_EN / OPERATOR_DISCLOSURE_SK; unset or blank keeps the banner hidden. */
 export function getMessages(locale: Locale): Messages {
-  return messages[locale];
+  const base = messages[locale];
+  const disclosure = process.env[`OPERATOR_DISCLOSURE_${locale.toUpperCase()}`]?.trim();
+  return disclosure ? { ...base, common: { ...base.common, operatorDisclosure: disclosure } } : base;
 }
 
 export function otherLocale(locale: Locale): Locale {

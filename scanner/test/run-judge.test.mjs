@@ -6,7 +6,7 @@ import { chmodSync, mkdtempSync, readFileSync, readdirSync, writeFileSync, exist
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseArgs, validateJudgeOutput, normalizeOutput, changedSignals, mergeIdeas, buildModelInput, inventedFigures, figureContext, judgeHash, agentModeArgs, parseAgentEnvelope, amountText } from "../run-judge.mjs";
+import { parseArgs, validateJudgeOutput, normalizeOutput, changedSignals, mergeIdeas, buildModelInput, inventedFigures, figureContext, judgeHash, agentModeArgs, parseAgentEnvelope, amountText, slovakRawCode } from "../run-judge.mjs";
 import { figureValuesIn, sameFigureValues, sameProtectedTokens } from "../figure-tokens.mjs";
 import { callAgentNoTools } from "../run-extract.mjs";
 
@@ -622,4 +622,12 @@ test("Slovak label forms and month-day dates are not invented figures (2026-10-0
 test("window labels written with non-breaking hyphens or en dashes are labels, not figures", () => {
   assert.deepEqual(inventedFigures(["and 60\u2011day relative strength", "over a 60\u2013day window", "20\u2011, 50\u2011 and 200\u2011day averages"], {}), []);
   assert.deepEqual(inventedFigures(["Margin of 33 percent."], {}), [33]);
+});
+
+test("Slovak text that keeps stored action or rating codes is kept and noted, not rejected", () => {
+  const a = merge([words("NVDA", { sk: { ...words("NVDA").sk, verdict: "WATCH, žiadne nové peniaze." } }), words("AMD", { evidence: [] })]);
+  assert.equal(a.ideas.length, 2);
+  assert.ok(a.notes.some((n) => /NVDA: Slovak text keeps the English code WATCH/.test(n)));
+  assert.equal(slovakRawCode(["Vstup je silný, pridať 1/3."]), null);
+  assert.equal(slovakRawCode(["Strong-ish a ADDITIONAL"]), null);
 });
