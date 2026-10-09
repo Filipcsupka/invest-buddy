@@ -77,7 +77,7 @@ export function Datasheet({ locale, instrument, result, sample = true }: { local
         )}
       </ul>
       <figcaption className="specimen-foot">
-        <span>{fill(m.home.specimenCaption, { ticker: instrument.ticker, date })}</span>
+        <span>{fill(sample ? m.home.specimenCaption : m.home.datasheetCaption, { ticker: instrument.ticker, date })}</span>
         <Link className="arrow-link" href={`/${locale}/company/${instrument.ticker}`}>
           {fill(m.home.specimenLink, { ticker: instrument.ticker })}
           <IconArrowRight />

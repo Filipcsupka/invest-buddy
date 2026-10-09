@@ -23,6 +23,7 @@ export function ruleLabel(locale: Locale, hit: Pick<RuleHit, "id" | "label">): s
 }
 
 export function sectorLabel(locale: Locale, sector: string): string {
+  if (sector === "Sample extension" && process.env.DATA_MODE !== "fixture") return getMessages(locale).common.universe;
   const sectors = getMessages(locale).sectors as Record<string, string>;
   return sectors[sector] ?? sector;
 }

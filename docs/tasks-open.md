@@ -142,8 +142,9 @@ Groups: A first live run, B web, C pipeline quality, D data and accounts, E oper
 - DoD: each source is marked usable or dropped, with the terms link.
 
 ### D1b. Macro rule thresholds
-- Do: review the placeholder rules in `docs/data.md` (Macro rules): 10-year yield 20-observation change at or below 0 pp, VIX below 25, universe minus SPY 20-session return above 2 pp, 5 day staleness. Decide the thresholds, whether one missing input should leave the flag unknown, and the FRED and Cboe display terms. Unsuspend `invest-buddy-macro` with collect after migration 012.
-- DoD: thresholds confirmed or changed through `MACRO_*` variables; the macro score is no longer 0 of 5 for every ticker.
+- Status 2026-10-09: `invest-buddy-macro` is unsuspended and runs daily. All 36 tickers score 2 of 5: the market-wide `sectorRotationIntoGrowth=true` adds 2 points, while `dataTailwind=false` adds none. The 10-year yield rule is the binding condition.
+- Do: review the placeholder rules in `docs/data.md` (Macro rules): 10-year yield 20-observation change at or below 0 pp, VIX below 25, universe minus SPY 20-session return above 2 pp, 5 day staleness. Decide the thresholds, whether one missing input should leave the flag unknown, and the FRED and Cboe display terms.
+- DoD: thresholds confirmed or changed through `MACRO_*` variables; the market-wide 2 of 5 result is understood and accepted or corrected.
 
 ### D2. EPS consensus source
 - Do: no free verified source exists, so `epsBeat` stays unknown. Find one or accept unknown.
@@ -320,6 +321,12 @@ Evidence: `kubectl -n invest get cronjob,jobs`, `judge_runs`, `scheduled_gates` 
 
 ### H6. Judge one-off Jobs need a gate
 - The judge reads `scheduled_gates` and returns 404 "No detect gate" when the day's gate does not exist or was already judged. A manual judge Job outside that window fails by design; use `--symbols-file` or wait for the gate.
+
+## I. Web
+
+### I1. Web presentable
+- Done in the `web-presentable` PR: empty operator disclosure no longer renders; live home and dashboard drop fixture labels; `/robots.txt` points to the sitemap; unavailable pages and unknown tickers return HTTP 404; stored signal and action codes have EN/SK labels.
+- Remains: publish real operator disclosure text when ready. Judge-written verdicts, event and rationale bullets, number labels, plan text, evidence labels, and conflict or downgrade explanations can still appear in English on SK pages when a Slovak translation is absent. The card marks that fallback; it does not invent a translation.
 
 ## Not planned
 

@@ -1,10 +1,10 @@
 import { withPageLog } from "@/app/page-log";
-import { permanentRedirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { resolveLocale, type LocaleParams } from "../locale";
 
 async function Scanner({ params }: LocaleParams) {
-  const locale = await resolveLocale(params);
-  permanentRedirect(`/${locale}/dashboard`);
+  await resolveLocale(params);
+  notFound();
 }
 
 export default withPageLog("/scanner", Scanner);
