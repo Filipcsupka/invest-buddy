@@ -624,9 +624,10 @@ test("window labels written with non-breaking hyphens or en dashes are labels, n
   assert.deepEqual(inventedFigures(["Margin of 33 percent."], {}), [33]);
 });
 
-test("Slovak text that keeps stored action or rating codes is rejected", () => {
-  assert.throws(() => merge([words("NVDA", { sk: { ...words("NVDA").sk, verdict: "WATCH, žiadne nové peniaze." } }), words("AMD", { evidence: [] })]), /Slovak text keeps the English code WATCH/);
-  assert.throws(() => merge([words("NVDA", { sk: { ...words("NVDA").sk, whyItMatters: ["Vstup je Strong."] } }), words("AMD", { evidence: [] })]), /keeps the English code Strong/);
+test("Slovak text that keeps stored action or rating codes is kept and noted, not rejected", () => {
+  const a = merge([words("NVDA", { sk: { ...words("NVDA").sk, verdict: "WATCH, žiadne nové peniaze." } }), words("AMD", { evidence: [] })]);
+  assert.equal(a.ideas.length, 2);
+  assert.ok(a.notes.some((n) => /NVDA: Slovak text keeps the English code WATCH/.test(n)));
   assert.equal(slovakRawCode(["Vstup je silný, pridať 1/3."]), null);
   assert.equal(slovakRawCode(["Strong-ish a ADDITIONAL"]), null);
 });

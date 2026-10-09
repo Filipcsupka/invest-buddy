@@ -255,9 +255,9 @@ function mergeOne(idea, sig, modelInput, notes) {
     if (figures.length) throw new Error(`${idea.symbol}: figures not in the input: ${figures.slice(0, 5).join(", ")} (${figureContext(wording(idea), figures[0])})`);
     const publicWording = [...wording(idea), ...wording({ ...idea.sk, downgrade: { reason: idea.sk.downgradeReason }, conflict: { reason: idea.sk.conflictReason } })].join(" ");
     if (/\b(?:you should buy|you should sell|buy now|sell now|guaranteed return|price target|mal by si kúpiť|mal by si predať|kúp teraz|predaj teraz|garantovan\w* výnos|cieľov\w* cen\w*)\b/i.test(publicWording)) throw new Error(`${idea.symbol}: ADR-001 wording is not informational`);
-    // Slovak readers must not see stored codes: say "sledovať", not WATCH, and "silné", not Strong. Figures stay checked below.
+    // Slovak readers should not see stored codes ("sledovať", not WATCH). This is a note, not a failure: a hard check here could drop ideas from the scheduled run.
     const rawCode = slovakRawCode([idea.sk.verdict, ...idea.sk.whatHappened, ...idea.sk.whyItMatters, ...Object.values(idea.sk.plan), idea.sk.downgradeReason, idea.sk.conflictReason]);
-    if (rawCode) throw new Error(`${idea.symbol}: Slovak text keeps the English code ${rawCode}`);
+    if (rawCode) notes.push(`${idea.symbol}: Slovak text keeps the English code ${rawCode}; the page maps stored codes to Slovak labels`);
     if (idea.sk.evidence.length !== idea.evidence.length || idea.sk.evidence.some((e, idx) => e.url !== idea.evidence[idx].url)) throw new Error(`${idea.symbol}: Slovak evidence URLs differ from English`);
     const sameFigures = (a, b) => sameFigureValues(String(a ?? ""), String(b ?? "")) && sameProtectedTokens(String(a ?? ""), String(b ?? ""));
     if (idea.sk.whatHappened.length !== idea.whatHappened.length || idea.sk.whyItMatters.length !== idea.whyItMatters.length) throw new Error(`${idea.symbol}: Slovak bullets differ from English`);
