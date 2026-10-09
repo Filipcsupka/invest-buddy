@@ -328,6 +328,59 @@ Evidence: `kubectl -n invest get cronjob,jobs`, `judge_runs`, `scheduled_gates` 
 - Done in the `web-presentable` PR: empty operator disclosure no longer renders; live home and dashboard drop fixture labels; `/robots.txt` points to the sitemap; unavailable pages and unknown tickers return HTTP 404; stored signal and action codes have EN/SK labels.
 - Remains: publish real operator disclosure text when ready. Judge-written verdicts, event and rationale bullets, number labels, plan text, evidence labels, and conflict or downgrade explanations can still appear in English on SK pages when a Slovak translation is absent. The card marks that fallback; it does not invent a translation.
 
+## J. Launch plan: waitlist first, paid launch in about two months (decided 2026-10-09)
+
+Source: `ops-brain/projects/investing-platform/research/market-homework/` (`130-positioning-and-business-model.md`, `99-lessons.md`). Decision: idea 1 (monthly subscription for self-directed retail investors) is the main track, run as an experiment. Idea 2 (advisory networks) is discovery only, nothing built for it. Legal, billing, backups and alerts stay out of scope until the waitlist test passes, except where a task below says otherwise.
+
+Gate for opening the waitlist: every task marked W is done. Target: about three weeks. The waitlist promises a launch in about two months and takes no payment. Tasks marked P make the product worth paying for and run while the waitlist collects sign-ups. Tasks marked C run only if the test passes.
+
+Plan: weeks 0 to 3 do the W tasks and open the waitlist; weeks 3 to 8 do the P tasks and collect sign-ups; around week 8 compare the result with the pass bar (J10) and decide go or stop; then the C tasks.
+
+### W. Needed before the waitlist is valid
+- J1 (W, M). Slovak and English waitlist page with the plain promise ("a checked list of growth stocks with the reasons, in Slovak, every morning"), the planned free and paid split, a launch month, and two price variants (9.90 and 14 EUR a month on yearly billing, split by visitor). Email capture with a consent line and double opt-in. No payment, no card. Owner decision: use a third-party list tool (for example Buttondown or MailerLite free tier, no mailer or email table of our own) or our own table plus a mailer (needs a secret, so approval). Recommended: third-party for the test.
+- J2 (W, S). Hide the advice-like output until a lawyer has answered: idea cards ("Add about 1/3 of a full position", plan) on company pages and the public `/sizing` page. ADR-001 forbids sizing and "you should buy"; the live site contradicts it today.
+- J3 (W, S). Track record must match the rules. The list shows a 7 Oct 2026 "Start position" for AMD at score 17, while the Guide needs 18 for a buy (PR #80, open, owner decision: merge or keep 15). Make the record, the engine and the Guide agree, then show the start date and "outcomes pending" honestly.
+- J4 (W, S). "What you get" block on the waitlist page and the pricing teaser: free versus planned paid table from the map below (no invented numbers, no return claims, no "AI picks" wording).
+- J5 (W, S). Operator disclosure text published (owner writes it; env vars `OPERATOR_DISCLOSURE_EN/SK` exist in PR #82). Merge #82 once CI passes (it failed twice on a Docker Hub rate limit, not on code).
+- J6 (W, S). Daily flow proven on the schedule: the Saturday 2026-10-10 runs (H1, H2, H3, H7, F7) and two more clean weeks, so the demo is a live product.
+- J7 (W, S). Privacy-friendly traffic and signup measurement (Plausible or similar), tracked links per source, price variant recorded.
+- J8 (W, S, owner). Pass bar written before launch, for example: in 6 weeks at least 100 sign-ups and at least 20 who choose a paid price variant; otherwise stop the business track and keep the site free. Numbers are the owner's to set.
+- J9 (W, S, owner). 5 to 10 short interviews with the persona (Slovak or Czech self-directed investor, 28 to 45, US stocks through XTB, Trading 212 or Revolut). Questions: what they use now, what they would drop, whether Slovak matters, which price feels fair.
+- J10 (W, S). Slovak copy on the waitlist page and the landing reviewed by a native speaker.
+
+### P. Make it worth paying for (weeks 3 to 8, in this order)
+- P1 (M). Align the engine with the Guide beyond the threshold (C5): parallel point tables in `signals.ts`, deep add (15 to 20 percent dip, score above 18), breakout retest, EUR bands for owner view. Open owner decisions are in PR #80 and the C5 report.
+- P2 (L). Data depth: widen the tracked universe from 36 to about 150 (curated list plus weekly discovery), and decide the data licence (a commercial Twelve Data plan is quoted at about USD 499 a month, `research/data-providers.md`; the free tier is non-commercial). Check the company-page price chart against the licence.
+- P3 (M to L). Verification depth: today every row is "one source" and no row has two agreeing extractors. Add a second source or a second extractor for the key fields so "verified" means something.
+- P4 (L). Historical rule replay (a labelled backtest, never called a track record): 5 to 10 years, point-in-time fundamentals from SEC filing dates, losers included, costs included, benchmark shown, survivorship and look-ahead limits stated on the page. Without point-in-time data it misleads, so do not publish one built on today's restated numbers.
+- P5 (M). Track record automation: outcomes at 1, 5, 20 and 60 days against SPY for every signal, losers listed, dated, with a "past performance is not a forecast" line beside the numbers.
+- P6 (M). Score history per ticker (paid lever; keep the last N days free).
+- P7 (M). Weekly Slovak email of state changes (free) and later daily alerts (paid). Needs a real mailer (digest is suspended and `ConsoleMailer` only logs).
+- P8 (M). Methodology: add the placeholder and macro thresholds, one short article per component, a public changelog of rule versions.
+- P9 (M). Discovery as a feature: a "new names this week" page from `discovery_candidates` with the reasons (paid candidate).
+- P10 (M). Slovak quality of AI text: SK judge prose already stored still has English words and dot decimals; backfill and tighten the prompt. Czech later.
+- P11 (M to L). Crawlable company pages for search: titles, descriptions, structured data, sitemap by ticker, free score and factor grades.
+- P12 (M). Scanner page with filters, after P2 widens the universe (free: top N rows).
+- P13 (M). AI automation quality: failure handling and retries for extract and judge, cost per run visible, review calendar and discovery results checked every week.
+- P14 (S). Fix the instrument names that equal the ticker (AMD, ASML) and sync `instruments`.
+
+### C. Only if the waitlist test passes (about week 8 onward)
+- C1 (S plus legal time). One lawyer session with written questions: a paid feed with one output for everyone, BUY and ADD labels and the idea card, the sizing page, the published record, the NBS letter of February 2026, and the four idea 2 questions in `130-positioning-and-business-model.md` section 6.
+- C2 (L). Accounts and login, the `PaywallSegment` gate behind `PAYWALL=on` (designed, inactive), pricing page in EUR including VAT with the renewal, cancel and 30-day refund lines.
+- C3 (M). Stripe in test mode after written pre-approval (`research/billing.md`); VAT and OSS with an accountant.
+- C4 (M). Postgres backup and a restore test (E1); job alerts (E2); terms and privacy updated for accounts and payments.
+- C5 (S). Idea 2 discovery, only if wanted: 5 interviews with compliance heads or product managers at mid-size networks, a flat per-seat one-page offer. No fee share, nothing built.
+- Later: CSV export (paid), API, Czech language.
+
+### Free versus planned paid (from the research; the owner decides)
+- Free: landing, methodology, dashboard, company pages with score and rule breakdown, track record, owner portfolio, sizing guide only after the lawyer says so.
+- Free-limited: weekly email summary, scanner top rows, score history depth.
+- Paid: daily state-change alerts, longer score history, discovery candidates, CSV export, idea cards only if the lawyer clears them.
+- Never public: owner allocation amounts.
+
+### Caveat on track record length
+A short live record will not impress anyone who judges by ten years. The plan answers that with three honest items: a dated, loser-inclusive live record from day one (P5), a labelled historical replay with its limits stated (P4), and a published method nobody else shows. A backtest with look-ahead bias is worse than none.
+
 ## Not planned
 
 - Go or microservice rewrite. The workload is about 35 tickers a day and the jobs share types and logic with the web. Revisit only if one collector gets heavy or the pieces get different owners.
