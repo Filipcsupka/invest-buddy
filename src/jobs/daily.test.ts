@@ -35,6 +35,20 @@ it("accepts Friday prices for a Monday score", async () => {
   expect((await repository.scores("2025-08-11"))[0].invalidReasons).not.toContain("stale_prices");
 });
 
+it("keeps the 3 calendar day limit exact: day 3 scored, day 4 stale", async () => {
+  const { fixtureBars, fixtureFundamentals, fixtureMacro, instruments } = await import("../data/fixtures");
+  const instrument = instruments[0];
+  const bars = fixtureBars(instrument.ticker);
+  const provider = { instruments: async () => [instrument], bars: async () => bars, fundamentals: async () => fixtureFundamentals(instrument.ticker), macro: async () => fixtureMacro(instrument.ticker) };
+  const repository = new MemoryScoreRepository();
+  const last = bars.at(-1)!.date;
+  const plus = (days: number) => new Date(Date.parse(`${last}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
+  await runDaily(provider, repository, plus(3));
+  expect((await repository.scores(plus(3)))[0].invalidReasons).not.toContain("stale_prices");
+  await runDaily(provider, repository, plus(4));
+  expect((await repository.scores(plus(4)))[0].invalidReasons).toContain("stale_prices");
+});
+
 it("refreshes the same date when scoring inputs change", async () => {
   const { fixtureBars, fixtureFundamentals, fixtureMacro, instruments } = await import("../data/fixtures");
   const instrument = instruments[0];
