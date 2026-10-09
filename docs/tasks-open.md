@@ -169,10 +169,11 @@ Groups: A first live run, B web, C pipeline quality, D data and accounts, E oper
 - Do: alert when a CronJob fails or does not run, and when `/api/health` dates go stale.
 - DoD: a test alert fires and reaches you.
 
-### E3. Egress and NetworkPolicy (partly evidenced)
+### E3. Egress and NetworkPolicy (tested 2026-10-09, no policy proposed)
 - Status 2026-10-08: no NetworkPolicy exists in `invest`. Outbound HTTPS to SEC, FRED and Twelve Data works, as shown by the successful nightly collect, prices and macro Jobs. A deliberate test of a policy is still open.
 - Do: test outbound HTTPS from a Job on `k8s-worker-01` to sec.gov, data.sec.gov and the cited public pages. The infra repo has no NetworkPolicy resources.
-- DoD: results listed; a policy proposed only if you want one.
+- Result 2026-10-09 (one-off Job `egress-test-1009` on `k8s-worker-01`, removed afterwards): HTTPS reached www.sec.gov (200), data.sec.gov (200), api.stlouisfed.org (200), api.twelvedata.com, api.openfigi.com and api.fda.gov (404 on the root path, host reached), clinicaltrials.gov, api.usaspending.gov, news.google.com and www.treasury.gov (200). A made-up host failed with ENOTFOUND. No NetworkPolicy exists; one is proposed only if you want it.
+- DoD: results listed; a policy proposed only if you want one. Done.
 
 ### E4. Tidy the infra repo copy (done 2026-10-08, infra branch pending merge)
 - Note: infra `main` is the source of truth; `deploy/gitops/` is a mirror, synced and documented in `deploy/README.md`.
