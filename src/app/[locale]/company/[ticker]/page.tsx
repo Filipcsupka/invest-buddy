@@ -113,7 +113,7 @@ async function Company({ params }: Params) {
           stamp={data.sample ? m.common.sample : undefined}
           fields={[
             { label: m.company.sector, value: sectorLabel(locale, instrument.sector) },
-            { label: m.company.source, value: data.sample && instrument.source === "sample extension" ? m.common.extension : instrument.source === "discovery" ? m.common.discovery : m.common.guide },
+            { label: m.company.source, value: instrument.source === "sample extension" ? (data.sample ? m.common.extension : m.common.universe) : instrument.source === "discovery" ? m.common.discovery : m.common.guide },
             { label: m.company.session, value: <span className="num">{result.asOf ? formatDate(locale, result.asOf) : m.common.noScore}</span> },
             ...(review ? [
               { label: m.company.lastReviewed, value: <span className="num">{formatDate(locale, review.lastReviewed)}</span> },

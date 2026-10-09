@@ -25,8 +25,8 @@ describe("dictionaries", () => {
     expect([...sk.keys()].sort()).toEqual([...en.keys()].sort());
   });
 
-  it("have no empty strings", () => {
-    for (const [key, value] of [...en, ...sk]) expect(value.trim(), key).not.toBe("");
+  it("have no empty strings except the optional operator disclosure", () => {
+    for (const [key, value] of [...en, ...sk]) if (key !== "common.operatorDisclosure") expect(value.trim(), key).not.toBe("");
   });
 
   it("use the same placeholders in both locales", () => {

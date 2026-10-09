@@ -20,9 +20,10 @@ export function IdeaCard({ idea: stored, locale, showAmounts = true, nested = fa
   const L = nested ? "h4" : "h3";
   const id = `idea-${idea.id}`;
   const tier = publicTier(idea);
+  const action = m.actions[idea.action];
   const headline = showAmounts
-    ? fill(m.headline, { symbol: idea.symbol, action: idea.action, min: formatNumber(locale, idea.amountMinEur), max: formatNumber(locale, idea.amountMaxEur) })
-    : hasBuySize(tier) ? fill(m.headlineTier, { symbol: idea.symbol, action: idea.action, size: m.tiersShort[tier] }) : fill(m.headlinePublic, { symbol: idea.symbol, action: idea.action });
+    ? fill(m.headline, { symbol: idea.symbol, action, min: formatNumber(locale, idea.amountMinEur), max: formatNumber(locale, idea.amountMaxEur) })
+    : hasBuySize(tier) ? fill(m.headlineTier, { symbol: idea.symbol, action, size: m.tiersShort[tier] }) : fill(m.headlinePublic, { symbol: idea.symbol, action });
   const ratings: [string, keyof typeof idea.setup][] = [[m.company, "company"], [m.entry, "entry"], [m.catalyst, "catalyst"]];
   return (
     <article className={styles.card} aria-labelledby={`${id}-title`} data-action={idea.action}>
@@ -33,7 +34,7 @@ export function IdeaCard({ idea: stored, locale, showAmounts = true, nested = fa
           {englishFallback && <span className="muted small">{m.shownInEnglish}</span>}
           {idea.unconfirmed && <span className={`stamp ${styles.flag}`} title={m.unconfirmedNote}>{m.unconfirmed}</span>}
           {idea.conflictNote && <span className={`stamp ${styles.flag}`}>{m.conflict}</span>}
-          {idea.downgradedFrom && <span className={`stamp ${styles.flag}`}>{fill(m.downgraded, { action: idea.downgradedFrom })}</span>}
+          {idea.downgradedFrom && <span className={`stamp ${styles.flag}`}>{fill(m.downgraded, { action: m.actions[idea.downgradedFrom] })}</span>}
           {idea.carriedFrom && <span className={`stamp ${styles.flag}`} title={m.carriedNote}>{fill(m.carried, { date: formatDate(locale, idea.carriedFrom) })}</span>}
         </p>
         {idea.verdict && <p className={styles.verdict}>{idea.verdict}</p>}

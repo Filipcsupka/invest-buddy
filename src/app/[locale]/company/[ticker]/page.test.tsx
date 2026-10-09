@@ -169,7 +169,7 @@ describe("company page", () => {
     it("shows a WATCH idea with plan, badges and date", async () => {
       const html = await render({ sample: false, idea: withIdea(watch) });
       expect(html).toContain("Latest trade idea");
-      expect(html).toContain("AMD - WATCH");
+      expect(html).toContain("AMD - Watch");
       expect(html).toContain("UNCONFIRMED");
       expect(html).toContain("Carried data from");
       expect(html).toContain("Opportunity cost");
@@ -177,7 +177,7 @@ describe("company page", () => {
     });
     it("shows START_POSITION with only the evidence links stored in the idea", async () => {
       const html = await render({ sample: false, idea: withIdea(add, { action: "START_POSITION" }) });
-      expect(html).toContain("START_POSITION");
+      expect(html).toContain("Start position");
       expect(html).toContain('href="https://example.com/nvda-release"');
       expect(html.match(/href="https:\/\/example\.com/g)).toHaveLength(2);
     });
@@ -186,12 +186,12 @@ describe("company page", () => {
     });
     it("shows no EUR amount in any field while the flag is off", async () => {
       const html = await render({ sample: false, eur: false, idea: withIdea(add) });
-      expect(html).toContain("NVDA - ADD");
+      expect(html).toContain("NVDA - Add");
       expect(html).not.toMatch(/EUR|€|Amount now/);
     });
     it("shows the band and amount when the flag is on", async () => {
       const html = await render({ sample: false, eur: true, idea: withIdea(add) });
-      expect(html).toContain("NVDA - ADD - EUR 60-90");
+      expect(html).toContain("NVDA - Add - EUR 60-90");
       expect(html).toContain("Amount now");
     });
     it("renders in Slovak", async () => {

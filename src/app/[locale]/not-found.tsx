@@ -11,7 +11,7 @@ export default function NotFound() {
   return (
     <div className="frame page state-page">
       <h1 className="title">{m.errors.notFoundTitle}</h1>
-      <p className="lede">{m.errors.notFoundBody}</p>
+      <p className="lede">{process.env.DATA_MODE === "fixture" ? m.errors.notFoundBody : m.errors.notFoundBodyLive}</p>
       <Link className="button" href={`/${locale}/dashboard`}>
         {m.errors.notFoundAction}
         <IconArrowRight />

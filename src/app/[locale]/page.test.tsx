@@ -21,4 +21,5 @@ it.each(["en", "sk"])("shows empty and stale live states on home in %s", async (
   const old = renderToStaticMarkup(await Home(props(locale)));
   expect(old).toContain(locale === "en" ? "Stale since" : "Zastarané od");
   expect(old).not.toMatch(/SAMPLE DATA|UKÁŽKOVÉ DÁTA|Sample extension/);
+  expect(old).not.toMatch(/Sample datasheet|Ukážkový list|Operator position disclosure|Zverejnenie pozícií prevádzkovateľa/);
 });
