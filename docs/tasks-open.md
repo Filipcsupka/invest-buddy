@@ -129,8 +129,10 @@ Groups: A first live run, B web, C pipeline quality, D data and accounts, E oper
 - DoD: each foreign symbol has a documented behaviour and a test; no field is guessed.
 
 ### C8. Price freshness rule (rule done 2026-10-08; SQ to XYZ live check open)
-- Do: `daily.ts` needs a bar dated exactly the scoring date, so Monday scores stay `stale_prices` (no Monday price run). Add the planned 3 calendar day rule. Check the `SQ` to `XYZ` mapping against the live Twelve Data API.
-- DoD: Monday scores are not stale on a normal weekend; mapping confirmed with one live call.
+- Done: `daily.ts` accepts a latest bar up to 3 calendar days older than the scoring date, so Monday scores after a normal weekend are not `stale_prices`; older bars stay stale. Tests in `src/jobs/daily.test.ts` cover Friday to Monday and the day 3 / day 4 boundary.
+- Mapping in code: `DEFAULT_SYMBOL_MAP = { SQ: "XYZ" }` in `src/data/twelvedata.ts`; `marketTicker` in `src/collectors/sources/common.ts` and `collect.ts` reuse it for SEC and OpenFIGI.
+- Open (coordinator): one live Twelve Data call for `XYZ` to confirm the mapping. This worker has no API key.
+- DoD: Monday scores are not stale on a normal weekend (done); mapping confirmed with one live call (open).
 
 ## D. Data and accounts (owner)
 
