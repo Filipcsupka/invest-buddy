@@ -13,7 +13,7 @@ import { defaultHttp } from "../collectors/sources/client";
 import { normalizeIssuer } from "../collectors/sources/thirteenf";
 import { score } from "../engine/score";
 import type { OHLCV } from "../engine/types";
-import { TwelveDataProvider } from "../data/twelvedata";
+import { SymbolNotFoundError, TwelveDataProvider } from "../data/twelvedata";
 import { filingUrl } from "../collectors/edgar";
 import { previousTradingDay } from "./macro";
 
@@ -239,6 +239,17 @@ export function nonCommonStockReason(symbol: string): string | null {
   return null;
 }
 
+/** Drop non-common symbols before the cut so the shortlist is filled from lower-ranked real candidates. Skips are reported once per symbol. */
+export function shortlistCandidates(rows: DiscoveryCandidate[], known: Set<string>, limit: number = DISCOVERY.maxCandidatesPerWeek) {
+  const skipped = new Map<string, string>();
+  const common = rows.filter((row) => {
+    const reason = known.has(row.symbol) ? null : nonCommonStockReason(row.symbol);
+    if (reason) skipped.set(row.symbol, reason);
+    return !reason;
+  });
+  return { shortlist: rankCandidates(common, known, limit), skipped: [...skipped].map(([symbol, reason]) => ({ symbol, reason })) };
+}
+
 export async function screenCandidates(rows: DiscoveryCandidate[], date: string, barsFor: (symbol: string) => Promise<OHLCV[]>,
   macro: { growthSectorRotation: boolean | null; dataTailwind: boolean | null }, benchmarkClose: number | null | ((date: string) => Promise<number | null>)): Promise<DiscoveryCandidate[]> {
   const screened: DiscoveryCandidate[] = [];
@@ -270,7 +281,10 @@ export async function screenDiscoveryShortlist(rows: DiscoveryCandidate[], date:
     const reason = nonCommonStockReason(row.symbol);
     if (reason) { skipped.push({ symbol: row.symbol, reason }); continue; }
     try { screened.push(...await screenCandidates([row], date, barsFor, macro, benchmarkClose)); }
-    catch (error) { failures.push({ symbol: row.symbol, reason: error instanceof Error ? error.message : String(error) }); }
+    catch (error) {
+      if (error instanceof SymbolNotFoundError) { skipped.push({ symbol: row.symbol, reason: "symbol not accepted by Twelve Data" }); continue; }
+      failures.push({ symbol: row.symbol, reason: error instanceof Error ? error.message : String(error) });
+    }
   }
   return { screened, skippedCount: skipped.length, skipped, failureCount: failures.length, failures };
 }
@@ -344,7 +358,7 @@ async function main() {
     const sources = [...themeCandidates()];
     for (const result of gathered) if (result.status === "fulfilled") sources.push(...result.value);
     else process.stderr.write(`Discovery source failed: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}\n`);
-    const shortlist = rankCandidates(sources, known, DISCOVERY.maxScreenedPerWeek);
+    const { shortlist, skipped: filtered } = shortlistCandidates(sources, known, DISCOVERY.maxScreenedPerWeek);
     if (!process.env.TWELVE_DATA_API_KEY) throw new Error("TWELVE_DATA_API_KEY is required to apply the scoring rules to discovery candidates");
     const provider = new TwelveDataProvider({ apiKey: process.env.TWELVE_DATA_API_KEY });
     const bySymbol = new Map(shortlist.map((row) => [row.symbol, row]));
@@ -371,7 +385,10 @@ async function main() {
       const row = await pool.query<{ close: string }>("SELECT close FROM daily_bars WHERE ticker='SPY' AND bar_date=$1::date", [signalDate]);
       return row.rows[0] ? Number(row.rows[0].close) : null;
     };
-    const { screened, skippedCount, skipped, failureCount, failures } = await screenDiscoveryShortlist(shortlist, date, barsFor, macro, benchmarkClose);
+    const result = await screenDiscoveryShortlist(shortlist, date, barsFor, macro, benchmarkClose);
+    const { screened, failureCount, failures } = result;
+    const skipped = [...filtered, ...result.skipped];
+    const skippedCount = skipped.length;
     for (const failure of failures) process.stderr.write(`${failure.symbol}: screening failed: ${failure.reason}\n`);
     const selected = screened.sort((a, b) => (b.ruleScore ?? 0) - (a.ruleScore ?? 0) || b.score - a.score || a.symbol.localeCompare(b.symbol)).slice(0, DISCOVERY.maxCandidatesPerWeek);
     const saved = await saveCandidates(pool, week, selected);
