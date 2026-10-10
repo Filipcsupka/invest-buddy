@@ -1924,3 +1924,6 @@ th[aria-sort] .sort .icon {
   max-width: 68ch;
   overflow-wrap: anywhere;
 }
+
+.insider-table td, .insider-table th { vertical-align: top; }
+.insider-codes ul { margin: 0; padding-left: 1.2rem; }

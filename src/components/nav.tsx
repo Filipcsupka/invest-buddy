@@ -33,6 +33,7 @@ export function Nav({ locale }: { locale: Locale }) {
             { href: "/dashboard", text: m.nav.dashboard },
             ...(ideasEnabled() && flags().ADVICE_OUTPUT ? [{ href: "/ideas", text: m.nav.ideas }] : []),
             { href: "/track-record", text: m.nav.trackRecord },
+            ...(flags().INSIDERS_PAGE ? [{ href: "/insiders", text: m.nav.insiders }] : []),
             { href: "/portfolio", text: m.nav.portfolio },
             { href: "/methodology", text: m.nav.methodology },
             ...(flags().ADVICE_OUTPUT ? [{ href: "/sizing", text: m.nav.sizing }] : []),
