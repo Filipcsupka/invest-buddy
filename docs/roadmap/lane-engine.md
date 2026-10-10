@@ -84,7 +84,7 @@ Status: done 2026-10-10, PR #90, merged and live.
 - Risk or open question: D1 changes the buy label of AMD, DDOG, NOW, NVDA, PLTR and SNOW from buy to WATCH (C5 report), and the track record already lists a 7 Oct START for AMD; decide how to word that.
 
 ### EN3. START at score 18, separate ADD threshold (PR #80 follow-up)
-Status: thresholds and boundary tests merged in PR #80; PR #90 introduced the golden edges, refreshed in PR #80. This follow-up corrects the rule explanation and golden reasons. EN2 owner sign-off remains open.
+Status: thresholds and boundary tests merged in PR #80; PR #90 introduced the golden edges, refreshed in PR #80. PR #107 corrects the rule explanation and golden reasons. EN2 owner sign-off remains open.
 - Why: Guide section 8 sets START at 18 and ADD at 15. PR #80 already implements both thresholds; its explanation still calls every 15 to 17 result WATCH.
 - Steps:
   1. After EN2, adjust PR #80: add `minScoreForAdd` to `SIGNAL_RULES` in `src/engine/signals.ts` (value from EN2), keep `minScoreForBuy` 18.
@@ -681,7 +681,7 @@ Status: done 2026-10-10, PR #86, merged and live.
 - Source terms: ClinicalTrials row corrected (no CronJob collects it; no such rows live on 2026-10-09); Alpha Vantage row notes lane DATA's EULA reading; "task D1b" is tasks-open D1b.
 - Owner decision 1 and EN2: "D1 to D6" are C5 report decisions, not lane DATA tasks.
 - EN1: owns `src/engine/golden.test.ts`; PL10 no longer writes a second golden test.
-- EN3: PR #80 already implemented the separate thresholds. The remaining follow-up corrects the explanation and golden reasons; EN2 owner sign-off is still open.
+- EN3: PR #80 implemented the separate thresholds. PR #107 corrects the explanation and golden reasons; EN2 owner sign-off is still open.
 - EN11: its hash test is the single rules-version guard.
 - EN13: the risk note about a suspended portfolio CronJob is wrong; it runs (manifest and live).
 - EN21: merged into D6, D12, D14 and D15; `pit_fields` is not built; step 4 overruled by D5 for public filings.
