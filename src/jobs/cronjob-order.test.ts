@@ -118,8 +118,8 @@ describe("daily pipeline order", () => {
     expect(doc.indexOf("name: daily")).toBeLessThan(doc.indexOf("name: judge"));
     for (const text of ["runAsNonRoot: true", "automountServiceAccountToken: false", "allowPrivilegeEscalation: false", "readOnlyRootFilesystem: true", 'drop: ["ALL"]', "type: RuntimeDefault", "concurrencyPolicy: Forbid"]) expect(doc).toContain(text);
   });
-  it("keeps digest suspended until delivery is configured", () => {
-    expect(job("digest")).toContain("suspend: true");
+  it("runs the digest now that the Telegram secret is set", () => {
+    expect(job("digest")).toContain("suspend: false");
     expect(minutes("daily").at + startWindow("daily") + deadline("daily")).toBeLessThanOrEqual(minutes("judge").at);
   });
 });

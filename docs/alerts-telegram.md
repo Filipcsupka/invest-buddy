@@ -19,7 +19,7 @@ The digest job (`src/jobs/digest.ts`, CronJob `invest-buddy-digest`, 07:30 Tue t
 4. Create the secret in namespace `invest` as a sealed secret named `invest-buddy-telegram` with keys `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`, through the infra repo like the other secrets. Never commit the plain value.
 5. Copy the CronJob change from `deploy/gitops` into the infra repo. The env entries are `optional`, so the job still starts while the secret is missing.
 6. First proof: run the job once by hand, for example `kubectl -n invest create job --from=cronjob/invest-buddy-digest digest-test-1`. Its log should end with `"telegram":"sent"` (or `"empty"` on a day without changes), and the post should appear in the channel.
-7. After the proof, set `suspend: false` on `invest-buddy-digest` in infra. `src/jobs/cronjob-order.test.ts` asserts the mirror keeps it suspended, so flip that assertion in the same PR.
+7. Done 2026-10-10: the first manual run sent (`"telegram":"sent"`, 9 alerts). After the proof, set `suspend: false` on `invest-buddy-digest` in infra. `src/jobs/cronjob-order.test.ts` asserts the mirror keeps it suspended, so flip that assertion in the same PR.
 
 ## Wording
 
