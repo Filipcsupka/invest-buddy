@@ -1,0 +1,67 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: invest-buddy-earnings-calendar
+  namespace: invest
+spec:
+  # Suspended until the owner confirms the Alpha Vantage key still works and approves the first run (D27).
+  suspend: true
+  # One EARNINGS_CALENDAR request a day (12 month horizon). 06:45 is after the judge and before the 07:30 digest.
+  # Free key: 25 requests a day, shared with collect-alphavantage on Saturday (20); the job also stops at the data_sources cap.
+  schedule: "45 6 * * 0-6"
+  timeZone: Europe/Bratislava
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      # A retry would spend another request of the daily quota; the next day is the retry.
+      backoffLimit: 0
+      activeDeadlineSeconds: 300
+      template:
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          nodeSelector:
+            kubernetes.io/hostname: k8s-worker-01
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: earnings-calendar
+              image: ghcr.io/filipcsupka/invest-buddy:latest
+              command: ["node", "dist/jobs/earnings-calendar.js"]
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-secrets
+                      key: DATABASE_URL
+                - name: ALPHA_VANTAGE_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-source-keys
+                      key: ALPHA_VANTAGE_API_KEY
+                      optional: true
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 128Mi
+                limits:
+                  memory: 512Mi
+              volumeMounts:
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: tmp
+              emptyDir:
+                sizeLimit: 1Gi

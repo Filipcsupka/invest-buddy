@@ -124,6 +124,20 @@ describe("daily pipeline order", () => {
   });
 });
 
+describe("earnings calendar", () => {
+  it("is suspended, daily after the judge and before the digest, hardened like collect", () => {
+    const doc = job("earnings-calendar");
+    expect(doc).toMatch(/^\s{2}suspend: true$/m);
+    expect(minutes("earnings-calendar").days).toBe("0-6");
+    expect(minutes("judge").at + startWindow("judge") + deadline("judge")).toBeLessThanOrEqual(minutes("earnings-calendar").at);
+    expect(minutes("earnings-calendar").at + startWindow("earnings-calendar") + deadline("earnings-calendar")).toBeLessThanOrEqual(minutes("digest").at);
+    expect(doc).toContain('command: ["node", "dist/jobs/earnings-calendar.js"]');
+    expect(doc).toContain("name: ALPHA_VANTAGE_API_KEY");
+    expect(doc).toContain("backoffLimit: 0");
+    for (const text of ["runAsNonRoot: true", "automountServiceAccountToken: false", "allowPrivilegeEscalation: false", "readOnlyRootFilesystem: true", 'drop: ["ALL"]', "type: RuntimeDefault", "concurrencyPolicy: Forbid"]) expect(doc).toContain(text);
+  });
+});
+
 describe("watch step", () => {
   it("polls SEC before collect and long before detect, with no AI and no source keys", () => {
     const watch = minutes("watch");
