@@ -11,7 +11,7 @@ Decision on 2026-10-08: the markers identify sections that could become subscrib
 | `idea-card` | Company | Action, size tier, rationale, setup, plan and evidence | Candidate | `ADVICE_OUTPUT` | The full card appears only when legal review permits advice-like wording. With the flag off, it shows the rule state and evidence. The ideas page also requires `IDEAS_PAGE`. |
 | `portfolio-performance` | Portfolio | Indexed return, benchmark chart and performance figures | Candidate | None | Detailed portfolio performance has value beyond the basic screen. |
 | `portfolio-weights` | Portfolio | Position weights | Candidate | None | Shows portfolio composition. |
-| `track-record-signals` | Track record | Dated signals and 30, 90 and 180 day returns | Candidate | None | Detailed outcome history supports deeper evaluation. |
+| `track-record-signals` | Track record | Dated signals and 1, 5, 20 and 60 trading day returns | Candidate | None | Detailed outcome history supports deeper evaluation. |
 | `track-record-history` | Track record | Historical score snapshots and ticker details | Candidate | None | Gives access to prior screens. |
 | `track-record-benchmark` | Track record, fixture mode | Sample benchmark chart | Candidate | None | Keeps the fixture example with the detailed record section. |
 | `sizing-matrix` | Sizing | Tier percentages by account size | Candidate | `ADVICE_OUTPUT` | Detailed application of the published method. |

@@ -17,6 +17,7 @@ import { pageMetadata } from "@/i18n/metadata";
 import { resolveLocale, type LocaleParams } from "../locale";
 import { recordSignalLabel } from "@/i18n/record-signal";
 import { flags } from "@/config/flags";
+import { WINDOWS } from "@/track-record/measure";
 
 export async function generateMetadata({ params }: LocaleParams): Promise<Metadata> {
   const locale = await resolveLocale(params);
@@ -41,7 +42,7 @@ async function TrackRecord({ params }: LocaleParams) {
       <section className="sheet-section" aria-labelledby="record-summary">
         <h2 id="record-summary">{m.trackRecord.summaryTitle}</h2>
         <p>{fill(record.snapshotCount === 1 ? m.trackRecord.summaryOne : m.trackRecord.summary, { count: formatNumber(locale, record.snapshotCount), date: record.firstDate ? formatDate(locale, record.firstDate) : m.trackRecord.none })}</p>
-        {record.hit30.n > 0 && <p>{fill(m.trackRecord.hitRate, { rate: formatPercent(locale, record.hit30.rate ?? 0), n: formatNumber(locale, record.hit30.n) })}</p>}
+        {record.hit20.n > 0 && <p>{fill(m.trackRecord.hitRate, { rate: formatPercent(locale, record.hit20.rate ?? 0), n: formatNumber(locale, record.hit20.n) })}</p>}
         {record.buySignalCount < 30 && <p className="muted small">{fill(m.trackRecord.smallSample, { n: formatNumber(locale, record.buySignalCount) })}</p>}
       </section>
       <PaywallSegment id="track-record-benchmark"><section className="sheet-section" aria-labelledby="benchmark">
@@ -58,10 +59,10 @@ async function TrackRecord({ params }: LocaleParams) {
       <PaywallSegment id="track-record-signals"><section className="sheet-section" aria-labelledby="signals">
         <h2 id="signals">{m.trackRecord.signalsTitle}</h2>
         {record.signals.length === 0 ? <p className="muted">{record.snapshotCount === 0 ? m.trackRecord.empty : m.trackRecord.noSignals}</p> : <div className="table-scroll"><table className="screen">
-          <thead><tr><th scope="col">{m.trackRecord.date}</th><th scope="col">{m.trackRecord.ticker}</th><th scope="col">{flags().ADVICE_OUTPUT ? m.trackRecord.state : m.trackRecord.stateOnly}</th><th scope="col">{m.trackRecord.return30}</th><th scope="col">{m.trackRecord.return90}</th><th scope="col">{m.trackRecord.return180}</th></tr></thead>
+          <thead><tr><th scope="col">{m.trackRecord.date}</th><th scope="col">{m.trackRecord.ticker}</th><th scope="col">{flags().ADVICE_OUTPUT ? m.trackRecord.state : m.trackRecord.stateOnly}</th>{WINDOWS.map((days) => <th scope="col" key={days}>{m.trackRecord[`return${days}`]}</th>)}</tr></thead>
           <tbody>{record.signals.map((signal) => <tr key={signal.id}>
             <td>{formatDate(locale, signal.asOf)}</td><td>{signal.ticker}</td><td>{recordSignalLabel(locale, signal)}</td>
-            {([30, 90, 180] as const).map((days) => <td key={days}>{signal.windows[days] ? fill(m.trackRecord.returnCell, { stock: formatPercent(locale, signal.windows[days]!.stock), excess: formatPercent(locale, signal.windows[days]!.excess) }) : m.trackRecord.pending}</td>)}
+            {WINDOWS.map((days) => <td key={days}>{signal.windows[days] ? fill(m.trackRecord.returnCell, { stock: formatPercent(locale, signal.windows[days]!.stock), excess: formatPercent(locale, signal.windows[days]!.excess) }) : m.trackRecord.pending}</td>)}
           </tr>)}</tbody>
         </table></div>}
         <p className="muted small">{m.trackRecord.method}</p>

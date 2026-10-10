@@ -19,7 +19,7 @@ export interface RecordHistory {
   lastDate: string | null;
   signals: RecordSignal[];
   buySignalCount: number;
-  hit30: ReturnType<typeof hitRate>;
+  hit20: ReturnType<typeof hitRate>;
 }
 
 type SignalRow = { id: string; ticker: string; as_of: string; source: "score" | "judge"; tier: string; state: string; score: number | null; reference_close: string | null; spy_reference_close: string | null };
@@ -58,11 +58,11 @@ export async function readRecord(pool: Pick<pg.Pool, "query">, today: string): P
   }
   return { snapshotCount: Number(summary.rows[0]?.count ?? 0), firstDate: summary.rows[0]?.first_date ?? null,
     lastDate: summary.rows[0]?.last_date ?? null, signals, buySignalCount: uniqueBuys.size,
-    hit30: hitRate([...uniqueBuys.values()].map((signal) => signal.windows[30]?.excess ?? null)) };
+    hit20: hitRate([...uniqueBuys.values()].map((signal) => signal.windows[20]?.excess ?? null)) };
 }
 
 export async function recordHistory(): Promise<RecordHistory> {
-  const empty: RecordHistory = { snapshotCount: 0, firstDate: null, lastDate: null, signals: [], buySignalCount: 0, hit30: { hits: 0, n: 0, rate: null } };
+  const empty: RecordHistory = { snapshotCount: 0, firstDate: null, lastDate: null, signals: [], buySignalCount: 0, hit20: { hits: 0, n: 0, rate: null } };
   const pool = getPool();
   if (!pool) return empty;
   return readRecord(pool, new Date().toISOString().slice(0, 10));
