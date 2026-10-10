@@ -357,6 +357,8 @@ Owner decision 2026-10-09: the weeks to 2026-12-31 go to collecting data so hist
 
 2026-10-10, in review: D43 history read model in `src/db/history.ts` (`scoreHistory`, `fundamentalsHistory`, `universeAsOf`; depth limit, keyset paging, SEC rows gated by the `sec` display flag; no migration). The company page query from W33 is not merged yet, so it is a new module in `src/db/`; the web lane wires it later.
 
+2026-10-10, in review: W33 score history per ticker on the company page, read through D43 `scoreHistory` (segment `score-history`, chart plus table, EN and SK). No migration; no free-depth limit until W30 sets N.
+
 2026-10-10, in review: D27 (migration 046) stores the Alpha Vantage earnings calendar for universe names every day; the CronJob is suspended and the live migration needs owner approval.
 2026-10-10, in review: D11 (#110) adds dated universe membership and a change script in migration 043; the live migration needs owner approval.
 

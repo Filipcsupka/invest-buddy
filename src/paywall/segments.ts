@@ -6,6 +6,7 @@
 export const PAYWALL_SEGMENTS = {
   "scanner-rows-full": "Scanner results beyond the free row limit",
   "idea-card": "Latest trade idea: action, size tier, what happened, why, setup, numbers, plan and evidence",
+  "score-history": "Score history per ticker: total score by scan day, parts and state",
   "portfolio-performance": "Indexed portfolio performance, benchmark comparison and return details",
   "portfolio-weights": "Current portfolio position weights",
   "track-record-signals": "Dated signal outcomes and forward return windows",
