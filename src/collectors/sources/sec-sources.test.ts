@@ -7,6 +7,7 @@ import { MemoryCollectorRepository } from "../../db/collectors";
 import { MemoryCusipStore } from "../../db/source-collectors";
 import { computeGrowth, collectFrames, latestQuarter, parseFrame, shift, type FrameValue } from "./frames";
 import { collectGetcurrent, parseFeed } from "./getcurrent";
+import { parseHolderOwnership } from "../edgar";
 import { mapCusips, pickListing } from "./openfigi";
 import { runExtraSources } from "./registry";
 import { collect13f, DATASETS_PAGE, issuerMatcher, normalizeIssuer, parseDatasetLinks, reportPeriod, scanDataset } from "./thirteenf";
@@ -102,6 +103,12 @@ describe("SEC XBRL frames", () => {
 });
 
 describe("SEC getcurrent", () => {
+  it("reads named ownership fields and leaves prose values unknown", () => {
+    expect(parseHolderOwnership("<ownership><percentOfClass>6.25</percentOfClass><aggregateAmountOwned>1,250,000</aggregateAmountOwned></ownership>"))
+      .toEqual({ percent: 6.25, shares: 1250000 });
+    expect(parseHolderOwnership("<html>Holder owns 6.25% and 1,250,000 shares</html>"))
+      .toEqual({ percent: null, shares: null });
+  });
   it("merges the subject and the filer entries of one accession", () => {
     const filings = parseFeed(fx("sec_getcurrent_13g.xml"));
     expect(filings).toHaveLength(3);
@@ -115,6 +122,7 @@ describe("SEC getcurrent", () => {
   it("stores universe 13D, 13G and 8-K filings and a holder-event fact, and drops old and unknown issuers", async () => {
     const http = stubHttp((call) => {
       if (call.url.endsWith("company_tickers.json")) return fx("sec_company_tickers.json");
+      if (call.url.endsWith("index.json")) return JSON.stringify({ directory: { item: [] } });
       if (call.url.includes("SCHEDULE%2013G")) return fx("sec_getcurrent_13g.xml");
       if (call.url.includes("SCHEDULE%2013D")) return fx("sec_getcurrent_13d.xml");
       if (call.url.includes("type=8-K")) return fx("sec_getcurrent_8k.xml");
@@ -130,6 +138,30 @@ describe("SEC getcurrent", () => {
       { symbol: "PLTR", key: "holder_5pct_events", asOf: "2026-10-05", documentUrls: [expect.stringContaining("400010")], value: { count: 1, events: [expect.objectContaining({ form: "SCHEDULE 13D" })] } },
     ]);
     expect(http.calls.map((call) => call.url).filter((url) => url.includes("getcurrent")).every((url) => url.includes("count=100"))).toBe(true);
+  });
+
+  it("persists each universe holder accession once without changing the holder fact", async () => {
+    const http = stubHttp((call) => {
+      if (call.url.endsWith("company_tickers.json")) return fx("sec_company_tickers.json");
+      if (call.url.includes("type=SCHEDULE%2013G")) return fx("sec_getcurrent_13g.xml");
+      if (call.url.includes("type=SCHEDULE%2013D")) return fx("sec_getcurrent_13d.xml");
+      if (call.url.includes("type=8-K")) return fx("sec_getcurrent_8k.xml");
+      if (call.url.endsWith("index.json")) return JSON.stringify({ directory: { item: [{ name: "ownership.xml", type: "SC 13G/A" }, { name: "ownership.xml", type: "SC 13D" }] } });
+      if (call.url.endsWith("ownership.xml")) return "<ownership><percentOfClass>6.25</percentOfClass><aggregateAmountOwned>1250000</aggregateAmountOwned></ownership>";
+      throw new Error(`unrouted ${call.url}`);
+    });
+    const repo = new MemoryCollectorRepository();
+    const options = { since: "2026-09-05", now: new Date("2026-10-05T12:00:00Z"), http, companies: COMPANIES, symbols: ["NVDA", "PLTR"] };
+    const first = await runExtraSources(repo, ["getcurrent"], options);
+    const fact = structuredClone([...repo.facts.values()].filter((row) => row.key === "holder_5pct_events"));
+    const second = await runExtraSources(repo, ["getcurrent"], options);
+    expect(first.exitCode).toBe(0);
+    expect(second.documentsWritten).toBe(0);
+    expect(second.factsWritten).toBe(0);
+    expect(repo.holderEvents.size).toBe(2);
+    expect([...repo.holderEvents.values()].map((row) => [row.ticker, row.form, row.percent, row.shares]).sort())
+      .toEqual([["NVDA", "SCHEDULE 13G/A", 6.25, 1250000], ["PLTR", "SCHEDULE 13D", 6.25, 1250000]]);
+    expect([...repo.facts.values()].filter((row) => row.key === "holder_5pct_events")).toEqual(fact);
   });
 });
 

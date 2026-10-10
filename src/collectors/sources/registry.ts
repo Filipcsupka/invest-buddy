@@ -74,6 +74,7 @@ export async function runExtraSources(repository: CollectorRepository, names: So
           ids.set(doc.url, stored.id);
           if (stored.written) run.documentsWritten++;
         }
+        for (const event of output.holderEvents ?? []) await repository.upsertHolderEvent?.(event);
         for (const fact of facts) {
           const documentIds = fact.documentUrls.map((url) => ids.get(url)).filter((id): id is number => id !== undefined);
           if (await repository.upsertFact({ symbol: fact.symbol, key: fact.key, asOf: fact.asOf, value: fact.value, documentIds, ...(fact.expiresAt ? { expiresAt: fact.expiresAt } : {}) })) run.factsWritten++;

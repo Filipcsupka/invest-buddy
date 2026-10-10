@@ -16,6 +16,13 @@ const deadline = (name: string) => Number(/activeDeadlineSeconds: (\d+)/.exec(jo
 const startWindow = (name: string) => Number(/startingDeadlineSeconds: (\d+)/.exec(job(name))?.[1]) / 60;
 
 describe("daily pipeline order", () => {
+  it("schedules holder events on weekdays after watch, pending owner approval", () => {
+    const holder = minutes("holder-events");
+    expect(holder.days).toBe("2-6");
+    expect(holder.at).toBeGreaterThan(minutes("watch").at);
+    expect(job("holder-events")).toContain("suspend: true");
+    expect(job("holder-events")).toContain('args: ["--source", "getcurrent"]');
+  });
   const chain = ["prices", "collect", "detect", "extract", "macro", "reconcile", "daily", "judge"];
   it("uses the night schedule in Bratislava", () => {
     const expected = ["00:30", "01:00", "01:35", "01:50", "04:00", "04:10", "04:25", "05:30"];

@@ -1,6 +1,7 @@
 import type pg from "pg";
 import type { CollectedDocument } from "../collectors/types";
 import type { Form4Transaction } from "../collectors/edgar";
+import type { HolderEvent } from "../collectors/sources/common";
 import { freshnessDays } from "../data/evidence";
 import { insiderFromFact, DEFAULT_INSIDER_MIN_NET_BUY_USD, INSIDER_FACT_DAYS, INSIDER_FACT_LEAD_DAYS, type InsiderDocument, type InsiderResult } from "../data/insider";
 import { FACT_SOURCE_IDS, licenceClassFor, sourceIdFor } from "../data/sources-registry";
@@ -27,6 +28,7 @@ export interface SourceState {
 export interface CollectorRepository extends SourceState {
   upsertDocument(doc: CollectedDocument): Promise<{ id: number; written: boolean }>;
   upsertInsiderTransactions?(accession: string, ticker: string, filedAt: string, rows: Form4Transaction[]): Promise<void>;
+  upsertHolderEvent?(event: HolderEvent): Promise<boolean>;
   upsertFact(fact: Fact): Promise<boolean>;
   bars(symbol: string, limit: number): Promise<{ date: string; close: number; volume: number }[]>;
   recordRun(run: CollectorRun): Promise<void>;
@@ -36,6 +38,12 @@ export class MemoryCollectorRepository implements CollectorRepository {
   readonly facts = new Map<string, Fact>();
   readonly runs: CollectorRun[] = [];
   readonly insiderTransactions = new Map<string, Form4Transaction>();
+  readonly holderEvents = new Map<string, HolderEvent>();
+  async upsertHolderEvent(event: HolderEvent) {
+    if (this.holderEvents.has(event.accession)) return false;
+    this.holderEvents.set(event.accession, structuredClone(event));
+    return true;
+  }
   async upsertInsiderTransactions(accession: string, _ticker: string, _filedAt: string, rows: Form4Transaction[]) {
     for (const row of rows) this.insiderTransactions.set(`${accession}:${row.lineNo}`, structuredClone(row));
   }
@@ -83,6 +91,12 @@ export async function loadInsider(pool: pg.Pool, symbol: string, asOf: string, m
 }
 export class PostgresCollectorRepository implements CollectorRepository {
   constructor(private readonly pool: pg.Pool) {}
+  async upsertHolderEvent(event: HolderEvent) {
+    const result = await this.pool.query(`INSERT INTO holder_events (accession,ticker,filer_name,filer_cik,form,filed_at,percent,shares)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (accession) DO NOTHING`,
+      [event.accession,event.ticker,event.filerName,event.filerCik,event.form,event.filedAt,event.percent,event.shares]);
+    return (result.rowCount ?? 0) > 0;
+  }
   async upsertInsiderTransactions(accession: string, ticker: string, filedAt: string, rows: Form4Transaction[]) {
     for (const row of rows) await this.pool.query(`INSERT INTO insider_transactions
       (accession,line_no,ticker,owner_cik,owner_name,reporting_owners,is_director,is_officer,is_ten_percent_owner,is_other,
