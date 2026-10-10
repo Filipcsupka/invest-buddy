@@ -27,8 +27,8 @@ describe("storedFirstVerifier", () => {
   });
   it("applies the field's freshness window and the missing-field checks", async () => {
     const verify = storedFirstVerifier(stored("Revenue was $46.7 billion, up 56%"), live());
-    expect(await verify(entry({ claim: "fundamentals.productCatalyst" }), "2026-10-19")).toBe(true);
-    expect(await verify(entry({ claim: "fundamentals.productCatalyst" }), "2026-10-21")).toBe(false);
+    expect(await verify(entry({ claim: "fundamentals.productCatalyst" }), "2026-12-19")).toBe(true);
+    expect(await verify(entry({ claim: "fundamentals.productCatalyst" }), "2026-12-21")).toBe(false);
     expect(await verify(entry(), "2026-09-19")).toBe(false);
     expect(await verify(entry({ fiscalPeriod: "" }), "2026-10-05")).toBe(false);
     expect(await verify(entry({ quote: undefined }), "2026-10-05")).toBe(false);

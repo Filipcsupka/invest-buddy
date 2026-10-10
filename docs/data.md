@@ -246,4 +246,10 @@ Probe from the owner Mac on 2026-10-10 (HTTP status, time):
 
 Collector behaviour: `rss` reads each wire on its own, so one dead feed is logged as `rss` failure with the feed name and the run goes on (`collectRssFeeds`); it throws only when every feed fails. A release in both feeds is stored once by URL. The rss ping passes when at least one wire answers. GDELT keeps headlines already fetched when a later ticker times out or gets a 429, stops starting tickers after 20 minutes (Job deadline 30), and stores headline, link, outlet, time and tickers only.
 
-Not done: a daily GDELT CronJob. `collect --source gdelt` works; scheduling it adds a CronJob and an egress that is rate-limited (1 request per 5 s, 35 tickers, 10 to 15 minutes), so it waits for the owner.
+The GitOps mirror includes a suspended GDELT CronJob at 01:05 Tuesday to Saturday. It runs before detect and has a 25 minute deadline. The owner must copy the change to the live GitOps repository and decide when to unsuspend it; no live schedule changes with this repository PR.
+
+## Product catalyst coverage
+
+The catalyst window is 90 days; narrative changes remain at 30 days. Extract bundles include recent SEC filings and EX-99 exhibits, plus stored PR Newswire RSS releases and GDELT headlines matched to the symbol. The bundle remains bounded by document count and text length. RSS and GDELT text has display disabled under the source registry, so a headline can direct the extractor to a filing but cannot by itself verify a public catalyst claim. A decided claim still needs an exact quote from stored, display-allowed text.
+
+Detect adds up to six symbols per night when their latest product catalyst consensus is missing, unknown or older than seven days, even if no new filing arrived. It reviews the oldest answers first. Extract runs these reviews even when the source bundle has not changed; a bundle with no documents produces an unknown answer.

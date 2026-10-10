@@ -13,7 +13,7 @@ const norm = (s) => String(s).replace(/\s+/g, " ").trim().toLowerCase();
 /** Same numbers as freshnessDays in src/data/evidence.ts; src/db/bundle.test.ts compares the two. */
 export const FRESHNESS_DAYS = {
   revenueAccelerating: 100, revenueDeclining: 100, epsBeat: 100, guidanceRaised: 100, guidanceCut: 100,
-  productCatalyst: 30, insiderOrInstitutionalBuying: 60, narrativeChanged: 30,
+  productCatalyst: 90, insiderOrInstitutionalBuying: 60, narrativeChanged: 30,
 };
 
 const day = (iso) => String(iso ?? "").slice(0, 10);

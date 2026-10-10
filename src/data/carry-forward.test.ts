@@ -21,10 +21,10 @@ describe("carry-forward windows", () => {
   });
   it("expires a field after its window and turns it into unknown without evidence", () => {
     const r = row({ field: "productCatalyst", evidence_refs: [{ url: "https://sec.gov/a", publishedAt: "2026-09-01" }] });
-    expect(carryState(r, "2026-10-01")).toMatchObject({ state: "carried" });
-    expect(carryState(r, "2026-10-02")).toMatchObject({ state: "expired", windowDays: 30 });
-    expect(carryField(r, "2026-10-10")).toMatchObject({ value: null, verified: false, agreement: "single", evidenceRefs: [], agentValues: {}, carriedFrom: "2026-09-20" });
-    expect(carryField(r, "2026-10-10").reason).toMatch(/^Expired: last scanned 2026-09-20/);
+    expect(carryState(r, "2026-11-30")).toMatchObject({ state: "carried" });
+    expect(carryState(r, "2026-12-01")).toMatchObject({ state: "expired", windowDays: 90 });
+    expect(carryField(r, "2026-12-10")).toMatchObject({ value: null, verified: false, agreement: "single", evidenceRefs: [], agentValues: {}, carriedFrom: "2026-09-20" });
+    expect(carryField(r, "2026-12-10").reason).toMatch(/^Expired: last scanned 2026-09-20/);
   });
   it("counts a true claim from its newest cited publication date, never later than the scan date", () => {
     const r = row({ field: "insiderOrInstitutionalBuying", as_of: "2026-09-20", evidence_refs: [{ url: "u", publishedAt: "2026-08-01" }, { url: "v", publishedAt: "2026-09-25" }] });

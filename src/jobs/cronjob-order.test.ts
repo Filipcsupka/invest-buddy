@@ -138,3 +138,18 @@ describe("watch step", () => {
     for (const text of ["runAsNonRoot: true", "automountServiceAccountToken: false", "allowPrivilegeEscalation: false", "readOnlyRootFilesystem: true", 'drop: ["ALL"]', "type: RuntimeDefault", "concurrencyPolicy: Forbid"]) expect(doc).toContain(text);
   });
 });
+
+describe("GDELT collector proposal", () => {
+  it("runs before detect and stays suspended for owner review", () => {
+    const name = "collect-gdelt";
+    expect(minutes(name)).toEqual({ at: 65, days: "2-6" });
+    expect(minutes(name).at + startWindow(name) + deadline(name)).toBeLessThanOrEqual(minutes("detect").at);
+    const doc = job(name);
+    expect(doc).toContain("suspend: true");
+    expect(doc).toContain('args: ["--source", "gdelt"]');
+    expect(doc).toContain('command: ["node", "dist/jobs/collect.js"]');
+    expect(doc).toContain("name: DATABASE_URL");
+    expect(doc).not.toContain("name: INGEST_TOKEN");
+    for (const text of ["runAsNonRoot: true", "automountServiceAccountToken: false", "allowPrivilegeEscalation: false", "readOnlyRootFilesystem: true", 'drop: ["ALL"]', "type: RuntimeDefault", "concurrencyPolicy: Forbid"]) expect(doc).toContain(text);
+  });
+});
