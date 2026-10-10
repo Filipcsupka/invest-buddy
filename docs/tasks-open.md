@@ -315,7 +315,7 @@ Evidence: `kubectl -n invest get cronjob,jobs`, `judge_runs`, `scheduled_gates` 
 ### H4. Digest is suspended
 - `invest-buddy-digest` is suspended in infra and `ConsoleMailer` only logs (C3). DoD: owner picks a real mailer or leaves it off.
 
-### H5. Dependabot opens many major bumps
+### H5. Dependabot opens many major bumps (done 2026-10-09, majors are ignored since #63)
 - `.github/dependabot.yml` groups only minor and patch updates, so each major bump is its own PR (11 opened at once on 2026-10-08). Five CI-action bumps were merged on 2026-10-09; the Node, TypeScript, ESLint, vitest and `@types/node` majors were closed.
 - DoD: config limited to minor and patch, or a monthly grouped run.
 
@@ -331,6 +331,17 @@ Evidence: `kubectl -n invest get cronjob,jobs`, `judge_runs`, `scheduled_gates` 
 ## J. Q4 roadmap
 
 Owner decision 2026-10-09: the weeks to 2026-12-31 go to collecting data so history accumulates, owner portfolio features, a finished web with free and paid tiers built and tested (payment off), and a marketing and waitlist launch at the end of the year. This replaces the earlier plan to open a waitlist first (PR #83, closed). The plan, owner decisions, schedule and gates are in `docs/roadmap/README.md`; the tasks (D, W, EN, PL) are in the lane files next to it. After each merged roadmap task, add one status line here with the task ID, the PR and the live proof.
+
+### Progress log
+2026-10-09 and 2026-10-10 (all merged and live on the cluster, checked on the site and in the database):
+- Presentable web: #81 and #82. Banner hidden while the disclosure text is empty (`OPERATOR_DISCLOSURE_EN` and `_SK` set the text), no sample labels, `robots.txt`, real 404 for unknown tickers and disabled pages, Slovak labels instead of raw codes, a Slovak fallback label when a translation is missing, no more "AMD, AMD" title, og:image and favicon.
+- Engine: #80 buy threshold. START_POSITION needs score 18, ADD stays at 15 (Guide sections 6 and 8), rules version 2026-10-09.1. EN1 (#90) golden fixtures pin the behaviour. C5 review result: score.ts matches the Guide; the parallel point tables, deep add, breakout retest and EUR bands in signals.ts are still open (EN lane).
+- Discovery: #77 growth-evidence names first and 24 screened, #79 extraction-runs route reads the instruments table (approved names like MU no longer get HTTP 400), EN36 (#86) MA200 pre-screen before the cut. A manual run stored 5 candidates for week 2026-10-05.
+- Data foundation, migrations 022 to 041 applied: D1 inventory script (#93), D2 source registry with licence classes (#91), D3 row provenance on bars, facts and documents (#97), D5 retention archives public SEC rows instead of deleting (#100; the retention CronJob stays suspended), D6 point-in-time design note (#87), D7 NYSE trading calendar (#94), D8 API usage ledger and cost caps (#95), D10 security master (#96), D12 daily bar revision log (#102), D14 score input snapshots (#104), D15 consensus history (#92), D16 data quality checks (#103), D17 raw snapshot store (#99), D34 resumable backfill runner (#101), D42 terms-check pack for the owner (#98).
+- Platform: PL1 CI uses the runner's PostgreSQL instead of Docker Hub (#85), W1 typed feature flags (#88), W2 one shared database pool with per-request cached loaders (#89).
+- Research: market homework (28 site notes, ranking, lessons, Slovak demand, advisory networks, positioning and business model) in the vault under `research/market-homework/`; the free scraper is at `~/tools/crawl4ai`.
+- Live checks 2026-10-10: `/api/health` 200, pages 0.5 to 1.8 s, 16 CronJobs and the web pod on the same image, 08:00 Alpha Vantage collect ok. Open proof: the 05:30 judge made no model call (no signal had changed), so H1 still needs a scheduled run that stores ideas; discovery 09:30 and review calendar 11:00 on the new image are checked next.
+- Next in the roadmap: D11 universe membership, D18 to D20 SEC fundamentals and filings backfills, EN2 to EN5 engine alignment, W3 and W4 web performance and design baseline, PL2 onward platform tasks, and the owner decisions list in `docs/roadmap/README.md` section b.
 
 ## Not planned
 

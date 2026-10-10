@@ -2,6 +2,10 @@
 
 Master plan for 2026-10-12 to 2026-12-31. Written 2026-10-09 from the four lane files in this folder (`lane-data.md`, `lane-web.md`, `lane-engine.md`, `lane-platform.md`), `docs/tasks-open.md`, and the vault notes `research/market-homework/130-positioning-and-business-model.md` and `99-lessons.md`. Task text lives in the lane files; this file decides order, owners and gates. Each lane file ends with a list of what the synthesis changed in it.
 
+## Status
+
+2026-10-10 08:30: weeks 1 and 2 of the first data wave are merged and live. Done: D1, D2, D3, D5, D6, D7, D8, D10, D12, D14, D15, D16, D17, D34, D42, EN1, EN36, PL1, W1, W2, plus the buy threshold PR #80 (EN2 decision default). Details and PR numbers are in the progress log under section J of `docs/tasks-open.md`.
+
 ## a) Summary
 
 The owner decided on 2026-10-09 to use the 12 weeks to the end of the year for five things: collect as much market and fundamentals data as free or owned sources allow, so history accumulates; build features for the owner's own portfolio and for investing in general; finish the web so the free and paid tiers are ready; launch marketing and a waitlist at the end of the year; and consider paid market data once the waitlist has a meaningful size.
