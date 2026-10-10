@@ -48,6 +48,9 @@ describe("data inventory (Postgres)", () => {
         ('inventory-test','ZZINV','8-K','https://example.com/inv-b','2031-03-02T00:00:00Z','b',repeat('b',50),'2031-03-20T00:00:00Z')`);
       await client.query("INSERT INTO collected_facts (symbol,fact_key,as_of,value,expires_at) VALUES ('ZZINV','inventory_test_key','2031-03-05','{}'::jsonb,'2031-03-25T00:00:00Z')");
 
+      await client.query(`INSERT INTO raw_snapshots (source_id,key,content_hash,content_type,size_bytes,body) VALUES
+        ('sec','inventory-test-a','h1','text/plain',1000,'\\x1f8b'::bytea), ('sec','inventory-test-b','h2','text/plain',500,'\\x1f8b'::bytea)`);
+
       log.length = 0;
       const after = await collectInventory(logged);
       const rows = (inv: typeof after, name: string) => inv.tables.find((t) => t.table === name)?.rows ?? 0;
@@ -60,6 +63,10 @@ describe("data inventory (Postgres)", () => {
       expect(after.documentExpiry.find((e) => e.month === "2031-03")).toMatchObject({ documents: 2, bodyBytes: 150 });
       expect(after.factExpiry.find((e) => e.month === "2031-03")?.rows).toBe(1);
       expect(after.factsByKey.find((f) => f.key === "inventory_test_key")?.rows).toBe(1);
+      expect(rows(after, "raw_snapshots") - rows(before, "raw_snapshots")).toBe(2);
+      const snapshotsOf = (inv: typeof after) => inv.snapshotsBySource.find((g) => g.source === "sec");
+      expect((snapshotsOf(after)?.sizeBytes ?? 0) - (snapshotsOf(before)?.sizeBytes ?? 0)).toBe(1500);
+      expect(inventoryMarkdown(after)).toContain("Raw snapshots by source");
       expect(after.tables.every((t) => t.bytes > 0)).toBe(true);
 
       expect(log.length).toBeGreaterThan(0);

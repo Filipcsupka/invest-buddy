@@ -1,6 +1,6 @@
 # Data inventory
 
-`npm run data:inventory` prints what the database holds: row counts, min and max dates, table sizes with indexes, source documents per source with body bytes, collected facts per key, and an expiry histogram by month. It prints JSON first, then markdown tables. Every statement is a SELECT and the run is wrapped in a `READ ONLY` transaction.
+`npm run data:inventory` prints what the database holds: row counts, min and max dates, table sizes with indexes, source documents per source with body bytes, raw snapshots per source (uncompressed and gzip bytes, D17), collected facts per key, and an expiry histogram by month. It prints JSON first, then markdown tables. Every statement is a SELECT and the run is wrapped in a `READ ONLY` transaction.
 
 ```
 DATABASE_URL=postgresql://... npm run data:inventory
