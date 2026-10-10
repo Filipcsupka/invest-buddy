@@ -5,7 +5,7 @@ const NAMES = ["PAYWALL", "AUTH", "BILLING", "WAITLIST", "ADVICE_OUTPUT", "OWNER
 
 describe("flags", () => {
   it("defaults everything off when unset", () => {
-    expect(flags({})).toEqual({ PAYWALL: false, AUTH: false, BILLING: false, WAITLIST: false, ADVICE_OUTPUT: false, IDEAS_PAGE: false, OWNER_VIEW: false });
+    expect(flags({})).toEqual({ PAYWALL: false, AUTH: false, BILLING: false, WAITLIST: false, ADVICE_OUTPUT: false, IDEAS_PAGE: false, INSIDERS_PAGE: true, OWNER_VIEW: false });
   });
 
   for (const name of NAMES) {
@@ -23,6 +23,11 @@ describe("flags", () => {
     expect(flags({ DATA_MODE: "fixture" }).IDEAS_PAGE).toBe(true);
     expect(flags({ DATA_MODE: "fixture", IDEAS_PAGE: "off" }).IDEAS_PAGE).toBe(true);
     expect(flags({ DATA_MODE: "db" }).IDEAS_PAGE).toBe(false);
+  });
+
+  it("INSIDERS_PAGE defaults on and can be disabled", () => {
+    expect(flags({}).INSIDERS_PAGE).toBe(true);
+    expect(flags({ INSIDERS_PAGE: "off" }).INSIDERS_PAGE).toBe(false);
   });
 
   it("reads process.env by default", () => {

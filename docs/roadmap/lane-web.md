@@ -563,6 +563,14 @@ Status: done 2026-10-10, PR #89, merged and live.
 
 ## Milestone map
 
+### SK1. Insider filings and SEC events
+- Why: SEC Form 4 history makes reported insider activity inspectable for each company in the screening universe.
+- Steps: show recent transactions with insider, role, code, shares, reported value, date and SEC filing link on `/insiders`; make the ticker panel reusable on a company page; explain P, S, A, M and F in English and Slovak.
+- Acceptance: only rows with display permission appear, the source can be opened at SEC.gov, the route can be turned off, and both languages pass the dictionary parity test. This page is informational screening under ADR-001 and does not depend on `ADVICE_OUTPUT`.
+- Depends on: D20 and migration 045.
+- Approval needed: migration 047 before live use.
+
+
 | Milestone | Tasks |
 |---|---|
 | [WL] waitlist launch | W1 to W26 |
