@@ -17,7 +17,7 @@ afterEach(() => { process.env.DATA_MODE = originalMode; history.mockReset(); ben
 it("shows an honest empty live record without fixture data", async () => {
   process.env.DATA_MODE = "db";
   benchmark.mockResolvedValue([]);
-  history.mockResolvedValue({ snapshotCount: 0, firstDate: null, lastDate: null, signals: [], buySignalCount: 0, hit30: { hits: 0, n: 0, rate: null } });
+  history.mockResolvedValue({ snapshotCount: 0, firstDate: null, lastDate: null, signals: [], buySignalCount: 0, hit20: { hits: 0, n: 0, rate: null } });
   const html = renderToStaticMarkup(await TrackRecord(props));
   expect(html).toContain("No real snapshots or signals");
   expect(html).toContain("0 snapshots");
@@ -30,13 +30,18 @@ it("shows an honest empty live record without fixture data", async () => {
 it("shows measured returns and pending windows from stored signals", async () => {
   process.env.DATA_MODE = "db";
   benchmark.mockResolvedValue([]);
-  history.mockResolvedValue({ snapshotCount: 1, firstDate: "2026-01-02", lastDate: "2026-01-02", buySignalCount: 1, hit30: { hits: 1, n: 1, rate: 1 },
+  history.mockResolvedValue({ snapshotCount: 1, firstDate: "2026-01-02", lastDate: "2026-01-02", buySignalCount: 1, hit20: { hits: 1, n: 1, rate: 1 },
     signals: [{ id: 1, ticker: "NVDA", asOf: "2026-01-02", tier: "SETUP", state: "Setup met (>=18)", score: 20,
-      windows: { 30: { date: "2026-02-02", stock: 0.1, spy: 0.05, excess: 0.05 }, 90: null, 180: null } }] });
+      windows: { 1: { date: "2026-01-05", stock: 0.1, spy: 0.05, excess: 0.05 }, 5: null, 20: null, 60: null } },
+    { id: 2, ticker: "AMD", asOf: "2026-01-02", tier: "SETUP", state: "Setup met (>=18)", score: 19,
+      windows: { 1: { date: "2026-01-05", stock: -0.1, spy: 0.05, excess: -0.15 }, 5: null, 20: null, 60: null } }] });
   const html = renderToStaticMarkup(await TrackRecord(props));
   expect(html).toContain("1 snapshot.");
   expect(html).toContain("NVDA");
   expect(html).toContain("vs SPY 5.0%");
+  expect(html).toContain("vs SPY -15.0%");
+  expect(html).toContain("1 trading day");
+  expect(html).toContain("60 trading days");
   expect(html).toContain("Pending");
   expect(html).not.toContain("synthetic");
   expect(html).toContain("Stale since");
@@ -44,7 +49,7 @@ it("shows measured returns and pending windows from stored signals", async () =>
 
 it("renders stored SPY history without reaching the fixture benchmark in db mode", async () => {
   process.env.DATA_MODE = "db";
-  history.mockResolvedValue({ snapshotCount: 2, firstDate: "2026-01-02", lastDate: "2026-01-05", signals: [], buySignalCount: 0, hit30: { hits: 0, n: 0, rate: null } });
+  history.mockResolvedValue({ snapshotCount: 2, firstDate: "2026-01-02", lastDate: "2026-01-05", signals: [], buySignalCount: 0, hit20: { hits: 0, n: 0, rate: null } });
   benchmark.mockResolvedValue([
     { date: "2026-01-02", open: 100, high: 100, low: 100, close: 100, volume: 0 },
     { date: "2026-01-05", open: 102, high: 102, low: 102, close: 102, volume: 0 },

@@ -21,12 +21,12 @@ it.skipIf(!process.env.TEST_DATABASE_URL)("reads stored real returns and keeps s
     await client.query("INSERT INTO record_signals (ticker,as_of,source,event_key,tier,state,score,rules_version,reference_close,spy_reference_close) VALUES ($1,'2026-01-02','judge','judge-a','STARTER','START_POSITION',20,'test-v1',NULL,NULL)", [ticker]);
     const record = await readRecord(client as never, "2026-02-02");
     const signal = record.signals.find((item) => item.ticker === ticker);
-    expect(signal?.windows[30]?.stock).toBeCloseTo(0.1);
-    expect(signal?.windows[30]?.excess).toBeCloseTo(0.05);
-    expect(signal?.windows[90]).toBeNull();
+    expect(signal?.windows[1]?.stock).toBeCloseTo(0.1);
+    expect(signal?.windows[1]?.excess).toBeCloseTo(0.05);
+    expect(signal?.windows[5]).toBeNull();
     expect(record.snapshotCount).toBeGreaterThan(0);
     expect(record.buySignalCount).toBe(baseline.buySignalCount + 1);
-    expect(record.hit30).toMatchObject({ hits: baseline.hit30.hits + 1, n: baseline.hit30.n + 1 });
+    expect(record.hit20).toEqual(baseline.hit20);
     await client.query("SAVEPOINT immutable_check");
     await expect(client.query("UPDATE record_snapshots SET score=19 WHERE ticker=$1", [ticker])).rejects.toThrow(/immutable/);
     await client.query("ROLLBACK TO SAVEPOINT immutable_check");
