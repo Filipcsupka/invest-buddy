@@ -37,7 +37,7 @@ function secFixture(options: { sqListedAs?: string; sic?: string } = {}) {
 describe("security master refresh (Postgres)", () => {
   it.skipIf(!process.env.TEST_DATABASE_URL)("seeds 37 current rows with SQ mapped to XYZ, fills every CIK, flags SPY as etf, and a second run changes nothing", () => inRollback(async (pool) => {
     const seeded = await pool.query("SELECT ticker, instrument_type, cik FROM instrument_ids WHERE valid_to IS NULL");
-    const core = await pool.query("SELECT count(*)::int AS n FROM instruments WHERE source IN ('guide','sample extension','benchmark')");
+    const core = await pool.query("SELECT count(*)::int AS n FROM instruments WHERE source IN ('guide','sample extension','discovery','benchmark')");
     expect(seeded.rowCount).toBe(core.rows[0].n);
     expect(seeded.rows.find((r) => r.ticker === "SPY")?.instrument_type).toBe("etf");
     expect((await loadVendorSymbols(pool, "twelvedata")).SQ).toBe("XYZ");

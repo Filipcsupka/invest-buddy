@@ -23,12 +23,12 @@ CREATE TABLE IF NOT EXISTS instrument_ids (
 CREATE UNIQUE INDEX IF NOT EXISTS instrument_ids_current_idx ON instrument_ids (ticker) WHERE valid_to IS NULL;
 CREATE INDEX IF NOT EXISTS instrument_ids_cik_idx ON instrument_ids (cik) WHERE cik IS NOT NULL;
 
--- Seed: the 36 universe names and the benchmark. No network source; SQ trades as XYZ at Twelve Data and SEC.
+-- Seed: the 36 universe names (35 guide or sample, PCVX from discovery) and the benchmark. No network source; SQ trades as XYZ at Twelve Data and SEC.
 INSERT INTO instrument_ids (ticker, instrument_type, vendor_symbols, valid_from)
 SELECT i.ticker,
        CASE WHEN i.source = 'benchmark' THEN 'etf' ELSE 'equity' END,
        CASE WHEN i.ticker = 'SQ' THEN '{"twelvedata": "XYZ", "sec": "XYZ"}'::jsonb ELSE '{}'::jsonb END,
        DATE '2026-10-09'
 FROM instruments i
-WHERE i.source IN ('guide', 'sample extension', 'benchmark')
+WHERE i.source IN ('guide', 'sample extension', 'discovery', 'benchmark')
 ON CONFLICT (ticker) WHERE valid_to IS NULL DO NOTHING;
