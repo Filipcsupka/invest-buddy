@@ -6,8 +6,10 @@ const scores = vi.fn();
 const idea = vi.fn();
 const review = vi.fn();
 const portfolio = vi.fn();
+const history = vi.fn();
 const originalAdvice = process.env.ADVICE_OUTPUT;
 vi.mock("@/data/store", () => ({ instrumentUniverse: () => universe(), latestScores: () => scores(), latestPortfolio: () => portfolio() }));
+vi.mock("@/data/score-history", () => ({ companyScoreHistory: () => history() }));
 vi.mock("@/data/ideas-store", () => ({ companyIdea: () => idea(), companyReview: () => review() }));
 
 import Company, * as page from "./page";
@@ -15,7 +17,7 @@ import { instruments } from "@/data/fixtures";
 import { scoredUniverse } from "@/data/scored";
 import { sampleIdeas } from "@/ideas/fixtures";
 
-afterEach(() => { universe.mockReset(); scores.mockReset(); idea.mockReset(); review.mockReset(); review.mockResolvedValue(null); portfolio.mockReset(); portfolio.mockResolvedValue(null); if (originalAdvice === undefined) delete process.env.ADVICE_OUTPUT; else process.env.ADVICE_OUTPUT = originalAdvice; });
+afterEach(() => { history.mockReset(); history.mockResolvedValue([]); universe.mockReset(); scores.mockReset(); idea.mockReset(); review.mockReset(); review.mockResolvedValue(null); portfolio.mockReset(); portfolio.mockResolvedValue(null); if (originalAdvice === undefined) delete process.env.ADVICE_OUTPUT; else process.env.ADVICE_OUTPUT = originalAdvice; });
 const props = (ticker: string, locale = "en") => ({ params: Promise.resolve({ locale, ticker }) });
 const dbInstrument = { ticker: "ZZZZ", name: "Zed Corp", sector: "Cloud & SaaS", tier: null, source: "guide" as const };
 
@@ -85,6 +87,22 @@ describe("company page", () => {
     review.mockResolvedValue(null);
     const none = renderToStaticMarkup(await Company(props(row.instrument.ticker, "en")));
     expect(none).not.toContain("Last reviewed");
+  });
+
+  it("shows the score history under its paywall marker in both languages", async () => {
+    const [row] = await scoredUniverse();
+    universe.mockResolvedValue([row.instrument]);
+    scores.mockResolvedValue({ rows: [row], sample: false, lastUpdated: "2026-10-08", stale: false });
+    idea.mockResolvedValue(null);
+    history.mockResolvedValue([{ asOf: "2026-10-03", technical: 5, fundamentals: 6, macro: 2, total: 13, state: "Watch" }, { asOf: "2026-10-02", technical: 4, fundamentals: 6, macro: 2, total: 12, state: "Watch" }]);
+    const en = renderToStaticMarkup(await Company(props(row.instrument.ticker, "en")));
+    expect(en).toContain("Score history");
+    expect(en).toContain('data-paywall-candidate="score-history"');
+    expect(en).toContain("over 2 scan days");
+    const sk = renderToStaticMarkup(await Company(props(row.instrument.ticker, "sk")));
+    expect(sk).toContain("História skóre");
+    history.mockResolvedValue([]);
+    expect(renderToStaticMarkup(await Company(props(row.instrument.ticker, "en")))).toContain("Not enough history yet");
   });
 
   it("404s a ticker missing from the universe, even if it is a fixture ticker", async () => {

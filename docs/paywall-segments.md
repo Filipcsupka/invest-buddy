@@ -9,6 +9,7 @@ Decision on 2026-10-08: the markers identify sections that could become subscrib
 | None | Dashboard `/dashboard` and scanner redirect | Ticker list, score, state, search and filters | Free | None | The basic screen is the entry point. `/scanner` redirects here. |
 | None | Company `/company/[ticker]` | Name, sector, current score and state | Free | None | A reader can inspect the basic screening result. |
 | `idea-card` | Company | Action, size tier, rationale, setup, plan and evidence | Candidate | `ADVICE_OUTPUT` | The full card appears only when legal review permits advice-like wording. With the flag off, it shows the rule state and evidence. The ideas page also requires `IDEAS_PAGE`. |
+| `score-history` | Company | Total score by scan day, parts and state, as chart and table | Candidate | None | History depth is a standard paid lever; the free depth is not set yet. |
 | `portfolio-performance` | Portfolio | Indexed return, benchmark chart and performance figures | Candidate | None | Detailed portfolio performance has value beyond the basic screen. |
 | `portfolio-weights` | Portfolio | Position weights | Candidate | None | Shows portfolio composition. |
 | `track-record-signals` | Track record | Dated signals and 30, 90 and 180 day returns | Candidate | None | Detailed outcome history supports deeper evaluation. |

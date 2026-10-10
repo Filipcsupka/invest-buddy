@@ -6,6 +6,8 @@ import { Chart } from "@/components/chart";
 import { groupLabels, TitleBlock } from "@/components/datasheet";
 import { IdeaCard } from "@/components/idea-card";
 import { PaywallSegment } from "@/components/paywall-segment";
+import { ScoreHistory } from "@/components/score-history";
+import { companyScoreHistory } from "@/data/score-history";
 import { flags } from "@/config/flags";
 import { Disclaimer } from "@/components/disclaimer";
 import { IconArrowLeft, IconArrowRight, IconCheck, IconCross } from "@/components/icons";
@@ -82,6 +84,7 @@ async function Company({ params }: Params) {
   const sources = scored ? sourceSummary(locale, result) : null;
   const ideaRow = await companyIdea(instrument.ticker);
   const review = await companyReview(instrument.ticker);
+  const history = await companyScoreHistory(instrument.ticker);
   const index = instruments.findIndex((item) => item.ticker === instrument.ticker);
   const prev = instruments[(index - 1 + instruments.length) % instruments.length];
   const next = instruments[(index + 1) % instruments.length];
@@ -174,6 +177,14 @@ async function Company({ params }: Params) {
           locale={locale}
           labels={{ name: instrument.ticker, aria: m.chart.label, close: m.chart.close, ma50: m.chart.ma50, ma200: m.chart.ma200, dip: m.chart.dip, last: m.chart.last }}
         />
+      </section>
+
+      <section className="sheet-section" aria-labelledby="history">
+        <div className="section-head">
+          <h2 id="history">{m.company.history.title}</h2>
+          <p className="muted small">{m.company.history.note}</p>
+        </div>
+        <PaywallSegment id="score-history"><div><ScoreHistory ticker={instrument.ticker} rows={history} locale={locale} /></div></PaywallSegment>
       </section>
 
       <div className="company-grid">
