@@ -345,7 +345,7 @@ Owner decision 2026-10-09: the weeks to 2026-12-31 go to collecting data so hist
 - Research: market homework (28 site notes, ranking, lessons, Slovak demand, advisory networks, positioning and business model) in the vault under `research/market-homework/`; the free scraper is at `~/tools/crawl4ai`.
 - Live checks 2026-10-10: `/api/health` 200, pages 0.5 to 1.8 s, 16 CronJobs and the web pod on the same image, 08:00 Alpha Vantage collect ok. Open proof: the 05:30 judge made no model call (no signal had changed), so H1 still needs a scheduled run that stores ideas; discovery 09:30 and review calendar 11:00 on the new image are checked next.
 - Next in the roadmap: D11 universe membership, D18 to D20 SEC fundamentals and filings backfills, EN2 to EN5 engine alignment, W3 and W4 web performance and design baseline, PL2 onward platform tasks, and the owner decisions list in `docs/roadmap/README.md` section b.
-- EN3: #80 set START at 18 and ADD at 15; #107 corrects the WATCH explanation and golden edges. CI and live proof for #107 are pending.
+- EN3: #80 set START at 18 and ADD at 15; #107 corrects the WATCH explanation and golden edges. Live proof follows its merge.
 
 ## Not planned
 
