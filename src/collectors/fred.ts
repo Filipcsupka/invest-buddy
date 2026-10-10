@@ -14,6 +14,8 @@ export async function collectFred(key: string, get = getText): Promise<Collected
 
 /** FRED series the macro rules read. DGS10 is the daily 10-year Treasury yield. */
 export const FRED_YIELD_SERIES = "DGS10";
+export const FRED_CPI_SERIES = "CPIAUCSL";
+export const FRED_PPI_SERIES = "PPIACO";
 export const fredSeriesUrl = (series: string) => `https://fred.stlouisfed.org/series/${series}`;
 export interface FredObservation { date: string; value: number }
 /** FRED lists newest first. Returns oldest first. A holiday or missing day is "." in FRED and is dropped. */

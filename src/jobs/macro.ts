@@ -2,7 +2,7 @@ import { runLoggedJob } from "./job-log";
 import { createHash } from "node:crypto";
 import pg from "pg";
 import universe from "../../scanner/universe.json";
-import { collectFredSeries, FRED_YIELD_SERIES, fredSeriesUrl } from "../collectors/fred";
+import { collectFredSeries, FRED_CPI_SERIES, FRED_PPI_SERIES, FRED_YIELD_SERIES, fredSeriesUrl } from "../collectors/fred";
 import { defaultHttp, type SourceHttp } from "../collectors/sources/client";
 import { collectVix } from "../collectors/sources/vix";
 import type { Company, Env } from "../collectors/sources/common";
@@ -23,45 +23,53 @@ export function previousTradingDay(now = new Date()): string {
   return lastCompletedSession(now);
 }
 
-export interface MacroInputs { yields: YieldPoint[] | null; yieldUrl: string | null; vix: VixPoint[] | null; vixUrl: string | null; universe: Record<string, Bar[]>; spy: Bar[] | null }
+export interface MacroInputs { yields: YieldPoint[] | null; yieldUrl: string | null; cpi: YieldPoint[] | null; cpiUrl: string | null; ppi: YieldPoint[] | null; ppiUrl: string | null; vix: VixPoint[] | null; vixUrl: string | null; universe: Record<string, Bar[]>; spy: Bar[] | null }
 export interface EvidenceItem { claim: string; url: string; publishedAt: string }
 export interface MacroOutcome { dataTailwind: MacroResult; sectorRotationIntoGrowth: MacroResult; evidence: { dataTailwind: EvidenceItem[]; sectorRotationIntoGrowth: EvidenceItem[] } }
 
 /** Pure: applies both rules to stored inputs. Evidence is the url of each stored document the verdict rests on, only for a known value. */
 export function evaluateMacro(inputs: MacroInputs, asOf: string, config: MacroConfig): MacroOutcome {
-  const dataTailwind = evaluateDataTailwind(inputs.yields, inputs.vix, asOf, config);
+  const dataTailwind = evaluateDataTailwind(inputs.yields, inputs.vix, asOf, config, { cpi: inputs.cpi, ppi: inputs.ppi });
   const sectorRotationIntoGrowth = evaluateSectorRotation(inputs.universe, inputs.spy, asOf, config);
-  const [yieldDate, vixDate] = dataTailwind.evidenceDates;
+  const [yieldDate, vixDate, cpiDate, ppiDate] = dataTailwind.evidenceDates;
   const items = dataTailwind.value === null || !inputs.yieldUrl || !inputs.vixUrl ? [] : [
     { claim: "macro.dataTailwind", url: inputs.yieldUrl, publishedAt: yieldDate }, { claim: "macro.dataTailwind", url: inputs.vixUrl, publishedAt: vixDate }];
+  if (cpiDate && ppiDate && inputs.cpiUrl && inputs.ppiUrl) items.push(
+    { claim: "macro.dataTailwind", url: inputs.cpiUrl, publishedAt: cpiDate },
+    { claim: "macro.dataTailwind", url: inputs.ppiUrl, publishedAt: ppiDate });
   // Rotation uses our own stored price bars, which have no public url, so it cites no document.
   return { dataTailwind, sectorRotationIntoGrowth, evidence: { dataTailwind: items, sectorRotationIntoGrowth: [] } };
 }
 
 interface DocRow { url: string; meta: { observations?: YieldPoint[]; close?: number; date?: string; recent?: { date: string; close: number }[] } }
 export async function loadInputs(pool: pg.Pool, asOf: string, tickers: string[] = symbols): Promise<MacroInputs> {
-  const yieldUrl = fredSeriesUrl(FRED_YIELD_SERIES);
-  const docs = await pool.query<DocRow>("SELECT url,meta FROM source_documents WHERE url = ANY($1::text[])", [[yieldUrl, VIX_DOC_URL]]);
+  const yieldUrl = fredSeriesUrl(FRED_YIELD_SERIES), cpiUrl = fredSeriesUrl(FRED_CPI_SERIES), ppiUrl = fredSeriesUrl(FRED_PPI_SERIES);
+  const docs = await pool.query<DocRow>("SELECT url,meta FROM source_documents WHERE url = ANY($1::text[])", [[yieldUrl, cpiUrl, ppiUrl, VIX_DOC_URL]]);
   const doc = (url: string) => docs.rows.find((row) => row.url === url);
-  const yieldDoc = doc(yieldUrl), vixDoc = doc(VIX_DOC_URL);
-  const observations = yieldDoc?.meta.observations;
-  const yields = Array.isArray(observations) ? observations.filter((p) => typeof p.date === "string" && Number.isFinite(p.value)) : null;
+  const yieldDoc = doc(yieldUrl), cpiDoc = doc(cpiUrl), ppiDoc = doc(ppiUrl), vixDoc = doc(VIX_DOC_URL);
+  const series = (row: DocRow | undefined): YieldPoint[] | null => {
+    const observations = row?.meta.observations;
+    return Array.isArray(observations) ? observations.filter((p) => typeof p.date === "string" && Number.isFinite(p.value)) : null;
+  };
   const vixMeta = vixDoc?.meta;
   const vix = vixMeta ? [...(vixMeta.recent ?? []), ...(vixMeta.date && Number.isFinite(vixMeta.close) ? [{ date: vixMeta.date, close: vixMeta.close as number }] : [])].filter((p) => typeof p.date === "string" && Number.isFinite(p.close)) : null;
   const rows = await pool.query<{ ticker: string; date: string; close: number }>("SELECT ticker,bar_date::text AS date,close::float8 AS close FROM daily_bars WHERE ticker = ANY($1::text[]) AND bar_date <= $2::date AND bar_date > $2::date - 90 ORDER BY ticker,bar_date", [[...tickers, BENCHMARK], asOf]);
   const byTicker: Record<string, Bar[]> = {};
   for (const row of rows.rows) (byTicker[row.ticker] ??= []).push({ date: row.date, close: row.close });
-  return { yields, yieldUrl: yieldDoc ? yieldUrl : null, vix, vixUrl: vixDoc ? VIX_DOC_URL : null,
+  return { yields: series(yieldDoc), yieldUrl: yieldDoc ? yieldUrl : null, cpi: series(cpiDoc), cpiUrl: cpiDoc ? cpiUrl : null, ppi: series(ppiDoc), ppiUrl: ppiDoc ? ppiUrl : null, vix, vixUrl: vixDoc ? VIX_DOC_URL : null,
     universe: Object.fromEntries(tickers.map((ticker) => [ticker, byTicker[ticker] ?? []])), spy: byTicker[BENCHMARK] ?? null };
 }
 
 export interface FetchDeps { http?: SourceHttp; env?: Env; now?: Date; get?: (url: string) => Promise<string> }
-/** Refreshes the two stored inputs. A failing source is reported and skipped; the rules then read what is stored and call old data stale. */
+/** Refreshes the stored macro inputs. A failing source is reported and skipped. */
 export async function fetchMacroInputs(repository: CollectorRepository, deps: FetchDeps = {}): Promise<string[]> {
   const env = deps.env ?? process.env, now = deps.now ?? new Date(), failures: string[] = [];
   const key = env.FRED_API_KEY;
   if (!key) failures.push("fred: FRED_API_KEY absent");
-  else try { await repository.upsertDocument(await collectFredSeries(key, FRED_YIELD_SERIES, deps.get)); } catch (error) { failures.push(`fred: ${error instanceof Error ? error.message : String(error)}`); }
+  else for (const [series, limit] of [[FRED_YIELD_SERIES, 80], [FRED_CPI_SERIES, 24], [FRED_PPI_SERIES, 24]] as const) {
+    try { await repository.upsertDocument(await collectFredSeries(key, series, deps.get, limit)); }
+    catch (error) { failures.push(`fred ${series}: ${error instanceof Error ? error.message : String(error)}`); }
+  }
   try {
     const output = await collectVix({ http: deps.http ?? defaultHttp(), companies: [] as Company[], symbols: [], since: now.toISOString().slice(0, 10), now, env });
     for (const document of output.documents) await repository.upsertDocument(document);
