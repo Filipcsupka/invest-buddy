@@ -65,7 +65,7 @@ describe("actions from data only, no portfolio", () => {
     expect(at(14).reasons.join()).toMatch(/Score 14 is below the add threshold of 15\.$/);
     for (const total of [15, 17]) {
       expect(at(total, { technicals: flatEntry })).toMatchObject({ action: "WATCH", sizeTier: "NONE" });
-      expect(at(total, { technicals: flatEntry }).reasons.join()).toMatch(new RegExp(`Score ${total} is below the buy threshold of 18; 15 to 17 is WATCH`));
+      expect(at(total, { technicals: flatEntry }).reasons.join()).toMatch(new RegExp(`Score ${total} is below the start threshold of 18; an add needs a strong entry or pullback`));
       expect(at(total)).toMatchObject({ action: "ADD", sizeTier: "ADD_THIRD" });
     }
     expect(at(18, { technicals: flatEntry })).toMatchObject({ action: "START_POSITION" });
