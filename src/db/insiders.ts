@@ -16,13 +16,14 @@ export interface InsiderEvent {
   code: string;
   shares: number;
   value: number | null;
-  secUrl: string;
+  /** Null when the instrument has no CIK stored yet. */
+  secUrl: string | null;
 }
 
 type Row = Omit<InsiderEvent, "shares" | "value" | "secUrl"> & {
   shares: string;
   value: string | null;
-  cik: string;
+  cik: string | null;
 };
 
 /** Recent public SEC Form 4 activity for current universe names. */
@@ -36,7 +37,7 @@ export async function insiderEvents(ticker?: string, db: Pick<pg.Pool, "query"> 
        t.filed_at::text AS "filedAt", t.code, t.shares::text AS shares,
        (t.shares * t.price)::text AS value, ids.cik::text AS cik
      FROM insider_transactions t
-     JOIN instrument_ids ids ON ids.ticker = t.ticker AND ids.valid_to IS NULL AND ids.cik IS NOT NULL
+     LEFT JOIN instrument_ids ids ON ids.ticker = t.ticker AND ids.valid_to IS NULL
      WHERE t.display_allowed = true
        AND EXISTS (SELECT 1 FROM data_sources s WHERE s.id = 'sec' AND s.display_allowed = true)
        AND EXISTS (SELECT 1 FROM universe_membership m WHERE m.ticker = t.ticker
@@ -52,6 +53,6 @@ export async function insiderEvents(ticker?: string, db: Pick<pg.Pool, "query"> 
     ...row,
     shares: Number(shares),
     value: value === null ? null : Number(value),
-    secUrl: `https://www.sec.gov/Archives/edgar/data/${cik}/${row.accession.replaceAll("-", "")}/`,
+    secUrl: cik ? `https://www.sec.gov/Archives/edgar/data/${cik}/${row.accession.replaceAll("-", "")}/` : null,
   }));
 }

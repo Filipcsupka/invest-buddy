@@ -37,7 +37,7 @@ export function InsiderPanel({ locale, events, ticker }: { locale: Locale; event
           <td>{isCode(event.code) ? m.codes[event.code] : event.code}</td>
           <td className="num">{formatNumber(locale, event.shares, Number.isInteger(event.shares) ? 0 : 2)}</td>
           <td className="num">{event.value === null ? m.notReported : money.format(event.value)}</td>
-          <td><a href={event.secUrl} target="_blank" rel="noopener noreferrer" aria-label={`${m.openSec}: ${event.ticker}, ${formatDate(locale, event.filedAt)}`}>SEC</a></td>
+          <td>{event.secUrl ? <a href={event.secUrl} target="_blank" rel="noopener noreferrer" aria-label={`${m.openSec}: ${event.ticker}, ${formatDate(locale, event.filedAt)}`}>SEC</a> : null}</td>
         </tr>;
       })}</tbody>
     </table></div>}
