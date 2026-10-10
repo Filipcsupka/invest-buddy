@@ -39,3 +39,7 @@ test("an empty database gate exits extract and judge with zero model calls", asy
     assert.ok(requests.every((request) => request.includes("/api/ingest/gate")));
   } finally { await new Promise((resolve) => server.close(resolve)); }
 });
+
+test("gateTradingDay skips a market holiday", () => {
+  assert.equal(gateTradingDay("2026-11-27"), "2026-11-25");
+});

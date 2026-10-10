@@ -1,0 +1,10 @@
+export const NYSE_HOLIDAYS: string[];
+export const NYSE_EARLY_CLOSES: string[];
+export const CALENDAR_FIRST_DAY: string;
+export const CALENDAR_LAST_DAY: string;
+export function isSession(date: string): boolean;
+export function isEarlyClose(date: string): boolean;
+export function sessionsBetween(from: string, to: string): string[];
+export function previousSession(date: string): string;
+export function lastSessionOnOrBefore(date: string): string;
+export function lastCompletedSession(now?: Date): string;

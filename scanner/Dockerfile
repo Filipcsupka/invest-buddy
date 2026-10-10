@@ -16,7 +16,7 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-reco
     && npm install -g @anthropic-ai/claude-code @openai/codex && npm cache clean --force \
     && useradd --create-home --uid 10001 --shell /usr/sbin/nologin scanner
 WORKDIR /app/scanner
-COPY scanner/run-scan.mjs scanner/run-extract.mjs scanner/run-judge.mjs scanner/gate-db.mjs scanner/quotes.mjs scanner/extraction-log.mjs scanner/ai-budget.mjs scanner/anthropic-cutoff.mjs scanner/claude-usage.mjs scanner/validate.mjs scanner/compare.mjs scanner/figure-tokens.mjs scanner/universe.json ./
+COPY scanner/run-scan.mjs scanner/run-extract.mjs scanner/run-judge.mjs scanner/gate-db.mjs scanner/quotes.mjs scanner/extraction-log.mjs scanner/ai-budget.mjs scanner/anthropic-cutoff.mjs scanner/claude-usage.mjs scanner/validate.mjs scanner/compare.mjs scanner/figure-tokens.mjs scanner/trading-calendar.mjs scanner/universe.json ./
 COPY scanner/prompts ./prompts
 COPY scanner/schema ./schema
 RUN mkdir -p /app/scanner/out /home/scanner/.claude /home/scanner/.codex \
