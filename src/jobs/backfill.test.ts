@@ -137,7 +137,9 @@ dbDescribe("backfill_state (Postgres)", () => {
       const releaseA = await a.lock(JOB);
       expect(releaseA).not.toBeNull();
       expect(await b.lock(JOB)).toBeNull();
-      expect(await b.lock(`${JOB}-other`)).not.toBeNull();
+      const releaseOther = await b.lock(`${JOB}-other`);
+      expect(releaseOther).not.toBeNull();
+      await releaseOther!();
       await releaseA!();
       const releaseB = await b.lock(JOB);
       expect(releaseB).not.toBeNull();
