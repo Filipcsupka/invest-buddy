@@ -337,6 +337,7 @@ Owner decision 2026-10-09: the weeks to 2026-12-31 go to collecting data so hist
 
 ### Progress log
 - W10 (PR #121): `ADVICE_OUTPUT` off hides action, size and plan text, closes `/sizing` and `/ideas`, and keeps rule states and evidence visible; EN/SK route and render tests pass. Live proof follows merge.
+- D20 (#118, open; migration 045): Form 4 transactions are stored by accession and line, with a resumable SEC backfill. PostgreSQL parity, collector and resume tests pass; live migration and backfill await owner approval.
 - W34 (#111, open): the flagged scanner filters stored scores by score, sector, F/T/M, state, held status and source; the free row limit awaits W30 and the owner's plan decision.
 2026-10-09 and 2026-10-10 (all merged and live on the cluster, checked on the site and in the database):
 - Presentable web: #81 and #82. Banner hidden while the disclosure text is empty (`OPERATOR_DISCLOSURE_EN` and `_SK` set the text), no sample labels, `robots.txt`, real 404 for unknown tickers and disabled pages, Slovak labels instead of raw codes, a Slovak fallback label when a translation is missing, no more "AMD, AMD" title, og:image and favicon.
