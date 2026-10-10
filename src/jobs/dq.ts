@@ -80,7 +80,9 @@ export const hasFail = (rows: DqRow[]) => rows.some((r) => r.status === "fail");
 export async function loadInputs(db: Pick<pg.Pool, "query">, today: string): Promise<DqInput[]> {
   const result = await db.query<{ ticker: string; bar_date: string; open: string; high: string; low: string; close: string; volume: string }>(
     `SELECT i.ticker, b.bar_date::text AS bar_date, b.open, b.high, b.low, b.close, b.volume
-     FROM instruments i LEFT JOIN daily_bars b ON b.ticker = i.ticker AND b.bar_date >= $1::date - $2::int
+     FROM instruments i JOIN universe_membership m ON m.ticker=i.ticker
+       AND m.valid_from <= $1::date AND (m.valid_to IS NULL OR m.valid_to > $1::date)
+     LEFT JOIN daily_bars b ON b.ticker = i.ticker AND b.bar_date >= $1::date - $2::int
      ORDER BY i.ticker, b.bar_date`, [today, DQ_THRESHOLDS.lookbackDays]);
   const byTicker = new Map<string, OHLCV[]>();
   for (const r of result.rows) {

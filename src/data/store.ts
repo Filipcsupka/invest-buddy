@@ -24,16 +24,21 @@ const pool = getPool;
 async function latestScoresUncached(): Promise<StoreData<StoreRow[]>> {
   if (fixtureMode()) { const rows = await fixtureUniverse(); return { rows, sample: true, lastUpdated: rows[0]?.result.asOf ?? null, stale: false }; }
   const db = pool(); if (!db) return { rows: [], sample: false, lastUpdated: null, stale: false };
-  const result = await db.query<{ ticker: string; name: string; sector: string; tier: 1 | 2 | 3 | null; source: Instrument["source"]; audit: ScoreResult; as_of: string }>(`SELECT DISTINCT ON (s.ticker) s.ticker,i.name,i.sector,i.tier,i.source,s.audit,s.as_of::text FROM score_results s JOIN instruments i ON i.ticker=s.ticker WHERE s.audit ? 'scanRunId' ORDER BY s.ticker,s.as_of DESC`);
+  const result = await db.query<{ ticker: string; name: string; sector: string; tier: 1 | 2 | 3 | null; source: Instrument["source"]; audit: ScoreResult; as_of: string }>(`SELECT DISTINCT ON (s.ticker) s.ticker,i.name,i.sector,m.tier,i.source,s.audit,s.as_of::text FROM score_results s
+    JOIN instruments i ON i.ticker=s.ticker JOIN universe_membership m ON m.ticker=i.ticker
+    WHERE s.audit ? 'scanRunId' AND m.list <> 'benchmark' AND m.valid_from <= CURRENT_DATE
+      AND (m.valid_to IS NULL OR m.valid_to > CURRENT_DATE) ORDER BY s.ticker,s.as_of DESC`);
   const rows = result.rows.map((row) => ({ instrument: { ticker: row.ticker, name: row.name, sector: row.sector, tier: row.tier, source: row.source }, result: row.audit }));
   const lastUpdated = result.rows.map((row) => row.as_of).sort().at(-1) ?? null;
   return { rows, sample: false, lastUpdated, stale: stale(lastUpdated) };
 }
-/** Ticker universe: fixture instruments in fixture mode, otherwise the instruments table (benchmarks excluded). */
+/** Ticker universe: fixture instruments in fixture mode, otherwise current membership. */
 async function instrumentUniverseUncached(): Promise<Instrument[]> {
   if (fixtureMode()) return fixtureInstruments;
   const db = pool(); if (!db) return [];
-  const result = await db.query<Instrument>("SELECT ticker,name,sector,tier,source FROM instruments WHERE source <> 'benchmark' ORDER BY ticker");
+  const result = await db.query<Instrument>(`SELECT i.ticker,i.name,i.sector,m.tier,i.source FROM universe_membership m
+    JOIN instruments i ON i.ticker=m.ticker WHERE m.list <> 'benchmark' AND m.valid_from <= CURRENT_DATE
+    AND (m.valid_to IS NULL OR m.valid_to > CURRENT_DATE) ORDER BY i.ticker`);
   return result.rows;
 }
 export async function scoreHistory(): Promise<StoreData<StoreRow[]>> {

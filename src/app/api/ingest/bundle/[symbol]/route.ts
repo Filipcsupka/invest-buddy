@@ -25,7 +25,8 @@ async function getHandler(request: Request, context: { params: Promise<{ symbol:
   if (!isIsoDate(asOf)) return Response.json({ error: "asOf must be YYYY-MM-DD" }, { status: 400 });
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
   try {
-    const known = await pool.query("SELECT 1 FROM instruments WHERE ticker=$1 AND source <> 'benchmark'", [symbol]);
+    const known = await pool.query(`SELECT 1 FROM universe_membership WHERE ticker=$1 AND list <> 'benchmark'
+      AND valid_from <= $2::date AND (valid_to IS NULL OR valid_to > $2::date) LIMIT 1`, [symbol, asOf]);
     if (!known.rows.length) return Response.json({ error: "Unknown symbol" }, { status: 404 });
     return Response.json(await buildBundle(pool, symbol, days, new Date(), undefined, asOf));
   }

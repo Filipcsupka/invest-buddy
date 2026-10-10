@@ -17,5 +17,5 @@ it("requires ingest authentication and returns database additions", async () => 
   const response = await GET(new Request("http://localhost/api/ingest/universe", { headers: { authorization: "Bearer secret" } }));
   expect(response.status).toBe(200);
   expect(await response.json()).toEqual({ instruments: [{ symbol: "F7ZZ", name: "New Company", sector: "Biotech", tier: null }] });
-  expect(query).toHaveBeenCalledWith(expect.stringContaining("FROM instruments WHERE source <> 'benchmark'"));
+  expect(query).toHaveBeenCalledWith(expect.stringContaining("FROM universe_membership m"), [null]);
 });

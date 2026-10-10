@@ -37,8 +37,12 @@ export class DatabaseUniverseProvider implements UniverseProvider {
     });
   }
   async instruments(): Promise<Instrument[]> {
-    const rows = await this.pool.query<Instrument & { ticker: string }>(`SELECT DISTINCT i.ticker,i.name,i.sector,i.tier,i.source FROM instruments i
-      JOIN consensus_findings c ON c.symbol=i.ticker WHERE ($1::date IS NULL OR c.as_of <= $1) ORDER BY i.ticker`, [this.asOf ?? null]);
+    const rows = await this.pool.query<Instrument & { ticker: string }>(`SELECT DISTINCT i.ticker,i.name,i.sector,m.tier,i.source FROM instruments i
+      JOIN universe_membership m ON m.ticker=i.ticker
+      JOIN consensus_findings c ON c.symbol=i.ticker
+      WHERE m.list <> 'benchmark' AND m.valid_from <= COALESCE($1::date,CURRENT_DATE)
+        AND (m.valid_to IS NULL OR m.valid_to > COALESCE($1::date,CURRENT_DATE))
+        AND ($1::date IS NULL OR c.as_of <= $1) ORDER BY i.ticker`, [this.asOf ?? null]);
     return rows.rows.map((row) => ({ ...row }));
   }
   async bars(ticker: string): Promise<OHLCV[]> {

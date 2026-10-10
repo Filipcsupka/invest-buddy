@@ -34,11 +34,13 @@ export async function hasOkExtraction(pool: Pick<pg.Pool, "query">, key: { symbo
 /** Stale reviews first, rotated by the latest extraction attempt so failures cannot starve other symbols. */
 export async function reviewDueSymbols(pool: Pick<pg.Pool, "query">, days: number, limit: number): Promise<string[]> {
   const result = await pool.query<{ ticker: string }>(`SELECT i.ticker FROM instruments i
+    JOIN universe_membership m ON m.ticker=i.ticker AND m.list <> 'benchmark'
+      AND m.valid_from <= CURRENT_DATE AND (m.valid_to IS NULL OR m.valid_to > CURRENT_DATE)
     LEFT JOIN LATERAL (SELECT max(as_of) AS reviewed_at FROM extraction_runs e
       WHERE e.symbol=i.ticker AND e.status='ok' AND e.applied_at IS NOT NULL) r ON true
     LEFT JOIN LATERAL (SELECT max(as_of) AS judged_at FROM trade_ideas t WHERE t.symbol=i.ticker) j ON true
     LEFT JOIN LATERAL (SELECT max(created_at) AS attempted_at FROM extraction_runs e WHERE e.symbol=i.ticker) a ON true
-    WHERE i.source <> 'benchmark' AND (r.reviewed_at IS NULL OR j.judged_at IS NULL
+    WHERE (r.reviewed_at IS NULL OR j.judged_at IS NULL
       OR r.reviewed_at < current_date - $1::integer OR j.judged_at < current_date - $1::integer)
     ORDER BY a.attempted_at NULLS FIRST, LEAST(r.reviewed_at,j.judged_at) NULLS FIRST, i.ticker LIMIT $2`, [days, limit]);
   return result.rows.map((row) => row.ticker);

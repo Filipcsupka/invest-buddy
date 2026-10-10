@@ -111,6 +111,7 @@ describe("dq storage", () => {
     try {
       await pool.query("BEGIN");
       await pool.query("INSERT INTO instruments (ticker,name,sector,tier,source) VALUES ('ZZQ','t','t',1,'guide')");
+      await pool.query("INSERT INTO universe_membership(ticker,list,tier,valid_from,reason,criteria_version,added_by) VALUES ('ZZQ','core',1,'2026-10-09','Test','v1','test')");
       const inputs = await loadInputs(pool, "2026-10-10");
       expect(inputs.find((i) => i.ticker === "ZZQ")).toEqual({ ticker: "ZZQ", bars: [] });
     } finally { await pool.query("ROLLBACK"); await pool.end(); }

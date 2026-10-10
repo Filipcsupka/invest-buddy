@@ -100,7 +100,7 @@ describe("one request", () => {
     const rows = await scoredUniverse();
     const row = rows.find((r) => r.instrument.ticker === instruments[0].ticker)!;
     handler = (sql) => {
-      if (sql.includes("FROM instruments WHERE source")) return { rows: [row.instrument] };
+      if (sql.includes("FROM universe_membership m")) return { rows: [row.instrument] };
       if (sql.includes("DISTINCT ON (s.ticker)")) return { rows: [{ ...row.instrument, audit: row.result, as_of: row.result.asOf }] };
       return { rows: [] };
     };
@@ -112,7 +112,7 @@ describe("one request", () => {
     expect(html).toContain(row.instrument.ticker);
     expect(pools).toHaveLength(1);
     expect(sqlSeen.filter((sql) => sql.includes("DISTINCT ON (s.ticker)"))).toHaveLength(1);
-    expect(sqlSeen.filter((sql) => sql.includes("FROM instruments WHERE source"))).toHaveLength(1);
+    expect(sqlSeen.filter((sql) => sql.includes("FROM universe_membership m"))).toHaveLength(1);
     expect(pools[0].end).not.toHaveBeenCalled();
   });
 });

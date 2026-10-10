@@ -110,8 +110,11 @@ export function signalsFor(symbols: JudgeSymbol[], portfolio: JudgeInput["portfo
 export async function buildJudgeInput(pool: Pick<pg.Pool, "query">, asOf: string, now = new Date(), maxSymbols = DEFAULT_MAX_SYMBOLS, requested: string[] = []): Promise<JudgeInput> {
   const baseline = await latestBaseline(pool, asOf);
   const previous = await latestIdeaPerSymbol(pool);
-  const scores = await pool.query<ScoreRow>(`SELECT DISTINCT ON (s.ticker) s.ticker, i.name, i.sector, i.tier, s.audit FROM score_results s JOIN instruments i ON i.ticker=s.ticker
-    WHERE s.as_of <= $1 AND s.as_of >= ($1::date - 10) ORDER BY s.ticker, s.as_of DESC`, [asOf]);
+  const scores = await pool.query<ScoreRow>(`SELECT DISTINCT ON (s.ticker) s.ticker, i.name, i.sector, m.tier, s.audit FROM score_results s
+    JOIN instruments i ON i.ticker=s.ticker JOIN universe_membership m ON m.ticker=i.ticker
+    WHERE s.as_of <= $1 AND s.as_of >= ($1::date - 10) AND m.list <> 'benchmark'
+      AND m.valid_from <= $1::date AND (m.valid_to IS NULL OR m.valid_to > $1::date)
+    ORDER BY s.ticker, s.as_of DESC`, [asOf]);
   const held = new Set((baseline?.positions ?? []).map((p) => p.symbol));
   const picked = pickSymbols(scores.rows, held, new Set(previous.map((p) => p.symbol)), maxSymbols, new Set(requested));
   const tickers = picked.map((r) => r.ticker);
