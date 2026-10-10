@@ -5,6 +5,9 @@ import { companyCiks } from "../collectors/edgar";
 import { getText } from "../collectors/http";
 import { requireSecUserAgent } from "../collectors/sec-user-agent";
 import { loadStoredCiks, loadVendorSymbols, resolveCik } from "../data/security-master";
+import { collectCompanyfacts } from "../collectors/sources/companyfacts";
+import { defaultHttp } from "../collectors/sources/client";
+import { PostgresUsageLedger } from "../data/usage";
 
 export interface WatchedFiling { cik: number; symbol: string; accession: string; form: string; items: string; filedAt: string }
 export interface RecentFilings { form: string[]; accessionNumber: string[]; filingDate: string[]; items?: string[] }
@@ -28,9 +31,10 @@ async function main() {
   requireSecUserAgent(process.env.SEC_USER_AGENT);
   const ciks = await companyCiks();
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
-  let count = 0, missing = 0;
+  let count = 0, missing = 0, fundamentals = 0;
   try {
     const stored = await loadStoredCiks(pool), secSymbols = await loadVendorSymbols(pool, "sec");
+    const ledger = new PostgresUsageLedger(pool), http = defaultHttp();
     for (const company of await loadUniverse(pool)) {
       const cik = resolveCik(company.symbol, stored, ciks, secSymbols);
       if (!cik) { process.stderr.write(`${company.symbol}: no CIK\n`); missing++; continue; }
@@ -38,11 +42,23 @@ async function main() {
       const json = JSON.parse(await getText(url)) as { filings: { recent: RecentFilings } };
       const added = await storeWatchRows(pool, submissionRows(company.symbol, cik, json.filings.recent));
       count += added.length;
+      const latestFinancial = submissionRows(company.symbol, cik, json.filings.recent)
+        .find((row) => /^(10-Q|10-K)(\/A)?$/.test(row.form));
+      if (latestFinancial) {
+        const processed = await pool.query("SELECT 1 FROM fundamentals_refresh WHERE ticker=$1 AND accession=$2", [company.symbol, latestFinancial.accession]);
+        if (!processed.rowCount) {
+          await ledger.reserve("sec", 1, { job: "watch:companyfacts" });
+          const result = await collectCompanyfacts(pool, http, company.symbol, cik);
+          if (result.accessions.includes(latestFinancial.accession))
+            await pool.query("INSERT INTO fundamentals_refresh (ticker,accession) VALUES ($1,$2) ON CONFLICT DO NOTHING", [company.symbol, latestFinancial.accession]);
+          fundamentals += result.inserted;
+        }
+      }
       process.stdout.write(`${company.symbol}: ${added.length ? added.map((r) => `${r.form} ${r.accession}`).join(", ") : "none"}\n`);
     }
   } finally { await pool.end(); }
-  process.stdout.write(`watch: ${count} new filings\n`);
+  process.stdout.write(`watch: ${count} new filings, ${fundamentals} fundamentals\n`);
   if (missing) process.exitCode = 1;
-  return { filings: count, missingCiks: missing, failures: missing };
+  return { filings: count, fundamentals, missingCiks: missing, failures: missing };
 }
 if (/(?:^|[/\\])watch\.(?:ts|js)$/.test(process.argv[1] ?? "")) void runLoggedJob("watch", main);

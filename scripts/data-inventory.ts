@@ -16,6 +16,7 @@ export const INVENTORY_TABLES: { table: string; dateColumn: string | null }[] = 
   { table: "source_documents", dateColumn: "published_at" },
   { table: "collected_facts", dateColumn: "as_of" },
   { table: "raw_snapshots", dateColumn: "fetched_at" },
+  { table: "fundamentals_pit", dateColumn: "filed" },
   { table: "collector_runs", dateColumn: "started_at" },
   { table: "scan_runs", dateColumn: null },
   { table: "scan_findings", dateColumn: null },

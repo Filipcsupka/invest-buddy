@@ -163,11 +163,15 @@ export function parseBackfillArgs(args: string[]): BackfillArgs {
 
 async function main() {
   const args = parseBackfillArgs(process.argv.slice(2));
-  const factory = registry.get(args.job);
-  if (!factory) throw new Error(`Unknown backfill job: ${args.job}. Registered: ${registeredBackfillJobs().join(", ") || "none"}`);
   if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required");
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
   try {
+    if (args.job === "companyfacts") {
+      const { createCompanyfactsBackfillJob } = await import("./companyfacts");
+      registerBackfillJob("companyfacts", () => createCompanyfactsBackfillJob(pool));
+    }
+    const factory = registry.get(args.job);
+    if (!factory) throw new Error(`Unknown backfill job: ${args.job}. Registered: ${registeredBackfillJobs().join(", ") || "none"}`);
     const result = await runBackfill(factory(), new PostgresBackfillStore(pool), new PostgresUsageLedger(pool), { only: args.only, maxRequests: args.maxRequests, dryRun: args.dryRun });
     if (result.plan) process.stdout.write(`Backfill ${args.job} (dry run, nothing stored): ${result.plan.length} subject(s) to process\n`);
     else process.stdout.write(`Backfill ${args.job}: ${result.status}, ${result.requests} request(s), ${result.subjectsDone} subject(s) finished${result.reason ? ` (${result.reason})` : ""}\n`);

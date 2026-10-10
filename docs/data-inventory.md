@@ -31,6 +31,10 @@ Tables the report covers that have no baseline row above: `discovery_candidates`
 
 Running the script on the live database once would add the per-table sizes, which the 2026-10-09 baseline does not have.
 
+## SEC companyfacts dry run, 2026-10-10
+
+A read-only HTTP pass fetched companyfacts for all 36 universe symbols through the SEC ticker map. The 36 JSON responses totalled 97,688,664 bytes before compression. All symbols resolved, all requests succeeded, and the largest response was MSFT at 4,881,196 bytes, below the raw snapshot store's 20 MiB limit. This measures source payloads; it does not measure database storage or rows written.
+
 ## Terms requests
 
 Drafts are in `docs/terms-requests.md`. The owner fills the dates; an answer is followed by a PR that updates the matching `data_sources` row.
