@@ -84,7 +84,7 @@ describe("collectors", () => {
     const result = await runCollect(repo, ["NVDA"], { since: "2026-09-01", sources: ["edgar", "rss"], get: flaky, now: () => new Date("2026-10-05T12:00:00Z") });
     expect(result.succeeded).toBe(1);
     expect(result.stoppedReason).toBeNull();
-    expect(result.failures).toEqual([{ ticker: "rss", reason: "The operation was aborted due to timeout" }]);
+    expect(result.failures).toEqual([{ ticker: "rss", reason: "globenewswire: The operation was aborted due to timeout" }]);
     expect(result.exitCode).toBe(0);
     expect([...repo.documents.values()].some((doc) => doc.source === "edgar")).toBe(true);
   });
@@ -121,7 +121,7 @@ describe("collectors", () => {
     const options = { since: "2026-09-01", sources: ["edgar", "rss"], get, now: () => new Date("2026-10-05T12:00:00Z") };
     const first = await runCollect(repo, ["NVDA"], options);
     const second = await runCollect(repo, ["NVDA"], options);
-    expect(first.documentsWritten).toBe(4);
+    expect(first.documentsWritten).toBe(5);
     expect(second.documentsWritten).toBe(0);
     expect(second.factsWritten).toBe(0);
     expect([...repo.facts.values()].find((fact) => fact.key === "insider_net_buy_90d")?.value).toEqual({ netShares: 60, netDollars: 520 });
@@ -153,7 +153,7 @@ describe("collectors", () => {
   it("writes nothing in dry-run mode", async () => {
     const repo = new MemoryCollectorRepository();
     const result = await runCollect(repo, ["NVDA"], { since: "2026-09-01", get, dryRun: true, now: () => new Date("2026-10-05T12:00:00Z") });
-    expect(result.documentsParsed).toBe(4);
+    expect(result.documentsParsed).toBe(5);
     expect(repo.documents.size).toBe(0);
     expect(repo.facts.size).toBe(0);
     expect(repo.runs).toHaveLength(0);

@@ -57,7 +57,7 @@ describe("collector tables (Postgres)", () => {
     await repo.upsertDocument({ ...base, source: "sec-13f", sourceId: "sec", docType: "13F holdings summary", url: "https://www.sec.gov/p4", meta: { display_allowed: true } });
     const docs = await pool.query<{ source: string; source_id: string; licence_class: string; display_allowed: boolean }>("SELECT source, source_id, licence_class, display_allowed FROM source_documents WHERE url LIKE 'https://www.sec.gov/p%' OR url = 'https://www.alphavantage.co/p2' OR url = 'https://example.com/p3' ORDER BY url");
     expect(Object.fromEntries(docs.rows.map((row) => [row.source, [row.source_id, row.licence_class, row.display_allowed]]))).toEqual({
-      edgar: ["sec", "public_gov", true], "sec-13f": ["sec", "public_gov", true], alphavantage: ["alphavantage", "internal_only", false], gdelt: ["gdelt", "unknown", false],
+      edgar: ["sec", "public_gov", true], "sec-13f": ["sec", "public_gov", true], alphavantage: ["alphavantage", "internal_only", false], gdelt: ["gdelt", "public_attrib", false],
     });
 
     await repo.upsertFact({ symbol: "NVDA", key: EPS_FACT_KEY, asOf: "2026-10-01", value: { a: 1 }, documentIds: [] });

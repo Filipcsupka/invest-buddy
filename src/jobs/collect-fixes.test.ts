@@ -128,7 +128,7 @@ describe("M6 SEC 403 is a lockout", () => {
 
 describe("M7 host allow-list", () => {
   it("allows exactly the hosts the collectors use", () => {
-    expect([...ALLOWED_HOSTS].sort()).toEqual(["api.stlouisfed.org", "data.sec.gov", "www.globenewswire.com", "www.sec.gov"]);
+    expect([...ALLOWED_HOSTS].sort()).toEqual(["api.stlouisfed.org", "data.sec.gov", "www.globenewswire.com", "www.prnewswire.com", "www.sec.gov"]);
   });
   it.each([
     "https://169.254.169.254/latest/meta-data", "https://internal.example/x", "https://evil.sec.gov.example/x", "https://www.sec.gov:8443/x",

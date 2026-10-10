@@ -1,9 +1,15 @@
 import { XMLParser } from "fast-xml-parser";
 import { plainText, type CollectedDocument } from "./types";
 import { LICENSES, sourceDocument } from "./sources/common";
-import { getText } from "./http";
+import { getText, RateLimitLockout } from "./http";
 
 export const GLOBE_NEWSWIRE_FEED = "https://www.globenewswire.com/rssfeed";
+export const PR_NEWSWIRE_FEED = "https://www.prnewswire.com/rss/news-releases-list.rss";
+/** Press-release wires, tried in this order. GlobeNewswire answers 403 or times out from some networks (cluster: 15 s timeouts), so it is no longer the only one. */
+export const RSS_FEEDS: readonly { id: string; url: string }[] = [
+  { id: "prnewswire", url: PR_NEWSWIRE_FEED },
+  { id: "globenewswire", url: GLOBE_NEWSWIRE_FEED },
+];
 export interface Company { symbol: string; name: string }
 const ambiguousTickers = new Set(["NOW", "NET", "SE", "SHOP", "SNOW", "META"]);
 const ambiguousNames: Record<string, RegExp> = {
@@ -34,6 +40,25 @@ export function parseRss(xml: string, companies: Company[], since: string): Coll
   }
   return out;
 }
+export interface RssResult { documents: CollectedDocument[]; failures: { feed: string; reason: string }[]; attempted: number }
+/** Reads every feed on its own. One dead feed is a failure entry, not an error; a 429 lockout still stops the run. Releases seen in two feeds are kept once, by URL. */
+export async function collectRssFeeds(companies: Company[], since: string, get = getText, feeds = RSS_FEEDS): Promise<RssResult> {
+  const documents = new Map<string, CollectedDocument>();
+  const failures: RssResult["failures"] = [];
+  for (const feed of feeds) {
+    try {
+      for (const doc of parseRss(await get(feed.url), companies, since)) if (!documents.has(doc.url)) documents.set(doc.url, doc);
+    } catch (error) {
+      if (error instanceof RateLimitLockout) throw error;
+      failures.push({ feed: feed.id, reason: error instanceof Error ? error.message : String(error) });
+    }
+  }
+  return { documents: [...documents.values()], failures, attempted: feeds.length };
+}
+export const describeRssFailures = (failures: RssResult["failures"]) => failures.map((failure) => `${failure.feed}: ${failure.reason}`).join("; ");
+/** Throws only when every feed failed. */
 export async function collectRss(companies: Company[], since: string, get = getText): Promise<CollectedDocument[]> {
-  return parseRss(await get(GLOBE_NEWSWIRE_FEED), companies, since);
+  const result = await collectRssFeeds(companies, since, get);
+  if (result.failures.length === result.attempted) throw new Error(`All RSS feeds failed: ${describeRssFailures(result.failures)}`);
+  return result.documents;
 }

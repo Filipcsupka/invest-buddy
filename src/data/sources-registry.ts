@@ -38,8 +38,8 @@ export const DATA_SOURCES: readonly DataSource[] = [
     termsUrl: "https://www.sec.gov/about/webmaster-frequently-asked-questions", termsCheckedOn: CHECKED,
     rateLimitNote: "Max 10 requests per second, declared User-Agent required; our code stays under 5 per second.",
     notes: "US government data from SEC EDGAR, public." }),
-  source({ id: "rss", name: "GlobeNewswire RSS", kind: "news", licenceClass: "unknown",
-    notes: "GlobeNewswire feed text. Redistribution terms not checked; internal signal only." }),
+  source({ id: "rss", name: "Press-release RSS (PR Newswire, GlobeNewswire)", kind: "news", licenceClass: "unknown",
+    notes: "Press-release wire feeds. PR Newswire feed read 2026-10-10 (HTTP 200 in 0.3 s); GlobeNewswire answers 403 here and timed out from the cluster. Redistribution terms of both not checked; internal signal only." }),
   source({ id: "fred", name: "FRED API", kind: "macro", licenceClass: "public_attrib", termsUrl: "https://fred.stlouisfed.org/docs/api/terms_of_use.html", termsCheckedOn: CHECKED,
     attributionText: "This product uses the FRED API but is not endorsed or certified by the Federal Reserve Bank of St. Louis",
     notes: "FRED series. Terms of the underlying data not checked; internal signal only. This product uses the FRED API but is not endorsed or certified by the Federal Reserve Bank of St. Louis. Series with a Copyright note need the owner's permission; terms do not address storage or redisplay." }),
@@ -57,7 +57,9 @@ export const DATA_SOURCES: readonly DataSource[] = [
     notes: "Cboe file. Any use of Cboe content needs advance approval and a signed licence (use-of-content page, read 2026-10-09); internal signal only." }),
   source({ id: "gnews", name: "Google News RSS", kind: "news", licenceClass: "internal_only", termsCheckedOn: CHECKED,
     notes: "Google News feed. Feed text allows only personal, non-commercial use in a feed reader. Internal signal only." }),
-  source({ id: "gdelt", name: "GDELT DOC 2.0", kind: "news", licenceClass: "unknown", notes: "GDELT DOC 2.0. Terms of use not checked; internal signal only." }),
+  source({ id: "gdelt", name: "GDELT DOC 2.0", kind: "news", licenceClass: "public_attrib", termsUrl: "https://www.gdeltproject.org/about.html", termsCheckedOn: "2026-10-10",
+    attributionText: "Source: The GDELT Project (https://www.gdeltproject.org/)", rateLimitNote: "One request per 5 seconds; answers took 11 to 19 s on 2026-10-05.",
+    notes: "GDELT datasets are free for any commercial use; redistribution allowed with a citation and a link to gdeltproject.org (about page, read 2026-10-10). The terms cover GDELT's own data, not the outlets' headline text, so display stays off. Metadata only: headline, link, outlet, time, tickers." }),
   source({ id: "openfigi", name: "OpenFIGI", kind: "reference", licenceClass: "unknown", termsUrl: "https://www.openfigi.com/api/documentation", termsCheckedOn: CHECKED,
     rateLimitNote: "25 mapping requests per minute without key, 25 per 6 seconds with key.", notes: "OpenFIGI mapping used only to link CUSIPs to tickers; terms not checked." }),
   source({ id: "alphavantage", name: "Alpha Vantage", kind: "fundamentals", licenceClass: "internal_only", termsUrl: "https://www.alphavantage.co/terms_of_service/", termsCheckedOn: CHECKED,
@@ -118,7 +120,20 @@ export function licenseFor(id: string): { license_note: string; display_allowed:
 const sql = (value: string | number | boolean | null) => value === null ? "NULL" : typeof value === "number" ? String(value) : typeof value === "boolean" ? String(value) : `'${value.replace(/'/g, "''")}'`;
 
 /** The INSERT in `migrations/022_data_sources.sql`. A test compares the file to this text. */
-export function seedSql(): string {
-  const rows = DATA_SOURCES.map((s) => `  (${[s.id, s.name, s.kind, s.licenceClass, s.displayAllowed, s.redistributionAllowed, s.termsUrl, s.termsCheckedOn, s.attributionText, s.rateLimitNote, s.dailyCap, s.monthlyCostCapEur, s.notes].map(sql).join(", ")})`);
+export function seedSql(sources: readonly DataSource[] = DATA_SOURCES): string {
+  const rows = sources.map((s) => `  (${[s.id, s.name, s.kind, s.licenceClass, s.displayAllowed, s.redistributionAllowed, s.termsUrl, s.termsCheckedOn, s.attributionText, s.rateLimitNote, s.dailyCap, s.monthlyCostCapEur, s.notes].map(sql).join(", ")})`);
   return `INSERT INTO data_sources (id, name, kind, licence_class, display_allowed, redistribution_allowed, terms_url, terms_checked_on, attribution_text, rate_limit_note, daily_cap, monthly_cost_cap_eur, notes) VALUES\n${rows.join(",\n")}\nON CONFLICT (id) DO NOTHING;\n`;
+}
+
+/** `UPDATE` statements that bring existing rows to the registry values. Migration 042 uses this for `rss` and `gdelt`; a test compares the file to this text. */
+/** UPDATE statements for later registry changes. Caps stay out: migration 025 and the usage ledger own daily_cap and monthly_cost_cap_eur. */
+export function updateSql(ids: readonly string[]): string {
+  return ids.map((id) => {
+    const s = BY_ID.get(id);
+    if (!s) throw new Error(`unknown data source: ${id}`);
+    const set = Object.entries({ name: s.name, kind: s.kind, licence_class: s.licenceClass, display_allowed: s.displayAllowed, redistribution_allowed: s.redistributionAllowed, terms_url: s.termsUrl,
+      terms_checked_on: s.termsCheckedOn, attribution_text: s.attributionText, rate_limit_note: s.rateLimitNote, notes: s.notes })
+      .map(([column, value]) => `${column} = ${sql(value)}`).join(",\n  ");
+    return `UPDATE data_sources SET\n  ${set}\nWHERE id = ${sql(id)};\n`;
+  }).join("\n");
 }

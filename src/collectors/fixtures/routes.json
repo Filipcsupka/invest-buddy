@@ -4,6 +4,7 @@
   "https://data.sec.gov/submissions/CIK0001045810.json": "nvda_submissions.json",
   "https://data.sec.gov/submissions/CIK0000937966.json": "asml_submissions.json",
   "https://www.globenewswire.com/rssfeed": "globenewswire.xml",
+  "https://www.prnewswire.com/rss/news-releases-list.rss": "prnewswire.xml",
   "https://www.sec.gov/Archives/edgar/data/1045810/000104581026000001/index.json": "nvda_8k_index.json",
   "https://www.sec.gov/Archives/edgar/data/1045810/000104581026000001/form8k.htm": "nvda_8k_primary.html",
   "https://www.sec.gov/Archives/edgar/data/1045810/000104581026000001/ex99-1.htm": "nvda_earnings.html",

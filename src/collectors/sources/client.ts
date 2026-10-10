@@ -37,7 +37,7 @@ export interface HttpDeps {
 /** Every host the A2 sources call, and nothing else. Redirects are checked against it on every hop. */
 export const SOURCE_HOSTS: readonly string[] = [
   "www.sec.gov", "data.sec.gov", // getcurrent, frames, 13F, company tickers, EDGAR ping
-  "www.globenewswire.com", "api.stlouisfed.org", // rss and fred pings
+  "www.globenewswire.com", "www.prnewswire.com", "api.stlouisfed.org", // rss and fred pings
   "api.openfigi.com", "api.fda.gov", "clinicaltrials.gov", "api.usaspending.gov", "www.federalreserve.gov",
   "api.fiscaldata.treasury.gov", "api.bls.gov", "news.google.com", "api.gdeltproject.org",
   "cdn.cboe.com", "cdn-api.cboe.com", // VIX file redirects from the first to the second

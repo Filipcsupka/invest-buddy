@@ -1,5 +1,5 @@
 import { XMLParser } from "fast-xml-parser";
-import { GLOBE_NEWSWIRE_FEED } from "../rss";
+import { RSS_FEEDS } from "../rss";
 import { defaultHttp, type SourceHttp } from "./client";
 import { parseJson, PING_REQUEST, runPing, type PingResult, type Env } from "./common";
 
@@ -14,10 +14,17 @@ export const pingEdgar = (http: SourceHttp = defaultHttp(), env: Env = process.e
 }, { sec: true, env });
 
 export const pingRss = (http: SourceHttp = defaultHttp()): Promise<PingResult> => runPing("rss", async () => {
-  const channel = new XMLParser({ ignoreAttributes: false }).parse(await http.get(GLOBE_NEWSWIRE_FEED, PING_REQUEST)).rss?.channel;
-  const items = channel?.item ? (Array.isArray(channel.item) ? channel.item : [channel.item]) : [];
-  if (!items.length) throw new Error("feed parsed but has no items");
-  return `${items.length} items`;
+  const results = await Promise.all(RSS_FEEDS.map(async (feed) => {
+    try {
+      const channel = new XMLParser({ ignoreAttributes: false }).parse(await http.get(feed.url, PING_REQUEST)).rss?.channel;
+      const items = channel?.item ? (Array.isArray(channel.item) ? channel.item : [channel.item]) : [];
+      if (!items.length) throw new Error("feed parsed but has no items");
+      return { feed: feed.id, ok: true, text: `${feed.id} ${items.length} items` };
+    } catch (error) { return { feed: feed.id, ok: false, text: `${feed.id} failed: ${error instanceof Error ? error.message : String(error)}` }; }
+  }));
+  // The source is healthy when at least one wire answers; a dead feed shows in the detail.
+  if (!results.some((result) => result.ok)) throw new Error(results.map((result) => result.text).join("; "));
+  return results.map((result) => result.text).join("; ");
 });
 
 export const pingFred = (http: SourceHttp = defaultHttp(), env: Env = process.env): Promise<PingResult> => runPing("fred", async () => {
