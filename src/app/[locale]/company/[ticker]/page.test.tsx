@@ -6,16 +6,16 @@ const scores = vi.fn();
 const idea = vi.fn();
 const review = vi.fn();
 const portfolio = vi.fn();
-const eurOn = vi.fn();
+const originalAdvice = process.env.ADVICE_OUTPUT;
 vi.mock("@/data/store", () => ({ instrumentUniverse: () => universe(), latestScores: () => scores(), latestPortfolio: () => portfolio() }));
-vi.mock("@/data/ideas-store", () => ({ companyIdea: () => idea(), companyReview: () => review(), ideasEnabled: () => eurOn() }));
+vi.mock("@/data/ideas-store", () => ({ companyIdea: () => idea(), companyReview: () => review() }));
 
 import Company, * as page from "./page";
 import { instruments } from "@/data/fixtures";
 import { scoredUniverse } from "@/data/scored";
 import { sampleIdeas } from "@/ideas/fixtures";
 
-afterEach(() => { universe.mockReset(); scores.mockReset(); idea.mockReset(); review.mockReset(); review.mockResolvedValue(null); eurOn.mockReset(); portfolio.mockReset(); portfolio.mockResolvedValue(null); });
+afterEach(() => { universe.mockReset(); scores.mockReset(); idea.mockReset(); review.mockReset(); review.mockResolvedValue(null); portfolio.mockReset(); portfolio.mockResolvedValue(null); if (originalAdvice === undefined) delete process.env.ADVICE_OUTPUT; else process.env.ADVICE_OUTPUT = originalAdvice; });
 const props = (ticker: string, locale = "en") => ({ params: Promise.resolve({ locale, ticker }) });
 const dbInstrument = { ticker: "ZZZZ", name: "Zed Corp", sector: "Cloud & SaaS", tier: null, source: "guide" as const };
 
@@ -105,12 +105,12 @@ describe("company page", () => {
     expect(html).toContain('href="/en/company/YYYY"');
   });
 
-  async function render(opts: { sample: boolean; locale?: string; idea?: unknown; eur?: boolean }) {
+  async function render(opts: { sample: boolean; locale?: string; idea?: unknown; advice?: boolean }) {
+    process.env.ADVICE_OUTPUT = opts.advice === false ? "off" : "on";
     const rows = (await scoredUniverse()).slice(0, 1);
     universe.mockResolvedValue([rows[0].instrument]);
     scores.mockResolvedValue({ rows, sample: opts.sample, lastUpdated: "2026-10-05", stale: false });
     idea.mockResolvedValue(opts.idea ?? null);
-    eurOn.mockReturnValue(opts.eur ?? false);
     portfolio.mockResolvedValue(null);
     return renderToStaticMarkup(await Company(props(rows[0].instrument.ticker, opts.locale)));
   }
@@ -138,7 +138,6 @@ describe("company page", () => {
       universe.mockResolvedValue([row.instrument]);
       scores.mockResolvedValue({ rows: [{ ...row, result }], sample: false, lastUpdated: "2026-10-05", stale: false });
       idea.mockResolvedValue(null);
-      eurOn.mockReturnValue(false);
       portfolio.mockResolvedValue(null);
       return renderToStaticMarkup(await Company(props(row.instrument.ticker, locale)));
     }
@@ -182,6 +181,15 @@ describe("company page", () => {
   describe("latest idea card", () => {
     const [add, watch] = sampleIdeas;
     const withIdea = (i: typeof add, extra = {}) => ({ idea: { ...i, ...extra }, sample: false });
+    it.each(["en", "sk"])("shows only rule state and evidence when advice is off in %s", async (locale) => {
+      const html = await render({ sample: false, locale, idea: withIdea(add), advice: false });
+      expect(html).toContain(locale === "en" ? "Evidence" : "Dôkazy");
+      expect(html).toContain('href="https://example.com/nvda-release"');
+      expect(html).toContain("Sample earnings release · example.com");
+      expect(html).not.toMatch(/Add about|Add 1\/3|Start position|Amount now|Opportunity cost|Prikúpiť|Otvoriť pozíciu|Príležitosť/);
+      expect(html).not.toContain("data-action=");
+      expect(html).not.toContain("data-tier=");
+    });
     it("shows a WATCH idea with plan, badges and date", async () => {
       const html = await render({ sample: false, idea: withIdea(watch) });
       expect(html).toContain("Latest trade idea");
@@ -202,15 +210,10 @@ describe("company page", () => {
       expect(html).toContain("No trade idea for this stock yet");
       expect(html).not.toContain("Informational screening output");
     });
-    it("shows no EUR amount in any field while the flag is off", async () => {
-      const html = await render({ sample: false, eur: false, idea: withIdea(add) });
-      expect(html).toContain("NVDA - Add");
+    it("shows no EUR amount in public action output", async () => {
+      const html = await render({ sample: false, idea: withIdea(add) });
+      expect(html).toContain("NVDA - Add 1/3");
       expect(html).not.toMatch(/EUR|€|Amount now/);
-    });
-    it("shows the band and amount when the flag is on", async () => {
-      const html = await render({ sample: false, eur: true, idea: withIdea(add) });
-      expect(html).toContain("NVDA - Add - EUR 60-90");
-      expect(html).toContain("Amount now");
     });
     it("renders in Slovak", async () => {
       const html = await render({ sample: false, locale: "sk", idea: withIdea(add) });

@@ -20,6 +20,7 @@ export function flags(env: Record<string, string | undefined> = process.env): Fl
     AUTH: parse(env.AUTH, false),
     BILLING: parse(env.BILLING, false),
     WAITLIST: parse(env.WAITLIST, false),
+    // Public action, size and plan wording stays hidden until legal review.
     ADVICE_OUTPUT: parse(env.ADVICE_OUTPUT, false),
     // Today's behaviour: the ideas page is always on in fixture mode.
     IDEAS_PAGE: fixture || parse(env.IDEAS_PAGE, false),

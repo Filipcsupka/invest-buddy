@@ -7,8 +7,8 @@ import { sampleIdeas } from "../ideas/fixtures";
 import { showsOnCompanyPage } from "../ideas/public";
 
 /**
- * The signal and its size tier are public, but ideas also carry the owner's EUR band, which ADR-001 keeps out of the public product.
- * The ideas page renders that private view, so it and its nav link stay hidden unless IDEAS_PAGE=on, or the app runs on fixture data.
+ * Ideas carry the owner's EUR band, which ADR-001 keeps out of public pages.
+ * The ideas page also requires ADVICE_OUTPUT before it can show action wording.
  */
 export const ideasEnabled = () => flags().IDEAS_PAGE;
 

@@ -5,6 +5,7 @@ import { Disclaimer } from "@/components/disclaimer";
 import { IdeaCard } from "@/components/idea-card";
 import { SampleStamp } from "@/components/operator-disclosure";
 import { ideasEnabled, latestIdeas } from "@/data/ideas-store";
+import { flags } from "@/config/flags";
 import { getMessages } from "@/i18n";
 import { pageMetadata } from "@/i18n/metadata";
 import { resolveLocale, type LocaleParams } from "../locale";
@@ -19,7 +20,7 @@ export async function generateMetadata({ params }: LocaleParams): Promise<Metada
 
 async function Ideas({ params }: LocaleParams) {
   const locale = await resolveLocale(params);
-  if (!ideasEnabled()) notFound();
+  if (!ideasEnabled() || !flags().ADVICE_OUTPUT) notFound();
   const m = getMessages(locale);
   const data = await latestIdeas();
   return (
@@ -35,7 +36,7 @@ async function Ideas({ params }: LocaleParams) {
       </header>
       {data.rows.length ? (
         <div role="list" aria-label={m.ideas.listLabel} style={{ display: "grid", gap: "var(--s5)" }}>
-          {data.rows.map((idea) => <div role="listitem" key={idea.id}><IdeaCard idea={idea} locale={locale} /></div>)}
+          {data.rows.map((idea) => <div role="listitem" key={idea.id}><IdeaCard idea={idea} locale={locale} showAmounts={false} /></div>)}
         </div>
       ) : (
         <p className="empty-line">{m.ideas.empty}</p>

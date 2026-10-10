@@ -15,8 +15,10 @@ export async function proxy(request: NextRequest) {
   incoming.set("x-request-id", requestId);
   incoming.set("x-request-start-ms", String(Date.now()));
   const [, locale, section, ticker] = request.nextUrl.pathname.split("/");
-  const unavailable = (section === "scanner" && !flags().PAYWALL)
-    || (section === "ideas" && !ideasEnabled())
+  const featureFlags = flags();
+  const unavailable = (section === "scanner" && !featureFlags.PAYWALL)
+    || (section === "sizing" && !featureFlags.ADVICE_OUTPUT)
+    || (section === "ideas" && (!ideasEnabled() || !featureFlags.ADVICE_OUTPUT))
     || (section === "owner-allocation" && !ownerViewEnabled())
     || (section === "company" && (!ticker || !(await instrumentUniverse()).some((item) => item.ticker === ticker.toUpperCase())));
   if (!unavailable) {

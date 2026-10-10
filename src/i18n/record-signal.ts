@@ -1,4 +1,5 @@
 import { getMessages, type Locale } from "./index";
+import { flags } from "@/config/flags";
 
 const scoreStates = {
   "Setup met (>=18)": "setup",
@@ -12,6 +13,9 @@ const scoreStates = {
 /** Stored record codes are localized at the display edge. */
 export function recordSignalLabel(locale: Locale, signal: { tier: string; state: string }): string {
   const m = getMessages(locale);
+  if (!flags().ADVICE_OUTPUT) {
+    return m.states[scoreStates[signal.state as keyof typeof scoreStates]] ?? m.trackRecord.ruleEvent;
+  }
   const tier = m.trackRecord.signalTiers[signal.tier as keyof typeof m.trackRecord.signalTiers] ?? signal.tier;
   const state = m.states[scoreStates[signal.state as keyof typeof scoreStates]]
     ?? m.ideas.actions[signal.state as keyof typeof m.ideas.actions]

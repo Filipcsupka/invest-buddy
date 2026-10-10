@@ -4,6 +4,7 @@ import { LanguageSwitch, NavLinks } from "./nav-links";
 import { ThemeToggle } from "./theme-toggle";
 import { latestScores } from "@/data/store";
 import { ideasEnabled } from "@/data/ideas-store";
+import { flags } from "@/config/flags";
 
 export function BrandMark() {
   return (
@@ -30,11 +31,11 @@ export function Nav({ locale }: { locale: Locale }) {
           label={m.nav.label}
           items={[
             { href: "/dashboard", text: m.nav.dashboard },
-            ...(ideasEnabled() ? [{ href: "/ideas", text: m.nav.ideas }] : []),
+            ...(ideasEnabled() && flags().ADVICE_OUTPUT ? [{ href: "/ideas", text: m.nav.ideas }] : []),
             { href: "/track-record", text: m.nav.trackRecord },
             { href: "/portfolio", text: m.nav.portfolio },
             { href: "/methodology", text: m.nav.methodology },
-            { href: "/sizing", text: m.nav.sizing },
+            ...(flags().ADVICE_OUTPUT ? [{ href: "/sizing", text: m.nav.sizing }] : []),
           ]}
         />
         <div className="header-tools">

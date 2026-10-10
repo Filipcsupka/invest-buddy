@@ -336,6 +336,7 @@ Evidence: `kubectl -n invest get cronjob,jobs`, `judge_runs`, `scheduled_gates` 
 Owner decision 2026-10-09: the weeks to 2026-12-31 go to collecting data so history accumulates, owner portfolio features, a finished web with free and paid tiers built and tested (payment off), and a marketing and waitlist launch at the end of the year. This replaces the earlier plan to open a waitlist first (PR #83, closed). The plan, owner decisions, schedule and gates are in `docs/roadmap/README.md`; the tasks (D, W, EN, PL) are in the lane files next to it. After each merged roadmap task, add one status line here with the task ID, the PR and the live proof.
 
 ### Progress log
+- W10 (PR #121): `ADVICE_OUTPUT` off hides action, size and plan text, closes `/sizing` and `/ideas`, and keeps rule states and evidence visible; EN/SK route and render tests pass. Live proof follows merge.
 - W34 (#111, open): the flagged scanner filters stored scores by score, sector, F/T/M, state, held status and source; the free row limit awaits W30 and the owner's plan decision.
 2026-10-09 and 2026-10-10 (all merged and live on the cluster, checked on the site and in the database):
 - Presentable web: #81 and #82. Banner hidden while the disclosure text is empty (`OPERATOR_DISCLOSURE_EN` and `_SK` set the text), no sample labels, `robots.txt`, real 404 for unknown tickers and disabled pages, Slovak labels instead of raw codes, a Slovak fallback label when a translation is missing, no more "AMD, AMD" title, og:image and favicon.
