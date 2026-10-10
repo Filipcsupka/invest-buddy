@@ -6,6 +6,8 @@ const dates = (n: number, last = ASOF) => Array.from({ length: n }, (_, i) => ne
 /** n daily points ending at `last`, linear from `first` to `end`. */
 const yields = (n: number, first: number, end: number, last = ASOF): YieldPoint[] => dates(n, last).map((date, i) => ({ date, value: first + ((end - first) * i) / (n - 1) }));
 const vix = (close: number, date = ASOF): VixPoint[] => [{ date, close }];
+const monthly = (growth = 1) => Array.from({ length: 24 }, (_, i) => ({ date: new Date(Date.UTC(2024, 10 + i, 1)).toISOString().slice(0, 10), value: 100 + i * growth }));
+const inflation = () => ({ cpi: monthly(), ppi: monthly(2) });
 const bars = (n: number, first: number, end: number, last = ASOF): Bar[] => dates(n, last).map((date, i) => ({ date, close: first + ((end - first) * i) / (n - 1) }));
 
 describe("dataTailwind", () => {
@@ -21,7 +23,7 @@ describe("dataTailwind", () => {
   it("is false when the yield rose", () => {
     const result = evaluateDataTailwind(yields(30, 4.0, 4.6), vix(18), ASOF);
     expect(result.value).toBe(false);
-    expect(result.reason).toContain("above 0");
+    expect(result.reason).toContain("above 0.25");
   });
   it("is false when VIX is 25 or higher", () => {
     expect(evaluateDataTailwind(yields(30, 4.4, 4.2), vix(25), ASOF).value).toBe(false);
@@ -32,7 +34,7 @@ describe("dataTailwind", () => {
     series[series.length - 1].value = 4.1; // rose on the last day only
     series[series.length - 21].value = 4.2; // 20 sessions back is higher, so the change is negative
     expect(evaluateDataTailwind(series, vix(15), ASOF).value).toBe(true);
-    series[series.length - 21].value = 4.0;
+    series[series.length - 21].value = 3.8;
     expect(evaluateDataTailwind(series, vix(15), ASOF).value).toBe(false);
   });
   it("uses only data on or before the date", () => {
@@ -67,9 +69,31 @@ describe("dataTailwind", () => {
   });
   it("takes thresholds from the config", () => {
     const rising = yields(30, 4.0, 4.1);
-    expect(evaluateDataTailwind(rising, vix(18), ASOF).value).toBe(false);
+    expect(evaluateDataTailwind(rising, vix(18), ASOF).value).toBe(true);
     expect(evaluateDataTailwind(rising, vix(18), ASOF, { ...DEFAULT_MACRO_CONFIG, yieldMaxChange: 0.5 }).value).toBe(true);
     expect(evaluateDataTailwind(yields(30, 4.4, 4.2), vix(18), ASOF, { ...DEFAULT_MACRO_CONFIG, vixMax: 15 }).value).toBe(false);
+  });
+  it("accepts a +0.20 pp rise and rejects +0.30 pp", () => {
+    expect(evaluateDataTailwind(yields(21, 4, 4.2), vix(18), ASOF, DEFAULT_MACRO_CONFIG, inflation()).value).toBe(true);
+    expect(evaluateDataTailwind(yields(21, 4, 4.3), vix(18), ASOF, DEFAULT_MACRO_CONFIG, inflation()).value).toBe(false);
+  });
+  it("rejects re-accelerating CPI or PPI", () => {
+    const series = inflation();
+    series.cpi[series.cpi.length - 1].value = 150;
+    expect(evaluateDataTailwind(yields(21, 4, 4.2), vix(18), ASOF, DEFAULT_MACRO_CONFIG, series).value).toBe(false);
+    const ppi = inflation();
+    ppi.ppi[ppi.ppi.length - 1].value = 200;
+    expect(evaluateDataTailwind(yields(21, 4, 4.2), vix(18), ASOF, DEFAULT_MACRO_CONFIG, ppi).value).toBe(false);
+  });
+  it("falls back when CPI is missing or monthly data is stale", () => {
+    const result = evaluateDataTailwind(yields(21, 4, 4.2), vix(18), ASOF, DEFAULT_MACRO_CONFIG, { cpi: null, ppi: monthly() });
+    expect(result.value).toBe(true);
+    expect(result.reason).toMatch(/CPIAUCSL newest none/);
+    expect(evaluateDataTailwind(yields(21, 4, 4.2), vix(18), ASOF, DEFAULT_MACRO_CONFIG, { cpi: monthly().slice(0, -3), ppi: monthly() }).value).toBe(true);
+  });
+  it("rejects VIX 26 and keeps a missing yield unknown with inflation present", () => {
+    expect(evaluateDataTailwind(yields(21, 4, 4.2), vix(26), ASOF, DEFAULT_MACRO_CONFIG, inflation()).value).toBe(false);
+    expect(evaluateDataTailwind(null, vix(18), ASOF, DEFAULT_MACRO_CONFIG, inflation()).value).toBeNull();
   });
 });
 
@@ -119,7 +143,7 @@ describe("sectorRotationIntoGrowth", () => {
 
 describe("macroConfig", () => {
   it("defaults to the documented placeholders", () => {
-    expect(macroConfig({})).toEqual({ windowSessions: 20, yieldMaxChange: 0, vixMax: 25, rotationMargin: 2, maxAgeDays: 5, minCoverage: 0.8 });
+    expect(macroConfig({})).toEqual({ windowSessions: 20, yieldMaxChange: 0.25, vixMax: 25, rotationMargin: 2, maxAgeDays: 5, inflationMaxAgeDays: 45, minCoverage: 0.8 });
   });
   it("reads the environment and refuses bad values", () => {
     expect(macroConfig({ MACRO_VIX_MAX: "30", MACRO_ROTATION_MARGIN_PP: "3.5", MACRO_YIELD_MAX_CHANGE_PP: "-0.1" })).toMatchObject({ vixMax: 30, rotationMargin: 3.5, yieldMaxChange: -0.1 });

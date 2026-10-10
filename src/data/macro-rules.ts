@@ -2,14 +2,14 @@
  * Deterministic macro flags. PLACEHOLDER RULES for owner review: the thresholds are sensible defaults, not a tested strategy.
  * Pure functions, no database and no network. The job in src/jobs/macro.ts feeds them stored data.
  *
- * dataTailwind: true when the 10-year yield did not rise over the last 20 sessions and VIX is below the cap, false otherwise,
- * null (unknown) when an input is missing, too short or stale.
+ * dataTailwind: stable/falling yields, CPI and PPI not re-accelerating, and VIX below the cap.
+ * Missing monthly inflation history falls back to yields and VIX; missing yields or VIX is unknown.
  * sectorRotationIntoGrowth: true when the universe's average 20-session return beats SPY's by more than the margin.
  */
 export interface MacroConfig {
   /** Sessions the yield change and the returns are measured over. */
   windowSessions: number;
-  /** dataTailwind needs yield change (percentage points) at or below this. 0 means "not rising". */
+  /** dataTailwind needs yield change (percentage points) at or below this. */
   yieldMaxChange: number;
   /** dataTailwind needs the VIX close below this. */
   vixMax: number;
@@ -17,11 +17,13 @@ export interface MacroConfig {
   rotationMargin: number;
   /** An input whose newest point is older than this many calendar days before asOf counts as stale. */
   maxAgeDays: number;
+  /** Monthly CPI and PPI observations may lag by this many calendar days. */
+  inflationMaxAgeDays: number;
   /** Share of the universe that must have bars for the rotation rule. */
   minCoverage: number;
 }
-export const DEFAULT_MACRO_CONFIG: MacroConfig = { windowSessions: 20, yieldMaxChange: 0, vixMax: 25, rotationMargin: 2, maxAgeDays: 5, minCoverage: 0.8 };
-export const MACRO_RULES_VERSION = "macro-rules-v1";
+export const DEFAULT_MACRO_CONFIG: MacroConfig = { windowSessions: 20, yieldMaxChange: 0.25, vixMax: 25, rotationMargin: 2, maxAgeDays: 5, inflationMaxAgeDays: 45, minCoverage: 0.8 };
+export const MACRO_RULES_VERSION = "macro-rules-v2";
 
 const number = (value: string | undefined, fallback: number, ok: (n: number) => boolean) => {
   if (value === undefined || value.trim() === "") return fallback;
@@ -38,6 +40,7 @@ export function macroConfig(env: Record<string, string | undefined> = process.en
     vixMax: number(env.MACRO_VIX_MAX, d.vixMax, (n) => n > 0),
     rotationMargin: number(env.MACRO_ROTATION_MARGIN_PP, d.rotationMargin, () => true),
     maxAgeDays: number(env.MACRO_MAX_AGE_DAYS, d.maxAgeDays, (n) => Number.isInteger(n) && n >= 1),
+    inflationMaxAgeDays: number(env.MACRO_INFLATION_MAX_AGE_DAYS, d.inflationMaxAgeDays, (n) => Number.isInteger(n) && n >= 1),
     minCoverage: number(env.MACRO_MIN_COVERAGE, d.minCoverage, (n) => n > 0 && n <= 1),
   };
 }
@@ -50,8 +53,33 @@ const unknown = (reason: string): MacroResult => ({ value: null, reason: `Unknow
 
 export interface YieldPoint { date: string; value: number }
 export interface VixPoint { date: string; close: number }
+export interface InflationInputs { cpi: YieldPoint[] | null; ppi: YieldPoint[] | null }
 
-export function evaluateDataTailwind(yields: YieldPoint[] | null, vix: VixPoint[] | null, asOf: string, config: MacroConfig = DEFAULT_MACRO_CONFIG): MacroResult {
+const monthBefore = (date: string, months: number): string => {
+  const [year, month] = date.slice(0, 7).split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1 - months, 1)).toISOString().slice(0, 7);
+};
+
+function inflationDirection(name: string, points: YieldPoint[] | null, asOf: string, maxAgeDays: number): { ok: boolean; text: string; date: string } | null {
+  const known = (points ?? []).filter((p) => p.date <= asOf && Number.isFinite(p.value) && p.value > 0).sort((a, b) => a.date.localeCompare(b.date));
+  const latest = known.at(-1);
+  if (!latest || ageDays(latest.date, asOf) > maxAgeDays) return null;
+  const byMonth = new Map(known.map((p) => [p.date.slice(0, 7), p]));
+  const previous = byMonth.get(monthBefore(latest.date, 3));
+  const yearAgo = byMonth.get(monthBefore(latest.date, 12));
+  const previousYearAgo = byMonth.get(monthBefore(latest.date, 15));
+  if (!previous || !yearAgo || !previousYearAgo) return null;
+  const currentRate = (latest.value / yearAgo.value - 1) * 100;
+  const previousRate = (previous.value / previousYearAgo.value - 1) * 100;
+  const ok = currentRate <= previousRate + 1e-9;
+  return { ok, date: latest.date, text: `${name} YoY ${latest.date} ${r2(currentRate)}% (base ${yearAgo.date}) vs ${previous.date} ${r2(previousRate)}% (base ${previousYearAgo.date}; ${ok ? "not higher" : "higher"})` };
+}
+const unavailableInflation = (name: string, points: YieldPoint[] | null, asOf: string) => {
+  const newest = (points ?? []).filter((p) => p.date <= asOf).sort((a, b) => a.date.localeCompare(b.date)).at(-1);
+  return `${name} newest ${newest?.date ?? "none"} (missing, stale or lacks YoY history)`;
+};
+
+export function evaluateDataTailwind(yields: YieldPoint[] | null, vix: VixPoint[] | null, asOf: string, config: MacroConfig = DEFAULT_MACRO_CONFIG, inflation: InflationInputs = { cpi: null, ppi: null }): MacroResult {
   const known = (yields ?? []).filter((p) => p.date <= asOf).sort((a, b) => a.date.localeCompare(b.date));
   const latestYield = known.at(-1);
   if (!latestYield) return unknown("no 10-year yield observation on or before the date");
@@ -61,11 +89,15 @@ export function evaluateDataTailwind(yields: YieldPoint[] | null, vix: VixPoint[
   const latestVix = (vix ?? []).filter((p) => p.date <= asOf).sort((a, b) => a.date.localeCompare(b.date)).at(-1);
   if (!latestVix) return unknown("no VIX close on or before the date");
   if (ageDays(latestVix.date, asOf) > config.maxAgeDays) return unknown(`VIX is stale (newest ${latestVix.date}, limit ${config.maxAgeDays} days)`);
-  const change = r2(latestYield.value - earlier.value);
-  const yieldOk = change <= config.yieldMaxChange, vixOk = latestVix.close < config.vixMax;
-  const value = yieldOk && vixOk;
-  const reason = `${value ? "Tailwind" : "No tailwind"}: 10-year yield ${earlier.date} ${earlier.value} to ${latestYield.date} ${latestYield.value} (change ${change} pp, ${yieldOk ? "at or below" : "above"} ${config.yieldMaxChange}); VIX ${latestVix.date} ${latestVix.close} (${vixOk ? "below" : "not below"} ${config.vixMax}). Placeholder rule ${MACRO_RULES_VERSION}`;
-  return { value, reason, evidenceDates: [latestYield.date, latestVix.date] };
+  const change = latestYield.value - earlier.value;
+  const yieldOk = change <= config.yieldMaxChange + 1e-9, vixOk = latestVix.close < config.vixMax;
+  const cpi = inflationDirection("CPIAUCSL", inflation.cpi, asOf, config.inflationMaxAgeDays);
+  const ppi = inflationDirection("PPIACO", inflation.ppi, asOf, config.inflationMaxAgeDays);
+  const inflationAvailable = !!cpi && !!ppi;
+  const value = yieldOk && vixOk && (!inflationAvailable || (cpi.ok && ppi.ok));
+  const inflationText = inflationAvailable ? `${cpi.text}; ${ppi.text}` : `inflation fallback to rates and VIX: ${cpi?.text ?? unavailableInflation("CPIAUCSL", inflation.cpi, asOf)}; ${ppi?.text ?? unavailableInflation("PPIACO", inflation.ppi, asOf)}`;
+  const reason = `${value ? "Tailwind" : "No tailwind"}: 10-year yield ${earlier.date} ${earlier.value} to ${latestYield.date} ${latestYield.value} (change ${r2(change)} pp, ${yieldOk ? "at or below" : "above"} ${config.yieldMaxChange}); VIX ${latestVix.date} ${latestVix.close} (${vixOk ? "below" : "not below"} ${config.vixMax}); ${inflationText}. Placeholder rule ${MACRO_RULES_VERSION}`;
+  return { value, reason, evidenceDates: [latestYield.date, latestVix.date, ...(inflationAvailable ? [cpi.date, ppi.date] : [])] };
 }
 
 export interface Bar { date: string; close: number }

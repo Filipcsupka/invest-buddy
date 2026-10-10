@@ -20,6 +20,7 @@ const vixCsv = (close: number) => `DATE,OPEN,HIGH,LOW,CLOSE\n${[5, 4, 3, 2, 1, 0
 const bars = (n: number, first: number, end: number) => Array.from({ length: n }, (_, i) => ({ date: day(n - 1 - i), close: first + ((end - first) * i) / (n - 1) }));
 const inputs = (over: Partial<MacroInputs> = {}): MacroInputs => ({
   yields: bars(30, 4.4, 4.2).map((b) => ({ date: b.date, value: b.close })), yieldUrl: "https://fred.stlouisfed.org/series/DGS10",
+  cpi: null, cpiUrl: null, ppi: null, ppiUrl: null,
   vix: [{ date: ASOF, close: 18 }], vixUrl: VIX_DOC_URL, universe: Object.fromEntries(tickers.map((t) => [t, bars(30, 100, 108)])), spy: bars(30, 100, 102), ...over });
 
 describe("previousTradingDay", () => {
@@ -39,6 +40,13 @@ describe("macro outcome", () => {
     expect(outcome.evidence.dataTailwind.map((item) => item.url)).toEqual(["https://fred.stlouisfed.org/series/DGS10", VIX_DOC_URL]);
     expect(outcome.evidence.dataTailwind.every((item) => item.claim === "macro.dataTailwind" && item.publishedAt === ASOF)).toBe(true);
     expect(outcome.evidence.sectorRotationIntoGrowth).toEqual([]);
+  });
+  it("cites both monthly series when inflation history is available", () => {
+    const monthly = Array.from({ length: 24 }, (_, i) => ({ date: new Date(Date.UTC(2024, 10 + i, 1)).toISOString().slice(0, 10), value: 100 + i }));
+    const outcome = evaluateMacro(inputs({ cpi: monthly, ppi: monthly, cpiUrl: "https://fred.stlouisfed.org/series/CPIAUCSL", ppiUrl: "https://fred.stlouisfed.org/series/PPIACO" }), ASOF, DEFAULT_MACRO_CONFIG);
+    expect(outcome.dataTailwind.value).toBe(true);
+    expect(outcome.evidence.dataTailwind.map((item) => item.url)).toEqual(["https://fred.stlouisfed.org/series/DGS10", VIX_DOC_URL, "https://fred.stlouisfed.org/series/CPIAUCSL", "https://fred.stlouisfed.org/series/PPIACO"]);
+    expect(outcome.dataTailwind.reason).toMatch(/CPIAUCSL YoY .* PPIACO YoY/);
   });
   it("is unknown with no evidence when inputs are missing", () => {
     const outcome = evaluateMacro(inputs({ yields: null, yieldUrl: null, vix: null, vixUrl: null, spy: null }), ASOF, DEFAULT_MACRO_CONFIG);
@@ -64,11 +72,11 @@ describe("macro inputs", () => {
     expect(JSON.stringify(doc)).not.toContain("secret-key");
     await expect(collectFredSeries("k", "DGS10", async () => JSON.stringify({ observations: [{ date: ASOF, value: "." }] }))).rejects.toThrow(/no numeric observation/);
   });
-  it("fetches both documents, and reports a missing key or a failing source without throwing", async () => {
+  it("fetches four documents, and reports a missing key or a failing source without throwing", async () => {
     const repository = new MemoryCollectorRepository();
     const http = stubHttp(() => vixCsv(18.5));
     expect(await fetchMacroInputs(repository, { http, env: { FRED_API_KEY: "k" }, get: async () => fredJson(0.01), now: new Date(`${ASOF}T10:00:00Z`) })).toEqual([]);
-    expect([...repository.documents.keys()].sort()).toEqual(["https://fred.stlouisfed.org/series/DGS10", VIX_DOC_URL].sort());
+    expect([...repository.documents.keys()].sort()).toEqual(["https://fred.stlouisfed.org/series/DGS10", "https://fred.stlouisfed.org/series/CPIAUCSL", "https://fred.stlouisfed.org/series/PPIACO", VIX_DOC_URL].sort());
     expect(repository.documents.get(VIX_DOC_URL)?.meta.display_allowed).toBe(false);
     const missing = await fetchMacroInputs(new MemoryCollectorRepository(), { http: stubHttp(() => { throw new Error("down"); }), env: {}, now: new Date(`${ASOF}T10:00:00Z`) });
     expect(missing).toEqual(["fred: FRED_API_KEY absent", "vix: down"]);
@@ -78,7 +86,7 @@ describe("macro inputs", () => {
 const url = process.env.TEST_DATABASE_URL;
 describe.skipIf(!url)("macro job on postgres", () => {
   const pool = new pg.Pool({ connectionString: url });
-  const docUrls = ["https://fred.stlouisfed.org/series/DGS10", VIX_DOC_URL];
+  const docUrls = ["https://fred.stlouisfed.org/series/DGS10", "https://fred.stlouisfed.org/series/CPIAUCSL", "https://fred.stlouisfed.org/series/PPIACO", VIX_DOC_URL];
   const cleanup = async () => {
     await pool.query("DELETE FROM consensus_findings WHERE as_of=$1", [ASOF]);
     await pool.query("DELETE FROM reconcile_runs WHERE as_of=$1", [ASOF]);
@@ -119,12 +127,12 @@ describe.skipIf(!url)("macro job on postgres", () => {
     const rows = await consensus();
     expect(rows).toHaveLength(tickers.length * 2);
     expect(rows.every((row) => row.agreement === "data_rule" && row.verified && row.value === true)).toBe(true);
-    expect(rows.find((row) => row.field === "dataTailwind")?.evidence_refs.map((ref) => ref.url)).toEqual(docUrls);
+    expect(rows.find((row) => row.field === "dataTailwind")?.evidence_refs.map((ref) => ref.url)).toEqual([docUrls[0], docUrls[3]]);
     expect(rows.find((row) => row.field === "dataTailwind")?.reason).toMatch(/10-year yield .* VIX/);
     const macro = await pool.query<{ run_id: string; data: Record<string, unknown>; evidence: { items: { url: string }[] }; superseded_by: string | null }>("SELECT run_id,data,evidence,superseded_by FROM macro_findings WHERE as_of=$1", [ASOF]);
     expect(macro.rows).toHaveLength(1);
     expect(macro.rows[0]).toMatchObject({ run_id: macroRunId(ASOF), superseded_by: null, data: { runnerName: "data_rule", dataTailwind: true, sectorRotationIntoGrowth: true, placeholder: true } });
-    expect(macro.rows[0].evidence.items.map((item) => item.url)).toEqual(docUrls);
+    expect(macro.rows[0].evidence.items.map((item) => item.url)).toEqual([docUrls[0], docUrls[3]]);
     const before = JSON.stringify(rows);
     await runMacro(pool, ASOF, { fetch: false });
     expect(JSON.stringify(await consensus())).toBe(before);
@@ -146,7 +154,7 @@ describe.skipIf(!url)("macro job on postgres", () => {
   });
 
   it("writes false when a rule fails and unknown rows when inputs are stale or missing", async () => {
-    await seedBars(); await seedDocs(-0.01, 18.5); // yield rose over the window
+    await seedBars(); await seedDocs(-0.02, 18.5); // yield rose more than 0.25 pp
     await runMacro(pool, ASOF, { fetch: false });
     expect((await consensus()).find((row) => row.symbol === "AMD" && row.field === "dataTailwind")).toMatchObject({ value: false, verified: true, agreement: "data_rule" });
     await pool.query("DELETE FROM source_documents WHERE url = ANY($1::text[])", [docUrls]);
