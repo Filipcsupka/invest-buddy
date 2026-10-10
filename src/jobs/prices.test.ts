@@ -90,4 +90,63 @@ describe("runPrices", () => {
       expect((await pool.query("SELECT count(*)::int AS n FROM daily_bars WHERE source_id IS NULL")).rows[0].n).toBe(0);
     } finally { await pool.query("ROLLBACK"); await pool.end(); }
   });
+  it("logs first sight of each bar and no revisions when the same data is run twice", async () => {
+    const repo = new MemoryPriceRepository();
+    const p = provider(async () => series(4));
+    await runPrices(p, repo, ["NVDA"]);
+    const second = await runPrices(p, repo, ["NVDA"]);
+    expect(second.barsRevised).toBe(0);
+    expect(repo.revisions.filter((r) => r.kind === "superseded")).toHaveLength(0);
+    expect(repo.revisions.filter((r) => r.kind === "first")).toHaveLength(4);
+  });
+  it("logs old values for one changed close and for a split-like scale of the whole history", async () => {
+    const repo = new MemoryPriceRepository();
+    await runPrices(provider(async () => series(5, 100)), repo, ["NVDA"]);
+    const one = series(5, 100); one[2] = bar(one[2].date, 101);
+    const r1 = await runPrices(provider(async () => one), repo, ["NVDA"]);
+    expect(r1.barsRevised).toBe(1);
+    expect(repo.runs[1].barsRevised).toBe(1);
+    expect(repo.revisions.filter((r) => r.kind === "superseded").map((r) => [r.date, r.close])).toEqual([[one[2].date, 100]]);
+    const r2 = await runPrices(provider(async () => series(5, 50)), repo, ["NVDA"]);
+    expect(r2.barsRevised).toBe(5);
+    expect(repo.revisions.filter((r) => r.kind === "superseded")).toHaveLength(6);
+  });
+  it("does not log revisions in dry-run", async () => {
+    const repo = new MemoryPriceRepository();
+    await runPrices(provider(async () => series(3)), repo, ["NVDA"], { dryRun: true });
+    expect(repo.revisions).toHaveLength(0);
+  });
+  it.skipIf(!process.env.TEST_DATABASE_URL)("logs first sight and revisions, blocks UPDATE and DELETE, and counts bars_revised (Postgres)", async () => {
+    const pool = new pg.Pool({ connectionString: process.env.TEST_DATABASE_URL, max: 1 });
+    const t = "ZZRV";
+    const revisions = async (kind: string) => (await pool.query<{ bar_date: string; close: string }>("SELECT to_char(bar_date,'YYYY-MM-DD') AS bar_date, close::text FROM daily_bar_revisions WHERE ticker=$1 AND kind=$2 ORDER BY bar_date", [t, kind])).rows;
+    try {
+      await pool.query("INSERT INTO instruments (ticker,name,sector,tier,source) VALUES ($1,'Revision test','Test',NULL,'sample extension') ON CONFLICT (ticker) DO NOTHING", [t]);
+      await pool.query("DELETE FROM daily_bars WHERE ticker=$1", [t]);
+      const repo = new PostgresPriceRepository(pool);
+      const first = await runPrices(provider(async () => series(5, 100)), repo, [t]);
+      expect(first.barsRevised).toBe(0);
+      const firstCount = (await revisions("first")).length;
+      expect(firstCount).toBe(5);
+      expect((await revisions("superseded"))).toHaveLength(0);
+
+      const same = await runPrices(provider(async () => series(5, 100)), repo, [t]);
+      expect(same.barsRevised).toBe(0);
+      expect(await revisions("superseded")).toHaveLength(0);
+      expect(await revisions("first")).toHaveLength(firstCount);
+
+      const one = series(5, 100); one[2] = bar(one[2].date, 101);
+      expect((await runPrices(provider(async () => one), repo, [t])).barsRevised).toBe(1);
+      expect(await revisions("superseded")).toEqual([{ bar_date: one[2].date, close: "100" }]);
+
+      const scaled = await runPrices(provider(async () => series(5, 50)), repo, [t]);
+      expect(scaled.barsRevised).toBe(5);
+      expect(await revisions("superseded")).toHaveLength(6);
+      expect(await revisions("first")).toHaveLength(firstCount);
+      expect((await pool.query("SELECT bars_revised FROM price_ingest_runs ORDER BY id DESC LIMIT 1")).rows[0].bars_revised).toBe(5);
+
+      await expect(pool.query("UPDATE daily_bar_revisions SET close = 1 WHERE ticker=$1", [t])).rejects.toThrow(/immutable/);
+      await expect(pool.query("DELETE FROM daily_bar_revisions WHERE ticker=$1", [t])).rejects.toThrow(/immutable/);
+    } finally { await pool.end(); }
+  });
 });
