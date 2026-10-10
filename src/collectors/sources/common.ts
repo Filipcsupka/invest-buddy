@@ -1,4 +1,4 @@
-import { licenseFor } from "../../data/sources-registry";
+import { licenseFor, sourceIdFor } from "../../data/sources-registry";
 import { DEFAULT_SYMBOL_MAP } from "../../data/twelvedata";
 import type { CusipStore } from "../../db/source-collectors";
 import type { SourceState } from "../../db/collectors";
@@ -61,7 +61,7 @@ export const LICENSES = {
 } satisfies Record<string, License>;
 
 export function sourceDocument(input: Omit<CollectedDocument, "contentHash">, license: License): CollectedDocument {
-  return document({ ...input, meta: { ...input.meta, license_note: license.license_note, display_allowed: license.display_allowed } });
+  return document({ ...input, sourceId: input.sourceId ?? sourceIdFor(input.source), meta: { ...input.meta, license_note: license.license_note, display_allowed: license.display_allowed } });
 }
 
 export const isoDate = (date: Date) => date.toISOString().slice(0, 10);

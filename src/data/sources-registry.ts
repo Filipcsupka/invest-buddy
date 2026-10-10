@@ -100,6 +100,14 @@ export function canDisplay(name: string): boolean {
   return !!found && found.licenceClass !== "unknown" && found.displayAllowed;
 }
 
+/** Fact keys with a single writer, to registry id. Migration 023 backfills `collected_facts.source_id` from the same list. */
+export const FACT_SOURCE_IDS: Readonly<Record<string, string>> = {
+  eps_surprise_latest: "alphavantage", insider_net_buy_90d: "sec", sec_filer_status: "sec", holder_5pct_events: "sec",
+  institutional_13f: "sec", revenue_growth_quarterly: "sec", gov_contract_awards_window: "usaspending", price_move_5d: "twelvedata",
+};
+/** Licence class stored next to a row's source id. A source that is not in the registry is `unknown`. */
+export const licenceClassFor = (name: string): LicenceClass => getSource(name)?.licenceClass ?? "unknown";
+
 /** Shape stored on documents as `meta.license_note` and `meta.display_allowed`. */
 export function licenseFor(id: string): { license_note: string; display_allowed: boolean } {
   const found = BY_ID.get(id);
