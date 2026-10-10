@@ -3,6 +3,7 @@ import type { ScoreResult } from "../engine";
 import type { AlertChange, SaveOutcome, ScoreRepository, ScoredInstrument } from "./types";
 import { stateChange } from "./types";
 import { SCORE_RULES_VERSION } from "../engine/score";
+import { snapshotFor } from "./score-snapshots";
 import { scoreSignal } from "../track-record/measure";
 
 export class PostgresScoreRepository implements ScoreRepository {
@@ -16,7 +17,7 @@ export class PostgresScoreRepository implements ScoreRepository {
       let changed = false;
       const tickers = new Set<string>();
       const alerts: AlertChange[] = [];
-      for (const { instrument, result, fingerprint } of records) {
+      for (const { instrument, result, fingerprint, consensusRows } of records) {
         if (instrument.ticker !== result.ticker || result.asOf !== asOf || tickers.has(result.ticker)) throw new Error("Invalid daily score batch");
         tickers.add(result.ticker);
         const key = fingerprint ?? JSON.stringify(result);
@@ -41,6 +42,11 @@ export class PostgresScoreRepository implements ScoreRepository {
           VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9)
           ON CONFLICT (ticker,as_of) DO UPDATE SET technical=EXCLUDED.technical,fundamentals=EXCLUDED.fundamentals,macro=EXCLUDED.macro,total=EXCLUDED.total,state=EXCLUDED.state,audit=EXCLUDED.audit,inputs_fingerprint=EXCLUDED.inputs_fingerprint`,
           [result.ticker, asOf, result.technical, result.fundamentals, result.macro, result.total, result.state, JSON.stringify(result), key]);
+        // One snapshot per distinct fingerprint; a repeat of an earlier fingerprint keeps the first row.
+        const snapshot = snapshotFor(result, key, SCORE_RULES_VERSION, { consensusRows });
+        await client.query(`INSERT INTO score_input_snapshots (ticker,as_of,rules_version,inputs_fingerprint,inputs,bars_hash,bar_last_date)
+          VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7) ON CONFLICT (ticker,as_of,inputs_fingerprint) DO NOTHING`,
+        [snapshot.ticker, snapshot.asOf, snapshot.rulesVersion, snapshot.inputsFingerprint, JSON.stringify(snapshot.inputs), snapshot.barsHash, snapshot.barLastDate]);
         // Only scan-backed rows enter the public record. The first observation for a date stays fixed on reruns.
         const runIds = [...new Set(Object.values(result.scanRunIds ?? {}).concat(result.scanRunId ? [result.scanRunId] : []))];
         const provenance = runIds.length ? await client.query<{ found: number; all_real: boolean }>(
