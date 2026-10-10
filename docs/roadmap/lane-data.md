@@ -91,6 +91,7 @@ D1 to D8 safety and licence foundations (start now: D5 before 2026-11-05). D9 to
 ---
 
 ### D1 Baseline data inventory and growth report
+Status: done 2026-10-10, PR #93, merged and live.
 Why: no single place lists what we hold and at what rate it grows; numbers above were hand-queried (`docs/data.md` has no volumes).
 Steps: 1. Add `scripts/data-inventory.ts` that runs SELECT-only queries (row counts, min and max dates, table sizes via `pg_total_relation_size`, per source document counts and body bytes, expiry histogram). 2. Print JSON and a markdown table. 3. Add `docs/data-inventory.md` with the 2026-10-09 baseline from this file. 4. Add npm script `data:inventory`.
 Acceptance: running with `DATABASE_URL` prints all tables listed above with sizes; test `scripts/data-inventory.test.ts` runs against `TEST_DATABASE_URL` seeded rows and checks counts and that no non-SELECT statement is issued (assert on the query log).
@@ -101,6 +102,7 @@ Approval needed: none (read-only; a cluster run is a manual exec by the owner or
 Risk or open question: numbers drift daily; the doc is a dated baseline, not a live view (D39 is the live view).
 
 ### D2 Data source registry with licence classes
+Status: done 2026-10-10, PR #91, merged and live.
 Why: licence lives as free text in `meta.license_note` and `meta.display_allowed` (`src/collectors/sources/common.ts` `LICENSES`); the display layer needs one table. Source: `docs/data.md` collectors section.
 Steps: 1. Migration 022 `data_sources` (id, name, kind, licence_class in `public_gov`, `public_attrib`, `internal_only`, `licensed`, `unknown`; display_allowed boolean; redistribution_allowed boolean; terms_url; terms_checked_on date; attribution_text; rate_limit_note; daily_cap; monthly_cost_cap_eur; notes). 2. Seed rows for every source in the terms table above with the status found on 2026-10-09 (unverified stays `unknown`, display false). 3. `src/data/sources-registry.ts` with typed read and a pure `canDisplay(sourceId)`. 4. Move `LICENSES` in `common.ts` to read from the same constants so there is one list.
 Acceptance: migration applies on empty and on the live schema; tests: every source name in `registry.ts` has a row, a source with `unknown` class returns `canDisplay` false, seeded SEC row returns true; `npm run typecheck` clean.
@@ -111,6 +113,7 @@ Approval needed: cluster write (migration runs in the web init container after m
 Risk or open question: licence_class vocabulary should match what the web lane's paywall uses; confirm with that lane.
 
 ### D3 Row-level provenance on bars, facts and documents
+Status: done 2026-10-10, PR #97, merged and live.
 Why: a displayed number must be traceable to a source and licence. Only documents carry `meta.display_allowed`; `daily_bars` and `collected_facts` have no source column (`migrations/001`, `007`).
 Steps: 1. Migration 023: add `source_id`, `fetched_at`, `vendor_symbol` to `daily_bars`; `source_id` and `licence_class` to `collected_facts`; `source_id`, `licence_class`, `display_allowed` (promoted from meta) to `source_documents`. 2. Backfill existing rows (bars: `twelvedata`, internal; documents by `source` column; facts by key map) in the same migration. 3. Update `src/db/prices.ts`, `src/db/collectors.ts` upserts to set the fields. 4. Update the collectors that build documents (`common.ts sourceDocument`) to pass `source_id`.
 Acceptance: after migration no row has null `source_id` (SQL check in test); a new prices run writes `twelvedata`; tests in `src/db/collectors-pg.test.ts` and `src/jobs/prices.test.ts` cover both; `display_allowed` column equals `meta.display_allowed` for all rows before and after.
@@ -132,6 +135,7 @@ Approval needed: none
 Risk or open question: this may blank the price chart on company pages; coordinate with the web lane and decision 1.
 
 ### D5 Retention that archives instead of deleting
+Status: done 2026-10-10, PR #100, merged and live.
 Synthesis note: `src/jobs/retention.ts` is also changed by W11 (unconfirmed waitlist purge), PL26 (job_runs purge) and PL44 (rate limit rows). D5 lands first and the others rebase on it. EN21 step 4 (keep raw documents on the 30 day rule) is overruled for public SEC filings, which this task archives; internal-only text is still deleted after 30 days, which matches EN21's licence concern.
 Why: `src/jobs/retention.ts` deletes documents after 30 to 100 days and facts after 30; the first documents expire 2026-11-05 (live `expires_at` min). A switched-on retention would destroy raw filings that cannot be recovered cheaply and break history. Source: live DB, `docs/data.md` Collectors.
 Steps: 1. Migration 024: `source_documents_archive` and `collected_facts_archive` with the same columns plus `archived_at`. 2. Change `retention.ts`: for sources `edgar` and public-gov classes, move rows to the archive in one transaction instead of `DELETE`; keep deleting `internal_only` news text after 30 days. 3. Keep the CronJob suspended in infra until merged and tested. 4. Extend `--dry-run` output with archive counts. 5. Update `docs/data.md` retention paragraph.
@@ -143,6 +147,7 @@ Approval needed: cluster write (migration; unsuspending retention later is a sep
 Risk or open question: archive growth (see D38). Alternative is a longer `expires_at`; archive keeps the live table small for queries.
 
 ### D6 Point-in-time storage design (ADR)
+Status: done 2026-10-10, PR #87, merged and live.
 Synthesis note: EN21 step 1 (retention audit per table) is folded into this ADR's table-by-table list.
 Why: later features (history, backtests, track record, paid depth) need "what did we know on day X". Today bars, documents and scores are overwritten (see gap 2). Source: `migrations/018_track_record.sql` already uses immutable triggers for two tables.
 Steps: 1. Write `docs/adr-point-in-time.md`: every observation table has `observed_at` (when we fetched) and a business date (`as_of`, `period_end`, `filed`); append-only revision tables for bars, scores, consensus, estimates; documents keyed by content hash; immutable trigger pattern from `018`; query pattern `as_of_known(date)`. 2. List which tables become append-only (D12, D14, D15, D18 to D20, D27, D28). 3. Define retention per class (never delete: filings, revisions, score inputs).
@@ -154,6 +159,7 @@ Approval needed: none
 Risk or open question: bitemporal modelling adds query complexity; the ADR must keep reads simple (views).
 
 ### D7 Trading calendar module
+Status: done 2026-10-10, PR #94, merged and live.
 Why: data quality checks and "bar missing" logic need to know holidays and half days. `daily.ts` only uses a 3 calendar day freshness rule (C8).
 Steps: 1. Add `src/data/trading-calendar.ts` with NYSE holidays and early closes 2025 to 2027 as static data, functions `isSession(date)`, `sessionsBetween`, `previousSession`. 2. Cite the NYSE holiday page in a comment with the check date; leave a `TODO verify` marker only if the page is unreachable. 3. Replace ad hoc weekday logic in `src/jobs/macro.ts` and the extract default date where they compute "last completed weekday session".
 Acceptance: unit tests for Thanksgiving, Christmas 2026, Good Friday 2027, a half day, and a weekend; existing macro and extract date tests still pass.
@@ -164,6 +170,7 @@ Approval needed: none
 Risk or open question: holiday list must be re-verified each December; D16 adds a check that fails when the calendar ends within 60 days.
 
 ### D8 API usage ledger and cost caps
+Status: done 2026-10-10, PR #95, merged and live.
 Synthesis note: PL42 (data call ledger and guard) is merged into this task. There is one ledger (`api_usage`) and one guard (`src/data/usage.ts`), with limits read from `data_sources` (D2), not a second `api_calls` table or `config/providers.json`. Added from PL42: a share of the Twelve Data daily cap is reserved for `prices`, and a job over its share logs `quota_skip` and ends `partial` instead of failing. PL29 lists the ledger in the ops report.
 Why: only Alpha Vantage requests are counted (`collector_runs.api_requests`, migration 012). With more sources, a runaway job could exhaust a daily quota or, after a paid plan, spend money. Source: `docs/data.md` Alpha Vantage section.
 Steps: 1. Migration 025 `api_usage` (source_id, day, requests, credits, est_cost_eur, job, run_id). 2. `src/data/usage.ts` with `reserve(source, n)` that reads daily and monthly caps from `data_sources` (D2) and throws `CapReached` before the call. 3. Wire Twelve Data (`src/data/twelvedata.ts`) and Alpha Vantage first; later collectors use it. 4. Default `monthly_cost_cap_eur = 0` for every row; a paid source cannot be called while the cap is 0.
@@ -185,6 +192,7 @@ Approval needed: none
 Risk or open question: do not over-design; only the five interfaces above.
 
 ### D10 Security master
+Status: done 2026-10-10, PR #96, merged and live.
 Why: tickers change (SQ to XYZ), and sources key on CIK, CUSIP or FIGI. The map lives in code (`DEFAULT_SYMBOL_MAP`) and a CUSIP cache with 0 rows. Source: `src/data/twelvedata.ts`, `migrations/008`.
 Steps: 1. Migration 026 `instrument_ids` (ticker, cik, figi, composite_figi, exchange, currency, sic, sic_description, fiscal_year_end, vendor_symbols jsonb, status, valid_from, valid_to). 2. Seed from SEC `company_tickers.json` and submissions (no new source) for the 36 names; SPY by hand. 3. Replace `DEFAULT_SYMBOL_MAP` reads with a lookup that falls back to the constant. 4. Script `scripts/master-refresh.ts` to refresh weekly and log changes.
 Acceptance: all 37 instruments have a CIK (SPY none, flagged `etf`); SQ resolves to vendor symbol XYZ for Twelve Data and for SEC; test with a ticker change fixture; refresh is idempotent.
@@ -206,6 +214,7 @@ Approval needed: cluster write (migration)
 Risk or open question: tier (1 to 3) is a guide concept; store it in membership, not only in `instruments`.
 
 ### D12 Price revision log
+Status: done 2026-10-10, PR #102, merged and live.
 Synthesis note: together with D14 and D15 this replaces the `pit_fields` table proposed in EN21.
 Why: `daily_bars` upserts overwrite. A split or a vendor correction changes old rows with no trace, and the job refetches 260 days each night. Source: `src/db/prices.ts` line `ON CONFLICT ... DO UPDATE`.
 Steps: 1. Migration 028 `daily_bar_revisions` (ticker, bar_date, observed_at, open, high, low, close, volume, source_id), append-only with the immutable trigger pattern from `018`. 2. In the prices upsert, when a stored bar differs from the new one, insert the old values into revisions inside the same transaction. 3. Also store the first observation of every new bar (so the close at first sight is kept). 4. Log the count of revised bars per run in `price_ingest_runs` (new column `bars_revised`).
@@ -227,6 +236,7 @@ Approval needed: none (uses existing key and quota; if the endpoint costs more c
 Risk or open question: whether the Basic plan includes splits and dividends is unverified.
 
 ### D14 Append-only score and input snapshots
+Status: done 2026-10-10, PR #104, merged and live.
 Synthesis note: covers EN21's per-day copy of score inputs; EN21 is not built separately.
 Why: `score_results` is refreshed on the same date (`docs/data.md`, "Same-day scores are refreshed"), and `record_snapshots` keeps only score, state and rule hits. We need the inputs and the rule version to reproduce any past score, and to compare rule versions over the 12 weeks. Source: `src/jobs/daily.ts`, `migrations/005`, `018`.
 Steps: 1. Migration 030 `score_input_snapshots` (ticker, as_of, observed_at, rules_version, inputs_fingerprint, inputs jsonb containing the audit inputs and consensus rows used, bars_hash of the last 260 closes, bar_last_date), append-only, one row per distinct fingerprint. 2. In `daily.ts` insert a row whenever the fingerprint changes. 3. Add `scripts/replay-score.ts` that rebuilds a score from a snapshot row and compares it with `score_results`.
@@ -238,6 +248,7 @@ Approval needed: cluster write (migration)
 Risk or open question: `inputs` jsonb size per row; estimate with D1 numbers (about 178 audits in 7 days of `audit` already, 2.5 MB table), fine at 300 names.
 
 ### D15 Consensus finding history
+Status: done 2026-10-10, PR #92, merged and live.
 Synthesis note: covers EN21's per-day copy of consensus rows; EN21 is not built separately.
 Why: `consensus_findings` has primary key (symbol, field, as_of); a rerun the same day replaces the row, losing the earlier decision and the agent values. Source: `migrations/004`.
 Steps: 1. Migration 031 `consensus_findings_history` with the same columns plus `superseded_at`. 2. Trigger on the live table: before UPDATE or DELETE insert the old row. 3. No change to reads.
@@ -249,6 +260,7 @@ Approval needed: cluster write (migration)
 Risk or open question: none known.
 
 ### D16 Data quality check framework and price checks
+Status: done 2026-10-10, PR #103, merged and live.
 Why: only ingest-time validation exists (`parseTimeSeries`). Gaps, stale tickers and outliers are not tracked over time. Source: `src/data/twelvedata.ts`, `docs/data.md` Price ingest.
 Steps: 1. Migration 032 `dq_results` (check_id, subject, as_of, status `pass`, `warn`, `fail`, detail jsonb, run_at). 2. `src/jobs/dq.ts` with checks: missing sessions per ticker using D7, bar older than 3 days (matches C8), daily move over 40%, volume zero on a session, high below low, duplicate dates, rows per ticker below 200 (the db-mode minimum), calendar ends within 60 days. 3. Register jobs output in `runLoggedJob`. 4. Add `build:jobs` entry in `package.json`.
 Acceptance: unit tests with seeded gaps and outliers produce the exact expected `warn` and `fail` rows; a clean fixture produces only `pass`; the job exits 1 if any `fail`; build step includes `dq.js`.
@@ -259,6 +271,7 @@ Approval needed: cluster write (migration; CronJob in D40)
 Risk or open question: thresholds are placeholders for the owner.
 
 ### D17 Raw snapshot store
+Status: done 2026-10-10, PR #99, merged and live.
 Why: restated XBRL, estimates and calendars change; we need the raw response at the time. `source_documents.body` caps at 200 KB and expires. Source: `migrations/007`.
 Steps: 1. Migration 033 `raw_snapshots` (id, source_id, key, fetched_at, content_hash, content_type, size_bytes, body bytea gzip, meta jsonb) unique on (source_id, key, content_hash), no expiry. 2. `src/data/raw-store.ts` with `putSnapshot` (gzip, dedupe by hash, reject over 20 MB) and `getSnapshot`. 3. Accept that bodies go in Postgres TOAST for now; keep the API narrow so a later move to files or object storage changes one module.
 Acceptance: tests: same body twice stores one row; 1 MB JSON round-trips byte for byte; oversize rejected; hash stable; `data:inventory` (D1) reports size.
@@ -434,6 +447,7 @@ Approval needed: none
 Risk or open question: tolerances are guesses; owner or the owner's rules should set them.
 
 ### D34 Resumable backfill framework
+Status: done 2026-10-10, PR #101, merged and live.
 Synthesis note: the runner lands here with a fake job in its tests. Each source task registers its own plug-in when it lands: D19 `filings`, D20 `form4`, D18 `companyfacts`, EN22 `prices` (EN22 is the long price backfill and runs through this runner).
 Why: several tasks need long, rate-limited history pulls (filings 3 years, Form 4 3 years, companyfacts, price history). A crash or a daily cap must not restart from zero.
 Steps: 1. Migration 041 `backfill_state` (job, subject, cursor jsonb, status, updated_at). 2. `src/jobs/backfill.ts` with a generic runner (`--job`, `--only`, `--max-requests`, `--dry-run`) that reads the cursor, uses D8 reserve, and stops cleanly at a cap. 3. Plug in jobs: `filings`, `form4`, `companyfacts`, `prices`. 4. Add to `build:jobs` and the scanner-free web image.
@@ -519,6 +533,7 @@ Approval needed: none
 Risk or open question: whether a score derived from internal-only inputs may be shown is a legal question (not settled; ask in the lawyer session).
 
 ### D42 Terms-check pack for the owner
+Status: done 2026-10-10, PR #98, merged and live.
 Why: written permissions are the gate for any later display. Source: `docs/tasks-accounts-needed.md` rows 1, 8, 10, 11, 12, 14.
 Steps: 1. Draft one short plain email or form text each for Alpha Vantage (display of EPS surprise and estimates; commercial use), Cboe (permissions@cboe.com, VIX close derived flags), Twelve Data (display of daily closes on a public company page; the Grow plan wording "internal display data access"), FINRA (short interest redistribution), Finnhub (display), GDELT. 2. Each states product, user count (none yet), what would be shown, and asks a yes or no with conditions. 3. Add a tracking table to `docs/data-inventory.md` with sent and answered dates.
 Acceptance: drafts in `docs/terms-requests.md`; owner marks sent; answers update `data_sources` rows in a PR (terms_url, checked_on, class).

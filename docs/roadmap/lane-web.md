@@ -76,6 +76,7 @@ Sizes are given per task: S is 0.5 to 1 day, M 2 to 4, L 5 to 10. Two tasks are 
 ## Phase A: foundations and speed
 
 ### W1. [WL] Typed feature flags module
+Status: done 2026-10-10, PR #88, merged and live.
 - Synthesis note: this module is the one flag source. PL32 adds the env schema next to it (`src/config/env.ts`) and the flag document `docs/flags.md`. The payment flag is `BILLING` in every lane (PL32 and PL45 used `PAYMENTS`). D4 adds `RAW_SERIES_DISPLAY` here.
 - Why: flags are read ad hoc from `process.env` (`IDEAS_PAGE` in `src/data/ideas-store.ts`, `OWNER_VIEW` in `src/data/owner-allocation.ts`, `DATA_MODE` in many files). `docs/paywall-segments.md` needs `PAYWALL=on`. Every later task adds a flag.
 - Steps: 1) add `src/config/flags.ts` exporting `flags()` with `PAYWALL`, `AUTH`, `BILLING`, `WAITLIST`, `ADVICE_OUTPUT`, `IDEAS_PAGE`, `OWNER_VIEW`, each parsed once with zod (already a dependency), default off except where today's behaviour is on. 2) move the two existing flag readers to it, keep their exports. 3) document each flag and its default in `deploy/README.md` and `.env.example`.
@@ -87,6 +88,7 @@ Sizes are given per task: S is 0.5 to 1 day, M 2 to 4, L 5 to 10. Two tasks are 
 - Risk or open question: none.
 
 ### W2. [WL] One shared DB pool and per-request cached loaders
+Status: done 2026-10-10, PR #89, merged and live.
 - Synthesis note: this task creates `src/db/pool.ts`. PL18 extends the same module with `readPool()` and `writePool()` and moves the API routes onto it; there is one pool module.
 - Why: the store functions open a new `pg.Pool` per call, and a company request makes about 8 calls (see "Code facts" above). Likely main cause of the 2 to 4 s TTFB reported by the owner (I measured 0.6 to 3.6 s). Hypothesis, to be confirmed by W3.
 - Steps: 1) add `src/db/pool.ts` with a lazy module-level `pg.Pool` (max 5, idle timeout, `connectionTimeoutMillis` 3000). 2) change `src/data/store.ts`, `src/data/ideas-store.ts` and the pool users in `src/db/portfolio.ts`, `portfolio-history.ts` callers to use it and stop calling `db.end()`. 3) wrap `latestScores`, `instrumentUniverse`, `latestPortfolio`, `latestIdeas` in React `cache()` so `load()` called from `generateMetadata` and the page runs once per request. 4) keep fixture mode untouched. 5) ensure jobs under `src/jobs` keep their own pools.
