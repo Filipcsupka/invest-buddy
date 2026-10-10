@@ -3,6 +3,7 @@ import { MemoryCollectorRepository } from "../../db/collectors";
 import { EPS_FACT_KEY } from "../../data/eps";
 import { collectAlphaVantage, documentUrl, MAX_REQUESTS_PER_DAY, MAX_REQUESTS_PER_RUN, parseEarnings, pickSymbols, redact } from "./alphavantage";
 import { runExtraSources } from "./registry";
+import { MemoryUsageLedger } from "../../data/usage";
 import { context, stubHttp, type Call } from "./testing";
 
 /** Shape of the documented EARNINGS answer, written by hand for the tests (not a captured live response). */
@@ -129,5 +130,17 @@ describe("collectAlphaVantage", () => {
   it("redacts the raw and url-encoded key", () => {
     expect(redact("a k+y/ b k%2By%2F", "k+y/")).toBe("a [redacted] b [redacted]");
     expect(redact("text", undefined)).toBe("text");
+  });
+});
+
+describe("usage ledger", () => {
+  it("reserves each request and stops before sending when the ledger cap is reached", async () => {
+    const ledger = new MemoryUsageLedger({ alphavantage: { dailyCap: 3, monthlyCostCapEur: 0 } });
+    const http = stubHttp(answerAll);
+    const output = await collectAlphaVantage(context(http, { companies, symbols, env: { ALPHA_VANTAGE_API_KEY: KEY }, state: new MemoryCollectorRepository(), usage: ledger }));
+    expect(http.calls).toHaveLength(3);
+    expect(output.apiRequests).toBe(3);
+    expect(ledger.rows.reduce((n, row) => n + row.requests, 0)).toBe(3);
+    expect(output.failures?.[0].reason).toMatch(/daily cap 3/);
   });
 });

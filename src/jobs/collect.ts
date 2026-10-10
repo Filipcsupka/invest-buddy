@@ -14,12 +14,13 @@ import { EXTRA_SOURCES, LEGACY_SOURCES, type SourceName } from "../collectors/ty
 import type { SourceHttp } from "../collectors/sources/client";
 import { formatPings, isExtra, runExtraSources, runPings } from "../collectors/sources/registry";
 import { MemoryCusipStore, PostgresCusipStore, type CusipStore } from "../db/source-collectors";
+import { PostgresUsageLedger, type UsageLedger } from "../data/usage";
 import { isIsoDate } from "../db/iso-date";
 import { loadUniverse } from "../db/universe";
 
 const companies = universe.instruments as Company[];
 const daysAgo = (date: Date, days: number) => new Date(date.getTime() - days * 86400000).toISOString().slice(0, 10);
-export interface CollectOptions { since?: string; sources?: string[]; dryRun?: boolean; now?: () => Date; get?: (url: string) => Promise<string>; http?: SourceHttp; cusips?: CusipStore; companies?: Company[] }
+export interface CollectOptions { since?: string; sources?: string[]; dryRun?: boolean; now?: () => Date; get?: (url: string) => Promise<string>; http?: SourceHttp; cusips?: CusipStore; companies?: Company[]; usage?: UsageLedger }
 /** Phase A collectors (edgar, rss, fred) run as before. Phase A2 sources (`EXTRA_SOURCES`) run through the source registry. */
 export async function runCollect(repository: CollectorRepository, symbols: string[], options: CollectOptions = {}) {
   const companies = options.companies ?? universe.instruments as Company[];
@@ -28,7 +29,7 @@ export async function runCollect(repository: CollectorRepository, symbols: strin
   const first = basic.length ? await runLegacyCollect(repository, symbols, { ...options, sources: basic }) : undefined;
   if (!extra.length) return first!;
   const now = options.now?.() ?? new Date();
-  const second = await runExtraSources(repository, extra, { since: options.since ?? daysAgo(now, 30), now, dryRun: options.dryRun, http: options.http, cusips: options.cusips, companies, symbols });
+  const second = await runExtraSources(repository, extra, { since: options.since ?? daysAgo(now, 30), now, dryRun: options.dryRun, http: options.http, cusips: options.cusips, companies, symbols, usage: options.usage });
   if (!first) return second;
   return { ...first, sources: requested, requested: first.requested + second.requested, succeeded: first.succeeded + second.succeeded, failures: [...first.failures, ...second.failures],
     documentsWritten: first.documentsWritten + second.documentsWritten, factsWritten: first.factsWritten + second.factsWritten, stoppedReason: first.stoppedReason ?? second.stoppedReason,
@@ -182,7 +183,7 @@ async function main() {
     const unknown = symbols.filter((s) => !activeCompanies.some((c) => c.symbol === s));
     if (unknown.length) throw new Error(`Unknown ticker(s): ${unknown.join(", ")}`);
     const repository = pool ? new PostgresCollectorRepository(pool) : new MemoryCollectorRepository();
-    const result = await runCollect(repository, symbols, { since, sources: names as SourceName[] | undefined, dryRun, cusips: pool ? new PostgresCusipStore(pool) : new MemoryCusipStore(), companies: activeCompanies });
+    const result = await runCollect(repository, symbols, { since, sources: names as SourceName[] | undefined, dryRun, cusips: pool ? new PostgresCusipStore(pool) : new MemoryCusipStore(), companies: activeCompanies, usage: pool ? new PostgresUsageLedger(pool) : undefined });
     process.stdout.write(`Collect: ${result.succeeded}/${result.requested} tickers, ${result.documentsParsed} documents parsed, ${result.factsComputed} facts computed, ${result.documentsWritten} documents written, ${result.factsWritten} facts written${dryRun ? " (dry run, nothing stored)" : ""}\n`);
     for (const failure of result.failures) process.stderr.write(`Failed ${failure.ticker}: ${safeReason(failure.reason)}\n`);
     if (result.stoppedReason) process.stderr.write("Stopped: source limit reached\n");

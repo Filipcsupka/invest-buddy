@@ -1,4 +1,5 @@
 import type { CollectorRepository, CollectorRun } from "../../db/collectors";
+import type { UsageLedger } from "../../data/usage";
 import type { CusipStore } from "../../db/source-collectors";
 import { RateLimitLockout } from "../http";
 import { EXTRA_SOURCES, type SourceName } from "../types";
@@ -42,7 +43,7 @@ export const SOURCES: (Omit<SourceModule, "name"> & { name: SourceName | "openfi
 ];
 export const PING_NAMES = SOURCES.map((source) => source.name);
 
-export interface ExtraOptions { since: string; now: Date; dryRun?: boolean; http?: SourceHttp; cusips?: CusipStore; companies: Company[]; symbols: string[]; env?: Env }
+export interface ExtraOptions { since: string; now: Date; dryRun?: boolean; http?: SourceHttp; cusips?: CusipStore; companies: Company[]; symbols: string[]; env?: Env; usage?: UsageLedger }
 
 /**
  * Runs the sources that are not phase A collectors. One failing source does not stop the others, except that a 429 lockout
@@ -51,7 +52,7 @@ export interface ExtraOptions { since: string; now: Date; dryRun?: boolean; http
  */
 export async function runExtraSources(repository: CollectorRepository, names: SourceName[], options: ExtraOptions) {
   const run: CollectorRun = { startedAt: options.now.toISOString(), sources: names, requested: names.length, succeeded: 0, failures: [], documentsWritten: 0, factsWritten: 0, stoppedReason: null, apiRequests: {} };
-  const ctx: SourceContext = { http: options.http ?? defaultHttp(), companies: options.companies, symbols: options.symbols, since: options.since, now: options.now, env: options.env ?? process.env, cusips: options.cusips, state: repository };
+  const ctx: SourceContext = { http: options.http ?? defaultHttp(), companies: options.companies, symbols: options.symbols, since: options.since, now: options.now, env: options.env ?? process.env, cusips: options.cusips, state: repository, usage: options.usage };
   const universe = new Set(options.companies.map((company) => company.symbol));
   let documentsParsed = 0, factsComputed = 0, secLocked = false;
   for (const name of names) {
