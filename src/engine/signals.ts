@@ -13,7 +13,7 @@ import type { Technicals } from "../data/technicals";
  *  1. Rejection (revenue declining, guidance cut, or the rule engine's "Criteria broken"): THESIS_BROKEN for a held name, WATCH otherwise.
  *  2. Held, company rating Weak and a downtrend: REDUCE. A name that is not held goes on and ends as WATCH.
  *  3. Fewer than two confirmed key fields: WATCH, insufficient evidence.
- *  4. Buy conditions: rule score at least 18 (Guide s6, s8; 15-17 is WATCH), company and entry at least Good, no downtrend. Not met: HOLD for a held name, WATCH otherwise.
+ *  4. ADD conditions: rule score at least 15, company and entry at least Good, no downtrend. START_POSITION needs 18. Not met: HOLD for a held name, WATCH otherwise.
  *  5. Conviction (score 18 or more, company, entry and catalyst at least Strong, a fresh confirmed EPS beat or guidance raise, no carried data):
  *       HIGH_CONVICTION_ADD, tier ADD_HALF (add about 1/2 of a full position).
  *     Good entry (entry at least Strong, or a pullback): ADD, tier ADD_THIRD (add about 1/3 of a full position).
@@ -25,9 +25,9 @@ import type { Technicals } from "../data/technicals";
  * The value stays in ACTIONS so older stored ideas still parse.
  */
 export const SIGNAL_RULES = {
-  version: "2026-10-09.1",
+  version: "2026-10-10.1",
   actionsOrder: ["HIGH_CONVICTION_ADD", "ADD", "START_POSITION"],
-  /** InvestingGuide s6 and s8: score 18+ is the buy alert, 15-17 is WATCH (add on dip), 12-14 wait. Every buy action needs this score. */
+  /** InvestingGuide s6 and s8: START_POSITION needs 18; a score of 15 to 17 can qualify for ADD. */
   minScoreForBuy: 18,
   /** Guide section 8: an ADD alert needs score 15 or more; a BUY (START_POSITION) alert needs 18. */
   minScoreForAdd: 15,
@@ -189,7 +189,7 @@ export function signalFor(s: SignalSymbolInput, rules: SignalRules = SIGNAL_RULE
   if (conviction) { sig.action = "HIGH_CONVICTION_ADD"; sig.sizeTier = "ADD_HALF"; sig.reasons.push("Conviction conditions met."); return sig; }
   if (atLeast(r.ratings.entry, "Strong") || regime === "pullback") { sig.action = "ADD"; sig.sizeTier = "ADD_THIRD"; sig.reasons.push("Fundamentals hold and the entry is good."); return sig; }
   if (s.score.total < rules.minScoreForBuy) {
-    sig.reasons.push(`Score ${s.score.total} is below the buy threshold of ${rules.minScoreForBuy}; 15 to 17 is WATCH, add on a dip.`);
+    sig.reasons.push(`Score ${s.score.total} is below the start threshold of ${rules.minScoreForBuy}; an add needs a strong entry or pullback.`);
     if (s.held) sig.action = "HOLD";
     return sig;
   }

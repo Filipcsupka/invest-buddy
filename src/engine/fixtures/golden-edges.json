@@ -1,7 +1,7 @@
 {
  "description": "Built by hand: six names at score 15 to 17 and one at 18 for threshold edges.",
  "asOf": "2026-10-08",
- "signalRulesVersion": "2026-10-09.1",
+ "signalRulesVersion": "2026-10-10.1",
  "scoreRulesVersion": "2026-10-06.1",
  "symbols": [
   {
@@ -99,7 +99,7 @@
      "productCatalyst"
     ],
     "reasons": [
-     "Score 15 is below the buy threshold of 18; 15 to 17 is WATCH, add on a dip."
+     "Score 15 is below the start threshold of 18; an add needs a strong entry or pullback."
     ]
    }
   },
@@ -198,7 +198,7 @@
      "productCatalyst"
     ],
     "reasons": [
-     "Score 15 is below the buy threshold of 18; 15 to 17 is WATCH, add on a dip."
+     "Score 15 is below the start threshold of 18; an add needs a strong entry or pullback."
     ]
    }
   },
