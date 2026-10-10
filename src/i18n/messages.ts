@@ -46,6 +46,7 @@ const en = {
   sources: {
     label: "Source",
     none: "No source yet",
+    noneCatalyst: "Needs an SEC filing or press release from the last 90 days. Checked nightly, up to 6 stocks a night.",
     summary: "Data sources",
     newTab: "opens in a new tab",
     kinds: {
@@ -567,6 +568,7 @@ const sk: Messages = {
   sources: {
     label: "Zdroj",
     none: "Zatiaľ bez zdroja",
+    noneCatalyst: "Treba podanie SEC alebo tlačovú správu z posledných 90 dní. Kontrola beží každú noc, najviac pre 6 akcií.",
     summary: "Zdroje údajov",
     newTab: "otvorí sa na novej karte",
     kinds: {

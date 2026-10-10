@@ -222,7 +222,7 @@ async function Company({ params }: Params) {
                             <span className="rule-name">{m.rules[rule.id]}</span>
                           </span>
                           {hit ? <span className="rule-def num">{ruleDetail(locale, hit, result)}</span> : null}
-                          {hit ? <span className="rule-def rule-src"><SourceList locale={locale} items={ruleSources(locale, result, rule.id)} /></span> : null}
+                          {hit ? <span className="rule-def rule-src"><SourceList locale={locale} items={ruleSources(locale, result, rule.id)} emptyNote={rule.id === "catalyst"} /></span> : null}
                         </th>
                         <td className="num rule-points">{met ? `+${rule.points}` : "0"}</td>
                       </tr>
@@ -260,7 +260,7 @@ async function Company({ params }: Params) {
                 <div key={label}>
                   <dt>{label}</dt>
                   <dd className="num">{value}{field && result.agreement?.[field] ? <small className="muted"> · {m.agreement[result.agreement[field] as keyof typeof m.agreement]}</small> : null}{field && result.expiredFields?.includes(field) ? <small className="muted"> · {m.agreement.expired}</small> : field && result.carriedFrom?.[field] ? <small className="muted"> · {fill(m.agreement.carried, { date: formatDate(locale, result.carriedFrom[field]) })}</small> : null}</dd>
-                  <dd className="input-src"><SourceList locale={locale} items={inputSources(locale, result, key)} /></dd>
+                  <dd className="input-src"><SourceList locale={locale} items={inputSources(locale, result, key)} emptyNote={key === "productCatalyst"} /></dd>
                 </div>
               ))}
             </dl>

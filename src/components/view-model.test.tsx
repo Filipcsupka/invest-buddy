@@ -43,6 +43,16 @@ describe("rule sources by agreement type", () => {
     expect(ruleSources("en", r, "catalyst")).toEqual([]);
     expect(renderToStaticMarkup(<SourceList locale="en" items={ruleSources("en", r, "catalyst")} />)).toContain("No source yet");
   });
+  it("catalyst without a source says what is missing, in EN and SK; other rows keep the short text", () => {
+    const en = renderToStaticMarkup(<SourceList locale="en" items={[]} emptyNote />);
+    expect(en).toContain("No source yet");
+    expect(en).toContain("last 90 days");
+    expect(en).toContain("up to 6 stocks a night");
+    const sk = renderToStaticMarkup(<SourceList locale="sk" items={[]} emptyNote />);
+    expect(sk).toContain("Zatiaľ bez zdroja");
+    expect(sk).toContain("posledných 90 dní");
+    expect(renderToStaticMarkup(<SourceList locale="en" items={[]} />)).not.toContain("90 days");
+  });
   it("technical rules name own price bars; macro rules name their data, none when unknown", async () => {
     const r = await base();
     expect(ruleSources("en", r, "dip")).toEqual([expect.objectContaining({ label: "Own price bars", href: null })]);
