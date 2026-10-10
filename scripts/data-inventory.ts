@@ -15,6 +15,7 @@ export const INVENTORY_TABLES: { table: string; dateColumn: string | null }[] = 
   { table: "filing_watch", dateColumn: "filed_at" },
   { table: "source_documents", dateColumn: "published_at" },
   { table: "collected_facts", dateColumn: "as_of" },
+  { table: "raw_snapshots", dateColumn: "fetched_at" },
   { table: "collector_runs", dateColumn: "started_at" },
   { table: "scan_runs", dateColumn: null },
   { table: "scan_findings", dateColumn: null },
@@ -30,6 +31,7 @@ export const INVENTORY_TABLES: { table: string; dateColumn: string | null }[] = 
 
 export type TableRow = { table: string; rows: number; min: string | null; max: string | null; bytes: number };
 export type GroupRow = { key: string; documents: number; bodyBytes: number; min: string | null; max: string | null };
+export type SnapshotGroup = { source: string; snapshots: number; sizeBytes: number; storedBytes: number; min: string | null; max: string | null };
 export type ExpiryRow = { month: string; documents: number; bodyBytes: number };
 export type Inventory = {
   generatedAt: string;
@@ -37,6 +39,7 @@ export type Inventory = {
   tables: TableRow[];
   instrumentsBySource: { source: string; rows: number }[];
   documentsBySource: GroupRow[];
+  snapshotsBySource: SnapshotGroup[];
   factsByKey: { key: string; rows: number; min: string | null; max: string | null }[];
   documentExpiry: ExpiryRow[];
   factExpiry: { month: string; rows: number }[];
@@ -69,6 +72,10 @@ export async function collectInventory(db: Queryable): Promise<Inventory> {
   const factsByKey = has("collected_facts")
     ? (await db.query("SELECT fact_key AS key, count(*) AS rows, min(as_of)::text AS min, max(as_of)::text AS max FROM collected_facts GROUP BY fact_key ORDER BY fact_key")).rows.map((r) => ({ key: String(r.key), rows: num(r.rows), min: str(r.min), max: str(r.max) }))
     : [];
+  const snapshotsBySource = has("raw_snapshots")
+    ? (await db.query(`SELECT source_id AS source, count(*) AS snapshots, coalesce(sum(size_bytes),0) AS size_bytes, coalesce(sum(octet_length(body)),0) AS stored_bytes, min(fetched_at)::text AS min, max(fetched_at)::text AS max
+        FROM raw_snapshots GROUP BY source_id ORDER BY source_id`)).rows.map((r) => ({ source: String(r.source), snapshots: num(r.snapshots), sizeBytes: num(r.size_bytes), storedBytes: num(r.stored_bytes), min: str(r.min), max: str(r.max) }))
+    : [];
   const documentExpiry = has("source_documents")
     ? (await db.query(`SELECT to_char(expires_at, 'YYYY-MM') AS month, count(*) AS documents, coalesce(sum(octet_length(body)),0) AS body_bytes
         FROM source_documents GROUP BY 1 ORDER BY 1`)).rows.map((r) => ({ month: String(r.month), documents: num(r.documents), bodyBytes: num(r.body_bytes) }))
@@ -77,7 +84,7 @@ export async function collectInventory(db: Queryable): Promise<Inventory> {
     ? (await db.query("SELECT to_char(expires_at, 'YYYY-MM') AS month, count(*) AS rows FROM collected_facts GROUP BY 1 ORDER BY 1")).rows.map((r) => ({ month: String(r.month), rows: num(r.rows) }))
     : [];
 
-  return { generatedAt: new Date().toISOString(), databaseBytes: num(size.rows[0]?.bytes), tables, instrumentsBySource, documentsBySource, factsByKey, documentExpiry, factExpiry };
+  return { generatedAt: new Date().toISOString(), databaseBytes: num(size.rows[0]?.bytes), tables, instrumentsBySource, documentsBySource, snapshotsBySource, factsByKey, documentExpiry, factExpiry };
 }
 
 export function formatBytes(bytes: number): string {
@@ -103,6 +110,9 @@ export function inventoryMarkdown(inv: Inventory): string {
     "",
     "### Source documents by source",
     table(["Source", "Documents", "Body bytes", "Min published", "Max published"], inv.documentsBySource.map((r) => [r.key, r.documents, formatBytes(r.bodyBytes), r.min, r.max])),
+    "",
+    "### Raw snapshots by source (size = uncompressed, stored = gzip)",
+    table(["Source", "Snapshots", "Size", "Stored", "Min fetched", "Max fetched"], inv.snapshotsBySource.map((r) => [r.source, r.snapshots, formatBytes(r.sizeBytes), formatBytes(r.storedBytes), r.min, r.max])),
     "",
     "### Collected facts by key",
     table(["Key", "Rows", "Min as_of", "Max as_of"], inv.factsByKey.map((r) => [r.key, r.rows, r.min, r.max])),
