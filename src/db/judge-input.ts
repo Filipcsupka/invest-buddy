@@ -59,7 +59,7 @@ export function pickSymbols(rows: ScoreRow[], held: Set<string>, previous: Set<s
 }
 
 const refLabel = (ref: { url?: string; fiscalPeriod?: string }): string | null =>
-  ref.url && SEC_PUBLIC_URL.test(ref.url) ? "SEC XBRL" : ref.fiscalPeriod?.startsWith("Form 4") ? "Form 4" : null;
+  ref.url && SEC_PUBLIC_URL.test(ref.url) ? "SEC XBRL" : ref.fiscalPeriod?.startsWith("Form 4") ? "SEC Form 4" : null;
 const docLabel = (docType: string): string => (docType === "10-Q" ? "10-Q" : "Earnings release");
 
 /**

@@ -3,7 +3,7 @@ import type { CollectedDocument } from "../collectors/types";
 import type { Form4Transaction } from "../collectors/edgar";
 import type { HolderEvent } from "../collectors/sources/common";
 import { freshnessDays } from "../data/evidence";
-import { insiderFromFact, DEFAULT_INSIDER_MIN_NET_BUY_USD, INSIDER_FACT_DAYS, INSIDER_FACT_LEAD_DAYS, type InsiderDocument, type InsiderResult } from "../data/insider";
+import { insiderFromFact, netBuyFromTransactions, INSIDER_WINDOW_DAYS, type InsiderNetBuy, type InsiderTxRow, DEFAULT_INSIDER_MIN_NET_BUY_USD, INSIDER_FACT_DAYS, INSIDER_FACT_LEAD_DAYS, type InsiderDocument, type InsiderResult } from "../data/insider";
 import { FACT_SOURCE_IDS, licenceClassFor, sourceIdFor } from "../data/sources-registry";
 import { DEFAULT_EPS_BEAT_MIN_SURPRISE_PCT, EPS_FACT_KEY, epsFromFact, type EpsResult } from "../data/eps";
 
@@ -29,6 +29,8 @@ export interface CollectorRepository extends SourceState {
   upsertDocument(doc: CollectedDocument): Promise<{ id: number; written: boolean }>;
   upsertInsiderTransactions?(accession: string, ticker: string, filedAt: string, rows: Form4Transaction[]): Promise<void>;
   upsertHolderEvent?(event: HolderEvent): Promise<boolean>;
+  /** 90-day net open-market buying from stored Form 4 lines, with the ids of the stored Form 4 filings behind it. null when the ticker has no line in the window. */
+  insiderNetBuy?(symbol: string, asOf: string): Promise<(InsiderNetBuy & { documentIds: number[] }) | null>;
   upsertFact(fact: Fact): Promise<boolean>;
   bars(symbol: string, limit: number): Promise<{ date: string; close: number; volume: number }[]>;
   recordRun(run: CollectorRun): Promise<void>;
@@ -44,8 +46,19 @@ export class MemoryCollectorRepository implements CollectorRepository {
     this.holderEvents.set(event.accession, structuredClone(event));
     return true;
   }
-  async upsertInsiderTransactions(accession: string, _ticker: string, _filedAt: string, rows: Form4Transaction[]) {
-    for (const row of rows) this.insiderTransactions.set(`${accession}:${row.lineNo}`, structuredClone(row));
+  private readonly insiderOrigin = new Map<string, { accession: string; ticker: string; filedAt: string }>();
+  async upsertInsiderTransactions(accession: string, ticker: string, filedAt: string, rows: Form4Transaction[]) {
+    for (const row of rows) { this.insiderTransactions.set(`${accession}:${row.lineNo}`, structuredClone(row)); this.insiderOrigin.set(`${accession}:${row.lineNo}`, { accession, ticker, filedAt }); }
+  }
+  async insiderNetBuy(symbol: string, asOf: string) {
+    const lines: InsiderTxRow[] = [...this.insiderTransactions].flatMap(([key, row]) => {
+      const origin = this.insiderOrigin.get(key);
+      return origin && origin.ticker === symbol ? [{ accession: origin.accession, ticker: symbol, transactionDate: row.transactionDate, filedAt: origin.filedAt, code: row.code, shares: row.shares, price: row.price, derivative: row.derivative }] : [];
+    });
+    const net = netBuyFromTransactions(lines, asOf);
+    if (!net) return null;
+    const accessions = new Set(net.accessions);
+    return { ...net, documentIds: [...this.documents.values()].filter((doc) => doc.docType === "4" && doc.symbol === symbol && accessions.has(String(doc.meta.accession))).map((doc) => doc.id) };
   }
   async upsertDocument(doc: CollectedDocument) {
     const old = this.documents.get(doc.url);
@@ -105,6 +118,17 @@ export class PostgresCollectorRepository implements CollectorRepository {
       ON CONFLICT (accession,line_no) DO NOTHING`,
       [accession,row.lineNo,ticker,row.ownerCik,row.ownerName,JSON.stringify(row.reportingOwners),row.isDirector,row.isOfficer,row.isTenPercentOwner,row.isOther,
         row.transactionDate,row.code,row.shares,row.price,row.acquiredDisposed,row.derivative,row.sharesAfter,filedAt,row.plan10b5]);
+  }
+  async insiderNetBuy(symbol: string, asOf: string) {
+    const from = new Date(Date.parse(`${asOf}T00:00:00Z`) - INSIDER_WINDOW_DAYS * 86_400_000).toISOString().slice(0, 10);
+    const result = await this.pool.query<{ accession: string; transaction_date: string; filed_at: string; code: string; shares: string; price: string | null; derivative: boolean }>(
+      `SELECT accession,transaction_date::text,filed_at::text,code,shares::text,price::text,derivative FROM insider_transactions
+       WHERE ticker=$1 AND transaction_date BETWEEN $2::date AND $3::date AND filed_at BETWEEN $2::date AND $3::date`, [symbol, from, asOf]);
+    const net = netBuyFromTransactions(result.rows.map((row) => ({ accession: row.accession, ticker: symbol, transactionDate: row.transaction_date, filedAt: row.filed_at, code: row.code,
+      shares: Number(row.shares), price: row.price === null ? null : Number(row.price), derivative: row.derivative })), asOf);
+    if (!net) return null;
+    const docs = net.accessions.length ? await this.pool.query<{ id: string }>("SELECT id FROM source_documents WHERE symbol=$1 AND doc_type='4' AND meta->>'accession' = ANY($2::text[]) ORDER BY id", [symbol, net.accessions]) : { rows: [] };
+    return { ...net, documentIds: docs.rows.map((row) => Number(row.id)) };
   }
   async upsertDocument(doc: CollectedDocument) {
     const sourceId = doc.sourceId ?? sourceIdFor(doc.source);

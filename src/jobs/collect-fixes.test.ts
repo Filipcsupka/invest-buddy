@@ -217,3 +217,30 @@ describe("safeReason", () => {
     expect(safeReason("x".repeat(500)).length).toBe(200);
   });
 });
+
+describe("D20b insider_net_buy_90d from stored Form 4 lines", () => {
+  const tx = (code: string, shares: number, price: number | null, lineNo: number, derivative = false) => ({ lineNo, ownerCik: null, ownerName: null, reportingOwners: [], isDirector: null, isOfficer: null, isTenPercentOwner: null, isOther: null,
+    transactionDate: "2026-09-20", code, shares, price, acquiredDisposed: null, derivative, sharesAfter: null, plan10b5: "unknown" as const });
+  const run = async (rows: ReturnType<typeof tx>[]) => {
+    const repo = new MemoryCollectorRepository();
+    const doc = document({ source: "edgar", symbol: "NVDA", docType: "4", url: "https://www.sec.gov/a.xml", publishedAt: "2026-09-22T00:00:00Z", body: "x", meta: { accession: "0000000001-26-000001", trades: [] } });
+    const { id } = await repo.upsertDocument(doc);
+    await repo.upsertInsiderTransactions("0000000001-26-000001", "NVDA", "2026-09-22", rows);
+    return { id, fact: (await deriveFacts("NVDA", [], new Map(), repo, "2026-10-05")).find((f) => f.key === "insider_net_buy_90d") };
+  };
+  it("net buy cites the Form 4 filing", async () => {
+    const { id, fact } = await run([tx("P", 1000, 10, 1), tx("S", 200, 12, 2)]);
+    expect(fact).toMatchObject({ value: { netShares: 800, netDollars: 7600 }, documentIds: [id] });
+  });
+  it("net sell", async () => {
+    expect((await run([tx("S", 500, 10, 1)])).fact?.value).toEqual({ netShares: -500, netDollars: -5000 });
+  });
+  it("only grants: fact is written with 0 net and no evidence document", async () => {
+    const { fact } = await run([tx("A", 5000, 0, 1), tx("M", 100, 5, 2), tx("F", 50, 40, 3), tx("P", 10, 1, 4, true)]);
+    expect(fact).toMatchObject({ value: { netShares: 0, netDollars: 0 }, documentIds: [] });
+  });
+  it("no rows: no fact from the table (the extractor stays the fallback)", async () => {
+    const facts = await deriveFacts("NVDA", [], new Map(), new MemoryCollectorRepository(), "2026-10-05");
+    expect(facts.find((f) => f.key === "insider_net_buy_90d")).toBeUndefined();
+  });
+});

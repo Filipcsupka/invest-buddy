@@ -31,7 +31,7 @@ function docKind(docType: string): SourceKind | null {
   if (docType === "10-Q") return "10-Q";
   if (docType === "10-K") return "10-K";
   if (docType === "8-K") return "8-K";
-  if (docType === "Form 4") return "form4";
+  if (docType === "Form 4" || docType === "4") return "form4";
   if (docType === "EPS surprise") return "alphavantage";
   return null;
 }

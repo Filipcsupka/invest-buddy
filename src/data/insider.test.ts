@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type pg from "pg";
-import { insiderFromFact, insiderMinNetBuyUsd, DEFAULT_INSIDER_MIN_NET_BUY_USD } from "./insider";
+import { insiderFromFact, insiderMinNetBuyUsd, netBuyFromTransactions, DEFAULT_INSIDER_MIN_NET_BUY_USD, type InsiderTxRow } from "./insider";
 import { loadInsider } from "../db/collectors";
 import { reconcileField, type AgentFinding } from "../jobs/reconcile";
 
@@ -87,5 +87,29 @@ describe("loadInsider", () => {
   it("is null without a fact", async () => {
     const pool = { query: async () => ({ rows: [] }) } as unknown as pg.Pool;
     expect(await loadInsider(pool, "NVDA", asOf)).toBeNull();
+  });
+});
+
+describe("netBuyFromTransactions (stored Form 4 lines)", () => {
+  const line = (code: string, shares: number, price: number | null, extra: Partial<InsiderTxRow> = {}): InsiderTxRow =>
+    ({ accession: "0000000001-26-000001", ticker: "NVDA", transactionDate: "2026-09-20", filedAt: "2026-09-22", code, shares, price, derivative: false, ...extra });
+  it("net buy: P adds, S subtracts", () => {
+    expect(netBuyFromTransactions([line("P", 1000, 10), line("S", 200, 12, { accession: "0000000001-26-000002" })], asOf))
+      .toEqual({ netShares: 800, netDollars: 7600, dollarsComplete: true, accessions: ["0000000001-26-000001", "0000000001-26-000002"] });
+  });
+  it("net sell is negative", () => {
+    expect(netBuyFromTransactions([line("P", 100, 10), line("S", 500, 10)], asOf)).toMatchObject({ netShares: -400, netDollars: -4000 });
+  });
+  it("none: no line in the 90 day window means null, so the extractor stays the fallback", () => {
+    expect(netBuyFromTransactions([], asOf)).toBeNull();
+    expect(netBuyFromTransactions([line("P", 100, 10, { transactionDate: "2026-06-01", filedAt: "2026-06-03" })], asOf)).toBeNull();
+    expect(netBuyFromTransactions([line("P", 100, 10, { filedAt: "2026-10-09" })], asOf)).toBeNull();
+  });
+  it("only grants and exercises: lines exist but net is 0, never a buy", () => {
+    const result = netBuyFromTransactions([line("A", 5000, 0), line("M", 300, 5), line("F", 100, 50), line("G", 10, null), line("P", 900, 10, { derivative: true })], asOf);
+    expect(result).toEqual({ netShares: 0, netDollars: 0, dollarsComplete: true, accessions: [] });
+  });
+  it("a trade without a price adds shares and flags the dollars as incomplete", () => {
+    expect(netBuyFromTransactions([line("P", 100, 10), line("P", 50, null)], asOf)).toMatchObject({ netShares: 150, netDollars: 1000, dollarsComplete: false });
   });
 });

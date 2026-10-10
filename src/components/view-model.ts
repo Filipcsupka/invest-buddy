@@ -72,7 +72,9 @@ const itemKey = (s: SourceItem) => s.href ?? `${s.kind}:${s.publishedAt ?? ""}`;
 function fieldItems(result: ScoreResult, field: string): SourceItem[] {
   const out = (result.sources?.[field] ?? []).filter((s): s is SourceItem => isKind(s.kind));
   const agreement = result.agreement?.[field];
-  if (agreement === "xbrl_override" && !out.some((s) => s.kind === "xbrl")) out.push(plain("xbrl"));
+  // A Form 4 override (insider flag) names SEC Form 4; every other verified SEC override names SEC XBRL data.
+  if (agreement === "xbrl_override" && field === "insiderOrInstitutionalBuying") { if (!out.some((s) => s.kind === "form4")) out.push(plain("form4")); }
+  else if (agreement === "xbrl_override" && !out.some((s) => s.kind === "xbrl")) out.push(plain("xbrl"));
   if (agreement === "data_rule" && field === "epsBeat" && !out.some((s) => s.kind === "alphavantage")) out.push(plain("alphavantage"));
   return out;
 }

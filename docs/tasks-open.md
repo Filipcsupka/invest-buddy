@@ -337,6 +337,8 @@ Owner decision 2026-10-09: the weeks to 2026-12-31 go to collecting data so hist
 
 ### Progress log
 - D21 (migration 047, PR #128, CI pending): current SEC 13D/G and 8-K feed stores universe holder filings by accession; the weekday job stays suspended until the migration and schedule are approved.
+- D20b (open PR): the insider rule reads stored Form 4 lines (P minus S over 90 days, grants and exercises ignored), writes `insider_net_buy_90d` with the Form 4 filings as evidence, and the page names the source "SEC Form 4" in EN and SK. No migration. Tests written; CI result pending, not yet implemented.
+- D20b (#129, open): the insider rule reads stored Form 4 lines (P minus S over 90 days, grants and exercises ignored), writes `insider_net_buy_90d` with the Form 4 filings as evidence, and the page names the source "SEC Form 4" in EN and SK. No migration. Implemented: fixture tests (net buy, net sell, none, only grants) and CI `quality` passed. Live check after the next collect and reconcile still to do.
 - W10 (#121, merged): `ADVICE_OUTPUT` off hides action, size and plan text, closes `/sizing` and `/ideas`, and keeps rule states and evidence visible. Implemented: EN/SK route and render tests and CI `quality` passed. Live check on the site still to do.
 - D20 (#118, merged; migration 045): Form 4 transactions are stored by accession and line, with a resumable SEC backfill. Implemented: PostgreSQL parity, collector and resume tests and CI passed. Live migration and backfill await owner approval.
 - EN27 (#120, merged): track record measures 1, 5, 20 and 60 shared trading sessions against SPY. Implemented: Node 22 tests, lint, typecheck, build and CI passed. Live check on `/track-record` still to do.
