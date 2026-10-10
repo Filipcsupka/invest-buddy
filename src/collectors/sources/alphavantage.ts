@@ -1,4 +1,5 @@
 import { EPS_FACT_KEY, type EpsSurpriseFact } from "../../data/eps";
+import { CapReached } from "../../data/usage";
 import { freshnessDays } from "../../data/evidence";
 import type { CollectedDocument } from "../types";
 import { defaultHttp, type SourceHttp } from "./client";
@@ -69,12 +70,13 @@ export async function collectAlphaVantage(ctx: SourceContext): Promise<SourceOut
     const ticker = marketTicker(symbol);
     let quarter: EpsSurpriseFact | undefined;
     try {
+      await ctx.usage?.reserve(SOURCE, 1, { job: "collect", credits: 1 });
       requests++;
       quarter = parseEarnings(await ctx.http.get(requestUrl(ticker, key), { timeoutMs: 15_000, maxAttempts: 1 }), today);
     } catch (error) {
       const reason = redact(error instanceof Error ? error.message : String(error), key);
       failures.push({ ticker: symbol, reason });
-      if (error instanceof AlphaVantageLimit || /HTTP 429/.test(reason)) {
+      if (error instanceof AlphaVantageLimit || error instanceof CapReached || /HTTP 429/.test(reason)) {
         for (const rest of picked.slice(index + 1)) failures.push({ ticker: rest, reason: "not fetched: Alpha Vantage limit" });
         break;
       }

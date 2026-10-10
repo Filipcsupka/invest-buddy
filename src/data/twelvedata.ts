@@ -26,6 +26,8 @@ export interface TwelveDataOptions {
   backoffMs?: number;
   outputSize?: number;
   symbolMap?: Readonly<Record<string, string>>;
+  /** Called before every request that is sent, retries included. Throwing (CapReached) stops the call before it is made. */
+  reserve?: () => Promise<unknown>;
 }
 
 const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -69,12 +71,14 @@ export function parseTimeSeries(body: unknown, symbol: string, nowMs: number): O
 
 export class TwelveDataProvider implements MarketDataProvider {
   private readonly stamps: number[] = [];
-  private readonly o: Required<Omit<TwelveDataOptions, "apiKey" | "fetch">> & { fetch: typeof fetch };
+  private readonly o: Required<Omit<TwelveDataOptions, "apiKey" | "fetch" | "reserve">> & { fetch: typeof fetch };
   private readonly apiKey: string;
+  private readonly reserve?: () => Promise<unknown>;
   requests = 0;
   constructor(options: TwelveDataOptions) {
     if (!options.apiKey) throw new Error("TWELVE_DATA_API_KEY is required");
     this.apiKey = options.apiKey;
+    this.reserve = options.reserve;
     this.o = {
       fetch: options.fetch ?? globalThis.fetch, now: options.now ?? Date.now, sleep: options.sleep ?? defaultSleep,
       baseUrl: options.baseUrl ?? "https://api.twelvedata.com", maxPerMinute: Math.min(options.maxPerMinute ?? 7, 7), timeoutMs: options.timeoutMs ?? 20_000,
@@ -99,6 +103,7 @@ export class TwelveDataProvider implements MarketDataProvider {
     for (let attempt = 0; attempt <= this.o.maxRetries; attempt++) {
       if (attempt > 0) await this.o.sleep(this.o.backoffMs * 2 ** (attempt - 1));
       await this.throttle();
+      await this.reserve?.();
       this.requests++;
       let response: Response;
       try {

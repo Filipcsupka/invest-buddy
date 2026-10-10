@@ -15,6 +15,7 @@ import { score } from "../engine/score";
 import { movingAverage } from "../engine/indicators";
 import type { OHLCV } from "../engine/types";
 import { DailyLimitError, SymbolNotFoundError, TwelveDataProvider } from "../data/twelvedata";
+import { CapReached, PostgresUsageLedger } from "../data/usage";
 import { filingUrl } from "../collectors/edgar";
 import { previousTradingDay } from "./macro";
 
@@ -280,7 +281,10 @@ export async function preScreenMa200(rows: DiscoveryCandidate[], date: string, b
       if (ma200 !== null && close !== undefined && close < ma200) { dropped.push({ symbol: row.symbol, reason: `pre-screen: close ${close} below MA200 ${ma200.toFixed(2)}` }); continue; }
     } catch (error) {
       if (error instanceof SymbolNotFoundError) { skipped.push({ symbol: row.symbol, reason: "symbol not accepted by Twelve Data" }); continue; }
-      if (error instanceof DailyLimitError) stopped = true;
+      if (error instanceof DailyLimitError || error instanceof CapReached) {
+        stopped = true;
+        if (error instanceof CapReached) process.stderr.write(`${JSON.stringify({ event: "quota_skip", job: "discovery", source: error.source, reason: error.reason })}\n`);
+      }
     }
     kept.push(row);
   }
@@ -411,7 +415,8 @@ async function main() {
     const preScreen = DISCOVERY.preScreenMa200;
     const { shortlist: ranked, skipped: filtered } = shortlistCandidates(sources, known, preScreen ? Math.max(DISCOVERY.preScreenTopK, DISCOVERY.maxScreenedPerWeek) : DISCOVERY.maxScreenedPerWeek);
     if (!process.env.TWELVE_DATA_API_KEY) throw new Error("TWELVE_DATA_API_KEY is required to apply the scoring rules to discovery candidates");
-    const provider = new TwelveDataProvider({ apiKey: process.env.TWELVE_DATA_API_KEY });
+    const usage = new PostgresUsageLedger(pool);
+    const provider = new TwelveDataProvider({ apiKey: process.env.TWELVE_DATA_API_KEY, reserve: () => usage.reserve("twelvedata", 1, { job: "discovery", credits: 1 }) });
     const bySymbol = new Map(ranked.map((row) => [row.symbol, row]));
     const fresh = (bars: OHLCV[]) => bars.length >= 200 && bars.at(-1) && Date.parse(`${date}T00:00:00Z`) - Date.parse(`${bars.at(-1)!.date}T00:00:00Z`) <= 4 * 86400000;
     const stored = async (table: "daily_bars" | "discovery_price_bars", symbol: string): Promise<OHLCV[]> => {
