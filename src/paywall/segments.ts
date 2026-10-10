@@ -4,6 +4,7 @@
  * Add an id here and wrap the section in <PaywallSegment id="..."> when a new segment is a candidate.
  */
 export const PAYWALL_SEGMENTS = {
+  "scanner-rows-full": "Scanner results beyond the free row limit",
   "idea-card": "Latest trade idea: action, size tier, what happened, why, setup, numbers, plan and evidence",
   "portfolio-performance": "Indexed portfolio performance, benchmark comparison and return details",
   "portfolio-weights": "Current portfolio position weights",
