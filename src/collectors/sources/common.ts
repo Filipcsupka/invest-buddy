@@ -27,11 +27,12 @@ export interface SourceContext {
 }
 /** Facts reference documents by URL; the runner swaps in database ids after the upsert. `expiresAt` overrides the 30-day default. */
 export interface PendingFact { symbol: string; key: string; asOf: string; value: unknown; documentUrls: string[]; expiresAt?: string }
+export interface HolderEvent { accession: string; ticker: string; filerName: string | null; filerCik: number | null; form: string; filedAt: string; percent: number | null; shares: number | null }
 /**
  * `apiRequests`: requests sent to a metered API, recorded in collector_runs.api_requests. `failures`: per-ticker failures of a source
  * that keeps going after one ticker fails. `skipped`: why the source sent nothing (no key, cap reached).
  */
-export interface SourceOutput { documents: CollectedDocument[]; facts: PendingFact[]; apiRequests?: number; failures?: { ticker: string; reason: string }[]; skipped?: string }
+export interface SourceOutput { documents: CollectedDocument[]; facts: PendingFact[]; holderEvents?: HolderEvent[]; apiRequests?: number; failures?: { ticker: string; reason: string }[]; skipped?: string }
 export interface PingResult { source: string; ok: boolean; ms: number; detail: string; skipped?: boolean }
 export interface SourceModule {
   name: string;

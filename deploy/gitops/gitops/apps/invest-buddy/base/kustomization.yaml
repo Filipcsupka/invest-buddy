@@ -12,4 +12,5 @@ resources:
   - review-calendar-cronjob.yaml
   - macro-cronjob.yaml
   - earnings-calendar-cronjob.yaml
+  - holder-events-cronjob.yaml
   - backup-cronjob.yaml

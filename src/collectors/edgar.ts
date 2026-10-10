@@ -96,6 +96,24 @@ export async function companyCiks(get: Get = getText): Promise<Map<string, numbe
 /** Form 4 `primaryDocument` is normally `xslF345X05/<name>.xml`, which serves an HTML rendering. The raw XML sits next to it without the prefix. */
 export const form4RawPath = (primary: string) => primary.replace(/^xsl[^/]*\//i, "");
 
+/** Only named machine-readable ownership fields count; prose percentages can describe a different holder or class. */
+export function parseHolderOwnership(xml: string): { percent: number | null; shares: number | null } {
+  const field = (names: string[]): number | null => {
+    for (const name of names) {
+      const match = new RegExp(`<(?:(?:[\\w-]+):)?${name}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/(?:(?:[\\w-]+):)?${name}>`, "i").exec(xml);
+      if (!match) continue;
+      const raw = match[1].replace(/<[^>]+>/g, "").trim().replace(/,/g, "");
+      if (!/^\d+(?:\.\d+)?$/.test(raw)) return null;
+      const number = Number(raw);
+      return Number.isFinite(number) && number >= 0 ? number : null;
+    }
+    return null;
+  };
+  const percent = field(["percentOfClass", "percentageOfClass"]);
+  return { percent: percent !== null && percent <= 100 ? percent : null,
+    shares: field(["aggregateAmountOwned", "aggregateAmountBeneficiallyOwned"]) };
+}
+
 /** Resolves a filing file name against the filing folder. Names come from remote JSON, so anything leaving the folder is refused. */
 export function filingUrl(base: string, name: string): string {
   const url = new URL(name, base).toString();

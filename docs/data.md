@@ -47,7 +47,7 @@ What each stores:
 | Source | Output |
 |---|---|
 | `frames` | Quarterly revenue from XBRL frames for all filers: YoY, QoQ and acceleration. A fact `revenue_growth_quarterly` per universe symbol, plus one document with the top 25 accelerating names outside the universe (symbol null, because `collected_facts.symbol` is required). |
-| `getcurrent` | Schedule 13D, 13G and 8-K from the EDGAR current-filings feed, universe issuers only, plus fact `holder_5pct_events`. |
+| `getcurrent` | Schedule 13D, 13G and 8-K from the EDGAR current-filings feed, universe issuers only, plus fact `holder_5pct_events`. 13D/13G rows also go to `holder_events` (migration 047, unique on accession, kept without expiry); percent and shares come only from named fields in the filing and stay null otherwise. CronJob `invest-buddy-holder-events` (07:45 weekdays) is suspended. |
 | `13f` | Fact `institutional_13f` (filer count, shares, value) per universe symbol for the latest data set period. |
 | `openfda`, `clinicaltrials` | Approvals, recalls and trial updates for VRTX, CRSP and REGN, plus discovery documents. |
 | `usaspending` | Contract awards for configured universe recipients. |

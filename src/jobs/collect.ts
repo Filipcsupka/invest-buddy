@@ -29,7 +29,7 @@ export async function runCollect(repository: CollectorRepository, symbols: strin
   const first = basic.length ? await runLegacyCollect(repository, symbols, { ...options, sources: basic }) : undefined;
   if (!extra.length) return first!;
   const now = options.now?.() ?? new Date();
-  const second = await runExtraSources(repository, extra, { since: options.since ?? daysAgo(now, 30), now, dryRun: options.dryRun, http: options.http, cusips: options.cusips, companies, symbols, usage: options.usage });
+  const second = await runExtraSources(repository, extra, { since: options.since ?? daysAgo(now, extra.length === 1 && extra[0] === "getcurrent" ? 3 : 30), now, dryRun: options.dryRun, http: options.http, cusips: options.cusips, companies, symbols, usage: options.usage });
   if (!first) return second;
   return { ...first, sources: requested, requested: first.requested + second.requested, succeeded: first.succeeded + second.succeeded, failures: [...first.failures, ...second.failures],
     documentsWritten: first.documentsWritten + second.documentsWritten, factsWritten: first.factsWritten + second.factsWritten, stoppedReason: first.stoppedReason ?? second.stoppedReason,
