@@ -4,7 +4,7 @@ import { loadUniverse } from "../db/universe";
 import { companyCiks } from "../collectors/edgar";
 import { getText } from "../collectors/http";
 import { requireSecUserAgent } from "../collectors/sec-user-agent";
-import { DEFAULT_SYMBOL_MAP } from "../data/twelvedata";
+import { loadStoredCiks, loadVendorSymbols, resolveCik } from "../data/security-master";
 
 export interface WatchedFiling { cik: number; symbol: string; accession: string; form: string; items: string; filedAt: string }
 export interface RecentFilings { form: string[]; accessionNumber: string[]; filingDate: string[]; items?: string[] }
@@ -30,8 +30,9 @@ async function main() {
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
   let count = 0, missing = 0;
   try {
+    const stored = await loadStoredCiks(pool), secSymbols = await loadVendorSymbols(pool, "sec");
     for (const company of await loadUniverse(pool)) {
-      const cik = ciks.get(company.symbol) ?? ciks.get(DEFAULT_SYMBOL_MAP[company.symbol] ?? company.symbol);
+      const cik = resolveCik(company.symbol, stored, ciks, secSymbols);
       if (!cik) { process.stderr.write(`${company.symbol}: no CIK\n`); missing++; continue; }
       const url = `https://data.sec.gov/submissions/CIK${String(cik).padStart(10, "0")}.json`;
       const json = JSON.parse(await getText(url)) as { filings: { recent: RecentFilings } };

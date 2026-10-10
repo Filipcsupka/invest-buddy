@@ -5,6 +5,7 @@ import type { MarketDataProvider } from "../data/providers";
 import { DEFAULT_SYMBOL_MAP, DailyLimitError, SymbolNotFoundError, TwelveDataProvider } from "../data/twelvedata";
 import { MemoryPriceRepository, PostgresPriceRepository, type PriceRepository, type PriceRunRecord } from "../db/prices";
 import { loadUniverse } from "../db/universe";
+import { loadVendorSymbols } from "../data/security-master";
 import { CapReached, PostgresUsageLedger } from "../data/usage";
 import { randomUUID } from "node:crypto";
 
@@ -69,7 +70,7 @@ async function main() {
     const runId = randomUUID();
     const ledger = pool ? new PostgresUsageLedger(pool) : null;
     const reserve = ledger ? () => ledger.reserve("twelvedata", 1, { job: "prices", runId, credits: 1 }) : undefined;
-    const result = await runPrices(new TwelveDataProvider({ apiKey, reserve }), repository, tickers, { dryRun });
+    const result = await runPrices(new TwelveDataProvider({ apiKey, reserve, ...(pool ? { symbolMap: await loadVendorSymbols(pool, "twelvedata") } : {}) }), repository, tickers, { dryRun });
     process.stdout.write(`Prices: ${result.succeeded}/${result.requested} tickers, ${result.barsWritten} bars written${dryRun ? " (dry run, nothing stored)" : ""}\n`);
     if (result.unmapped.length) process.stderr.write(`Unmapped symbols: ${result.unmapped.join(", ")}\n`);
     for (const failure of result.failures) process.stderr.write(`Failed ${failure.ticker}\n`);

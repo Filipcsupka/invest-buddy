@@ -22,6 +22,7 @@
     "watch": "tsx src/jobs/watch.ts",
     "discovery": "tsx src/jobs/discovery.ts",
     "retention": "tsx src/jobs/retention.ts",
+    "master:refresh": "tsx scripts/master-refresh.ts",
     "macro": "tsx src/jobs/macro.ts",
     "build:jobs": "esbuild src/jobs/daily.ts src/jobs/prices.ts src/jobs/reconcile.ts src/jobs/digest.ts src/jobs/portfolio.ts src/jobs/collect.ts src/jobs/detect.ts src/jobs/watch.ts src/jobs/retention.ts src/jobs/macro.ts src/jobs/discovery.ts --bundle --platform=node --format=cjs --target=node22 --packages=external --tsconfig=tsconfig.json --outdir=dist/jobs",
     "judge": "node scanner/run-judge.mjs",
