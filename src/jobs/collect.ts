@@ -103,6 +103,9 @@ async function runLegacyCollect(repository: CollectorRepository, symbols: string
       for (const doc of docs) {
         if (options.dryRun) continue;
         const stored = await repository.upsertDocument(doc);
+        if (doc.docType === "4") await repository.upsertInsiderTransactions?.(
+          String(doc.meta.accession), symbol, doc.publishedAt.slice(0, 10),
+          (doc.meta.transactions ?? []) as import("../collectors/edgar").Form4Transaction[]);
         ids.set(doc.url, stored.id);
         if (stored.written) run.documentsWritten++;
       }

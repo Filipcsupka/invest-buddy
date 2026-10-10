@@ -7,6 +7,14 @@ type Get = (url: string) => Promise<string>;
 type Recent = { form: string[]; accessionNumber: string[]; primaryDocument: string[]; filingDate: string[]; items?: string[] };
 /** `dollars` is null when the filing gives no usable price (empty or footnoted price field). It is never counted as 0. */
 export interface InsiderTrade { date: string; code: "P" | "S"; shares: number; dollars: number | null }
+export interface Form4Transaction {
+  lineNo: number; ownerCik: string | null; ownerName: string | null;
+  reportingOwners: { cik: string | null; name: string | null; isDirector: boolean | null; isOfficer: boolean | null; isTenPercentOwner: boolean | null; isOther: boolean | null }[];
+  isDirector: boolean | null; isOfficer: boolean | null; isTenPercentOwner: boolean | null; isOther: boolean | null;
+  transactionDate: string; code: string; shares: number; price: number | null;
+  acquiredDisposed: string | null; derivative: boolean; sharesAfter: number | null;
+  plan10b5: "yes" | "no" | "unknown";
+}
 const ACCESSION = /^\d{10}-\d{2}-\d{6}$/;
 const parser = new XMLParser({ ignoreAttributes: false, trimValues: true });
 const many = <T>(value: T | T[] | undefined): T[] => value === undefined ? [] : Array.isArray(value) ? value : [value];
@@ -33,6 +41,46 @@ export function form4OwnerCik(xml: string): string | null {
   const owner = parser.parse(xml).ownershipDocument?.reportingOwner?.reportingOwnerId?.rptOwnerCik;
   const cik = value(owner).trim();
   return /^\d+$/.test(cik) ? cik : null;
+}
+
+/** All transaction rows, including exercises and derivatives. Line numbers follow XML order within each table. */
+export function parseForm4Transactions(xml: string): Form4Transaction[] {
+  const root = parser.parse(xml).ownershipDocument;
+  if (!root) return [];
+  const owners = many(root.reportingOwner);
+  const flag = (owner: typeof owners[number], field: string): boolean | null => {
+    const raw = value(owner?.reportingOwnerRelationship?.[field]).trim();
+    return raw === "1" || raw.toLowerCase() === "true" ? true : raw === "0" || raw.toLowerCase() === "false" ? false : null;
+  };
+  const reportingOwners = owners.map((owner) => ({ cik: value(owner?.reportingOwnerId?.rptOwnerCik).trim() || null,
+    name: value(owner?.reportingOwnerId?.rptOwnerName).trim() || null,
+    isDirector: flag(owner, "isDirector"), isOfficer: flag(owner, "isOfficer"),
+    isTenPercentOwner: flag(owner, "isTenPercentOwner"), isOther: flag(owner, "isOther") }));
+  const sole = reportingOwners.length === 1 ? reportingOwners[0] : undefined;
+  const plan = value(root.aff10b5One).trim();
+  const plan10b5 = plan === "1" || plan.toLowerCase() === "true" ? "yes" : plan === "0" || plan.toLowerCase() === "false" ? "no" : "unknown";
+  const out: Form4Transaction[] = [];
+  for (const [derivative, rows] of [[false, many(root.nonDerivativeTable?.nonDerivativeTransaction)], [true, many(root.derivativeTable?.derivativeTransaction)]] as const) {
+    for (const [index, row] of rows.entries()) {
+      const date = value(row.transactionDate);
+      const sharesText = value(row.transactionAmounts?.transactionShares).trim();
+      const shares = Number(sharesText);
+      const code = value(row.transactionCoding?.transactionCode).trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !sharesText || !Number.isFinite(shares) || shares <= 0 || !code) continue;
+      const number = (node: unknown): number | null => {
+        const raw = value(node).trim();
+        if (!raw) return null;
+        const parsed = Number(raw);
+        return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+      };
+      out.push({ lineNo: (derivative ? 1000000 : 0) + index + 1, ownerCik: sole?.cik ?? null, ownerName: sole?.name ?? null, reportingOwners,
+        isDirector: sole?.isDirector ?? null, isOfficer: sole?.isOfficer ?? null, isTenPercentOwner: sole?.isTenPercentOwner ?? null, isOther: sole?.isOther ?? null,
+        transactionDate: date, code, shares, price: number(row.transactionAmounts?.transactionPricePerShare),
+        acquiredDisposed: value(row.transactionAmounts?.transactionAcquiredDisposedCode).trim() || null,
+        derivative, sharesAfter: number(row.postTransactionAmounts?.sharesOwnedFollowingTransaction), plan10b5 });
+    }
+  }
+  return out;
 }
 
 export function filingRows(recent: Recent, since: string, form4Since = since) {
@@ -71,7 +119,7 @@ export async function collectEdgar(symbol: string, cik: number, since: string, g
     const url = filingUrl(base, file);
     const raw = await get(url);
     const meta: Record<string, unknown> = { accession: row.accession, items: row.items };
-    if (row.form === "4") { meta.trades = parseForm4(raw); meta.ownerCik = form4OwnerCik(raw); }
+    if (row.form === "4") { meta.trades = parseForm4(raw); meta.ownerCik = form4OwnerCik(raw); meta.transactions = parseForm4Transactions(raw); }
     docs.push(sourceDocument({ source: "edgar", symbol, docType: row.form,
       url, publishedAt: `${row.date}T00:00:00Z`, body: raw, meta }, LICENSES.sec));
     if (row.form === "8-K" || row.form === "8-K/A") {
