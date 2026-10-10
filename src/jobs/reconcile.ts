@@ -69,7 +69,7 @@ export async function reconcileField(symbol: string, field: string, asOf: string
     if (sec) evidenceRefs.push({ claim: `fundamentals.${field}`, url: sec.source, publishedAt: asOf, fiscalPeriod: sec.period, quote: `Revenue growth ${sec.currentGrowth.toFixed(2)}% versus ${sec.priorGrowth.toFixed(2)}%` });
   }
   if (field === "insiderOrInstitutionalBuying" && insider && insider.value !== null) {
-    // Stored Form 4 data decides, like SEC revenue facts. A conflicting agent claim is overridden and the reason says so.
+    // Stored Form 4 lines decide, like SEC revenue facts. A conflicting agent claim is overridden and the reason says so. The page names the source SEC Form 4.
     const conflict = values.some((v) => v !== null && v !== insider.value);
     agreement = conflict ? "xbrl_override" : agreement === "agree" ? "agree" : "xbrl_override";
     value = insider.value; verified = true; reason = conflict ? `${insider.reason}; overrides agent claim` : `${insider.reason}; confirmed by SEC data`;

@@ -133,16 +133,23 @@ export const collectExitCode = (stoppedReason: string | null, failed: number, re
 export async function deriveFacts(symbol: string, docs: CollectedDocument[], ids: Map<string, number>, repository: CollectorRepository, asOf: string): Promise<Fact[]> {
   const facts: Fact[] = [];
   const make = (key: string, value: unknown, documents: CollectedDocument[], factDate = asOf) => facts.push({ symbol, key, asOf: factDate, value, documentIds: documents.map((doc) => ids.get(doc.url)).filter((id): id is number => id !== undefined) });
-  const trades = docs.filter((doc) => doc.docType === "4" && doc.publishedAt.slice(0, 10) >= daysAgo(new Date(`${asOf}T00:00:00Z`), 90));
-  if (trades.length) {
-    const entries = trades.flatMap((doc) => (doc.meta.trades as InsiderTrade[] ?? []).filter((trade) => trade.date >= daysAgo(new Date(`${asOf}T00:00:00Z`), 90)));
-    // A trade without a usable price adds shares but no dollars. dollarsComplete:false tells the reader netDollars is a lower bound on what was priced.
-    const priced = entries.filter((trade) => trade.dollars !== null && trade.dollars !== undefined);
-    make("insider_net_buy_90d", {
-      netShares: entries.reduce((n, trade) => n + (trade.code === "P" ? trade.shares : -trade.shares), 0),
-      netDollars: priced.reduce((n, trade) => n + (trade.code === "P" ? trade.dollars! : -trade.dollars!), 0),
-      ...(priced.length < entries.length ? { dollarsComplete: false } : {}),
-    }, trades);
+  // Deterministic fact from the stored Form 4 lines (P minus S, 90 days). Only when the ticker has no stored line does it fall back to the parsed trades of this run's documents.
+  const stored = await repository.insiderNetBuy?.(symbol, asOf);
+  if (stored) {
+    make("insider_net_buy_90d", { netShares: stored.netShares, netDollars: stored.netDollars, ...(stored.dollarsComplete ? {} : { dollarsComplete: false }) }, [], asOf);
+    facts[facts.length - 1].documentIds = stored.documentIds;
+  } else {
+    const trades = docs.filter((doc) => doc.docType === "4" && doc.publishedAt.slice(0, 10) >= daysAgo(new Date(`${asOf}T00:00:00Z`), 90));
+    if (trades.length) {
+      const entries = trades.flatMap((doc) => (doc.meta.trades as InsiderTrade[] ?? []).filter((trade) => trade.date >= daysAgo(new Date(`${asOf}T00:00:00Z`), 90)));
+      // A trade without a usable price adds shares but no dollars. dollarsComplete:false tells the reader netDollars is a lower bound on what was priced.
+      const priced = entries.filter((trade) => trade.dollars !== null && trade.dollars !== undefined);
+      make("insider_net_buy_90d", {
+        netShares: entries.reduce((n, trade) => n + (trade.code === "P" ? trade.shares : -trade.shares), 0),
+        netDollars: priced.reduce((n, trade) => n + (trade.code === "P" ? trade.dollars! : -trade.dollars!), 0),
+        ...(priced.length < entries.length ? { dollarsComplete: false } : {}),
+      }, trades);
+    }
   }
   const earnings = docs.filter((doc) => doc.docType === "8-K EX-99.1").sort((a, b) => b.publishedAt.localeCompare(a.publishedAt))[0];
   // Keyed by the filing date, not the run date: the same earnings 8-K must not create a new row (and a new computed_at) every day.

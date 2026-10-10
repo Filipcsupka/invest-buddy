@@ -72,7 +72,7 @@ describe("judge input", () => {
       c("productCatalyst", { agreement: "single", verified: false, evidence_refs: [{ url: "https://sec.gov/single", publishedAt: "2026-10-04" }] }),
     ];
     const ev = collectEvidence(rows, new Set([f4, "https://sec.gov/disputed", "https://sec.gov/single"]));
-    expect(ev.map((e) => [e.url, e.label])).toEqual([[xbrl, "SEC XBRL"], [f4, "Form 4"]]);
+    expect(ev.map((e) => [e.url, e.label])).toEqual([[xbrl, "SEC XBRL"], [f4, "SEC Form 4"]]);
   });
   it("adds earnings release and 10-Q, dedupes by url, sorts newest first and caps", () => {
     const rows = Array.from({ length: 10 }, (_, i) => c(`f${i}`, { evidence_refs: [{ url: `https://sec.gov/d${i}`, publishedAt: `2026-09-${String(10 + i).padStart(2, "0")}` }, { url: "https://sec.gov/dup", publishedAt: "2026-09-01" }] }));
