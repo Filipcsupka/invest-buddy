@@ -376,7 +376,7 @@ Risk or open question: exact ECB endpoint and its cadence not verified today (us
 
 ### D27 Earnings calendar daily snapshot
 Why: expected earnings dates move, and the history of "what date did we expect on day X" is lost if not stored. Alpha Vantage `EARNINGS_CALENDAR` returns the forward calendar in one request (per `docs/tasks-accounts-needed.md` row 1, 2026-10-05), cheap against the 25 per day limit. EULA allows personal non-commercial use only (verified), so internal.
-Steps: 1. Migration (built as 045) `earnings_calendar_snapshots` (observed_at, ticker, report_date, fiscal_date_ending, estimate, currency, source_id) unique on (observed_on, ticker, report_date), append-only. 2. Collector `alphavantage-calendar.ts` using D8 reserve (one call a day for the 12 month horizon). 3. Store raw CSV via D17. 4. Mark `licence_class internal_only`.
+Steps: 1. Migration (built as 046) `earnings_calendar_snapshots` (observed_at, ticker, report_date, fiscal_date_ending, estimate, currency, source_id) unique on (observed_on, ticker, report_date), append-only. 2. Collector `alphavantage-calendar.ts` using D8 reserve (one call a day for the 12 month horizon). 3. Store raw CSV via D17. 4. Mark `licence_class internal_only`.
 Acceptance: fixture CSV with 36 universe and 200 other rows stores universe rows only (plus all rows in raw store); rerun same day adds none; a changed date the next day adds a row; usage ledger shows 1 request.
 Size: S
 Depends on: D8, D17
@@ -586,4 +586,4 @@ Risk or open question: terms for display on a paid product often need a sales co
 - D39: the `data` block goes into the PL29 ops report instead of `/api/health` (PL18 keeps public health minimal); added dependency PL29.
 - D40: the slot table is the single schedule for every new CronJob in the window.
 - D43: W33 builds `scoreHistory` first in the same module; added dependency W33.
-- D27: built as migration 045, collector `alphavantage-calendar.ts`, job `earnings-calendar`, suspended CronJob `invest-buddy-earnings-calendar` (06:45 daily).
+- D27: built as migration 046, collector `alphavantage-calendar.ts`, job `earnings-calendar`, suspended CronJob `invest-buddy-earnings-calendar` (06:45 daily).
