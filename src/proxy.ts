@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { instrumentUniverse } from "@/data/store";
 import { ideasEnabled } from "@/data/ideas-store";
 import { ownerViewEnabled } from "@/data/owner-allocation";
+import { flags } from "@/config/flags";
 import { getMessages, type Locale } from "@/i18n";
 import { writeHttpLog } from "@/app/api/ingest/request-log";
 
@@ -14,7 +15,7 @@ export async function proxy(request: NextRequest) {
   incoming.set("x-request-id", requestId);
   incoming.set("x-request-start-ms", String(Date.now()));
   const [, locale, section, ticker] = request.nextUrl.pathname.split("/");
-  const unavailable = section === "scanner"
+  const unavailable = (section === "scanner" && !flags().PAYWALL)
     || (section === "ideas" && !ideasEnabled())
     || (section === "owner-allocation" && !ownerViewEnabled())
     || (section === "company" && (!ticker || !(await instrumentUniverse()).some((item) => item.ticker === ticker.toUpperCase())));
