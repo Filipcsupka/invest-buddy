@@ -2,7 +2,7 @@ import { runLoggedJob } from "./job-log";
 import pg from "pg";
 import universe from "../../scanner/universe.json";
 import type { MarketDataProvider } from "../data/providers";
-import { DailyLimitError, SymbolNotFoundError, TwelveDataProvider } from "../data/twelvedata";
+import { DEFAULT_SYMBOL_MAP, DailyLimitError, SymbolNotFoundError, TwelveDataProvider } from "../data/twelvedata";
 import { MemoryPriceRepository, PostgresPriceRepository, type PriceRepository, type PriceRunRecord } from "../db/prices";
 import { loadUniverse } from "../db/universe";
 
@@ -28,7 +28,7 @@ export async function runPrices(provider: MarketDataProvider, repository: PriceR
       if (!bars.length) throw new Error("no bars returned");
       const stored = await repository.countSince(ticker, bars[0].date);
       if (bars.length < stored) throw new Error(`fetched ${bars.length} bars but ${stored} are stored for the same range; kept stored bars`);
-      if (!options.dryRun) barsWritten += await repository.upsertBars(ticker, bars);
+      if (!options.dryRun) barsWritten += await repository.upsertBars(ticker, bars, { sourceId: options.provider ?? "twelvedata", vendorSymbol: DEFAULT_SYMBOL_MAP[ticker] ?? ticker });
       succeeded++;
     } catch (error) {
       if (error instanceof DailyLimitError) {

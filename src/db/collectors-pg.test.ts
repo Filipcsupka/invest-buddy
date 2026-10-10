@@ -47,4 +47,39 @@ describe("collector tables (Postgres)", () => {
       await client.query("ROLLBACK TO SAVEPOINT s");
     } finally { await client.query("ROLLBACK"); client.release(); await pool.end(); }
   });
+
+  it.skipIf(!process.env.TEST_DATABASE_URL)("stamps documents and facts with source, licence class and display flag, and keeps no null source_id", () => inRollback(async (pool) => {
+    const repo = new PostgresCollectorRepository(pool);
+    const base = { symbol: "NVDA", publishedAt: "2026-10-01T00:00:00Z", body: "x", contentHash: "h" };
+    const edgar = await repo.upsertDocument({ ...base, source: "edgar", docType: "4", url: "https://www.sec.gov/p1", meta: { display_allowed: true } });
+    await repo.upsertDocument({ ...base, source: "alphavantage", docType: "EPS surprise", url: "https://www.alphavantage.co/p2", meta: { display_allowed: false } });
+    await repo.upsertDocument({ ...base, source: "gdelt", docType: "news headline", url: "https://example.com/p3", meta: {} });
+    await repo.upsertDocument({ ...base, source: "sec-13f", sourceId: "sec", docType: "13F holdings summary", url: "https://www.sec.gov/p4", meta: { display_allowed: true } });
+    const docs = await pool.query<{ source: string; source_id: string; licence_class: string; display_allowed: boolean }>("SELECT source, source_id, licence_class, display_allowed FROM source_documents WHERE url LIKE 'https://www.sec.gov/p%' OR url = 'https://www.alphavantage.co/p2' OR url = 'https://example.com/p3' ORDER BY url");
+    expect(Object.fromEntries(docs.rows.map((row) => [row.source, [row.source_id, row.licence_class, row.display_allowed]]))).toEqual({
+      edgar: ["sec", "public_gov", true], "sec-13f": ["sec", "public_gov", true], alphavantage: ["alphavantage", "internal_only", false], gdelt: ["gdelt", "unknown", false],
+    });
+
+    await repo.upsertFact({ symbol: "NVDA", key: EPS_FACT_KEY, asOf: "2026-10-01", value: { a: 1 }, documentIds: [] });
+    await repo.upsertFact({ symbol: "NVDA", key: "some_new_key", asOf: "2026-10-01", value: { a: 1 }, documentIds: [edgar.id] });
+    await repo.upsertFact({ symbol: "NVDA", key: "orphan_key", asOf: "2026-10-01", value: { a: 1 }, documentIds: [] });
+    const facts = await pool.query<{ fact_key: string; source_id: string; licence_class: string }>("SELECT fact_key, source_id, licence_class FROM collected_facts WHERE symbol='NVDA' AND as_of='2026-10-01' ORDER BY fact_key");
+    expect(Object.fromEntries(facts.rows.map((row) => [row.fact_key, [row.source_id, row.licence_class]]))).toEqual({
+      [EPS_FACT_KEY]: ["alphavantage", "internal_only"], some_new_key: ["sec", "public_gov"], orphan_key: ["unknown", "unknown"],
+    });
+
+    for (const table of ["source_documents", "collected_facts", "daily_bars"]) expect((await pool.query(`SELECT count(*)::int AS n FROM ${table} WHERE source_id IS NULL`)).rows[0].n, table).toBe(0);
+    expect((await pool.query("SELECT count(*)::int AS n FROM source_documents WHERE display_allowed IS DISTINCT FROM (COALESCE(meta->>'display_allowed','false') = 'true')")).rows[0].n).toBe(0);
+  }));
+
+  it.skipIf(!process.env.TEST_DATABASE_URL)("fills provenance for rows written without it and keeps display_allowed equal to meta", () => inRollback(async (pool) => {
+    // What a job running the previous release writes during the rollout.
+    await pool.query(`INSERT INTO source_documents (source,symbol,doc_type,url,published_at,content_hash,body,meta) VALUES
+      ('edgar','NVDA','4','https://www.sec.gov/old1','2026-10-01','h','x','{"display_allowed":true}'),
+      ('vix',NULL,'VIX','https://www.cboe.com/old2','2026-10-01','h','x','{"display_allowed":false}')`);
+    const rows = await pool.query<{ source_id: string; licence_class: string; display_allowed: boolean }>("SELECT source_id, licence_class, display_allowed FROM source_documents WHERE url IN ('https://www.sec.gov/old1','https://www.cboe.com/old2') ORDER BY url");
+    expect(rows.rows).toEqual([{ source_id: "cboe", licence_class: "internal_only", display_allowed: false }, { source_id: "sec", licence_class: "public_gov", display_allowed: true }]);
+    await pool.query("INSERT INTO collected_facts (symbol,fact_key,as_of,value) VALUES ('NVDA','old_fact','2026-10-01','{}')");
+    expect((await pool.query("SELECT source_id, licence_class FROM collected_facts WHERE fact_key='old_fact'")).rows[0]).toEqual({ source_id: "unknown", licence_class: "unknown" });
+  }));
 });

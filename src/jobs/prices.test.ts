@@ -1,6 +1,7 @@
+import pg from "pg";
 import { describe, expect, it } from "vitest";
 import type { OHLCV } from "../engine";
-import { MemoryPriceRepository } from "../db/prices";
+import { MemoryPriceRepository, PostgresPriceRepository } from "../db/prices";
 import type { MarketDataProvider } from "../data/providers";
 import { DailyLimitError } from "../data/twelvedata";
 import { priceTickers, runPrices } from "./prices";
@@ -69,5 +70,24 @@ describe("runPrices", () => {
     expect(r.succeeded).toBe(1);
     expect(repo.bars.size).toBe(0);
     expect(repo.runs).toHaveLength(0);
+  });
+  it("writes source twelvedata and the vendor symbol with each batch", async () => {
+    const repo = new MemoryPriceRepository();
+    await runPrices(provider(async () => series(3)), repo, ["NVDA", "SQ"]);
+    expect(repo.provenance.get("NVDA")).toEqual({ sourceId: "twelvedata", vendorSymbol: "NVDA" });
+    expect(repo.provenance.get("SQ")).toEqual({ sourceId: "twelvedata", vendorSymbol: "XYZ" });
+  });
+  it.skipIf(!process.env.TEST_DATABASE_URL)("stores source_id twelvedata, vendor symbol and fetch time in daily_bars (Postgres)", async () => {
+    const pool = new pg.Pool({ connectionString: process.env.TEST_DATABASE_URL, max: 1 });
+    try {
+      await pool.query("BEGIN");
+      await pool.query("INSERT INTO instruments (ticker,name,sector,tier,source) VALUES ('ZZPV','Prov test','Test',NULL,'sample extension') ON CONFLICT (ticker) DO NOTHING");
+      const repo = new PostgresPriceRepository(pool);
+      await runPrices(provider(async () => series(3)), repo, ["ZZPV"]);
+      const rows = await pool.query<{ source_id: string; vendor_symbol: string; fetched: boolean }>("SELECT source_id, vendor_symbol, fetched_at IS NOT NULL AS fetched FROM daily_bars WHERE ticker='ZZPV'");
+      expect(rows.rows).toHaveLength(3);
+      for (const row of rows.rows) expect(row).toEqual({ source_id: "twelvedata", vendor_symbol: "ZZPV", fetched: true });
+      expect((await pool.query("SELECT count(*)::int AS n FROM daily_bars WHERE source_id IS NULL")).rows[0].n).toBe(0);
+    } finally { await pool.query("ROLLBACK"); await pool.end(); }
   });
 });
