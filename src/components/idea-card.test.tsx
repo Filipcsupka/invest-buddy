@@ -1,11 +1,36 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { IdeaCard } from "./idea-card";
 import { ideasEnabled } from "../data/ideas-store";
 import { sampleIdeas } from "../ideas/fixtures";
 
 const [add, watch] = sampleIdeas;
-const html = (idea = add, locale: "en" | "sk" = "en") => renderToStaticMarkup(<IdeaCard idea={idea} locale={locale} />);
+const originalAdvice = process.env.ADVICE_OUTPUT;
+beforeEach(() => { process.env.ADVICE_OUTPUT = "on"; });
+afterEach(() => { if (originalAdvice === undefined) delete process.env.ADVICE_OUTPUT; else process.env.ADVICE_OUTPUT = originalAdvice; });
+const html = (idea = add, locale: "en" | "sk" = "en") => renderToStaticMarkup(<IdeaCard idea={idea} locale={locale} showAmounts />);
+
+it.each(["en", "sk"] as const)("hides actions, size tiers, plans and amounts when ADVICE_OUTPUT is off (%s)", (locale) => {
+  process.env.ADVICE_OUTPUT = "off";
+  const out = renderToStaticMarkup(<IdeaCard idea={add} locale={locale} stateLabel={locale === "en" ? "Setup met" : "Nastavenie splnené"} />);
+  expect(out).toContain("NVDA");
+  expect(out).toContain("example.com");
+  expect(out).toContain("Sample earnings release");
+  expect(out).toContain("Sample 10-Q");
+  expect(out).not.toMatch(/Add|Start position|Prikúpiť|Otvoriť pozíciu|EUR|€|data-action|data-tier|Opportunity cost|Príležitosť/);
+});
+
+it("shows only known document labels while preserving every source link", () => {
+  process.env.ADVICE_OUTPUT = "off";
+  const blocked = ["Buy EUR 50 now", "HIGH_CONVICTION_ADD", "STARTER", "STANDARD", "FULL", "Accumulate NVDA now", "Increase exposure 5%", "Sample 10-Q Buy"];
+  const idea = { ...add, evidence: blocked.map((label, index) => ({ url: `https://example.com/source-${index}`, label })) };
+  const out = html(idea);
+  blocked.forEach((label, index) => {
+    expect(out).toContain(`href="https://example.com/source-${index}"`);
+    expect(out).toContain(`Evidence ${index + 1} · example.com`);
+    expect(out).not.toContain(label);
+  });
+});
 
 describe("idea card", () => {
   it("shows the alert layout in order, with the headline and evidence links", () => {

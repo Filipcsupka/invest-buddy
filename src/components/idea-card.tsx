@@ -3,16 +3,34 @@ import styles from "./idea-card.module.css";
 import type { StoredIdea } from "../db/ideas";
 import { hasBuySize, publicTier, stripEur } from "../ideas/public";
 import { localizeCodes, localizeEvidenceLabel } from "../ideas/localize";
+import { flags } from "../config/flags";
 
 const RATING_KEY = { "Very strong": "Very strong", Strong: "Strong", Good: "Good", Neutral: "Neutral", Weak: "Weak" } as const;
+const PUBLIC_SOURCE_LABEL = /^(?:Sample )?(?:Earnings release|Výsledková správa|10-[QK]|8-K|Form [345]|Proxy statement|Annual report|Quarterly report|Press release|Tlačová správa)$/i;
 
 /**
  * One alert in the fixed layout: headline, verdict, what happened, why it matters, setup, numbers, plan, evidence.
- * The public card (showAmounts false) shows the action and the size tier, never EUR. The private owner view adds the EUR band.
+ * Public callers set showAmounts false. The legal flag reduces the card to rule state and evidence.
  */
-export function IdeaCard({ idea: stored, locale, showAmounts = true, nested = false }: { idea: StoredIdea; locale: Locale; showAmounts?: boolean; nested?: boolean }) {
+export function IdeaCard({ idea: stored, locale, showAmounts = false, nested = false, stateLabel }: { idea: StoredIdea; locale: Locale; showAmounts?: boolean; nested?: boolean; stateLabel?: string }) {
   const m = getMessages(locale).ideas;
-  // ADR-001: without the flag no EUR amount or band is rendered, in any field.
+  if (!flags().ADVICE_OUTPUT) {
+    const H = nested ? "h3" : "h2";
+    return <article className={styles.card} aria-labelledby={`idea-${stored.id}-title`}>
+      <H id={`idea-${stored.id}-title`} className={styles.headline}>{stored.symbol}{stateLabel ? ` · ${stateLabel}` : ""}</H>
+      {stored.evidence.length > 0 && <section aria-label={m.evidence}>
+        <ul className={styles.links}>{stored.evidence.map((item, index) => {
+          const translated = locale === "sk" ? stored.translations?.sk?.evidence.find((source) => source.url === item.url)?.label : undefined;
+          const label = localizeEvidenceLabel(locale, translated ?? item.label);
+          const source = PUBLIC_SOURCE_LABEL.test(label) ? label : `${m.evidence} ${index + 1}`;
+          return <li key={item.url}>
+            <a href={item.url} target="_blank" rel="noopener noreferrer">{source} · {new URL(item.url).hostname.replace(/^www\./, "")}</a>
+          </li>;
+        })}</ul>
+      </section>}
+    </article>;
+  }
+  // ADR-001: public callers omit the owner's EUR amount and band.
   const translated = locale === "sk" ? stored.translations?.sk : undefined;
   const selected = translated ? { ...stored, ...translated, conflictNote: translated.conflictNote ?? translated.conflictReason ?? stored.conflictNote, plan: { ...stored.plan, ...translated.plan } } : stored;
   const stripped = showAmounts ? selected : stripEur(selected);

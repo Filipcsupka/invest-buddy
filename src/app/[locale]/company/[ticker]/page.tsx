@@ -6,6 +6,7 @@ import { Chart } from "@/components/chart";
 import { groupLabels, TitleBlock } from "@/components/datasheet";
 import { IdeaCard } from "@/components/idea-card";
 import { PaywallSegment } from "@/components/paywall-segment";
+import { flags } from "@/config/flags";
 import { Disclaimer } from "@/components/disclaimer";
 import { IconArrowLeft, IconArrowRight, IconCheck, IconCross } from "@/components/icons";
 import { OperatorDisclosure } from "@/components/operator-disclosure";
@@ -13,7 +14,7 @@ import { StateChip } from "@/components/score-badge";
 import { ScoreMark } from "@/components/score-mark";
 import { SourceList } from "@/components/source-list";
 import { inputSources, ruleSources, sourceSummary } from "@/components/view-model";
-import { companyIdea, companyReview, ideasEnabled } from "@/data/ideas-store";
+import { companyIdea, companyReview } from "@/data/ideas-store";
 import { instrumentUniverse, latestPortfolio, latestScores } from "@/data/store";
 import { DataStatus } from "@/components/data-status";
 export const dynamic = "force-dynamic";
@@ -49,6 +50,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 async function Company({ params }: Params) {
   const { locale, instrument, instruments, result, data } = await load(params);
   const m = getMessages(locale);
+  const adviceOutput = flags().ADVICE_OUTPUT;
   const portfolio = await latestPortfolio();
   const held = portfolio?.weights.some((position) => position.weightPercent > 0 && position.symbol.toUpperCase() === instrument.ticker) ?? false;
   if (!result) return <div className="frame page"><h1 className="title">{instrument.ticker}</h1>{held && <span className="tag">{m.portfolio.heldNoSignal}</span>}<DataStatus locale={locale} lastUpdated={data.lastUpdated} stale={data.stale} /></div>;
@@ -146,10 +148,10 @@ async function Company({ params }: Params) {
       {ideaRow && (
         <section className="sheet-section" aria-labelledby="idea">
           <div className="section-head">
-            <h2 id="idea">{m.company.ideaTitle}</h2>
-            <p className="muted small">{m.company.ideaNote}</p>
+            <h2 id="idea">{adviceOutput ? m.company.ideaTitle : m.ideas.evidence}</h2>
+            {adviceOutput && <p className="muted small">{m.company.ideaNote}</p>}
           </div>
-          <PaywallSegment id="idea-card"><IdeaCard idea={ideaRow.idea} locale={locale} showAmounts={ideasEnabled()} nested /></PaywallSegment>
+          <PaywallSegment id="idea-card"><IdeaCard idea={ideaRow.idea} locale={locale} showAmounts={false} stateLabel={m.states[state]} nested /></PaywallSegment>
         </section>
       )}
       {!ideaRow && (
