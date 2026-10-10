@@ -20,5 +20,5 @@ it("serves a newly approved database instrument without a compiled universe entr
   const response = await GET(request, { params: Promise.resolve({ symbol: "F7ZZ" }) });
   expect(response.status).toBe(200);
   expect(await response.json()).toMatchObject({ symbol: "F7ZZ" });
-  expect(query).toHaveBeenCalledWith(expect.stringContaining("FROM instruments"), ["F7ZZ"]);
+  expect(query).toHaveBeenCalledWith(expect.stringContaining("FROM universe_membership"), ["F7ZZ", "2026-10-05"]);
 });

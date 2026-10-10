@@ -149,6 +149,7 @@ describe("weekly discovery", () => {
       expect((await pool.query("SELECT status FROM discovery_candidates WHERE week_start=$1 AND symbol=$2", [week, symbol])).rows[0].status).toBe("approved");
     } finally {
       await pool.query("DELETE FROM discovery_candidates WHERE week_start=$1", [week]);
+      await pool.query("DELETE FROM universe_membership WHERE ticker=$1", [symbol]);
       await pool.query("DELETE FROM instruments WHERE ticker=$1", [symbol]);
       await pool.end();
       rmSync(dir, { recursive: true, force: true });

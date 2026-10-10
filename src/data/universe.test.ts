@@ -29,12 +29,12 @@ describe("instrumentUniverse", () => {
     expect(query).not.toHaveBeenCalled();
   });
 
-  it("reads the instruments table in db mode and excludes benchmarks", async () => {
+  it("reads current membership in db mode and excludes benchmarks", async () => {
     process.env.DATA_MODE = "db"; process.env.DATABASE_URL = "postgresql://x";
     const rows = [{ ticker: "AAA", name: "A", sector: "S", tier: null, source: "guide" }];
     query.mockResolvedValue({ rows });
     expect(await instrumentUniverse()).toEqual(rows);
-    expect(query.mock.calls[0][0]).toContain("source <> 'benchmark'");
+    expect(query.mock.calls[0][0]).toContain("m.list <> 'benchmark'");
     expect(end).not.toHaveBeenCalled();
   });
 

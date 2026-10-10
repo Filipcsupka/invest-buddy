@@ -63,7 +63,10 @@ export async function persistGate(db: Pick<pg.Pool, "query">, gate: GatePayload)
 }
 
 export async function unextractedDiscoverySymbols(db: Pick<pg.Pool, "query">): Promise<string[]> {
-  const result = await db.query<{ symbol: string }>(`SELECT i.ticker AS symbol FROM instruments i WHERE i.source='discovery' AND NOT EXISTS (
+  const result = await db.query<{ symbol: string }>(`SELECT i.ticker AS symbol FROM instruments i
+    JOIN universe_membership m ON m.ticker=i.ticker AND m.list='discovery'
+      AND m.valid_from <= CURRENT_DATE AND (m.valid_to IS NULL OR m.valid_to > CURRENT_DATE)
+    WHERE NOT EXISTS (
     SELECT 1 FROM extraction_runs e WHERE e.symbol=i.ticker AND e.status='ok' AND e.applied_at IS NOT NULL)`);
   return result.rows.map((row) => row.symbol);
 }

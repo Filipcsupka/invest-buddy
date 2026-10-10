@@ -61,6 +61,20 @@ describe("DatabaseUniverseProvider fundamentals", () => {
   });
 });
 
+it("limits daily instruments to membership active on the score date", async () => {
+  let sql = "", params: unknown[] = [];
+  const db = { query: async (statement: string, values: unknown[]) => {
+    sql = statement; params = values;
+    return { rows: [{ ticker: "NVDA", name: "NVIDIA", sector: "AI", tier: 1, source: "guide" }] };
+  } } as unknown as pg.Pool;
+  const instruments = await new DatabaseUniverseProvider(db, "2026-10-11").instruments();
+  expect(instruments.map((row) => row.ticker)).toEqual(["NVDA"]);
+  expect(sql).toContain("JOIN universe_membership m");
+  expect(sql).toContain("m.valid_from <= COALESCE($1::date,CURRENT_DATE)");
+  expect(sql).toContain("m.valid_to > COALESCE($1::date,CURRENT_DATE)");
+  expect(params).toEqual(["2026-10-11"]);
+});
+
 describe("DatabaseUniverseProvider sources", () => {
   const REL = "https://www.sec.gov/Archives/edgar/data/1/ex99.htm", AV = "https://www.alphavantage.co/query?function=EARNINGS&symbol=NVDA";
   const withRefs = [

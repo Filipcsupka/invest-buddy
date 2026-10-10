@@ -17,19 +17,25 @@ function fakeDb() {
   const candidates = [{ week_start: "2026-10-05", symbol: "MU", name: "Micron Technology", sector: "AI & semiconductors", status: "pending" }];
   const extractionRuns: { symbol: string; status: string; applied_at: Date | null }[] = [];
   const consensus: { symbol: string; as_of: string }[] = [];
+  const membership = [{ ticker: "NVDA", list: "core" }, { ticker: "SPY", list: "benchmark" }];
   const query = async (sql: string, params: unknown[] = []) => {
     const text = sql.replace(/\s+/g, " ");
-    if (/^(BEGIN|COMMIT|ROLLBACK)/.test(text)) return { rows: [], rowCount: 0 };
+    if (/^(BEGIN|COMMIT|ROLLBACK|SELECT pg_advisory_xact_lock)/.test(text)) return { rows: [], rowCount: 0 };
     if (text.includes("FROM discovery_candidates")) { const rows = candidates.filter((c) => c.symbol === params[0] && ["pending", "approved"].includes(c.status)); return { rows, rowCount: rows.length }; }
     if (text.startsWith("INSERT INTO instruments")) {
       const [ticker, name, sector] = params as string[]; const old = instruments.find((i) => i.ticker === ticker);
       if (old) Object.assign(old, { name, sector }); else instruments.push({ ticker, name, sector, tier: null, source: "discovery" });
       return { rows: [], rowCount: 1 };
     }
+    if (text.startsWith("INSERT INTO universe_membership")) {
+      const ticker = params[0] as string;
+      if (!membership.some((m) => m.ticker === ticker)) membership.push({ ticker, list: "discovery" });
+      return { rows: [], rowCount: 1 };
+    }
     if (text.startsWith("UPDATE discovery_candidates")) { candidates.find((c) => c.symbol === params[2])!.status = params[0] as string; return { rows: [], rowCount: 1 }; }
-    if (text.includes("FROM instruments WHERE source <> 'benchmark' ORDER BY ticker")) return { rows: instruments.filter((i) => i.source !== "benchmark").sort((a, b) => a.ticker.localeCompare(b.ticker)), rowCount: 0 };
-    if (text.startsWith("SELECT 1 FROM instruments WHERE ticker=$1")) { const rows = instruments.filter((i) => i.ticker === params[0] && i.source !== "benchmark"); return { rows, rowCount: rows.length }; }
-    if (text.includes("WHERE i.source='discovery' AND NOT EXISTS")) return { rows: instruments.filter((i) => i.source === "discovery" && !extractionRuns.some((e) => e.symbol === i.ticker && e.status === "ok" && e.applied_at)).map((i) => ({ symbol: i.ticker })), rowCount: 0 };
+    if (text.includes("FROM universe_membership m") && text.includes("JOIN instruments i")) return { rows: instruments.filter((i) => membership.some((m) => m.ticker === i.ticker && m.list !== "benchmark")).sort((a, b) => a.ticker.localeCompare(b.ticker)), rowCount: 0 };
+    if (text.startsWith("SELECT 1 FROM universe_membership")) { const rows = membership.filter((m) => m.ticker === params[0] && m.list !== "benchmark"); return { rows, rowCount: rows.length }; }
+    if (text.includes("m.list='discovery'") && text.includes("FROM extraction_runs")) return { rows: instruments.filter((i) => membership.some((m) => m.ticker === i.ticker && m.list === "discovery") && !extractionRuns.some((e) => e.symbol === i.ticker && e.status === "ok" && e.applied_at)).map((i) => ({ symbol: i.ticker })), rowCount: 0 };
     if (text.includes("JOIN consensus_findings c ON c.symbol=i.ticker")) return { rows: instruments.filter((i) => consensus.some((c) => c.symbol === i.ticker)), rowCount: 0 };
     throw new Error(`unexpected query: ${text.slice(0, 80)}`);
   };

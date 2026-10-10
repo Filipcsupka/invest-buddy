@@ -363,8 +363,14 @@ export async function reviewCandidate(db: pg.Pool, symbol: string, approve: bool
     const row = await client.query<{ week_start: string; name: string; sector: string; status: string }>(`SELECT week_start::text,name,sector,status FROM discovery_candidates
       WHERE symbol=$1 AND status ${approve ? "IN ('pending','approved')" : "= 'pending'"} ORDER BY week_start DESC LIMIT 1 FOR UPDATE`, [symbol]);
     if (!row.rows.length) throw new Error(`No pending candidate for ${symbol}`);
-    if (approve) await client.query(`INSERT INTO instruments (ticker,name,sector,tier,source) VALUES ($1,$2,$3,NULL,'discovery')
-      ON CONFLICT (ticker) DO UPDATE SET name=EXCLUDED.name,sector=EXCLUDED.sector`, [symbol, row.rows[0].name, row.rows[0].sector]);
+    if (approve) {
+      await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`universe:${symbol}`]);
+      await client.query(`INSERT INTO instruments (ticker,name,sector,tier,source) VALUES ($1,$2,$3,NULL,'discovery')
+        ON CONFLICT (ticker) DO UPDATE SET name=EXCLUDED.name,sector=EXCLUDED.sector`, [symbol, row.rows[0].name, row.rows[0].sector]);
+      await client.query(`INSERT INTO universe_membership(ticker,list,tier,valid_from,reason,criteria_version,added_by)
+        SELECT $1,'discovery',NULL,CURRENT_DATE,'Approved discovery candidate','discovery-v1','discovery-review'
+        WHERE NOT EXISTS (SELECT 1 FROM universe_membership WHERE ticker=$1 AND (valid_to IS NULL OR valid_to > CURRENT_DATE))`, [symbol]);
+    }
     if (row.rows[0].status === "pending") await client.query("UPDATE discovery_candidates SET status=$1,reviewed_at=now() WHERE week_start=$2 AND symbol=$3", [approve ? "approved" : "rejected", row.rows[0].week_start, symbol]);
     await client.query("COMMIT");
     if (approve && output) writeFileSync(output, JSON.stringify({ symbols: [symbol], reasons: { [symbol]: ["approved discovery candidate"] } }) + "\n");
@@ -389,12 +395,15 @@ async function main() {
     }
     requireSecUserAgent(process.env.SEC_USER_AGENT);
     const week = weekStart(explicitDate ?? new Date().toISOString().slice(0, 10));
-    const known = new Set((await pool.query<{ ticker: string }>(`SELECT ticker FROM instruments WHERE source <> 'benchmark'
+    const known = new Set((await pool.query<{ ticker: string }>(`SELECT ticker FROM universe_membership WHERE list <> 'benchmark'
+      AND valid_from <= CURRENT_DATE AND (valid_to IS NULL OR valid_to > CURRENT_DATE)
       UNION SELECT symbol AS ticker FROM discovery_candidates WHERE status IN ('approved','pending')`)).rows.map((r) => r.ticker));
     const previousWeek = new Date(`${week}T00:00:00Z`);
     previousWeek.setUTCDate(previousWeek.getUTCDate() - 7);
     const since = previousWeek.toISOString().slice(0, 10);
-    const companies = (await pool.query<{ ticker: string; name: string }>("SELECT ticker,name FROM instruments WHERE source <> 'benchmark'")).rows.map((r) => ({ symbol: r.ticker, name: r.name }));
+    const companies = (await pool.query<{ ticker: string; name: string }>(`SELECT i.ticker,i.name FROM instruments i
+      JOIN universe_membership m ON m.ticker=i.ticker WHERE m.list <> 'benchmark'
+        AND m.valid_from <= CURRENT_DATE AND (m.valid_to IS NULL OR m.valid_to > CURRENT_DATE)`)).rows.map((r) => ({ symbol: r.ticker, name: r.name }));
     const names = ["growth-frames", "edgar-8k", "ownership", "13f", "biotech", "movers"];
     const gathered = await Promise.allSettled([
       marketwideGrowthCandidates(new Date(`${date}T12:00:00Z`), companies),
