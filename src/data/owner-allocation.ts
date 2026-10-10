@@ -1,11 +1,12 @@
 import pg from "pg";
+import { flags } from "@/config/flags";
 import { latestBaseline, type Baseline } from "@/db/portfolio-baseline";
 import { latestIdeaPerSymbol, type StoredIdea } from "@/db/ideas";
 import { sampleBaseline, sampleIdeas } from "@/ideas/fixtures";
 import { latestScores } from "@/data/store";
 import { allocate, type AllocationResult, type AllocationSignal } from "@/engine/allocation";
 
-export const ownerViewEnabled = () => process.env.OWNER_VIEW === "on";
+export const ownerViewEnabled = () => flags().OWNER_VIEW;
 
 export interface OwnerAllocationData { baseline: Baseline | null; result: AllocationResult | null; sample: boolean }
 
