@@ -4,7 +4,7 @@ import { requireSecUserAgent } from "./sec-user-agent";
 
 export class RateLimitLockout extends Error {}
 /** Hosts the phase A collectors talk to. Anything else, including redirect targets, is refused. */
-export const ALLOWED_HOSTS: readonly string[] = ["www.sec.gov", "data.sec.gov", "www.globenewswire.com", "api.stlouisfed.org"];
+export const ALLOWED_HOSTS: readonly string[] = ["www.sec.gov", "data.sec.gov", "www.globenewswire.com", "www.prnewswire.com", "api.stlouisfed.org"];
 /** A response is read up to this many bytes. A 20-F can be 30 MB, the stored body is 200 KB. */
 export const MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
 export type Fetcher = (url: string, init?: RequestInit) => Promise<Response>;

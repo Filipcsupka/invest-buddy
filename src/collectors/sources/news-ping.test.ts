@@ -1,9 +1,10 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { MemoryCollectorRepository } from "../../db/collectors";
 import { MemoryCusipStore } from "../../db/source-collectors";
 import { RateLimitLockout } from "../http";
+import { collectRss, collectRssFeeds, GLOBE_NEWSWIRE_FEED, PR_NEWSWIRE_FEED } from "../rss";
 import { runCollect } from "../../jobs/collect";
 import { collectGdelt, docUrl, parseArticles } from "./gdelt";
 import { collectGnews, parseNews, searchUrl } from "./gnews";
@@ -133,6 +134,7 @@ describe("ping", () => {
     if (url.includes("gdelt")) return fx("gdelt_nvidia.json");
     if (url.includes("submissions/CIK")) return JSON.stringify({ filings: { recent: { form: ["8-K"], filingDate: ["2026-10-01"] } } });
     if (url.includes("globenewswire")) return phaseA("globenewswire.xml");
+    if (url.includes("prnewswire")) return phaseA("prnewswire.xml");
     if (url.includes("stlouisfed")) return JSON.stringify({ observations: [{ date: "2026-09-01", value: "4.25" }] });
     if (url.includes("alphavantage") && url.includes("apikey=demo")) return JSON.stringify({ symbol: "IBM", quarterlyEarnings: [{ fiscalDateEnding: "2026-06-30", reportedDate: "2026-07-22", reportedEPS: "2.80", estimatedEPS: "2.65", surprisePercentage: "5.66" }] });
     throw new Error(`unrouted ${url}`);
@@ -145,7 +147,7 @@ describe("ping", () => {
     const results = await runPings(undefined, http, { SEC_USER_AGENT: "Test Agent test@example.invalid", FRED_API_KEY: "k" });
     expect(results.map((result) => [result.source, result.ok, result.skipped ?? false])).toEqual(PING_NAMES.map((name) => [name, true, false]));
     for (const result of results) { expect(result.detail.length).toBeGreaterThan(0); expect(result.ms).toBeGreaterThanOrEqual(0); }
-    expect(http.calls).toHaveLength(PING_NAMES.length);
+    expect(http.calls).toHaveLength(PING_NAMES.length + 1); // the rss ping reads two wires
     expect(http.calls.filter((call) => call.method === "POST").map((call) => new URL(call.url).hostname).sort()).toEqual(["api.bls.gov", "api.openfigi.com", "api.usaspending.gov"]);
   });
 
@@ -187,5 +189,83 @@ describe("ping", () => {
       "gdelt    FAIL    80   HTTP 429",
       "frames   SKIP    0    skipped: x",
     ]);
+  });
+});
+
+describe("D31 news hardening", () => {
+  const phaseFile = (name: string) => readFileSync(join(process.cwd(), "src/collectors/fixtures", name), "utf8");
+  const companies = [{ symbol: "NVDA", name: "NVIDIA" }];
+
+  it("keeps the working wire when GlobeNewswire times out, and reports the dead one", async () => {
+    const get = async (url: string) => { if (url === GLOBE_NEWSWIRE_FEED) throw new Error("Timed out after 15000 ms at https://www.globenewswire.com/rssfeed"); return phaseFile("prnewswire.xml"); };
+    const result = await collectRssFeeds(companies, "2026-09-01", get);
+    expect(result.documents.map((doc) => doc.url)).toEqual(["https://www.prnewswire.com/news-releases/nvidia-expands-partner-program-302000001.html"]);
+    expect(result.failures).toEqual([{ feed: "globenewswire", reason: "Timed out after 15000 ms at https://www.globenewswire.com/rssfeed" }]);
+    expect(await collectRss(companies, "2026-09-01", get)).toHaveLength(1);
+  });
+
+  it("throws only when every wire failed, and names each", async () => {
+    await expect(collectRss(companies, "2026-09-01", async (url) => { throw new Error(`down ${new URL(url).hostname}`); }))
+      .rejects.toThrow("All RSS feeds failed: prnewswire: down www.prnewswire.com; globenewswire: down www.globenewswire.com");
+  });
+
+  it("stores a release that both wires carry once", async () => {
+    const result = await collectRssFeeds(companies, "2026-09-01", async () => phaseFile("prnewswire.xml"));
+    expect(result.documents).toHaveLength(1);
+    expect(result.failures).toEqual([]);
+  });
+
+  it("a collect run with one dead wire still succeeds and records the failure", async () => {
+    const get = async (url: string) => { if (url === GLOBE_NEWSWIRE_FEED) throw new Error("Timed out"); return phaseFile("prnewswire.xml"); };
+    const repo = new MemoryCollectorRepository();
+    const result = await runCollect(repo, ["NVDA"], { sources: ["rss"], since: "2026-09-01", get, now: () => new Date("2026-10-05T12:00:00Z") });
+    expect(result.failures).toEqual([{ ticker: "rss", reason: "globenewswire: Timed out" }]);
+    expect(result.exitCode).toBe(0);
+    expect(result.documentsWritten).toBe(1);
+    expect(PR_NEWSWIRE_FEED).toContain("prnewswire.com");
+  });
+
+  it("no scheduled job and no default run uses gnews", () => {
+    const base = join(process.cwd(), "deploy/gitops/gitops/apps/invest-buddy/base");
+    const yaml = readdirSync(base).filter((name) => name.endsWith(".yaml")).map((name) => readFileSync(join(base, name), "utf8")).join("\n");
+    expect(yaml).toContain("kind: CronJob");
+    expect(yaml).not.toMatch(/gnews/i);
+    expect(yaml).not.toMatch(/--source[= ]\S*gnews/);
+    expect(readFileSync(join(process.cwd(), "src/jobs/collect.ts"), "utf8")).not.toMatch(/\["edgar", "rss"[^\]]*gnews/);
+  });
+
+  it("GDELT with 11 to 19 s answers for 35 tickers fits the 30 minute Job deadline and stores metadata only", async () => {
+    const tickers = Array.from({ length: 35 }, (_, i) => ({ symbol: `T${i}`, name: `Name${i}` }));
+    let elapsed = 0;
+    const http = stubHttp(() => { elapsed += (11 + (elapsed % 9)) * 1000 + 6000; return fx("gdelt_nvidia.json"); });
+    const output = await collectGdelt(context(http, { companies: tickers, symbols: tickers.map((t) => t.symbol), since: "2026-10-01" }), () => elapsed);
+    expect(elapsed).toBeLessThan(30 * 60_000);
+    expect(http.calls).toHaveLength(35);
+    expect(output.failures).toBeUndefined();
+    for (const doc of output.documents) {
+      expect(doc.body).toBe(doc.meta.headline);
+      expect(Object.keys(doc.meta).sort()).toEqual(["display_allowed", "headline", "license_note", "outlet", "symbols"]);
+    }
+  });
+
+  it("GDELT stops at its time budget and keeps what it has", async () => {
+    const tickers = Array.from({ length: 10 }, (_, i) => ({ symbol: `T${i}`, name: `Name${i}` }));
+    let elapsed = 0;
+    const http = stubHttp(() => { elapsed += 150_000; return fx("gdelt_nvidia.json"); });
+    const output = await collectGdelt(context(http, { companies: tickers, symbols: tickers.map((t) => t.symbol), since: "2026-10-01" }), () => elapsed, 20 * 60_000);
+    expect(http.calls.length).toBeLessThan(10);
+    expect(output.documents.length).toBeGreaterThan(0);
+    expect(output.failures?.[0].reason).toMatch(/time budget of 20 min used, \d+ tickers left/);
+  });
+
+  it("GDELT keeps earlier headlines when a later ticker is rate limited, and fails only when nothing was stored", async () => {
+    let n = 0;
+    const partial = stubHttp(() => { if (++n === 2) throw new RateLimitLockout("HTTP 429 at https://api.gdeltproject.org/api/v2/doc/doc"); return fx("gdelt_nvidia.json"); });
+    const output = await collectGdelt(context(partial, { symbols: ["NVDA", "PLTR", "SQ"], since: "2026-10-01" }));
+    expect(output.documents).toHaveLength(1);
+    expect(output.failures).toEqual([{ ticker: "PLTR", reason: "HTTP 429 at https://api.gdeltproject.org/api/v2/doc/doc" }]);
+    expect(partial.calls).toHaveLength(2);
+    const dead = stubHttp(() => { throw new RateLimitLockout("HTTP 429"); });
+    await expect(collectGdelt(context(dead, { symbols: ["NVDA"] }))).rejects.toBeInstanceOf(RateLimitLockout);
   });
 });

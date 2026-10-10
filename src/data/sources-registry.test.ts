@@ -5,9 +5,10 @@ import { describe, expect, it } from "vitest";
 import { EXTRA_SOURCES, LEGACY_SOURCES } from "../collectors/types";
 import { PING_NAMES } from "../collectors/sources/registry";
 import { LICENSES } from "../collectors/sources/common";
-import { canDisplay, DATA_SOURCES, FACT_SOURCE_IDS, getSource, licenceClassFor, sourceIdFor, LICENCE_CLASSES, licenseFor, seedSql } from "./sources-registry";
+import { canDisplay, DATA_SOURCES, FACT_SOURCE_IDS, getSource, licenceClassFor, sourceIdFor, LICENCE_CLASSES, licenseFor, seedSql, updateSql } from "./sources-registry";
 
 const migration = readFileSync(join(process.cwd(), "migrations", "022_data_sources.sql"), "utf8");
+const news = readFileSync(join(process.cwd(), "migrations", "042_news_sources.sql"), "utf8");
 const provenance = readFileSync(join(process.cwd(), "migrations", "023_row_provenance.sql"), "utf8");
 
 describe("data source registry", () => {
@@ -45,8 +46,21 @@ describe("data source registry", () => {
     expect(LICENSES.cboe.display_allowed).toBe(false);
   });
 
-  it("keeps migration 022 seed in step with the constants", () => {
-    expect(migration).toContain(seedSql());
+  it("keeps migration 022 seed in step with the constants, except the rows migration 042 later updates", () => {
+    const original = DATA_SOURCES.map((item) => item.id === "rss"
+      ? { ...item, name: "GlobeNewswire RSS", notes: "GlobeNewswire feed text. Redistribution terms not checked; internal signal only." }
+      : item.id === "gdelt"
+        ? { ...item, licenceClass: "unknown" as const, termsUrl: null, termsCheckedOn: null, attributionText: null, rateLimitNote: null, notes: "GDELT DOC 2.0. Terms of use not checked; internal signal only." }
+        : item);
+    expect(migration).toContain(seedSql(original));
+  });
+
+  it("keeps migration 042 in step with the rss and gdelt rows, display off for both", () => {
+    expect(news).toContain(updateSql(["rss", "gdelt"]));
+    expect(getSource("gdelt")).toMatchObject({ licenceClass: "public_attrib", termsUrl: "https://www.gdeltproject.org/about.html", termsCheckedOn: "2026-10-10", displayAllowed: false });
+    expect(getSource("gdelt")!.attributionText).toContain("gdeltproject.org");
+    expect(canDisplay("rss")).toBe(false);
+    expect(canDisplay("gdelt")).toBe(false);
   });
 
   it.skipIf(!process.env.TEST_DATABASE_URL)("applies to the live schema and stores the same rows", async () => {

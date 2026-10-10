@@ -2,7 +2,7 @@ import { runLoggedJob } from "./job-log";
 import pg from "pg";
 import universe from "../../scanner/universe.json";
 import { collectEdgar, companyCiks, foreignFilerStatus, FOREIGN_FILER_FACT, type InsiderTrade } from "../collectors/edgar";
-import { collectRss } from "../collectors/rss";
+import { collectRssFeeds, describeRssFailures } from "../collectors/rss";
 import { collectFred } from "../collectors/fred";
 import { RateLimitLockout } from "../collectors/http";
 import { requireSecUserAgent } from "../collectors/sec-user-agent";
@@ -72,7 +72,15 @@ async function runLegacyCollect(repository: CollectorRepository, symbols: string
     if (sources.includes("edgar")) ciks = await companyCiks(get);
     // The press release feed is optional. A slow or blocked feed must not stop the SEC collection, so it is recorded as a failure of its own.
     if (sources.includes("rss")) {
-      try { rss = await collectRss(companies, since, get); }
+      try {
+        const feeds = await collectRssFeeds(companies, since, get);
+        rss = feeds.documents;
+        if (feeds.failures.length) {
+          const reason = feeds.failures.length === feeds.attempted ? `All RSS feeds failed: ${describeRssFailures(feeds.failures)}` : describeRssFailures(feeds.failures);
+          if (!sources.includes("edgar") && feeds.failures.length === feeds.attempted) throw new Error(reason);
+          run.failures.push({ ticker: "rss", reason });
+        }
+      }
       catch (error) {
         if (!sources.includes("edgar") || error instanceof RateLimitLockout) throw error;
         run.failures.push({ ticker: "rss", reason: error instanceof Error ? error.message : String(error) });

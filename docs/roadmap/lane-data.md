@@ -17,7 +17,7 @@ Universe. Table `instruments`: 37 rows (28 `guide`, 7 `sample extension`, 1 `dis
 Jobs live in `invest` (16 CronJobs, `kubectl get cronjob` 2026-10-09), Europe/Bratislava, Tue to Sat unless noted:
 - prices 00:30: `src/jobs/prices.ts`, Twelve Data free key, 260 daily bars per ticker for 36 tickers plus SPY (37 requests of the 800 per day, 7 per minute). Writes `daily_bars` with `ON CONFLICT DO UPDATE` (`src/db/prices.ts`), so a vendor revision silently replaces the stored bar.
 - watch 00:45: `filing_watch`, 33,719 rows, filings from 1995-05-19 to 2026-10-08. Cursor only, no text.
-- collect 01:00 (default sources `edgar` and `rss`): `src/collectors/edgar.ts` stores 8-K, 8-K/A, 10-Q, 10-K, 6-K, 20-F, Form 4 text and 8-K exhibits in `source_documents` (body capped at 200 KB, `migrations/007`). Look-back is 100 days (90 for Form 4). RSS fails from the cluster (documented in `docs/tasks-open.md` A4).
+- collect 01:00 (default sources `edgar` and `rss`): `src/collectors/edgar.ts` stores 8-K, 8-K/A, 10-Q, 10-K, 6-K, 20-F, Form 4 text and 8-K exhibits in `source_documents` (body capped at 200 KB, `migrations/007`). Look-back is 100 days (90 for Form 4). RSS now reads PR Newswire first and GlobeNewswire second; GlobeNewswire fails from the cluster (`docs/tasks-open.md` A4, D31).
 - detect 01:35 (`scheduled_gates`), extract 01:50, macro 04:00 (FRED DGS10 and Cboe VIX stored as one document each, `macro_findings`), reconcile 04:10, daily 04:25, judge 05:30, portfolio 06:00 UTC (`portfolio_nav_history`, 234 rows 2025-11-17 to 2026-10-08).
 - Saturday: collect-alphavantage 08:00 (live state is not suspended although `docs/data.md` says suspended; it has never run, LAST SCHEDULE is none; the key name exists in secret `invest-buddy-source-keys`), discovery 09:30 (`discovery_price_bars`, `discovery_candidates`), review calendar 11:00.
 - Suspended: backup, digest, retention.
@@ -66,7 +66,7 @@ Status words: verified = read on the date shown; partly = page read but a needed
 | OpenFIGI | CUSIP to ticker, FIGI | partly. https://www.openfigi.com/api/documentation: free, 25 mapping requests per minute without key, 25 per 6 seconds with key (the repo has a key). Terms page not read. |
 | NBS (nbs.sk), BSSE (bsse.sk) | SK macro and FX; SAX index, SK listed securities | unverified. NBS page lists exchange-rate datasets and a disclaimer link; BSSE page says trade data is delayed 15 minutes and the SAX index is not, and links "Právne informácie". Neither terms page was read. https://www.bcpb.sk failed the certificate check; the exchange's host is bsse.sk. |
 | Finstat, Czech sources (CNB, BCPP) | company registry data | unverified, not checked. Not needed for a US growth screen. Park until the web lane asks for SK or CZ issuers. |
-| Google News RSS, GDELT, GlobeNewswire RSS | headlines | Google: copyright line limits the feed to personal non-commercial use (`docs/tasks-accounts-needed.md` row 11, 2026-10-05), so avoid. GDELT terms unread. GlobeNewswire times out from the cluster. |
+| Google News RSS, GDELT, press-release RSS | headlines | Google: copyright line limits the feed to personal non-commercial use (`docs/tasks-accounts-needed.md` row 11, 2026-10-05), so avoid. GDELT terms read 2026-10-10 (D31): free for commercial use with citation; headline text rights not covered. Press-release RSS: PR Newswire works, GlobeNewswire times out from the cluster. |
 | FMP, EODHD | prices, fundamentals, estimates | unverified today. `research/data-providers.md` (2026-10-04) says FMP display needs a separate licence and EODHD commercial is about 399 USD per month; free limits there are from a worker report. |
 
 ## Owner decisions needed (data lane)
@@ -425,6 +425,7 @@ Depends on: D2
 Who: agent
 Approval needed: none; owner decides keep or drop
 Risk or open question: headline metadata display rights are not settled for any source here.
+Status 2026-10-10: done except the daily GDELT schedule. Decision and probe results are in `docs/data.md` ("News headline sources"). Migration 042 records the GDELT terms and renames the `rss` row.
 
 ### D32 Second price source for cross-check
 Why: one free vendor means errors go unseen. Massive free allows 5 calls per minute, 2 years of EOD history and corporate actions (partly verified); Tiingo free is internal use only, 500 symbols a month (verified). A cross-check never displays, so internal terms fit if the terms permit internal use.

@@ -228,3 +228,22 @@ Golden fixtures: `npx tsx scripts/export-golden.ts YYYY-MM-DD [--from-json judge
 Security master (migration 026). Table `instrument_ids` holds one current row per ticker (`valid_to` null) and keeps older rows as history. It has CIK, SIC, fiscal year end, state of incorporation, exchange, `instrument_type` (`etf` for SPY) and `vendor_symbols` (for SQ: Twelve Data XYZ, SEC XYZ). The migration seeds the 36 names and SPY with no ids except SQ's vendor symbols. `npm run master:refresh [-- --dry-run]` fills CIK and the SEC fields from `company_tickers.json` and submissions (needs `SEC_USER_AGENT`), logs each change, and a second run changes nothing. `loadVendorSymbols` and `loadStoredCiks` in `src/data/security-master.ts` feed the prices, collect and watch jobs; they fall back to `DEFAULT_SYMBOL_MAP` when the table is missing or a row has no symbol. The first refresh has not run yet, so CIKs are empty until it does.
 
 SEC companyfacts (migration 034). `npm run companyfacts -- --dry-run` fetches the 36-name universe, prints bytes and parsed fact counts per ticker, and writes nothing. `npm run companyfacts` stores the raw JSON and the allowed concepts in `fundamentals_pit`; `--only NVDA,AMD` narrows a run and `--watch-since YYYY-MM-DD` selects names with a 10-Q or 10-K since that date. The scheduled watch job also refreshes a name when its latest 10-Q or 10-K appears in companyfacts. A failed refresh or a filing not yet reflected in companyfacts is retried on the next watch run. The initial resumable pass uses `node dist/jobs/backfill.js --job companyfacts --max-requests 36`. All live modes need `DATABASE_URL` and `SEC_USER_AGENT`. The weekly CronJob is planned in D40; no new schedule is installed by this change.
+
+## News headline sources (D31, decided 2026-10-10)
+
+Probe from the owner Mac on 2026-10-10 (HTTP status, time):
+
+| Source | Result | Decision |
+|---|---|---|
+| GlobeNewswire `/rssfeed` | 403 with a browser and with a declared User-Agent; 15 s timeouts from the cluster (`docs/tasks-open.md` A4) | Keep as the second feed, never required. |
+| PR Newswire `/rss/news-releases-list.rss` | 200, 0.3 s, global feed with about 20 recent items | Now the first feed. Low yield for a 35-name universe; count matches in the next collect logs before relying on it. |
+| GDELT DOC 2.0 | 429 after 12 s from this network; the about page grants free commercial use, redistribution with citation and link (read 2026-10-10) | Keep internal, metadata only. Display stays off: the grant covers GDELT's data, not the outlets' headline text. Attribution text is stored in `data_sources`. |
+| Google News RSS | feed limited to personal non-commercial use | Dropped from every scheduled run; a test fails if a CronJob names `gnews`. |
+| Nasdaq per-symbol RSS, MarketWatch top stories | 200 (3.4 s and 0.2 s) | Candidates only. Terms not read, so not added. |
+| Yahoo Finance RSS | 200 | Excluded: terms bar commercial reuse (registry row `yahoo`). |
+| Business Wire, AccessWire, company IR RSS | connection failure or 403 | Not usable. |
+| SEC 8-K Item 7.01 and 8.01 exhibits | already collected as `EX-99.x` documents | Company press releases for display, public domain. |
+
+Collector behaviour: `rss` reads each wire on its own, so one dead feed is logged as `rss` failure with the feed name and the run goes on (`collectRssFeeds`); it throws only when every feed fails. A release in both feeds is stored once by URL. The rss ping passes when at least one wire answers. GDELT keeps headlines already fetched when a later ticker times out or gets a 429, stops starting tickers after 20 minutes (Job deadline 30), and stores headline, link, outlet, time and tickers only.
+
+Not done: a daily GDELT CronJob. `collect --source gdelt` works; scheduling it adds a CronJob and an egress that is rate-limited (1 request per 5 s, 35 tickers, 10 to 15 minutes), so it waits for the owner.
