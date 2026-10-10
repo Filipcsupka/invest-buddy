@@ -1,7 +1,7 @@
 import pg from "pg";
 import { describe, expect, it } from "vitest";
 import { freshnessDays } from "../data/evidence";
-import { expiredDocuments, purgeExtractionRuns, windowCase } from "./retention";
+import { expiredDocuments, purgeExtractionRuns, retainExpired, windowCase } from "./retention";
 import { purgeIdeas } from "./retention-ideas";
 
 describe("retention", () => {
@@ -119,6 +119,54 @@ describe("retention", () => {
       expect(await purgeExtractionRuns(client, false)).toBeGreaterThanOrEqual(1);
       const left = await client.query("SELECT agent FROM extraction_runs WHERE symbol='RTNTEST'");
       expect(left.rows.map((row) => row.agent)).toEqual(["codex"]);
+    } finally { await client.query("ROLLBACK"); client.release(); await pool.end(); }
+  });
+
+  it("counts only on a dry run and issues no DELETE or INSERT", async () => {
+    const calls: string[] = [];
+    const client = { query: async (sql: string) => { calls.push(sql); return { rows: [{ count: 4 }], rowCount: 0 }; } };
+    expect(await retainExpired(client, true)).toEqual({ archivedDocuments: 4, deletedDocuments: 4, archivedFacts: 4, deletedFacts: 4 });
+    expect(calls).toHaveLength(4);
+    for (const sql of calls) expect(sql).toMatch(/^SELECT count/);
+  });
+
+  it.skipIf(!process.env.TEST_DATABASE_URL)("archives expired public SEC rows, deletes other expired rows, and a dry run changes nothing", async () => {
+    const pool = new pg.Pool({ connectionString: process.env.TEST_DATABASE_URL });
+    const client = await pool.connect();
+    const stamp = Date.now();
+    const edgar = `https://example.test/retention-edgar-${stamp}`, rss = `https://example.test/retention-rss-${stamp}`;
+    try {
+      await client.query("BEGIN");
+      await client.query("INSERT INTO instruments (ticker,name,sector,source) VALUES ('RTNTEST','Retention test','Test','guide') ON CONFLICT DO NOTHING");
+      for (const [source, url] of [["edgar", edgar], ["rss", rss]]) await client.query(`INSERT INTO source_documents (source,symbol,doc_type,url,published_at,content_hash,body,expires_at)
+        VALUES ($1,'RTNTEST','8-K',$2,now()-interval '200 days','hash','filing text',now()-interval '1 day')`, [source, url]);
+      for (const [key, licence] of [["archive_me", "public_gov"], ["delete_me", "internal_only"]]) await client.query(`INSERT INTO collected_facts
+        (symbol,fact_key,as_of,value,expires_at,source_id,licence_class) VALUES ('RTNTEST',$1,current_date,'1'::jsonb,now()-interval '1 day','x',$2)`, [key, licence]);
+      const live = async (table: string, column: string, value: string) => (await client.query(`SELECT id FROM ${table} WHERE ${column}=$1`, [value])).rowCount;
+
+      const dry = await retainExpired(client, true);
+      expect(dry.archivedDocuments).toBeGreaterThanOrEqual(1);
+      expect(dry.deletedDocuments).toBeGreaterThanOrEqual(1);
+      expect(dry.archivedFacts).toBeGreaterThanOrEqual(1);
+      expect(dry.deletedFacts).toBeGreaterThanOrEqual(1);
+      expect(await live("source_documents", "url", edgar)).toBe(1);
+      expect(await live("source_documents", "url", rss)).toBe(1);
+      expect(await live("source_documents_archive", "url", edgar)).toBe(0);
+      expect(await live("collected_facts", "fact_key", "archive_me")).toBe(1);
+
+      await retainExpired(client, false);
+      expect(await live("source_documents", "url", edgar)).toBe(0);
+      expect(await live("source_documents_archive", "url", edgar)).toBe(1);
+      expect(await live("source_documents", "url", rss)).toBe(0);
+      expect(await live("source_documents_archive", "url", rss)).toBe(0);
+      expect(await live("collected_facts", "fact_key", "archive_me")).toBe(0);
+      expect(await live("collected_facts_archive", "fact_key", "archive_me")).toBe(1);
+      expect(await live("collected_facts", "fact_key", "delete_me")).toBe(0);
+      expect(await live("collected_facts_archive", "fact_key", "delete_me")).toBe(0);
+      const archived = await client.query("SELECT archived_at FROM source_documents_archive WHERE url=$1", [edgar]);
+      expect(archived.rows[0].archived_at).toBeInstanceOf(Date);
+      const dupes = await client.query("SELECT id FROM source_documents_archive GROUP BY id HAVING count(*) > 1");
+      expect(dupes.rowCount).toBe(0);
     } finally { await client.query("ROLLBACK"); client.release(); await pool.end(); }
   });
 });
