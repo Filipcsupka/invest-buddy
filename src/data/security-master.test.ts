@@ -46,9 +46,9 @@ describe("migration 026", () => {
   it("is additive: no drop, no alter, no delete", () => {
     expect(sql).not.toMatch(/\b(DROP|ALTER|DELETE|TRUNCATE)\b/i);
   });
-  it("has the spec columns and seeds only the guide, sample and benchmark names", () => {
+  it("has the spec columns and seeds only the guide, sample, discovery and benchmark names", () => {
     for (const column of ["ticker", "cik", "figi", "composite_figi", "exchange", "currency", "sic", "sic_description", "fiscal_year_end", "vendor_symbols", "status", "valid_from", "valid_to"]) expect(sql).toContain(column);
-    expect(sql).toContain("'guide', 'sample extension', 'benchmark'");
+    expect(sql).toContain("'guide', 'sample extension', 'discovery', 'benchmark'");
     expect(sql).toContain('"twelvedata": "XYZ"');
   });
   it("matches a universe of 36 names (SPY is the 37th)", () => { expect(universe.instruments).toHaveLength(36); });
