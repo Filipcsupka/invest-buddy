@@ -336,14 +336,11 @@ Evidence: `kubectl -n invest get cronjob,jobs`, `judge_runs`, `scheduled_gates` 
 Owner decision 2026-10-09: the weeks to 2026-12-31 go to collecting data so history accumulates, owner portfolio features, a finished web with free and paid tiers built and tested (payment off), and a marketing and waitlist launch at the end of the year. This replaces the earlier plan to open a waitlist first (PR #83, closed). The plan, owner decisions, schedule and gates are in `docs/roadmap/README.md`; the tasks (D, W, EN, PL) are in the lane files next to it. After each merged roadmap task, add one status line here with the task ID, the PR and the live proof.
 
 ### Progress log
-<<<<<<< HEAD
+- D21 (migration 047, PR #128, CI pending): current SEC 13D/G and 8-K feed stores universe holder filings by accession; the weekday job stays suspended until the migration and schedule are approved.
 - W10 (#121, merged): `ADVICE_OUTPUT` off hides action, size and plan text, closes `/sizing` and `/ideas`, and keeps rule states and evidence visible. Implemented: EN/SK route and render tests and CI `quality` passed. Live check on the site still to do.
 - D20 (#118, merged; migration 045): Form 4 transactions are stored by accession and line, with a resumable SEC backfill. Implemented: PostgreSQL parity, collector and resume tests and CI passed. Live migration and backfill await owner approval.
 - EN27 (#120, merged): track record measures 1, 5, 20 and 60 shared trading sessions against SPY. Implemented: Node 22 tests, lint, typecheck, build and CI passed. Live check on `/track-record` still to do.
 - W34 (#111, merged): the flagged scanner filters stored scores by score, sector, F/T/M, state, held status and source. Implemented: tests and CI passed. The free row limit awaits W30 and the owner's plan decision.
-=======
-- D21 (migration 047, PR pending): current SEC 13D/G and 8-K feed stores universe holder filings by accession; the weekday job stays suspended until the migration and schedule are approved.
->>>>>>> 524a837 (D21: store 13D/13G holder events (migration 047))
 - W10 (PR #121): `ADVICE_OUTPUT` off hides action, size and plan text, closes `/sizing` and `/ideas`, and keeps rule states and evidence visible; EN/SK route and render tests pass. Live proof follows merge.
 - D20 (#118, open; migration 045): Form 4 transactions are stored by accession and line, with a resumable SEC backfill. PostgreSQL parity, collector and resume tests pass; live migration and backfill await owner approval.
 - EN27 (open): track record measures 1, 5, 20 and 60 shared trading sessions against SPY; Node 22 tests, lint and typecheck pass. Live proof follows merge.
