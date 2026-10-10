@@ -126,12 +126,13 @@ export function seedSql(sources: readonly DataSource[] = DATA_SOURCES): string {
 }
 
 /** `UPDATE` statements that bring existing rows to the registry values. Migration 042 uses this for `rss` and `gdelt`; a test compares the file to this text. */
+/** UPDATE statements for later registry changes. Caps stay out: migration 025 and the usage ledger own daily_cap and monthly_cost_cap_eur. */
 export function updateSql(ids: readonly string[]): string {
   return ids.map((id) => {
     const s = BY_ID.get(id);
     if (!s) throw new Error(`unknown data source: ${id}`);
     const set = Object.entries({ name: s.name, kind: s.kind, licence_class: s.licenceClass, display_allowed: s.displayAllowed, redistribution_allowed: s.redistributionAllowed, terms_url: s.termsUrl,
-      terms_checked_on: s.termsCheckedOn, attribution_text: s.attributionText, rate_limit_note: s.rateLimitNote, daily_cap: s.dailyCap, monthly_cost_cap_eur: s.monthlyCostCapEur, notes: s.notes })
+      terms_checked_on: s.termsCheckedOn, attribution_text: s.attributionText, rate_limit_note: s.rateLimitNote, notes: s.notes })
       .map(([column, value]) => `${column} = ${sql(value)}`).join(",\n  ");
     return `UPDATE data_sources SET\n  ${set}\nWHERE id = ${sql(id)};\n`;
   }).join("\n");
