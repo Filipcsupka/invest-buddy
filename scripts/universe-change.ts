@@ -56,7 +56,7 @@ export async function changeUniverse(db: Pick<pg.Pool, "connect">, change: Chang
       if (prior.rows[0] && change.date < prior.rows[0].valid_to) throw new Error("Addition overlaps prior membership");
       const source = change.list === "benchmark" ? "benchmark" : change.list === "discovery" ? "discovery" : change.list === "extended" ? "sample extension" : "guide";
       await client.query(`INSERT INTO instruments(ticker,name,sector,tier,source) VALUES ($1,$2,$3,$4,$5)
-        ON CONFLICT(ticker) DO UPDATE SET name=EXCLUDED.name,sector=EXCLUDED.sector,tier=EXCLUDED.tier`,
+        ON CONFLICT(ticker) DO UPDATE SET name=EXCLUDED.name,sector=EXCLUDED.sector,tier=EXCLUDED.tier,source=EXCLUDED.source`,
       [change.ticker, change.name, change.sector, change.tier, source]);
       await client.query(`INSERT INTO universe_membership(ticker,list,tier,valid_from,reason,criteria_version,added_by)
         VALUES ($1,$2,$3,$4,$5,$6,$7)`, [change.ticker, change.list, change.tier, change.date, change.reason, change.criteriaVersion, change.actor]);

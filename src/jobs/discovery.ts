@@ -198,7 +198,8 @@ export async function moverCandidates(db: Pick<pg.Pool, "query">, date: string):
         WHERE p.bar_date <= $1::date
       UNION ALL
       SELECT p.symbol AS ticker,p.name,p.sector,p.bar_date,p.close,p.volume FROM discovery_price_bars p
-        WHERE p.bar_date <= $1::date AND NOT EXISTS (SELECT 1 FROM instruments i WHERE i.ticker=p.symbol)
+        WHERE p.bar_date <= $1::date AND NOT EXISTS (SELECT 1 FROM universe_membership m
+          WHERE m.ticker=p.symbol AND m.valid_from <= $1::date AND (m.valid_to IS NULL OR m.valid_to > $1::date))
     ) b)
     SELECT ticker,name,sector,((close/NULLIF(close_5,0)-1)*100)::float8 AS move_pct,
       (volume/NULLIF(avg_volume,0))::float8 AS volume_multiple FROM ranked
