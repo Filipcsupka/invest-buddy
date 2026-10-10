@@ -91,6 +91,14 @@ describe("dataTailwind", () => {
     expect(result.reason).toMatch(/CPIAUCSL newest none/);
     expect(evaluateDataTailwind(yields(21, 4, 4.2), vix(18), ASOF, DEFAULT_MACRO_CONFIG, { cpi: monthly().slice(0, -3), ppi: monthly() }).value).toBe(true);
   });
+  it("uses monthly inflation dated to the start of a month published weeks later, and falls back once it is older than the limit", () => {
+    const upTo = (last: string) => ({ cpi: monthly().filter((p) => p.date <= last), ppi: monthly(2).filter((p) => p.date <= last) });
+    const august = evaluateDataTailwind(yields(21, 4, 4.2), vix(18), ASOF, DEFAULT_MACRO_CONFIG, upTo("2026-08-01"));
+    expect(august.reason).not.toMatch(/inflation fallback/);
+    const july = evaluateDataTailwind(yields(21, 4, 4.2), vix(18), ASOF, DEFAULT_MACRO_CONFIG, upTo("2026-07-01"));
+    expect(july.reason).toMatch(/inflation fallback/);
+  });
+
   it("rejects VIX 26 and keeps a missing yield unknown with inflation present", () => {
     expect(evaluateDataTailwind(yields(21, 4, 4.2), vix(26), ASOF, DEFAULT_MACRO_CONFIG, inflation()).value).toBe(false);
     expect(evaluateDataTailwind(null, vix(18), ASOF, DEFAULT_MACRO_CONFIG, inflation()).value).toBeNull();
@@ -143,7 +151,7 @@ describe("sectorRotationIntoGrowth", () => {
 
 describe("macroConfig", () => {
   it("defaults to the documented placeholders", () => {
-    expect(macroConfig({})).toEqual({ windowSessions: 20, yieldMaxChange: 0.25, vixMax: 25, rotationMargin: 2, maxAgeDays: 5, inflationMaxAgeDays: 45, minCoverage: 0.8 });
+    expect(macroConfig({})).toEqual({ windowSessions: 20, yieldMaxChange: 0.25, vixMax: 25, rotationMargin: 2, maxAgeDays: 5, inflationMaxAgeDays: 75, minCoverage: 0.8 });
   });
   it("reads the environment and refuses bad values", () => {
     expect(macroConfig({ MACRO_VIX_MAX: "30", MACRO_ROTATION_MARGIN_PP: "3.5", MACRO_YIELD_MAX_CHANGE_PP: "-0.1" })).toMatchObject({ vixMax: 30, rotationMargin: 3.5, yieldMaxChange: -0.1 });

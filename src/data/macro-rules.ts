@@ -17,12 +17,12 @@ export interface MacroConfig {
   rotationMargin: number;
   /** An input whose newest point is older than this many calendar days before asOf counts as stale. */
   maxAgeDays: number;
-  /** Monthly CPI and PPI observations may lag by this many calendar days. */
+  /** Monthly CPI and PPI are dated to the first day of the month and published about six weeks later, so the newest one can be about 73 days old just before the next release. */
   inflationMaxAgeDays: number;
   /** Share of the universe that must have bars for the rotation rule. */
   minCoverage: number;
 }
-export const DEFAULT_MACRO_CONFIG: MacroConfig = { windowSessions: 20, yieldMaxChange: 0.25, vixMax: 25, rotationMargin: 2, maxAgeDays: 5, inflationMaxAgeDays: 45, minCoverage: 0.8 };
+export const DEFAULT_MACRO_CONFIG: MacroConfig = { windowSessions: 20, yieldMaxChange: 0.25, vixMax: 25, rotationMargin: 2, maxAgeDays: 5, inflationMaxAgeDays: 75, minCoverage: 0.8 };
 export const MACRO_RULES_VERSION = "macro-rules-v2";
 
 const number = (value: string | undefined, fallback: number, ok: (n: number) => boolean) => {
