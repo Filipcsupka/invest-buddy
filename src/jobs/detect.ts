@@ -9,7 +9,16 @@ export interface Filing { symbol: string; accession: string; form: string; items
 export interface InsiderFiling { symbol: string; accession: string; date: string; ownerCik: string | null; trades: { code: string; date: string }[]; isNew?: boolean }
 export interface Band { symbol: string; current: number; previous: number }
 export const relevantFiling = (f: Pick<Filing, "form" | "items">) =>
-  /^(10-Q|10-K)(\/A)?$/.test(f.form) || /^8-K(\/A)?$/.test(f.form) && /(?:^|[,\s])(?:2\.02|4\.02|5\.02)(?:$|[,\s])/.test(f.items);
+  /^(10-Q|10-K)(\/A)?$/.test(f.form) || /^8-K(\/A)?$/.test(f.form) && /(?:^|[,\s])(?:2\.02|4\.02|5\.02|7\.01|8\.01)(?:$|[,\s])/.test(f.items);
+
+export interface CatalystConsensus { symbol: string; asOf: string | null; value: boolean | null }
+/** Oldest reviews first so a null answer cannot starve the rest of the universe. */
+export function catalystReviewSymbols(rows: CatalystConsensus[], today: string, limit = GATE.catalystReviewPerNight): string[] {
+  const cutoff = new Date(Date.parse(`${today}T00:00:00Z`) - GATE.catalystReviewDays * 86400000).toISOString().slice(0, 10);
+  return rows.filter((row) => row.asOf === null || row.value === null || row.asOf < cutoff)
+    .sort((a, b) => (a.asOf ?? "").localeCompare(b.asOf ?? "") || a.symbol.localeCompare(b.symbol))
+    .slice(0, limit).map((row) => row.symbol);
+}
 
 export function insiderCluster(rows: InsiderFiling[], today: string, count = GATE.insiderBuys, days = GATE.insiderDays): string[] {
   const start = new Date(`${today}T00:00:00Z`); start.setUTCDate(start.getUTCDate() - days);
@@ -30,7 +39,7 @@ export function insiderCluster(rows: InsiderFiling[], today: string, count = GAT
 export const drawdownHit = (band: Band, threshold = GATE.drawdownPct) => band.current <= -threshold && band.previous > -threshold;
 export const valuationHit = (band: Band, threshold = GATE.valuationPe) => band.current <= threshold && band.previous > threshold;
 
-export function gateSymbols(input: { filings: Filing[]; insiders: InsiderFiling[]; drawdowns: Band[]; valuations: Band[]; newSymbols?: string[]; today: string }, order: string[]) {
+export function gateSymbols(input: { filings: Filing[]; insiders: InsiderFiling[]; drawdowns: Band[]; valuations: Band[]; newSymbols?: string[]; catalystReviews?: string[]; today: string }, order: string[]) {
   const reasons: Record<string, string[]> = {};
   const add = (symbol: string, reason: string) => { (reasons[symbol] ??= []).push(reason); };
   for (const f of input.filings) if (relevantFiling(f)) add(f.symbol, `${f.form} ${f.accession}`);
@@ -38,6 +47,7 @@ export function gateSymbols(input: { filings: Filing[]; insiders: InsiderFiling[
   for (const b of input.drawdowns) if (drawdownHit(b)) add(b.symbol, `drawdown band ${GATE.drawdownPct}%`);
   for (const b of input.valuations) if (valuationHit(b)) add(b.symbol, `valuation P/E band ${GATE.valuationPe}`);
   for (const symbol of input.newSymbols ?? []) add(symbol, "approved discovery candidate awaiting first extraction");
+  for (const symbol of input.catalystReviews ?? []) add(symbol, "catalyst review due");
   const symbols = order.filter((s) => reasons[s]);
   return { symbols, reasons: Object.fromEntries(symbols.map((s) => [s, reasons[s]])) };
 }
@@ -87,7 +97,7 @@ async function main() {
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
   try {
     const filings = await pool.query<Filing>(`SELECT w.symbol,w.accession,w.form,w.items || ',' || COALESCE((
-      SELECT substring(d.body from '(?i)Item[[:space:]]+(2[.]02|4[.]02|5[.]02)')
+      SELECT substring(d.body from '(?i)Item[[:space:]]+(2[.]02|4[.]02|5[.]02|7[.]01|8[.]01)')
       FROM source_documents d WHERE d.symbol=w.symbol AND d.meta->>'accession'=w.accession
         AND d.doc_type IN ('8-K','8-K/A') LIMIT 1), '') AS items FROM filing_watch w
       WHERE ($1::date IS NULL OR w.filed_at >= $1::date) AND NOT EXISTS (
@@ -107,9 +117,15 @@ async function main() {
         row_number() OVER (PARTITION BY symbol ORDER BY as_of DESC) AS rn FROM collected_facts WHERE fact_key='valuation_pe')
       SELECT symbol,pe::text AS current,previous::text FROM ranked WHERE rn=1 AND previous IS NOT NULL`);
     const newSymbols = await unextractedDiscoverySymbols(pool);
+    const universe = (await loadUniverse(pool)).map((u) => u.symbol);
+    const consensus = await pool.query<CatalystConsensus>(`SELECT i.ticker AS symbol, c.as_of::text AS "asOf", c.value
+      FROM instruments i LEFT JOIN LATERAL (
+        SELECT as_of,value FROM consensus_findings WHERE symbol=i.ticker AND field='productCatalyst'
+        ORDER BY as_of DESC LIMIT 1) c ON true WHERE i.ticker = ANY($1::text[])`, [universe]);
+    const catalystReviews = catalystReviewSymbols(consensus.rows, today);
     const result = gateSymbols({ filings: filings.rows, insiders: docs.rows.map((r) => ({ symbol: r.symbol, accession: r.accession, date: r.date, ownerCik: r.owner_cik, trades: Array.isArray(r.trades) ? r.trades : [], isNew: r.is_new })),
       drawdowns: bars.rows.flatMap((r) => { const peak = Number(r.high); return peak > 0 ? [{ symbol: r.symbol, current: 100 * (Number(r.close) / peak - 1), previous: 100 * (Number(r.previous) / peak - 1) }] : []; }),
-      valuations: valuations.rows.map((r) => ({ symbol: r.symbol, current: Number(r.current), previous: Number(r.previous) })), newSymbols, today }, (await loadUniverse(pool)).map((u) => u.symbol));
+      valuations: valuations.rows.map((r) => ({ symbol: r.symbol, current: Number(r.current), previous: Number(r.previous) })), newSymbols, catalystReviews, today }, universe);
     const payload = await persistGate(pool, { asOf: today, ...result, accessions: Object.fromEntries(result.symbols.map((symbol) => [symbol, [...new Set([...filings.rows.filter((f) => f.symbol === symbol && relevantFiling(f)).map((f) => f.accession), ...docs.rows.filter((d) => d.symbol === symbol && d.is_new && d.accession).map((d) => d.accession)])]])) });
     const json = JSON.stringify(payload) + "\n";
     if (out) writeFileSync(out, json);

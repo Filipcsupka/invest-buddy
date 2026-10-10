@@ -147,7 +147,7 @@ describe("daily carry-forward fingerprint and result", () => {
   it("flag on: result carries the tags and the fingerprint changes when a field expires", async () => {
     const a = await run(history(), "2026-10-05", true);
     const same = await run(history(), "2026-10-05", true);
-    const later = await run(history(), "2026-10-12", true);
+    const later = await run(history(), "2026-12-10", true);
     expect(a.result.carriedFrom).toMatchObject({ epsBeat: "2026-09-20" });
     expect(a.result.expiredFields).toEqual(["insiderOrInstitutionalBuying", "narrativeChanged"]);
     expect(same.fingerprint).toBe(a.fingerprint);

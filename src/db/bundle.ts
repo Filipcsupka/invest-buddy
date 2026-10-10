@@ -25,6 +25,7 @@ export function windowDaysFor(docType: string): number {
   // sec-frames growth rows are dated at quarter end and only exist 45+ days later, so a 30-day window would always drop them.
   if (docType === "XBRL revenue growth") return Math.max(freshnessDays.revenueAccelerating, freshnessDays.revenueDeclining);
   if (docType === "4") return freshnessDays.insiderOrInstitutionalBuying;
+  if (/^13F\b/i.test(docType)) return freshnessDays.insiderOrInstitutionalBuying;
   return Math.max(freshnessDays.productCatalyst, freshnessDays.narrativeChanged);
 }
 export const MAX_WINDOW_DAYS = Math.max(...Object.values(freshnessDays));
@@ -35,7 +36,7 @@ export function withinWindow(doc: Pick<RawDocument, "docType" | "publishedAt">, 
   return Number.isFinite(age) && age >= 0 && age <= windowDaysFor(doc.docType);
 }
 
-/** Earnings exhibits and filings are most useful, then everything else newest first. Bounded so one ticker stays well under the model context. */
+/** Earnings exhibits and filings lead the bounded context; documents within a type are newest first. */
 const priority = (docType: string) => /EX-99\.[12]/i.test(docType) ? 0 : /^(10-Q|10-K|20-F|6-K)$/i.test(docType) ? 1 : /^8-K/i.test(docType) ? 2 : docType === "4" ? 3 : 4;
 
 const SEPARATOR = "\n[...]\n";
@@ -107,7 +108,7 @@ export async function buildBundle(pool: pg.Pool, symbol: string, days = MAX_WIND
   const since = new Date(Date.parse(`${asOf}T00:00:00Z`) - days * 86400000).toISOString().slice(0, 10);
   const docs = await pool.query<{ id: string; url: string; source: string; doc_type: string; published_at: Date; meta: unknown; body: string }>(
     `SELECT id::text, url, source, doc_type, published_at, meta, body FROM source_documents
-     WHERE (symbol = $1 OR (source = 'rss' AND meta->'symbols' ? $1)) AND published_at >= $2::date AND published_at < ($3::date + 1) AND expires_at > now()
+     WHERE (symbol = $1 OR (source IN ('rss', 'gdelt') AND meta->'symbols' ? $1)) AND published_at >= $2::date AND published_at < ($3::date + 1) AND expires_at > now()
      ORDER BY published_at DESC, id LIMIT 200`, [symbol, since, asOf]);
   const facts = await pool.query<{ fact_key: string; as_of: string; value: unknown; document_ids: string[] }>(
     `SELECT fact_key, as_of::text AS as_of, value, document_ids::text[] AS document_ids FROM collected_facts

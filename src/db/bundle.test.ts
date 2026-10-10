@@ -49,15 +49,15 @@ describe("freshness windows", () => {
     expect(windowDaysFor("8-K EX-99.1")).toBe(freshnessDays.revenueAccelerating);
     expect(windowDaysFor("10-Q")).toBe(100);
     expect(windowDaysFor("4")).toBe(freshnessDays.insiderOrInstitutionalBuying);
-    expect(windowDaysFor("press release")).toBe(30);
+    expect(windowDaysFor("press release")).toBe(90);
     expect(windowDaysFor("XBRL revenue growth")).toBe(freshnessDays.revenueAccelerating);
     expect(withinWindow({ docType: "XBRL revenue growth", publishedAt: "2026-07-26T00:00:00Z" }, "2026-10-05")).toBe(true);
   });
   it("drops documents after the as-of day and older than the window", () => {
     expect(withinWindow({ docType: "press release", publishedAt: "2026-10-05T15:00:00.000Z" }, "2026-10-05")).toBe(true);
     expect(withinWindow({ docType: "press release", publishedAt: "2026-10-06T00:00:00.000Z" }, "2026-10-05")).toBe(false);
-    expect(withinWindow({ docType: "press release", publishedAt: "2026-09-05T00:00:00.000Z" }, "2026-10-05")).toBe(true);
-    expect(withinWindow({ docType: "press release", publishedAt: "2026-09-04T00:00:00.000Z" }, "2026-10-05")).toBe(false);
+    expect(withinWindow({ docType: "press release", publishedAt: "2026-07-07T00:00:00.000Z" }, "2026-10-05")).toBe(true);
+    expect(withinWindow({ docType: "press release", publishedAt: "2026-07-06T00:00:00.000Z" }, "2026-10-05")).toBe(false);
     expect(withinWindow({ docType: "4", publishedAt: "2026-08-06T00:00:00.000Z" }, "2026-10-05")).toBe(true);
     expect(withinWindow({ docType: "4", publishedAt: "2026-08-05T00:00:00.000Z" }, "2026-10-05")).toBe(false);
     expect(withinWindow({ docType: "10-Q", publishedAt: "2026-06-27T00:00:00.000Z" }, "2026-10-05")).toBe(true);

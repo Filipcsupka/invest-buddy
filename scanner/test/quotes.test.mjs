@@ -69,8 +69,8 @@ test("keeps a false value with a fresh quote from a display-allowed document", (
 });
 test("enforces the per-field freshness window when asOf is given", () => {
   const catalyst = (asOf) => { const out = base(); out.fundamentals.productCatalyst = { present: true, kind: "chip", summary: "x" }; out.evidence = [ev({ claim: "fundamentals.productCatalyst" })]; return checkEvidence(out, bundle, { asOf }); };
-  assert.equal(catalyst("2026-10-20").output.fundamentals.productCatalyst.present, true);
-  assert.equal(catalyst("2026-10-21").output.fundamentals.productCatalyst, null);
+  assert.equal(catalyst("2026-12-19").output.fundamentals.productCatalyst.present, true);
+  assert.equal(catalyst("2026-12-20").output.fundamentals.productCatalyst, null);
   assert.equal(run(ev(), bundle, { asOf: "2026-12-29" }).output.fundamentals.revenueAccelerating, true);
   assert.equal(run(ev(), bundle, { asOf: "2026-12-30" }).output.fundamentals.revenueAccelerating, null);
   assert.equal(run(ev(), bundle, { asOf: "2026-09-19" }).output.fundamentals.revenueAccelerating, null);

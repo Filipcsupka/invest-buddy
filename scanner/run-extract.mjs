@@ -190,10 +190,10 @@ async function main() {
     let spent = emptyUsage(), hash = null, tickerModel = opts.model || "default", tickerCost = 0;
     try {
       const bundle = await withRetry(() => loadBundle(opts, u.symbol, token, asOf), log, `${u.symbol} bundle`);
-      if (!bundle.documents?.length && !bundle.facts?.length) throw Object.assign(new Error("empty bundle"), { skip: true });
       hash = inputHash({ bundle, prompt, agent: opts.agent, model: opts.model });
       log(`${u.symbol}: input hash ${hash}; accessions ${(gate?.accessions?.[u.symbol] ?? []).join(",") || "none"}`);
-      if (logRuns && !opts.force && await alreadyExtracted(opts.baseUrl, token, { symbol: u.symbol, agent: opts.agent, inputHash: hash })) {
+      const catalystReview = gate?.reasons?.[u.symbol]?.includes("catalyst review due");
+      if (logRuns && !opts.force && !catalystReview && await alreadyExtracted(opts.baseUrl, token, { symbol: u.symbol, agent: opts.agent, inputHash: hash })) {
         skippedSymbols.push(u.symbol);
         log(`${u.symbol}: SKIPPED same input already extracted and applied (input ${hash.slice(0, 12)}); use --force to rerun`);
         return;

@@ -65,7 +65,7 @@ describe("retention", () => {
     } finally { await client.query("ROLLBACK"); client.release(); await pool.end(); }
   });
 
-  it.skipIf(!process.env.TEST_DATABASE_URL)("deletes a document cited only by a 40 day old productCatalyst but keeps one cited by a 40 day old guidanceRaised", async () => {
+  it.skipIf(!process.env.TEST_DATABASE_URL)("deletes a document cited only by a 95 day old productCatalyst but keeps one cited by a 95 day old guidanceRaised", async () => {
     const pool = new pg.Pool({ connectionString: process.env.TEST_DATABASE_URL });
     const client = await pool.connect();
     const stamp = Date.now();
@@ -74,10 +74,10 @@ describe("retention", () => {
       await client.query("BEGIN");
       await client.query("INSERT INTO instruments (ticker,name,sector,source) VALUES ('RTNTEST','Retention test','Test','guide') ON CONFLICT DO NOTHING");
       for (const url of [catalyst, guidance]) await client.query(`INSERT INTO source_documents (source,symbol,doc_type,url,published_at,content_hash,body,expires_at)
-        VALUES ('fixture','RTNTEST','test',$1,now()-interval '40 days','hash','text',now()-interval '1 day')`, [url]);
+        VALUES ('fixture','RTNTEST','test',$1,now()-interval '95 days','hash','text',now()-interval '1 day')`, [url]);
       for (const [field, url] of [["productCatalyst", catalyst], ["guidanceRaised", guidance]]) await client.query(`INSERT INTO consensus_findings
         (symbol,field,as_of,value,agreement,agent_values,evidence_refs,verified,reason)
-        VALUES ('RTNTEST',$1,current_date-40,true,'agree','{}'::jsonb,$2::jsonb,true,'fixture')`, [field, JSON.stringify([{ url }])]);
+        VALUES ('RTNTEST',$1,current_date-95,true,'agree','{}'::jsonb,$2::jsonb,true,'fixture')`, [field, JSON.stringify([{ url }])]);
       const removed = (await client.query(`DELETE ${expiredDocuments} RETURNING url`)).rows.map((row) => row.url);
       expect(removed).toContain(catalyst);
       expect(removed).not.toContain(guidance);

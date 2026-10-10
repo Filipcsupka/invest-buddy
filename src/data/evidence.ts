@@ -6,7 +6,7 @@ import { requireSecUserAgent } from "../collectors/sec-user-agent";
 
 export const freshnessDays: Record<string, number> = {
   revenueAccelerating: 100, revenueDeclining: 100, epsBeat: 100,
-  guidanceRaised: 100, guidanceCut: 100, productCatalyst: 30,
+  guidanceRaised: 100, guidanceCut: 100, productCatalyst: 90,
   insiderOrInstitutionalBuying: 60, narrativeChanged: 30,
   sectorRotationIntoGrowth: 30, dataTailwind: 30,
 };
