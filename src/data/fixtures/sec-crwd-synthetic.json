@@ -1,0 +1,113 @@
+{
+  "fixtureNote": "Synthetic SEC companyfacts shaped data; values and accession numbers are illustrative.",
+  "facts": {
+    "us-gaap": {
+      "RevenueFromContractWithCustomerExcludingAssessedTax": {
+        "units": {
+          "USD": [
+            {
+              "start": "2024-02-01",
+              "end": "2024-04-30",
+              "val": 100,
+              "accn": "crwd-2025-q1",
+              "fy": 2025,
+              "fp": "Q1",
+              "form": "10-Q",
+              "filed": "2024-05-30"
+            },
+            {
+              "start": "2024-05-01",
+              "end": "2024-07-31",
+              "val": 120,
+              "accn": "crwd-2025-q2",
+              "fy": 2025,
+              "fp": "Q2",
+              "form": "10-Q",
+              "filed": "2024-08-30"
+            },
+            {
+              "start": "2024-08-01",
+              "end": "2024-10-31",
+              "val": 140,
+              "accn": "crwd-2025-q3",
+              "fy": 2025,
+              "fp": "Q3",
+              "form": "10-Q",
+              "filed": "2024-11-30"
+            },
+            {
+              "start": "2024-02-01",
+              "end": "2024-10-31",
+              "val": 360,
+              "accn": "crwd-2025-q3",
+              "fy": 2025,
+              "fp": "Q3",
+              "form": "10-Q",
+              "filed": "2024-11-30"
+            },
+            {
+              "start": "2024-02-01",
+              "end": "2025-01-31",
+              "val": 540,
+              "accn": "crwd-2025-fy",
+              "fy": 2025,
+              "fp": "FY",
+              "form": "10-K",
+              "filed": "2025-03-22"
+            },
+            {
+              "start": "2025-08-01",
+              "end": "2025-10-31",
+              "val": 220,
+              "accn": "crwd-2026-q3",
+              "fy": 2026,
+              "fp": "Q3",
+              "form": "10-Q",
+              "filed": "2025-11-30"
+            },
+            {
+              "start": "2025-02-01",
+              "end": "2025-10-31",
+              "val": 520,
+              "accn": "crwd-2026-q3",
+              "fy": 2026,
+              "fp": "Q3",
+              "form": "10-Q",
+              "filed": "2025-11-30"
+            },
+            {
+              "start": "2025-02-01",
+              "end": "2026-01-31",
+              "val": 820,
+              "accn": "crwd-2026-fy",
+              "fy": 2026,
+              "fp": "FY",
+              "form": "10-K",
+              "filed": "2026-03-22"
+            },
+            {
+              "start": "2026-02-01",
+              "end": "2026-04-30",
+              "val": 180,
+              "accn": "crwd-2027-q1",
+              "fy": 2027,
+              "fp": "Q1",
+              "form": "10-Q",
+              "filed": "2026-05-30"
+            },
+            {
+              "start": "2026-05-01",
+              "end": "2026-07-31",
+              "val": 230,
+              "accn": "crwd-2027-q2",
+              "fy": 2027,
+              "fp": "Q2",
+              "form": "10-Q",
+              "filed": "2026-08-30"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

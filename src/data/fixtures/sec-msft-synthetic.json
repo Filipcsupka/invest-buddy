@@ -1,0 +1,113 @@
+{
+  "fixtureNote": "Synthetic SEC companyfacts shaped data; values and accession numbers are illustrative.",
+  "facts": {
+    "us-gaap": {
+      "RevenueFromContractWithCustomerExcludingAssessedTax": {
+        "units": {
+          "USD": [
+            {
+              "start": "2024-07-01",
+              "end": "2024-09-30",
+              "val": 100,
+              "accn": "msft-2025-q1",
+              "fy": 2025,
+              "fp": "Q1",
+              "form": "10-Q",
+              "filed": "2024-10-30"
+            },
+            {
+              "start": "2024-10-01",
+              "end": "2024-12-31",
+              "val": 120,
+              "accn": "msft-2025-q2",
+              "fy": 2025,
+              "fp": "Q2",
+              "form": "10-Q",
+              "filed": "2025-01-30"
+            },
+            {
+              "start": "2025-01-01",
+              "end": "2025-03-31",
+              "val": 140,
+              "accn": "msft-2025-q3",
+              "fy": 2025,
+              "fp": "Q3",
+              "form": "10-Q",
+              "filed": "2025-04-30"
+            },
+            {
+              "start": "2024-07-01",
+              "end": "2025-03-31",
+              "val": 360,
+              "accn": "msft-2025-q3",
+              "fy": 2025,
+              "fp": "Q3",
+              "form": "10-Q",
+              "filed": "2025-04-30"
+            },
+            {
+              "start": "2024-07-01",
+              "end": "2025-06-30",
+              "val": 540,
+              "accn": "msft-2025-fy",
+              "fy": 2025,
+              "fp": "FY",
+              "form": "10-K",
+              "filed": "2025-08-19"
+            },
+            {
+              "start": "2025-07-01",
+              "end": "2025-09-30",
+              "val": 130,
+              "accn": "msft-2026-q1",
+              "fy": 2026,
+              "fp": "Q1",
+              "form": "10-Q",
+              "filed": "2025-10-30"
+            },
+            {
+              "start": "2025-10-01",
+              "end": "2025-12-31",
+              "val": 170,
+              "accn": "msft-2026-q2",
+              "fy": 2026,
+              "fp": "Q2",
+              "form": "10-Q",
+              "filed": "2026-01-30"
+            },
+            {
+              "start": "2026-01-01",
+              "end": "2026-03-31",
+              "val": 220,
+              "accn": "msft-2026-q3",
+              "fy": 2026,
+              "fp": "Q3",
+              "form": "10-Q",
+              "filed": "2026-04-30"
+            },
+            {
+              "start": "2025-07-01",
+              "end": "2026-03-31",
+              "val": 520,
+              "accn": "msft-2026-q3",
+              "fy": 2026,
+              "fp": "Q3",
+              "form": "10-Q",
+              "filed": "2026-04-30"
+            },
+            {
+              "start": "2025-07-01",
+              "end": "2026-06-30",
+              "val": 820,
+              "accn": "msft-2026-fy",
+              "fy": 2026,
+              "fp": "FY",
+              "form": "10-K",
+              "filed": "2026-08-19"
+            }
+          ]
+        }
+      }
+    }
+  }
+}
