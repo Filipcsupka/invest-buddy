@@ -341,7 +341,7 @@ Owner decision 2026-10-09: the weeks to 2026-12-31 go to collecting data so hist
 - D20 (#118, merged; migration 045): Form 4 transactions are stored by accession and line, with a resumable SEC backfill. Implemented: PostgreSQL parity, collector and resume tests and CI passed. Live migration and backfill await owner approval.
 - EN27 (#120, merged): track record measures 1, 5, 20 and 60 shared trading sessions against SPY. Implemented: Node 22 tests, lint, typecheck, build and CI passed. Live check on `/track-record` still to do.
 - W34 (#111, merged): the flagged scanner filters stored scores by score, sector, F/T/M, state, held status and source. Implemented: tests and CI passed. The free row limit awaits W30 and the owner's plan decision.
-- SK1 (PR #127; migration 047): implemented. `/insiders` and a reusable ticker panel show display-allowed Form 4 rows in EN/SK; CI quality (tests, lint, parity) passes. Live migration needs owner approval.
+- SK1 (PR #127; migration 048): implemented. `/insiders` and a reusable ticker panel show display-allowed Form 4 rows in EN/SK; CI quality (tests, lint, parity) passes. Live migration needs owner approval.
 - W10 (PR #121): `ADVICE_OUTPUT` off hides action, size and plan text, closes `/sizing` and `/ideas`, and keeps rule states and evidence visible; EN/SK route and render tests pass. Live proof follows merge.
 - D20 (#118, open; migration 045): Form 4 transactions are stored by accession and line, with a resumable SEC backfill. PostgreSQL parity, collector and resume tests pass; live migration and backfill await owner approval.
 - EN27 (open): track record measures 1, 5, 20 and 60 shared trading sessions against SPY; Node 22 tests, lint and typecheck pass. Live proof follows merge.
