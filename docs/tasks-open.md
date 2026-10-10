@@ -351,6 +351,8 @@ Owner decision 2026-10-09: the weeks to 2026-12-31 go to collecting data so hist
 - Next in the roadmap: D11 universe membership, D18 to D20 SEC fundamentals and filings backfills, EN2 to EN5 engine alignment, W3 and W4 web performance and design baseline, PL2 onward platform tasks, and the owner decisions list in `docs/roadmap/README.md` section b.
 - EN3: #80 set START at 18 and ADD at 15; #107 corrects the WATCH explanation and golden edges. Live proof follows its merge.
 
+2026-10-10, in review: D43 history read model in `src/db/history.ts` (`scoreHistory`, `fundamentalsHistory`, `universeAsOf`; depth limit, keyset paging, SEC rows gated by the `sec` display flag; no migration). The company page query from W33 is not merged yet, so it is a new module in `src/db/`; the web lane wires it later.
+
 2026-10-10, in review: D11 (#110) adds dated universe membership and a change script in migration 043; the live migration needs owner approval.
 
 ## Not planned
