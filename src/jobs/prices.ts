@@ -23,7 +23,7 @@ export async function runPrices(provider: MarketDataProvider, repository: PriceR
   const startedAt = (options.now?.() ?? new Date()).toISOString();
   const failures: { ticker: string; reason: string }[] = [];
   const unmapped: string[] = [];
-  let succeeded = 0, barsWritten = 0;
+  let succeeded = 0, barsWritten = 0, barsRevised = 0;
   let stoppedReason: string | null = null;
   for (const [index, ticker] of tickers.entries()) {
     try {
@@ -31,7 +31,10 @@ export async function runPrices(provider: MarketDataProvider, repository: PriceR
       if (!bars.length) throw new Error("no bars returned");
       const stored = await repository.countSince(ticker, bars[0].date);
       if (bars.length < stored) throw new Error(`fetched ${bars.length} bars but ${stored} are stored for the same range; kept stored bars`);
-      if (!options.dryRun) barsWritten += await repository.upsertBars(ticker, bars, { sourceId: options.provider ?? "twelvedata", vendorSymbol: DEFAULT_SYMBOL_MAP[ticker] ?? ticker });
+      if (!options.dryRun) {
+        const r = await repository.upsertBars(ticker, bars, { sourceId: options.provider ?? "twelvedata", vendorSymbol: DEFAULT_SYMBOL_MAP[ticker] ?? ticker });
+        barsWritten += r.written; barsRevised += r.revised;
+      }
       succeeded++;
     } catch (error) {
       if (error instanceof DailyLimitError || error instanceof CapReached) {
@@ -43,7 +46,7 @@ export async function runPrices(provider: MarketDataProvider, repository: PriceR
       failures.push({ ticker, reason: error instanceof Error ? error.message : "unknown error" });
     }
   }
-  const run: PriceRunRecord = { provider: options.provider ?? "twelvedata", startedAt, requested: tickers.length, succeeded, failed: failures.length, barsWritten, failures, stoppedReason };
+  const run: PriceRunRecord = { provider: options.provider ?? "twelvedata", startedAt, requested: tickers.length, succeeded, failed: failures.length, barsWritten, barsRevised, failures, stoppedReason };
   if (!options.dryRun) await repository.recordRun(run);
   const exitCode = tickers.length > 0 && failures.length / tickers.length > FAILURE_LIMIT ? 1 : 0;
   return { ...run, exitCode, unmapped };
@@ -71,12 +74,12 @@ async function main() {
     const ledger = pool ? new PostgresUsageLedger(pool) : null;
     const reserve = ledger ? () => ledger.reserve("twelvedata", 1, { job: "prices", runId, credits: 1 }) : undefined;
     const result = await runPrices(new TwelveDataProvider({ apiKey, reserve, ...(pool ? { symbolMap: await loadVendorSymbols(pool, "twelvedata") } : {}) }), repository, tickers, { dryRun });
-    process.stdout.write(`Prices: ${result.succeeded}/${result.requested} tickers, ${result.barsWritten} bars written${dryRun ? " (dry run, nothing stored)" : ""}\n`);
+    process.stdout.write(`Prices: ${result.succeeded}/${result.requested} tickers, ${result.barsWritten} bars written, ${result.barsRevised} revised${dryRun ? " (dry run, nothing stored)" : ""}\n`);
     if (result.unmapped.length) process.stderr.write(`Unmapped symbols: ${result.unmapped.join(", ")}\n`);
     for (const failure of result.failures) process.stderr.write(`Failed ${failure.ticker}\n`);
     if (result.stoppedReason) process.stderr.write("Stopped: source limit reached\n");
     process.exitCode = result.exitCode;
-    return { requested: result.requested, succeeded: result.succeeded, failures: result.failed, barsWritten: result.barsWritten };
+    return { requested: result.requested, succeeded: result.succeeded, failures: result.failed, barsWritten: result.barsWritten, barsRevised: result.barsRevised };
   } finally { await pool?.end(); }
 }
 
