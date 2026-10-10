@@ -30,3 +30,16 @@ A dated snapshot read from a SELECT-only look at the live database on 2026-10-09
 Tables the report covers that have no baseline row above: `discovery_candidates`, `collector_runs`, `scan_runs`, `scan_findings`, `extraction_runs`, `record_signals`, `trade_ideas`. A table missing from the schema is skipped.
 
 Running the script on the live database once would add the per-table sizes, which the 2026-10-09 baseline does not have.
+
+## Terms requests
+
+Drafts are in `docs/terms-requests.md`. The owner fills the dates; an answer is followed by a PR that updates the matching `data_sources` row.
+
+| Source | `data_sources` id | Asked | Sent | Answered | Answer | Row updated |
+|---|---|---|---|---|---|---|
+| Alpha Vantage | `alphavantage` | display of EPS beat/miss and estimates; commercial use | | | | |
+| Cboe | `cboe` | display of flags derived from VIX close | | | | |
+| Twelve Data | `twelvedata` | display of daily closes on a public company page | | | | |
+| FINRA | `finra` | storage and display of short interest | | | | |
+| Finnhub | `finnhub` | business use and display | | | | |
+| GDELT | `gdelt` | commercial use; headline display | | | | |
