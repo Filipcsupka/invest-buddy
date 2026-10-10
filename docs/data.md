@@ -28,7 +28,7 @@ For a local demonstration, run `docker compose up -d --build db migrate web`, th
 
 This is informational screening under ADR-001. Scores are rule outputs for all visitors; they do not include position size or personal advice.
 
-Daily scoring requires a price bar dated exactly to the scoring session. Missing or older bars produce `Insufficient/invalid data` with `stale_prices`; no points are awarded. Same-day scores are refreshed when consensus inputs or price bars change.
+Daily scoring requires a price bar dated exactly to the scoring session. Missing or older bars produce `Insufficient/invalid data` with `stale_prices`; no points are awarded. Same-day scores are refreshed when consensus inputs or price bars change. Each distinct input set also writes one append-only row to `score_input_snapshots` (fundamentals, macro, consensus rows, rules version, hash of the last 260 closes). `npx tsx scripts/replay-score.ts TICKER YYYY-MM-DD` rebuilds the score from it and compares with `score_results`.
 
 ## Collectors
 

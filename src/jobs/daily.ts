@@ -1,7 +1,7 @@
 import { runLoggedJob } from "./job-log";
 import pg from "pg";
 import { createHash } from "node:crypto";
-import { score } from "../engine";
+import { scoreAsOf } from "../engine/score-as-of";
 import type { UniverseProvider } from "../data/providers";
 import { fixtureProvider } from "../data/fixtures";
 import type { ScoreRepository, ScoredInstrument, SaveOutcome } from "../db/types";
@@ -26,18 +26,10 @@ export async function runDaily(provider: UniverseProvider, repository: ScoreRepo
   if (!date || !validDate(date)) throw new Error("No valid data date available");
   const records: ScoredInstrument[] = inputs.map(({ instrument, bars, fundamentals, macro }) => {
     const throughDate = bars.filter((bar) => bar.date <= date);
-    const result = score({ ticker: instrument.ticker, bars: throughDate, fundamentals, macro });
-    const latestBar = throughDate.at(-1)?.date;
-    const ageDays = latestBar ? (Date.parse(`${date}T00:00:00Z`) - Date.parse(`${latestBar}T00:00:00Z`)) / 86_400_000 : Infinity;
-    if (ageDays > 3) {
-      result.state = "Insufficient/invalid data";
-      result.invalidReasons = [...result.invalidReasons, "stale_prices"];
-      result.technical = 0; result.fundamentals = 0; result.macro = 0; result.total = 0;
-      result.ruleHits = []; result.rejectionReasons = []; result.pullbackInUptrend = false;
-    }
+    const result = scoreAsOf({ ticker: instrument.ticker, bars, fundamentals, macro }, date);
     const origin = provider instanceof DatabaseUniverseProvider ? provider.provenance.get(instrument.ticker) : undefined;
     const fingerprint = createHash("sha256").update(JSON.stringify({ consensus: origin?.fingerprintRows ?? { fundamentals, macro }, sources: origin?.sources ?? null, latestBarDate: throughDate.at(-1)?.date ?? null, bars: throughDate })).digest("hex");
-    return { instrument, fingerprint, result: { ...result, asOf: date, ...(origin ? { scanRunId: Object.values(origin.runIds)[0], scanRunIds: origin.runIds, agreement: origin.agreement, consensusValues: origin.consensusValues, evidenceUrls: origin.evidenceUrls, sources: origin.sources, ...(origin.carriedFrom ? { carriedFrom: origin.carriedFrom, expiredFields: origin.expiredFields ?? [] } : {}) } : {}) } };
+    return { instrument, fingerprint, consensusRows: origin?.fingerprintRows, result: { ...result, ...(origin ? { scanRunId: Object.values(origin.runIds)[0], scanRunIds: origin.runIds, agreement: origin.agreement, consensusValues: origin.consensusValues, evidenceUrls: origin.evidenceUrls, sources: origin.sources, ...(origin.carriedFrom ? { carriedFrom: origin.carriedFrom, expiredFields: origin.expiredFields ?? [] } : {}) } : {}) } };
   });
   return repository.saveDaily(date, providerName, records);
 }

@@ -1,7 +1,7 @@
 import type { ScoreResult } from "../engine";
 import type { Instrument } from "../data/providers";
 
-export interface ScoredInstrument { instrument: Instrument; result: ScoreResult; fingerprint?: string }
+export interface ScoredInstrument { instrument: Instrument; result: ScoreResult; fingerprint?: string; /** Consensus rows the score read, kept in the input snapshot. */ consensusRows?: unknown }
 export interface AlertChange {
   ticker: string;
   asOf: string;
