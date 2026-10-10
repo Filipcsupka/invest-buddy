@@ -1,11 +1,17 @@
-import { technicalIndicators } from "./indicators";
+import { technicalIndicators, volumeAccumulation } from "./indicators";
 import type { Fundamentals, Macro, OHLCV, RuleHit, ScoreInputs, ScoreResult } from "./types";
 
 /** Bump when the scoring rules change; each new record snapshot stores this value. */
-export const SCORE_RULES_VERSION = "2026-10-06.1";
+export const SCORE_RULES_VERSION = "2026-10-10.1";
 
 const finite = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
 const boolean = (value: unknown) => typeof value === "boolean" || value === null;
+
+export function accumulationRule(volume: boolean | null, insider: boolean | null): boolean | null {
+  if (volume === true || insider === true) return true;
+  if (volume === null && insider === null) return null;
+  return false;
+}
 
 function validDate(value: unknown): value is string {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -47,6 +53,7 @@ export function score(input: ScoreInputs): ScoreResult {
     inputs: normalized, ruleHits: [], rejectionReasons: [],
   };
   const indicator = technicalIndicators(bars);
+  const accumulation = volumeAccumulation(bars);
   const f = normalized.fundamentals;
   const m = normalized.macro;
   const hits: RuleHit[] = [];
@@ -54,7 +61,11 @@ export function score(input: ScoreInputs): ScoreResult {
   add("revenue-acceleration", "Revenue growth accelerated", 4, (f.revenueAccelerating ?? (f.revenueGrowthCurrent !== null && f.revenueGrowthPrior !== null && f.revenueGrowthCurrent > f.revenueGrowthPrior)) && f.revenueDeclining === false, f.revenueAccelerating === null ? "unknown" : `${f.revenueGrowthPrior ?? "unknown"}% → ${f.revenueGrowthCurrent ?? "unknown"}%`, f.revenueAccelerating === null || (f.revenueAccelerating === undefined && (f.revenueGrowthCurrent === null || f.revenueGrowthPrior === null)));
   add("earnings", "EPS beat or guidance raised", 3, f.epsBeat || f.guidanceRaised, `EPS beat: ${f.epsBeat ?? "unknown"}; guidance raised: ${f.guidanceRaised ?? "unknown"}` , f.epsBeat === null && f.guidanceRaised === null);
   add("catalyst", "Curated product catalyst", 2, f.productCatalyst, String(f.productCatalyst ?? "unknown"), f.productCatalyst === null);
-  add("accumulation", "Insider or institutional accumulation", 1, f.insiderOrInstitutionalAccumulation, String(f.insiderOrInstitutionalAccumulation ?? "unknown"), f.insiderOrInstitutionalAccumulation === null);
+  const accumulationMatched = accumulationRule(accumulation.matched, f.insiderOrInstitutionalAccumulation);
+  add("accumulation", "Institutional or insider accumulation", 1,
+    accumulationMatched,
+    `up/down volume ${accumulation.ratio === null ? "unknown" : Number.isFinite(accumulation.ratio) ? accumulation.ratio.toFixed(2) : "∞"}; insider buying: ${f.insiderOrInstitutionalAccumulation ?? "unknown"}`,
+    accumulationMatched === null);
   add("above-ma", "Close above MA50 and MA200", 3, indicator.aboveBoth, `Close ${indicator.close}; MA50 ${indicator.ma50}; MA200 ${indicator.ma200}`);
   add("uptrend", "Uptrend intact", 3, indicator.uptrend, `MA50 ten days ago ${indicator.ma50TenDaysAgo}`);
   add("green-volume", "Higher volume on green days", 2, indicator.volumeOnGreen, `Green ${indicator.greenVolume}; red ${indicator.redVolume}`);

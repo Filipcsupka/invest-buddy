@@ -1,5 +1,20 @@
 import type { OHLCV } from "./types";
 
+/** Default up/down volume threshold for owner review. */
+export const ACCUMULATION_UPDOWN_RATIO = 1.25;
+
+export function volumeAccumulation(bars: OHLCV[]): { matched: boolean | null; ratio: number | null } {
+  if (bars.length < 51) return { matched: null, ratio: null };
+  let upVolume = 0;
+  let downVolume = 0;
+  for (let i = bars.length - 50; i < bars.length; i++) {
+    if (bars[i].close > bars[i - 1].close) upVolume += bars[i].volume;
+    else if (bars[i].close < bars[i - 1].close) downVolume += bars[i].volume;
+  }
+  const ratio = downVolume === 0 ? (upVolume > 0 ? Infinity : 0) : upVolume / downVolume;
+  return { matched: ratio >= ACCUMULATION_UPDOWN_RATIO, ratio };
+}
+
 export function movingAverage(bars: OHLCV[], period: number, offset = 0): number | null {
   if (period <= 0 || bars.length < period + offset) return null;
   const end = bars.length - offset;
