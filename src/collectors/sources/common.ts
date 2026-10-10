@@ -1,3 +1,4 @@
+import { licenseFor } from "../../data/sources-registry";
 import { DEFAULT_SYMBOL_MAP } from "../../data/twelvedata";
 import type { CusipStore } from "../../db/source-collectors";
 import type { SourceState } from "../../db/collectors";
@@ -39,20 +40,21 @@ export interface SourceModule {
 }
 
 export interface License { license_note: string; display_allowed: boolean }
+/** Read from the data source registry (`src/data/sources-registry.ts`), which is the single list of licences. */
 export const LICENSES = {
-  sec: { display_allowed: true, license_note: "US government data from SEC EDGAR, public." },
-  rss: { display_allowed: false, license_note: "GlobeNewswire feed text. Redistribution terms not checked; internal signal only." },
-  openfda: { display_allowed: true, license_note: "openFDA content is public domain under CC0 1.0 (open.fda.gov/terms). Some linked data may not be public domain." },
-  clinicaltrials: { display_allowed: false, license_note: "ClinicalTrials.gov (NLM). Terms text not checked; treated as not cleared for display." },
-  usaspending: { display_allowed: true, license_note: "USAspending.gov, US government open data." },
-  fed: { display_allowed: true, license_note: "Federal Reserve Board public data." },
-  treasury: { display_allowed: true, license_note: "US Treasury FiscalData, public." },
-  bls: { display_allowed: true, license_note: "US Bureau of Labor Statistics public data." },
-  cboe: { display_allowed: false, license_note: "Cboe file. Redistribution terms not checked; internal signal only." },
-  gnews: { display_allowed: false, license_note: "Google News feed. Feed text allows only personal, non-commercial use in a feed reader. Internal signal only." },
-  gdelt: { display_allowed: false, license_note: "GDELT DOC 2.0. Terms of use not checked; internal signal only." },
-  openfigi: { display_allowed: false, license_note: "OpenFIGI mapping used only to link CUSIPs to tickers; terms not checked." },
-  alphavantage: { display_allowed: false, license_note: "Alpha Vantage EARNINGS. Display rights not verified; internal only. The page may show only the derived EPS beat yes/no with the source name, never the estimate." },
+  sec: licenseFor("sec"),
+  rss: licenseFor("rss"),
+  openfda: licenseFor("openfda"),
+  clinicaltrials: licenseFor("clinicaltrials"),
+  usaspending: licenseFor("usaspending"),
+  fed: licenseFor("fed"),
+  treasury: licenseFor("treasury"),
+  bls: licenseFor("bls"),
+  cboe: licenseFor("cboe"),
+  gnews: licenseFor("gnews"),
+  gdelt: licenseFor("gdelt"),
+  openfigi: licenseFor("openfigi"),
+  alphavantage: licenseFor("alphavantage"),
 } satisfies Record<string, License>;
 
 export function sourceDocument(input: Omit<CollectedDocument, "contentHash">, license: License): CollectedDocument {
