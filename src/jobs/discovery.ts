@@ -12,8 +12,9 @@ import { collectClinicalTrials } from "../collectors/sources/clinicaltrials";
 import { defaultHttp } from "../collectors/sources/client";
 import { normalizeIssuer } from "../collectors/sources/thirteenf";
 import { score } from "../engine/score";
+import { movingAverage } from "../engine/indicators";
 import type { OHLCV } from "../engine/types";
-import { SymbolNotFoundError, TwelveDataProvider } from "../data/twelvedata";
+import { DailyLimitError, SymbolNotFoundError, TwelveDataProvider } from "../data/twelvedata";
 import { filingUrl } from "../collectors/edgar";
 import { previousTradingDay } from "./macro";
 
@@ -257,6 +258,35 @@ export function shortlistCandidates(rows: DiscoveryCandidate[], known: Set<strin
   return { shortlist: rankCandidates(common, known, limit), skipped: [...skipped].map(([symbol, reason]) => ({ symbol, reason })) };
 }
 
+/**
+ * Fetch bars once for the ranked names, drop those closing under MA200, then cut to `limit`.
+ * The caller's barsFor should cache per symbol so the full screen reuses these bars (one call per name).
+ * Names whose bars cannot be judged (fewer than 200 bars, fetch failure) stay in rank order and are decided by the full screen.
+ */
+export async function preScreenMa200(rows: DiscoveryCandidate[], date: string, barsFor: (symbol: string) => Promise<OHLCV[]>, limit: number = DISCOVERY.maxScreenedPerWeek) {
+  const kept: DiscoveryCandidate[] = [];
+  const dropped: { symbol: string; reason: string }[] = [];
+  const skipped: { symbol: string; reason: string }[] = [];
+  let calls = 0;
+  let stopped = false;
+  for (const row of rows) {
+    if (kept.length >= limit) break;
+    if (stopped) { kept.push(row); continue; }
+    calls++;
+    try {
+      const bars = (await barsFor(row.symbol)).filter((bar) => bar.date <= date);
+      const ma200 = movingAverage(bars, 200);
+      const close = bars.at(-1)?.close;
+      if (ma200 !== null && close !== undefined && close < ma200) { dropped.push({ symbol: row.symbol, reason: `pre-screen: close ${close} below MA200 ${ma200.toFixed(2)}` }); continue; }
+    } catch (error) {
+      if (error instanceof SymbolNotFoundError) { skipped.push({ symbol: row.symbol, reason: "symbol not accepted by Twelve Data" }); continue; }
+      if (error instanceof DailyLimitError) stopped = true;
+    }
+    kept.push(row);
+  }
+  return { kept: kept.slice(0, limit), dropped, skipped, calls, stoppedByLimit: stopped };
+}
+
 export async function screenCandidates(rows: DiscoveryCandidate[], date: string, barsFor: (symbol: string) => Promise<OHLCV[]>,
   macro: { growthSectorRotation: boolean | null; dataTailwind: boolean | null }, benchmarkClose: number | null | ((date: string) => Promise<number | null>),
   notPassed: { symbol: string; reason: string }[] = []): Promise<DiscoveryCandidate[]> {
@@ -378,10 +408,11 @@ async function main() {
         summary.push(...sourceSummary([{ name: names[index], error: message }]));
       }
     });
-    const { shortlist, skipped: filtered } = shortlistCandidates(sources, known, DISCOVERY.maxScreenedPerWeek);
+    const preScreen = DISCOVERY.preScreenMa200;
+    const { shortlist: ranked, skipped: filtered } = shortlistCandidates(sources, known, preScreen ? Math.max(DISCOVERY.preScreenTopK, DISCOVERY.maxScreenedPerWeek) : DISCOVERY.maxScreenedPerWeek);
     if (!process.env.TWELVE_DATA_API_KEY) throw new Error("TWELVE_DATA_API_KEY is required to apply the scoring rules to discovery candidates");
     const provider = new TwelveDataProvider({ apiKey: process.env.TWELVE_DATA_API_KEY });
-    const bySymbol = new Map(shortlist.map((row) => [row.symbol, row]));
+    const bySymbol = new Map(ranked.map((row) => [row.symbol, row]));
     const fresh = (bars: OHLCV[]) => bars.length >= 200 && bars.at(-1) && Date.parse(`${date}T00:00:00Z`) - Date.parse(`${bars.at(-1)!.date}T00:00:00Z`) <= 4 * 86400000;
     const stored = async (table: "daily_bars" | "discovery_price_bars", symbol: string): Promise<OHLCV[]> => {
       const column = table === "daily_bars" ? "ticker" : "symbol";
@@ -389,7 +420,8 @@ async function main() {
         `SELECT bar_date::text AS date,open,high,low,close,volume FROM ${table} WHERE ${column}=$1 AND bar_date <= $2::date ORDER BY bar_date`, [symbol, date]);
       return result.rows.map((row) => ({ date: row.date, open: Number(row.open), high: Number(row.high), low: Number(row.low), close: Number(row.close), volume: Number(row.volume) }));
     };
-    const barsFor = async (symbol: string): Promise<OHLCV[]> => {
+    const cache = new Map<string, Promise<OHLCV[]>>();
+    const fetchBars = async (symbol: string): Promise<OHLCV[]> => {
       const live = await stored("daily_bars", symbol);
       if (fresh(live)) return live;
       const discovered = await stored("discovery_price_bars", symbol);
@@ -398,6 +430,10 @@ async function main() {
       await saveDiscoveryPriceBars(pool, bySymbol.get(symbol)!, bars);
       return bars;
     };
+    const barsFor = (symbol: string): Promise<OHLCV[]> => {
+      if (!cache.has(symbol)) cache.set(symbol, fetchBars(symbol));
+      return cache.get(symbol)!;
+    };
     const macroRow = await pool.query<{ data_tailwind: boolean | null; rotation: boolean | null }>(`SELECT (data->>'dataTailwind')::boolean AS data_tailwind,
       (data->>'sectorRotationIntoGrowth')::boolean AS rotation FROM macro_findings WHERE as_of <= $1::date ORDER BY as_of DESC LIMIT 1`, [date]);
     const macro = { growthSectorRotation: macroRow.rows[0]?.rotation ?? null, dataTailwind: macroRow.rows[0]?.data_tailwind ?? null };
@@ -405,6 +441,16 @@ async function main() {
       const row = await pool.query<{ close: string }>("SELECT close FROM daily_bars WHERE ticker='SPY' AND bar_date=$1::date", [signalDate]);
       return row.rows[0] ? Number(row.rows[0].close) : null;
     };
+    let shortlist = ranked.slice(0, DISCOVERY.maxScreenedPerWeek);
+    let preScreened: { preScreened: number; dropped: { symbol: string; reason: string }[]; apiRequests: number } | null = null;
+    if (preScreen) {
+      const before = provider.requests;
+      const pre = await preScreenMa200(ranked, date, barsFor);
+      shortlist = pre.kept;
+      filtered.push(...pre.skipped);
+      preScreened = { preScreened: pre.calls, dropped: pre.dropped, apiRequests: provider.requests - before };
+      process.stderr.write(`Discovery pre-screen: ${pre.calls} of ${ranked.length} ranked names checked, ${pre.dropped.length} dropped under MA200, ${shortlist.length} go to the full screen, ${preScreened.apiRequests} Twelve Data requests${pre.stoppedByLimit ? " (daily limit reached, rest passed through)" : ""}\n`);
+    }
     const result = await screenDiscoveryShortlist(shortlist, date, barsFor, macro, benchmarkClose);
     const { screened, failureCount, failures } = result;
     const skipped = [...filtered, ...result.skipped];
@@ -412,7 +458,7 @@ async function main() {
     for (const failure of failures) process.stderr.write(`${failure.symbol}: screening failed: ${failure.reason}\n`);
     const selected = screened.sort((a, b) => (b.ruleScore ?? 0) - (a.ruleScore ?? 0) || b.score - a.score || a.symbol.localeCompare(b.symbol)).slice(0, DISCOVERY.maxCandidatesPerWeek);
     const saved = await saveCandidates(pool, week, selected);
-    process.stdout.write(`${JSON.stringify({ weekStart: week, sourceRows: summary, uniqueSymbols: new Set(sources.map((row) => row.symbol)).size, shortlisted: shortlist.length, candidates: saved, notPassed: result.notPassed, skippedCount, skipped, failureCount, failures })}\n`);
+    process.stdout.write(`${JSON.stringify({ weekStart: week, sourceRows: summary, uniqueSymbols: new Set(sources.map((row) => row.symbol)).size, ranked: ranked.length, preScreened: preScreened?.preScreened ?? 0, preScreenDropped: preScreened?.dropped.length ?? 0, preScreenDroppedNames: preScreened?.dropped ?? [], twelveDataRequests: provider.requests, screened: shortlist.length, shortlisted: shortlist.length, candidates: saved, notPassed: result.notPassed, skippedCount, skipped, failureCount, failures })}\n`);
   } finally { await pool.end(); }
 }
 if (/(?:^|[/\\])discovery\.(?:ts|js)$/.test(process.argv[1] ?? "")) main().catch((error) => { console.error(error instanceof Error ? error.message : error); process.exitCode = 1; });
