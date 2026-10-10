@@ -1,10 +1,11 @@
 import pg from "pg";
 import { describe, expect, it } from "vitest";
 
-/** One connection, so BEGIN and ROLLBACK wrap everything. Needs a migrated TEST_DATABASE_URL. */
-async function inRollback(fn: (pool: pg.Pool) => Promise<void>) {
-  const pool = new pg.Pool({ connectionString: process.env.TEST_DATABASE_URL, max: 1 });
-  try { await pool.query("BEGIN"); await fn(pool); } finally { await pool.query("ROLLBACK"); await pool.end(); }
+/** One dedicated client, so BEGIN and ROLLBACK wrap everything. pool.query would drop the connection after a failed statement and end the transaction. Needs a migrated TEST_DATABASE_URL. */
+async function inRollback(fn: (pool: pg.Client) => Promise<void>) {
+  const pool = new pg.Client({ connectionString: process.env.TEST_DATABASE_URL });
+  await pool.connect();
+  try { await pool.query("BEGIN"); await fn(pool); } finally { try { await pool.query("ROLLBACK"); } finally { await pool.end(); } }
 }
 
 // Same statement as the reconcile job's legacy upsert.
@@ -12,7 +13,7 @@ const upsert = `INSERT INTO consensus_findings (symbol,field,as_of,value,agreeme
   VALUES ($1,$2,$3,$4,$5,$6::jsonb,'[]'::jsonb,$7,$8)
   ON CONFLICT (symbol,field,as_of) DO UPDATE SET value=EXCLUDED.value,agreement=EXCLUDED.agreement,agent_values=EXCLUDED.agent_values,evidence_refs=EXCLUDED.evidence_refs,verified=EXCLUDED.verified,reason=EXCLUDED.reason,reconciled_at=now()`;
 
-const count = async (pool: pg.Pool, sql: string, params: unknown[] = []) => Number((await pool.query<{ n: string }>(sql, params)).rows[0].n);
+const count = async (pool: pg.Client, sql: string, params: unknown[] = []) => Number((await pool.query<{ n: string }>(sql, params)).rows[0].n);
 
 describe("consensus_findings_history (Postgres)", () => {
   it.skipIf(!process.env.TEST_DATABASE_URL)("keeps the old row when a same-day rerun changes the agent values", () => inRollback(async (pool) => {
