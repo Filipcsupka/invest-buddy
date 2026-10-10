@@ -7,6 +7,7 @@ import { defaultHttp, type SourceHttp } from "../collectors/sources/client";
 import { collectVix } from "../collectors/sources/vix";
 import type { Company, Env } from "../collectors/sources/common";
 import { PostgresCollectorRepository, type CollectorRepository } from "../db/collectors";
+import { lastCompletedSession } from "../data/trading-calendar";
 import { isIsoDate } from "../db/iso-date";
 import { loadUniverse } from "../db/universe";
 import { evaluateDataTailwind, evaluateSectorRotation, macroConfig, MACRO_RULES_VERSION, type Bar, type MacroConfig, type MacroResult, type VixPoint, type YieldPoint } from "../data/macro-rules";
@@ -17,14 +18,9 @@ export const VIX_DOC_URL = "https://www.cboe.com/tradable_products/vix/vix_histo
 const RUNNER = "data_rule";
 const symbols = (universe.instruments as { symbol: string }[]).map((item) => item.symbol);
 
-/** Last completed weekday in New York, the same rule as scanner/run-scan.mjs lastUsTradingDay. US market holidays are not modelled; use --date. */
+/** Last completed NYSE session in New York, holidays included (src/data/trading-calendar.ts). */
 export function previousTradingDay(now = new Date()): string {
-  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(now).map((p) => [p.type, p.value]));
-  const d = new Date(Date.UTC(+parts.year, +parts.month - 1, +parts.day));
-  const weekday = (x: Date) => x.getUTCDay() >= 1 && x.getUTCDay() <= 5;
-  if (!(weekday(d) && +parts.hour * 60 + +parts.minute >= 16 * 60 + 30)) d.setUTCDate(d.getUTCDate() - 1);
-  while (!weekday(d)) d.setUTCDate(d.getUTCDate() - 1);
-  return d.toISOString().slice(0, 10);
+  return lastCompletedSession(now);
 }
 
 export interface MacroInputs { yields: YieldPoint[] | null; yieldUrl: string | null; vix: VixPoint[] | null; vixUrl: string | null; universe: Record<string, Bar[]>; spy: Bar[] | null }
