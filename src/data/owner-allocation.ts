@@ -1,5 +1,5 @@
-import pg from "pg";
 import { flags } from "@/config/flags";
+import { getPool } from "@/db/pool";
 import { latestBaseline, type Baseline } from "@/db/portfolio-baseline";
 import { latestIdeaPerSymbol, type StoredIdea } from "@/db/ideas";
 import { sampleBaseline, sampleIdeas } from "@/ideas/fixtures";
@@ -15,11 +15,9 @@ export async function ownerAllocation(): Promise<OwnerAllocationData> {
   let baseline: Baseline | null = null;
   let ideas: StoredIdea[] = [];
   if (sample) { baseline = sampleBaseline; ideas = sampleIdeas; }
-  else if (process.env.DATABASE_URL) {
-    const db = new pg.Pool({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 3000 });
-    try {
-      [baseline, ideas] = await Promise.all([latestBaseline(db, new Date().toISOString().slice(0, 10)), latestIdeaPerSymbol(db)]);
-    } finally { await db.end(); }
+  else {
+    const db = getPool();
+    if (db) [baseline, ideas] = await Promise.all([latestBaseline(db, new Date().toISOString().slice(0, 10)), latestIdeaPerSymbol(db)]);
   }
   if (!baseline) return { baseline: null, result: null, sample };
   const scores = await latestScores();

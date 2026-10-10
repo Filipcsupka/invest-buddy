@@ -5,9 +5,10 @@ import { describe, expect, it } from "vitest";
 import { EXTRA_SOURCES, LEGACY_SOURCES } from "../collectors/types";
 import { PING_NAMES } from "../collectors/sources/registry";
 import { LICENSES } from "../collectors/sources/common";
-import { canDisplay, DATA_SOURCES, getSource, LICENCE_CLASSES, licenseFor, seedSql } from "./sources-registry";
+import { canDisplay, DATA_SOURCES, FACT_SOURCE_IDS, getSource, licenceClassFor, sourceIdFor, LICENCE_CLASSES, licenseFor, seedSql } from "./sources-registry";
 
 const migration = readFileSync(join(process.cwd(), "migrations", "022_data_sources.sql"), "utf8");
+const provenance = readFileSync(join(process.cwd(), "migrations", "023_row_provenance.sql"), "utf8");
 
 describe("data source registry", () => {
   it("has a row for every collector name and every source the collectors stamp on documents", () => {
@@ -56,5 +57,20 @@ describe("data source registry", () => {
       for (const row of rows.rows) expect(row.display_allowed, row.id).toBe(canDisplay(row.id));
       await expect(pool.query("INSERT INTO data_sources (id, name, kind, licence_class, display_allowed) VALUES ('t', 't', 'other', 'unknown', true)")).rejects.toThrow();
     } finally { await pool.end(); }
+  });
+
+  it("keeps the fact-key map in migration 023 in step with FACT_SOURCE_IDS", () => {
+    for (const [key, id] of Object.entries(FACT_SOURCE_IDS)) {
+      expect(getSource(id), key).toBeDefined();
+      expect(provenance, key).toContain(`WHEN '${key}' THEN '${id}'`);
+    }
+  });
+
+  it("maps collector names to registry ids the same way in migration 023 as in code", () => {
+    for (const name of ["edgar", "frames", "getcurrent", "13f", "sec-frames", "sec-getcurrent", "sec-13f", "vix"]) {
+      expect(provenance, name).toContain(`WHEN '${name}' THEN '${sourceIdFor(name)}'`);
+    }
+    expect(licenceClassFor("edgar")).toBe("public_gov");
+    expect(licenceClassFor("not-a-source")).toBe("unknown");
   });
 });

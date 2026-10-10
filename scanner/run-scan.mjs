@@ -9,6 +9,7 @@ import { randomUUID } from "node:crypto";
 import { tmpdir, userInfo } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { lastCompletedSession } from "./trading-calendar.mjs";
 import { validateTicker, validateMacro, validatePayload } from "./validate.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -48,14 +49,8 @@ function usage(msg) {
 
 // ---------- helpers ----------
 export function lastUsTradingDay(now = new Date()) {
-  // Last completed weekday session in New York. US market holidays are not modelled; use --as-of to override.
-  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(now).map((p) => [p.type, p.value]));
-  const d = new Date(Date.UTC(+parts.year, +parts.month - 1, +parts.day));
-  const afterClose = +parts.hour * 60 + +parts.minute >= 16 * 60 + 30;
-  const isWeekday = (x) => x.getUTCDay() >= 1 && x.getUTCDay() <= 5;
-  if (!(isWeekday(d) && afterClose)) d.setUTCDate(d.getUTCDate() - 1);
-  while (!isWeekday(d)) d.setUTCDate(d.getUTCDate() - 1);
-  return d.toISOString().slice(0, 10);
+  // Last completed NYSE session in New York, holidays included (trading-calendar.mjs). Use --as-of to override.
+  return lastCompletedSession(now);
 }
 
 export function getToken() {

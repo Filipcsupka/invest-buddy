@@ -2,11 +2,12 @@ import type pg from "pg";
 import type { CollectedDocument } from "../collectors/types";
 import { freshnessDays } from "../data/evidence";
 import { insiderFromFact, DEFAULT_INSIDER_MIN_NET_BUY_USD, INSIDER_FACT_DAYS, INSIDER_FACT_LEAD_DAYS, type InsiderDocument, type InsiderResult } from "../data/insider";
+import { FACT_SOURCE_IDS, licenceClassFor, sourceIdFor } from "../data/sources-registry";
 import { DEFAULT_EPS_BEAT_MIN_SURPRISE_PCT, EPS_FACT_KEY, epsFromFact, type EpsResult } from "../data/eps";
 
 export interface StoredDocument extends CollectedDocument { id: number }
 /** `expiresAt` (ISO date or timestamp) replaces the default 30-day fact expiry. */
-export interface Fact { symbol: string; key: string; asOf: string; value: unknown; documentIds: number[]; expiresAt?: string }
+export interface Fact { symbol: string; key: string; asOf: string; value: unknown; documentIds: number[]; expiresAt?: string; /** Registry id. Defaults to the key's single writer, else the first linked document's source. */ sourceId?: string }
 /** Keep a document through the longest evidence window of any field it can support. The windows are `freshnessDays` in evidence.ts. */
 export const documentRetentionDays = (docType: string) => /^(8-K|10-Q|10-K|20-F|6-K)(?:\b|\s)|EX-99\.1|XBRL revenue|EPS surprise/i.test(docType)
   ? Math.max(freshnessDays.revenueAccelerating, freshnessDays.epsBeat, freshnessDays.guidanceRaised)
@@ -77,22 +78,26 @@ export async function loadInsider(pool: pg.Pool, symbol: string, asOf: string, m
 export class PostgresCollectorRepository implements CollectorRepository {
   constructor(private readonly pool: pg.Pool) {}
   async upsertDocument(doc: CollectedDocument) {
+    const sourceId = doc.sourceId ?? sourceIdFor(doc.source);
     const prior = await this.pool.query<{ content_hash: string }>("SELECT content_hash FROM source_documents WHERE url=$1", [doc.url]);
-    const result = await this.pool.query<{ id: string }>(`INSERT INTO source_documents (source,symbol,doc_type,url,published_at,content_hash,body,meta,expires_at)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,now()+make_interval(days => $9::int))
+    const result = await this.pool.query<{ id: string }>(`INSERT INTO source_documents (source,symbol,doc_type,url,published_at,content_hash,body,meta,expires_at,source_id,licence_class,display_allowed)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,now()+make_interval(days => $12::int),$9,$10,$11)
       ON CONFLICT (url) DO UPDATE SET source=EXCLUDED.source,symbol=EXCLUDED.symbol,doc_type=EXCLUDED.doc_type,
         published_at=EXCLUDED.published_at,content_hash=EXCLUDED.content_hash,body=EXCLUDED.body,meta=EXCLUDED.meta,
-        fetched_at=now(),expires_at=EXCLUDED.expires_at
-      RETURNING id`, [doc.source, doc.symbol, doc.docType, doc.url, doc.publishedAt, doc.contentHash, doc.body, JSON.stringify(doc.meta), documentRetentionDays(doc.docType)]);
+        fetched_at=now(),expires_at=EXCLUDED.expires_at,source_id=EXCLUDED.source_id,licence_class=EXCLUDED.licence_class,display_allowed=EXCLUDED.display_allowed
+      RETURNING id`, [doc.source, doc.symbol, doc.docType, doc.url, doc.publishedAt, doc.contentHash, doc.body, JSON.stringify(doc.meta),
+        sourceId, licenceClassFor(sourceId), doc.meta.display_allowed === true, documentRetentionDays(doc.docType)]);
     return { id: Number(result.rows[0].id), written: prior.rows[0]?.content_hash !== doc.contentHash };
   }
   async upsertFact(fact: Fact) {
-    const result = await this.pool.query(`INSERT INTO collected_facts (symbol,fact_key,as_of,value,document_ids,expires_at)
-      VALUES ($1,$2,$3,$4::jsonb,$5::bigint[],COALESCE($6::timestamptz,now()+interval '30 days'))
+    const result = await this.pool.query(`WITH src AS (SELECT COALESCE($7::text, (SELECT d.source_id FROM source_documents d WHERE d.id = ANY($5::bigint[]) ORDER BY d.id LIMIT 1), 'unknown') AS id)
+      INSERT INTO collected_facts (symbol,fact_key,as_of,value,document_ids,expires_at,source_id,licence_class)
+      SELECT $1,$2,$3,$4::jsonb,$5::bigint[],COALESCE($6::timestamptz,now()+interval '30 days'),src.id,
+        COALESCE((SELECT s.licence_class FROM data_sources s WHERE s.id = src.id),'unknown') FROM src
       ON CONFLICT (symbol,fact_key,as_of) DO UPDATE SET value=EXCLUDED.value,document_ids=EXCLUDED.document_ids,
-        computed_at=now(),expires_at=EXCLUDED.expires_at
-      WHERE (collected_facts.value,collected_facts.document_ids) IS DISTINCT FROM (EXCLUDED.value,EXCLUDED.document_ids)`,
-      [fact.symbol, fact.key, fact.asOf, JSON.stringify(fact.value), fact.documentIds, fact.expiresAt ?? null]);
+        computed_at=now(),expires_at=EXCLUDED.expires_at,source_id=EXCLUDED.source_id,licence_class=EXCLUDED.licence_class
+      WHERE (collected_facts.value,collected_facts.document_ids,collected_facts.source_id) IS DISTINCT FROM (EXCLUDED.value,EXCLUDED.document_ids,EXCLUDED.source_id)`,
+      [fact.symbol, fact.key, fact.asOf, JSON.stringify(fact.value), fact.documentIds, fact.expiresAt ?? null, fact.sourceId ?? FACT_SOURCE_IDS[fact.key] ?? null]);
     return (result.rowCount ?? 0) > 0;
   }
   async bars(symbol: string, limit: number) {

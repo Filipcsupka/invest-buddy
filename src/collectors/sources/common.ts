@@ -1,7 +1,8 @@
-import { licenseFor } from "../../data/sources-registry";
+import { licenseFor, sourceIdFor } from "../../data/sources-registry";
 import { DEFAULT_SYMBOL_MAP } from "../../data/twelvedata";
 import type { CusipStore } from "../../db/source-collectors";
 import type { SourceState } from "../../db/collectors";
+import type { UsageLedger } from "../../data/usage";
 import { document, type CollectedDocument } from "../types";
 import type { SourceHttp } from "./client";
 import { validSecUserAgent } from "../sec-user-agent";
@@ -21,6 +22,8 @@ export interface SourceContext {
   cusips?: CusipStore;
   /** Stored facts and recorded API usage, for sources that plan their requests (alphavantage). */
   state?: SourceState;
+  /** Usage ledger (D8). Metered sources reserve each request here before sending it. */
+  usage?: UsageLedger;
 }
 /** Facts reference documents by URL; the runner swaps in database ids after the upsert. `expiresAt` overrides the 30-day default. */
 export interface PendingFact { symbol: string; key: string; asOf: string; value: unknown; documentUrls: string[]; expiresAt?: string }
@@ -58,7 +61,7 @@ export const LICENSES = {
 } satisfies Record<string, License>;
 
 export function sourceDocument(input: Omit<CollectedDocument, "contentHash">, license: License): CollectedDocument {
-  return document({ ...input, meta: { ...input.meta, license_note: license.license_note, display_allowed: license.display_allowed } });
+  return document({ ...input, sourceId: input.sourceId ?? sourceIdFor(input.source), meta: { ...input.meta, license_note: license.license_note, display_allowed: license.display_allowed } });
 }
 
 export const isoDate = (date: Date) => date.toISOString().slice(0, 10);

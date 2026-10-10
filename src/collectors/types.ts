@@ -9,6 +9,8 @@ export interface CollectedDocument {
   body: string;
   meta: Record<string, unknown>;
   contentHash: string;
+  /** Registry id (`src/data/sources-registry.ts`). Stored as `source_documents.source_id`; derived from `source` when absent. */
+  sourceId?: string;
 }
 
 /** Upper bound on characters scanned. The stored body is capped far below this, it only bounds CPU and memory. */

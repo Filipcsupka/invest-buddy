@@ -1,4 +1,5 @@
-import pg from "pg";
+import type pg from "pg";
+import { getPool } from "./pool";
 import type { OHLCV } from "../engine";
 
 type SpyBar = { date: string; close: string };
@@ -26,8 +27,8 @@ export async function readRecordBenchmark(pool: Pick<pg.Pool, "query">, firstDat
 }
 
 export async function recordBenchmark(firstDate: string | null, lastDate: string | null): Promise<OHLCV[]> {
-  if (!firstDate || !lastDate || !process.env.DATABASE_URL) return [];
-  const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 3000 });
-  try { return await readRecordBenchmark(pool, firstDate, lastDate); }
-  finally { await pool.end(); }
+  if (!firstDate || !lastDate) return [];
+  const pool = getPool();
+  if (!pool) return [];
+  return readRecordBenchmark(pool, firstDate, lastDate);
 }

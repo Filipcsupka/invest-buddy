@@ -2,10 +2,12 @@ import { runLoggedJob } from "./job-log";
 import pg from "pg";
 import universe from "../../scanner/universe.json";
 import type { MarketDataProvider } from "../data/providers";
-import { DailyLimitError, SymbolNotFoundError, TwelveDataProvider } from "../data/twelvedata";
+import { DEFAULT_SYMBOL_MAP, DailyLimitError, SymbolNotFoundError, TwelveDataProvider } from "../data/twelvedata";
 import { MemoryPriceRepository, PostgresPriceRepository, type PriceRepository, type PriceRunRecord } from "../db/prices";
 import { loadUniverse } from "../db/universe";
 import { loadVendorSymbols } from "../data/security-master";
+import { CapReached, PostgresUsageLedger } from "../data/usage";
+import { randomUUID } from "node:crypto";
 
 export const BENCHMARK = "SPY";
 export const FAILURE_LIMIT = 0.1;
@@ -29,10 +31,10 @@ export async function runPrices(provider: MarketDataProvider, repository: PriceR
       if (!bars.length) throw new Error("no bars returned");
       const stored = await repository.countSince(ticker, bars[0].date);
       if (bars.length < stored) throw new Error(`fetched ${bars.length} bars but ${stored} are stored for the same range; kept stored bars`);
-      if (!options.dryRun) barsWritten += await repository.upsertBars(ticker, bars);
+      if (!options.dryRun) barsWritten += await repository.upsertBars(ticker, bars, { sourceId: options.provider ?? "twelvedata", vendorSymbol: DEFAULT_SYMBOL_MAP[ticker] ?? ticker });
       succeeded++;
     } catch (error) {
-      if (error instanceof DailyLimitError) {
+      if (error instanceof DailyLimitError || error instanceof CapReached) {
         stoppedReason = error.message;
         for (const rest of tickers.slice(index)) failures.push({ ticker: rest, reason: rest === ticker ? error.message : "not fetched: daily limit reached" });
         break;
@@ -65,7 +67,10 @@ async function main() {
     if (unknown.length) throw new Error(`Unknown ticker(s): ${unknown.join(", ")}`);
     const tickers = only ?? all;
     const repository = pool ? new PostgresPriceRepository(pool) : new MemoryPriceRepository();
-    const result = await runPrices(new TwelveDataProvider({ apiKey, ...(pool ? { symbolMap: await loadVendorSymbols(pool, "twelvedata") } : {}) }), repository, tickers, { dryRun });
+    const runId = randomUUID();
+    const ledger = pool ? new PostgresUsageLedger(pool) : null;
+    const reserve = ledger ? () => ledger.reserve("twelvedata", 1, { job: "prices", runId, credits: 1 }) : undefined;
+    const result = await runPrices(new TwelveDataProvider({ apiKey, reserve, ...(pool ? { symbolMap: await loadVendorSymbols(pool, "twelvedata") } : {}) }), repository, tickers, { dryRun });
     process.stdout.write(`Prices: ${result.succeeded}/${result.requested} tickers, ${result.barsWritten} bars written${dryRun ? " (dry run, nothing stored)" : ""}\n`);
     if (result.unmapped.length) process.stderr.write(`Unmapped symbols: ${result.unmapped.join(", ")}\n`);
     for (const failure of result.failures) process.stderr.write(`Failed ${failure.ticker}\n`);
