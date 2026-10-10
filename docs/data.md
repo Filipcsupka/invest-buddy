@@ -140,6 +140,10 @@ A ticker is skipped when the fetch has fewer bars than the database already hold
 
 The free tier is for the private beta only. A data licence is required before a paid launch (ADR-002).
 
+## Accumulation score
+
+The +1 fundamentals rule is met when insider buying is confirmed or up-day volume divided by down-day volume over the last 50 sessions is at least 1.25. An up or down day compares its close with the previous session's close; unchanged closes are excluded. The 1.25 ratio is a default for owner review. Price and volume accumulation is unknown with fewer than 51 bars.
+
 ## Judge (phase C)
 
 The judge turns reconciled facts into a short list of trade ideas. Code decides the action, the size tier and the three ratings from data alone. One AI call writes the wording. A script validates and stores the result, and the web shows it. The AI never writes to the database or the web.

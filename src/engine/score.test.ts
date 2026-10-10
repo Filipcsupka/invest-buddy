@@ -1,11 +1,45 @@
 import { describe, expect, it } from "vitest";
 import { fixtureBars, fixtureFundamentals, fixtureMacro, instruments } from "../data/fixtures";
 import { fixtureRecord } from "../data/record";
-import { movingAverage, technicalIndicators } from "./indicators";
-import { score } from "./score";
+import { ACCUMULATION_UPDOWN_RATIO, movingAverage, technicalIndicators, volumeAccumulation } from "./indicators";
+import { accumulationRule, score } from "./score";
 
 const input = (ticker = "NVDA") => ({ ticker, bars: fixtureBars(ticker), fundamentals: fixtureFundamentals(ticker), macro: fixtureMacro(ticker) });
 describe("engine", () => {
+  it("compares up and down volume across 50 sessions", () => {
+    const bars = Array.from({ length: 51 }, (_, i) => ({
+      date: new Date(Date.UTC(2026, 0, 1) + i * 86400000).toISOString().slice(0, 10),
+      open: 100, high: 101, low: 99, close: 100 + (i % 2), volume: i % 2 ? 125 : 100,
+    }));
+    expect(ACCUMULATION_UPDOWN_RATIO).toBe(1.25);
+    expect(volumeAccumulation(bars)).toEqual({ matched: true, ratio: 1.25 });
+    expect(volumeAccumulation(bars.map((bar) => ({ ...bar, volume: bar.volume + (bar.close === 101 ? 1 : 0) })))).toEqual({ matched: true, ratio: 1.26 });
+    expect(volumeAccumulation(bars.map((bar) => ({ ...bar, volume: bar.volume - (bar.close === 101 ? 1 : 0) })))).toEqual({ matched: false, ratio: 1.24 });
+    expect(volumeAccumulation(bars.slice(1))).toEqual({ matched: null, ratio: null });
+    expect(volumeAccumulation([{ ...bars[0], volume: 1_000_000 }, ...bars])).toEqual({ matched: true, ratio: 1.25 });
+  });
+  it("combines volume and insider signals with three-valued OR", () => {
+    expect(accumulationRule(false, true)).toBe(true);
+    expect(accumulationRule(null, true)).toBe(true);
+    expect(accumulationRule(true, null)).toBe(true);
+    expect(accumulationRule(false, null)).toBe(false);
+    expect(accumulationRule(null, false)).toBe(false);
+    expect(accumulationRule(null, null)).toBeNull();
+  });
+  it("scores insider buying when volume is weak", () => {
+    const candidate = input();
+    candidate.bars = candidate.bars.map((bar) => ({ ...bar, close: 100, open: 100, high: 101, low: 99, volume: 100 }));
+    candidate.fundamentals.insiderOrInstitutionalAccumulation = true;
+    const hit = score(candidate).ruleHits.find((rule) => rule.id === "accumulation");
+    expect(hit).toMatchObject({ label: "Institutional or insider accumulation", points: 1, matched: true, unknown: false, detail: "up/down volume 0.00; insider buying: true" });
+  });
+  it("scores price and volume accumulation without insider buying", () => {
+    const candidate = input();
+    candidate.bars = candidate.bars.map((bar, i) => ({ ...bar, close: 100 + i, open: 99 + i, high: 101 + i, low: 98 + i, volume: 100 }));
+    candidate.fundamentals.insiderOrInstitutionalAccumulation = false;
+    const hit = score(candidate).ruleHits.find((rule) => rule.id === "accumulation");
+    expect(hit).toMatchObject({ points: 1, matched: true, unknown: false, detail: "up/down volume ∞; insider buying: false" });
+  });
   it("requires sufficient history and calculates a reproducible average", () => {
     const bars = fixtureBars("NVDA");
     expect(movingAverage(bars.slice(0, 49), 50)).toBeNull();
@@ -70,14 +104,14 @@ describe("engine", () => {
     expect(indicators.drawdown20).toBeGreaterThanOrEqual(0.05);
     expect(indicators.drawdown20).toBeLessThanOrEqual(0.1);
     const result = score({ ...candidate, bars, fundamentals: { ...candidate.fundamentals, revenueGrowthCurrent: 40, revenueGrowthPrior: 20, revenueDeclining: false, epsBeat: false, guidanceRaised: false, productCatalyst: false, insiderOrInstitutionalAccumulation: false, earningsMissAndGuidanceCut: false }, macro: { growthSectorRotation: false, dataTailwind: true } });
-    expect(result.total).toBe(15);
+    expect(result.total).toBe(16);
     expect(result.state).toBe("Watch");
     expect(result.pullbackInUptrend).toBe(true);
   });
   it("keeps exact score boundaries in separate rule states", () => {
     const base = input();
     const bars = base.bars.map((bar, day) => {
-      const close = 100 + day;
+      const close = 100 + day + (day % 2 ? 2 : 0);
       const open = close + (day % 2 ? 1 : -1);
       return { ...bar, close, open, high: Math.max(close, open) + 1, low: Math.min(close, open) - 1, volume: 100 };
     });

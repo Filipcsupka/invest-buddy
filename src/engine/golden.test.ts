@@ -70,9 +70,9 @@ const allKnown: Fundamentals = { revenueGrowthCurrent: 30, revenueGrowthPrior: 2
 const macroOn: Macro = { growthSectorRotation: true, dataTailwind: true };
 
 const GOLDEN_UP = { total: 23, fundamentals: 10, technical: 8, macro: 5, state: "Setup met (>=18)", matched: ["revenue-acceleration:4", "earnings:3", "catalyst:2", "accumulation:1", "above-ma:3", "uptrend:3", "green-volume:2", "rotation:2", "macro-data:3"] };
-const GOLDEN_UNKNOWN = { total: 12, state: "Wait", unknown: ["revenue-acceleration", "earnings", "catalyst", "accumulation", "rotation", "macro-data"] };
+const GOLDEN_UNKNOWN = { total: 13, state: "Wait", unknown: ["revenue-acceleration", "earnings", "catalyst", "rotation", "macro-data"] };
 const GOLDEN_DOWN = { total: 17, state: "Criteria broken", rejections: ["Long-term downtrend: close below MA200", "Long-term downtrend: MA50 below MA200"] };
-const GOLDEN_NO_FUNDAMENTALS = { total: 17, state: "Watch" };
+const GOLDEN_VOLUME_ONLY = { total: 18, state: "Setup met (>=18)" };
 
 describe("golden score", () => {
   it("freezes the rule table: ids, points and states for fixed inputs", () => {
@@ -86,7 +86,7 @@ describe("golden score", () => {
   it("freezes the state thresholds 18, 15 and 12", () => {
     const at = (revenue: boolean | null, total: Partial<Fundamentals>) => score({ ticker: "T", bars: bars(), fundamentals: { ...allKnown, revenueAccelerating: revenue, ...total }, macro: macroOn });
     expect(at(true, {}).state).toBe(GOLDEN_UP.state);
-    expect(at(true, { epsBeat: false, guidanceRaised: false, productCatalyst: false, insiderOrInstitutionalAccumulation: false }).total).toBe(GOLDEN_NO_FUNDAMENTALS.total);
-    expect(at(true, { epsBeat: false, guidanceRaised: false, productCatalyst: false, insiderOrInstitutionalAccumulation: false }).state).toBe(GOLDEN_NO_FUNDAMENTALS.state);
+    expect(at(true, { epsBeat: false, guidanceRaised: false, productCatalyst: false, insiderOrInstitutionalAccumulation: false }).total).toBe(GOLDEN_VOLUME_ONLY.total);
+    expect(at(true, { epsBeat: false, guidanceRaised: false, productCatalyst: false, insiderOrInstitutionalAccumulation: false }).state).toBe(GOLDEN_VOLUME_ONLY.state);
   });
 });
