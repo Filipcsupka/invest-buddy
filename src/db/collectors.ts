@@ -1,5 +1,6 @@
 import type pg from "pg";
 import type { CollectedDocument } from "../collectors/types";
+import type { Form4Transaction } from "../collectors/edgar";
 import { freshnessDays } from "../data/evidence";
 import { insiderFromFact, DEFAULT_INSIDER_MIN_NET_BUY_USD, INSIDER_FACT_DAYS, INSIDER_FACT_LEAD_DAYS, type InsiderDocument, type InsiderResult } from "../data/insider";
 import { FACT_SOURCE_IDS, licenceClassFor, sourceIdFor } from "../data/sources-registry";
@@ -25,6 +26,7 @@ export interface SourceState {
 }
 export interface CollectorRepository extends SourceState {
   upsertDocument(doc: CollectedDocument): Promise<{ id: number; written: boolean }>;
+  upsertInsiderTransactions?(accession: string, ticker: string, filedAt: string, rows: Form4Transaction[]): Promise<void>;
   upsertFact(fact: Fact): Promise<boolean>;
   bars(symbol: string, limit: number): Promise<{ date: string; close: number; volume: number }[]>;
   recordRun(run: CollectorRun): Promise<void>;
@@ -33,6 +35,10 @@ export class MemoryCollectorRepository implements CollectorRepository {
   readonly documents = new Map<string, StoredDocument>();
   readonly facts = new Map<string, Fact>();
   readonly runs: CollectorRun[] = [];
+  readonly insiderTransactions = new Map<string, Form4Transaction>();
+  async upsertInsiderTransactions(accession: string, _ticker: string, _filedAt: string, rows: Form4Transaction[]) {
+    for (const row of rows) this.insiderTransactions.set(`${accession}:${row.lineNo}`, structuredClone(row));
+  }
   async upsertDocument(doc: CollectedDocument) {
     const old = this.documents.get(doc.url);
     if (old?.contentHash === doc.contentHash) return { id: old.id, written: false };
@@ -77,6 +83,15 @@ export async function loadInsider(pool: pg.Pool, symbol: string, asOf: string, m
 }
 export class PostgresCollectorRepository implements CollectorRepository {
   constructor(private readonly pool: pg.Pool) {}
+  async upsertInsiderTransactions(accession: string, ticker: string, filedAt: string, rows: Form4Transaction[]) {
+    for (const row of rows) await this.pool.query(`INSERT INTO insider_transactions
+      (accession,line_no,ticker,owner_cik,owner_name,reporting_owners,is_director,is_officer,is_ten_percent_owner,is_other,
+       transaction_date,code,shares,price,acquired_disposed,derivative,shares_after,filed_at,plan_10b5_1)
+      VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+      ON CONFLICT (accession,line_no) DO NOTHING`,
+      [accession,row.lineNo,ticker,row.ownerCik,row.ownerName,JSON.stringify(row.reportingOwners),row.isDirector,row.isOfficer,row.isTenPercentOwner,row.isOther,
+        row.transactionDate,row.code,row.shares,row.price,row.acquiredDisposed,row.derivative,row.sharesAfter,filedAt,row.plan10b5]);
+  }
   async upsertDocument(doc: CollectedDocument) {
     const sourceId = doc.sourceId ?? sourceIdFor(doc.source);
     const prior = await this.pool.query<{ content_hash: string }>("SELECT content_hash FROM source_documents WHERE url=$1", [doc.url]);

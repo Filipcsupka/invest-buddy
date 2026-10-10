@@ -2,7 +2,7 @@ import { documentRetentionDays } from "../db/collectors";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { collectEdgar, foreignFilerStatus, parseForm4 } from "../collectors/edgar";
+import { collectEdgar, foreignFilerStatus, parseForm4, parseForm4Transactions } from "../collectors/edgar";
 import { collectFred } from "../collectors/fred";
 import { getText, resetSecLimiter, secSlot, RateLimitLockout } from "../collectors/http";
 import { parseRss } from "../collectors/rss";
@@ -24,6 +24,24 @@ describe("collectors", () => {
     const trades = parseForm4(await fixture("nvda_form4.xml"));
     expect(trades.map((trade) => trade.code)).toEqual(["P", "S"]);
     expect(trades.reduce((sum, trade) => sum + (trade.code === "P" ? trade.shares : -trade.shares), 0)).toBe(60);
+  });
+
+  it("stores P, S, M and derivative rows with owner and plan status", async () => {
+    const xml = `<ownershipDocument><aff10b5One>1</aff10b5One><reportingOwner><reportingOwnerId><rptOwnerCik>123</rptOwnerCik><rptOwnerName>Example Owner</rptOwnerName></reportingOwnerId><reportingOwnerRelationship><isDirector>1</isDirector><isOfficer>0</isOfficer></reportingOwnerRelationship></reportingOwner><nonDerivativeTable>${["P", "S", "M"].map((code) => `<nonDerivativeTransaction><transactionDate><value>2026-10-02</value></transactionDate><transactionCoding><transactionCode>${code}</transactionCode></transactionCoding><transactionAmounts><transactionShares><value>10</value></transactionShares><transactionPricePerShare><value>2</value></transactionPricePerShare><transactionAcquiredDisposedCode><value>A</value></transactionAcquiredDisposedCode></transactionAmounts><postTransactionAmounts><sharesOwnedFollowingTransaction><value>100</value></sharesOwnedFollowingTransaction></postTransactionAmounts></nonDerivativeTransaction>`).join("")}</nonDerivativeTable><derivativeTable><derivativeTransaction><transactionDate><value>2026-10-02</value></transactionDate><transactionCoding><transactionCode>M</transactionCode></transactionCoding><transactionAmounts><transactionShares><value>5</value></transactionShares></transactionAmounts></derivativeTransaction></derivativeTable></ownershipDocument>`;
+    const rows = parseForm4Transactions(xml);
+    expect(rows.map((row) => [row.code, row.derivative])).toEqual([["P", false], ["S", false], ["M", false], ["M", true]]);
+    expect(rows[0]).toMatchObject({ ownerCik: "123", ownerName: "Example Owner", isDirector: true, isOfficer: false, price: 2, sharesAfter: 100, plan10b5: "yes" });
+    const joint = parseForm4Transactions(xml.replace("</reportingOwner>", "</reportingOwner><reportingOwner><reportingOwnerId><rptOwnerCik>456</rptOwnerCik><rptOwnerName>Second Owner</rptOwnerName></reportingOwnerId></reportingOwner>"));
+    expect(joint[0].ownerCik).toBeNull();
+    expect(joint[0].reportingOwners.map((owner) => owner.cik)).toEqual(["123", "456"]);
+    expect(parseForm4Transactions(await fixture("nvda_form4.xml"))[0].plan10b5).toBe("unknown");
+    expect(parseForm4Transactions(xml.replace("<value>10</value>", "<footnoteId id=\"F1\"/>"))).toHaveLength(3);
+    const repo = new MemoryCollectorRepository();
+    await runCollect(repo, ["NVDA"], { since: "2026-09-01", sources: ["edgar"], get, now: () => new Date("2026-10-05T12:00:00Z") });
+    expect(repo.insiderTransactions.size).toBe(4);
+    await runCollect(repo, ["NVDA"], { since: "2026-09-01", sources: ["edgar"], get, now: () => new Date("2026-10-05T12:00:00Z") });
+    expect(repo.insiderTransactions.size).toBe(4);
+    expect([...repo.facts.values()].find((fact) => fact.key === "insider_net_buy_90d")?.value).toEqual({ netShares: 60, netDollars: 520 });
   });
 
   it("finds Item 2.02 in the primary 8-K when submissions omits items", async () => {

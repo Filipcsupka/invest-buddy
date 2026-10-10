@@ -170,6 +170,11 @@ async function main() {
       const { createCompanyfactsBackfillJob } = await import("./companyfacts");
       registerBackfillJob("companyfacts", () => createCompanyfactsBackfillJob(pool));
     }
+    if (args.job === "form4") {
+      const { createForm4BackfillJob, guardForm4Backfill } = await import("./form4");
+      guardForm4Backfill();
+      registerBackfillJob("form4", () => createForm4BackfillJob(pool));
+    }
     const factory = registry.get(args.job);
     if (!factory) throw new Error(`Unknown backfill job: ${args.job}. Registered: ${registeredBackfillJobs().join(", ") || "none"}`);
     const result = await runBackfill(factory(), new PostgresBackfillStore(pool), new PostgresUsageLedger(pool), { only: args.only, maxRequests: args.maxRequests, dryRun: args.dryRun });
