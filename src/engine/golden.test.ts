@@ -51,8 +51,8 @@ describe("golden threshold edges", () => {
     const totals = edges.symbols.map((s) => s.score.total).sort();
     expect(totals).toEqual([15, 15, 16, 16, 17, 17, 18]);
   });
-  it("pins today's behaviour: a buy action from score 15, conviction at 18", () => {
-    expect(by("EDGE15A").expected).toMatchObject({ action: "START_POSITION", sizeTier: "STARTER" });
+  it("pins the Guide thresholds: START needs 18, ADD from 15, conviction at 18", () => {
+    expect(by("EDGE15A").expected).toMatchObject({ action: "WATCH", sizeTier: "NONE" });
     expect(by("EDGE16A").expected).toMatchObject({ action: "ADD", sizeTier: "ADD_THIRD" });
     expect(by("EDGE17A").expected.action).toBe("WATCH");
     expect(by("EDGE18A").expected).toMatchObject({ action: "HIGH_CONVICTION_ADD", sizeTier: "ADD_HALF" });
