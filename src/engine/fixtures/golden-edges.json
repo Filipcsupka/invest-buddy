@@ -1,0 +1,666 @@
+{
+ "description": "Built by hand: six names at score 15 to 17 and one at 18 for threshold edges.",
+ "asOf": "2026-10-08",
+ "signalRulesVersion": "2026-10-06.1",
+ "scoreRulesVersion": "2026-10-06.1",
+ "symbols": [
+  {
+   "symbol": "EDGE15A",
+   "score": {
+    "total": 15,
+    "technical": 10,
+    "fundamentals": 5,
+    "macro": 0,
+    "state": "Watch"
+   },
+   "matchedRules": [],
+   "fields": {
+    "epsBeat": {
+     "value": true,
+     "agreement": "agree",
+     "verified": true,
+     "carriedFrom": null
+    },
+    "guidanceCut": {
+     "value": false,
+     "agreement": "agree",
+     "verified": true,
+     "carriedFrom": null
+    },
+    "guidanceRaised": {
+     "value": true,
+     "agreement": "agree",
+     "verified": true,
+     "carriedFrom": null
+    },
+    "productCatalyst": {
+     "value": true,
+     "agreement": "agree",
+     "verified": true,
+     "carriedFrom": null
+    },
+    "revenueAccelerating": {
+     "value": true,
+     "agreement": "agree",
+     "verified": true,
+     "carriedFrom": null
+    },
+    "revenueDeclining": {
+     "value": false,
+     "agreement": "agree",
+     "verified": true,
+     "carriedFrom": null
+    }
+   },
+   "expiredFields": [],
+   "technicals": {
+    "date": "2026-10-08",
+    "close": 100,
+    "return1dPercent": 0.5,
+    "return5dPercent": -3,
+    "return20dPercent": 2,
+    "return60dPercent": 8,
+    "vsMa20Percent": -2,
+    "vsMa50Percent": 4,
+    "vsMa200Percent": 15,
+    "belowHigh20Percent": 7,
+    "belowHigh52wPercent": 8,
+    "aboveLow52wPercent": 60,
+    "rangePosition52w": 85,
+    "rsi14": 50,
+    "avgVolume20": 1000000,
+    "volumeRatio": 1,
+    "atrPercent14": 2.5,
+    "relativeStrength20": null,
+    "relativeStrength60": null,
+    "regime": "range"
+   },
+   "expected": {
+    "action": "START_POSITION",
+    "sizeTier": "STARTER",
+    "ratings": {
+     "company": "Very strong",
+     "entry": "Good",
+     "catalyst": "Very strong"
+    },
+    "points": {
+     "company": 5,
+     "entry": 1,
+     "catalyst": 5
+    },
+    "unconfirmed": false,
+    "carriedFrom": null,
+    "confirmedFields": [
+     "revenueAccelerating",
+     "revenueDeclining",
+     "epsBeat",
+     "guidanceRaised",
+     "guidanceCut",
+     "productCatalyst"
+    ],
+    "reasons": [
+     "Buy conditions met; starter position."
+    ]
+   }
+  },
+  {
+   "symbol": "EDGE15B",
+   "score": {
+    "total": 15,
+    "technical": 10,
+    "fundamentals": 5,
+    "macro": 0,
+    "state": "Watch"
+   },
+   "matchedRules": [],
+   "fields": {
+    "epsBeat": {
+     "value": true,
+     "agreement": "agree",
+     "verified": true,
+     "carriedFrom": null
+    },
+    "guidanceCut": {
+     "value": false,
+     "agreement": "agree",
+     "verified": true,
+     "carriedFrom": null
+    },
+    "guidanceRaised": {
+     "value": true,
+     "agreement": "agree",
+     "verified": true,
+     "carriedFrom": null
+    },
+    "productCatalyst": {
+     "value": true,
+     "agreement": "agree",
+     "verified": true,
+     "carriedFrom": null
+    },
+    "revenueAccelerating": {
+     "value": true,
+     "agreement": "agree",
+     "verified": true,
+     "carriedFrom": "2026-09-20"
+    },
+    "revenueDeclining": {
+     "value": false,
+     "agreement": "agree",
+     "verified": true,
+     "carriedFrom": null
+    }
+   },
+   "expiredFields": [],
+   "technicals": {
+    "date": "2026-10-08",
+    "close": 100,
+    "return1dPercent": 0.5,
+    "return5dPercent": -3,
+    "return20dPercent": 2,
+    "return60dPercent": 8,
+    "vsMa20Percent": -2,
+    "vsMa50Percent": 4,
+    "vsMa200Percent": 15,
+    "belowHigh20Percent": 7,
+    "belowHigh52wPercent": 8,
+    "aboveLow52wPercent": 60,
+    "rangePosition52w": 85,
+    "rsi14": 50,
+    "avgVolume20": 1000000,
+    "volumeRatio": 1,
+    "atrPercent14": 2.5,
+    "relativeStrength20": null,
+    "relativeStrength60": null,
+    "regime": "range"
+   },
+   "expected": {
+    "action": "START_POSITION",
+    "sizeTier": "STARTER",
+    "ratings": {
+     "company": "Good",
+     "entry": "Good",
+     "catalyst": "Very strong"
+    },
+    "points": {
+     "company": 5,
+     "entry": 1,
+     "catalyst": 5
+    },
+    "unconfirmed": true,
+    "carriedFrom": "2026-09-20",
+    "confirmedFields": [
+     "revenueAccelerating",
+     "revenueDeclining",
+     "epsBeat",
+     "guidanceRaised",
+     "guidanceCut",
+     "productCatalyst"
+    ],
+    "reasons": [
+     "Buy conditions met; unconfirmed or carried data keeps it to a starter."
+    ]
+   }
+  },
+  {
+   "symbol": "EDGE16A",
+   "score": {
+    "total": 16,
+    "technical": 10,
+    "fundamentals": 6,
+    "macro": 0,
+    "state": "Watch"
+   },
+   "matchedRules": [],
+   "fields": {
+    "epsBeat": {
+     "value": true,
+     "agreement": "agree",
+     "verified": true,
+     "carriedFrom": null
+    },
+    "guidanceCut": {
+     "value": false,
+     "agreement": "agree",
+     "verified": true,
+     "carriedFrom": null
+    },
+    "guidanceRaised": {
+     "value": true,
+     "agreement": "agree",
+     "verified": true,
+     "carriedFrom": null
+    },
+    "productCatalyst": {
+     "value": true,
+     "agreement": "agree",
+     "verified": true,
+     "carriedFrom": null
+    },
+    "revenueAccelerating": {
+     "value": true,
+     "agreement": "agree",
+     "verified": true,
+     "carriedFrom": null
+    },
+    "revenueDeclining": {
+     "value": false,
+     "agreement": "agree",
+     "verified": true,
+     "carriedFrom": null
+    }
+   },
+   "expiredFields": [],
+   "technicals": {
+    "date": "2026-10-08",
+    "close": 100,
+    "return1dPercent": 0.5,
+    "return5dPercent": -3,
+    "return20dPercent": 2,
+    "return60dPercent": 8,
+    "vsMa20Percent": -2,
+    "vsMa50Percent": 4,
+    "vsMa200Percent": 15,
+    "belowHigh20Percent": 7,
+    "belowHigh52wPercent": 8,
+    "aboveLow52wPercent": 60,
+    "rangePosition52w": 85,
+    "rsi14": 48,
+    "avgVolume20": 1000000,
+    "volumeRatio": 1,
+    "atrPercent14": 2.5,
+    "relativeStrength20": 1.5,
+    "relativeStrength60": 3,
+    "regime": "pullback"
+   },
+   "expected": {
+    "action": "ADD",
+    "sizeTier": "ADD_THIRD",
+    "ratings": {
+     "company": "Very strong",
+     "entry": "Very strong",
+     "catalyst": "Very strong"
+    },
+    "points": {
+     "company": 5,
+     "entry": 6,
+     "catalyst": 5
+    },
+    "unconfirmed": false,
+    "carriedFrom": null,
+    "confirmedFields": [
+     "revenueAccelerating",
+     "revenueDeclining",
+     "epsBeat",
+     "guidanceRaised",
+     "guidanceCut",
+     "productCatalyst"
+    ],
+    "reasons": [
+     "Fundamentals hold and the entry is good."
+    ]
+   }
+  },
+  {
+   "symbol": "EDGE16B",
+   "score": {
+    "total": 16,
+    "technical": 10,
+    "fundamentals": 6,
+    "macro": 0,
+    "state": "Watch"
+   },
+   "matchedRules": [],
+   "fields": {
+    "epsBeat": {
+     "value": true,
+     "agreement": "agree",
+     "verified": true,
+     "carriedFrom": null
+    },
+    "guidanceCut": {
+     "value": true,
+     "agreement": "agree",
+     "verified": true,
+     "carriedFrom": null
+    },
+    "guidanceRaised": {
+     "value": true,
+     "agreement": "agree",
+     "verified": true,
+     "carriedFrom": null
+    },
+    "productCatalyst": {
+     "value": true,
+     "agreement": "agree",
+     "verified": true,
+     "carriedFrom": null
+    },
+    "revenueAccelerating": {
+     "value": true,
+     "agreement": "agree",
+     "verified": true,
+     "carriedFrom": null
+    },
+    "revenueDeclining": {
+     "value": false,
+     "agreement": "agree",
+     "verified": true,
+     "carriedFrom": null
+    }
+   },
+   "expiredFields": [],
+   "technicals": {
+    "date": "2026-10-08",
+    "close": 100,
+    "return1dPercent": 0.5,
+    "return5dPercent": -3,
+    "return20dPercent": 2,
+    "return60dPercent": 8,
+    "vsMa20Percent": -2,
+    "vsMa50Percent": 4,
+    "vsMa200Percent": 15,
+    "belowHigh20Percent": 7,
+    "belowHigh52wPercent": 8,
+    "aboveLow52wPercent": 60,
+    "rangePosition52w": 85,
+    "rsi14": 48,
+    "avgVolume20": 1000000,
+    "volumeRatio": 1,
+    "atrPercent14": 2.5,
+    "relativeStrength20": 1.5,
+    "relativeStrength60": 3,
+    "regime": "pullback"
+   },
+   "expected": {
+    "action": "WATCH",
+    "sizeTier": "NONE",
+    "ratings": {
+     "company": "Neutral",
+     "entry": "Very strong",
+     "catalyst": "Very strong"
+    },
+    "points": {
+     "company": 1,
+     "entry": 6,
+     "catalyst": 5
+    },
+    "unconfirmed": false,
+    "carriedFrom": null,
+    "confirmedFields": [
+     "revenueAccelerating",
+     "revenueDeclining",
+     "epsBeat",
+     "guidanceRaised",
+     "guidanceCut",
+     "productCatalyst"
+    ],
+    "reasons": [
+     "A rejection rule applies: revenue declining, guidance cut or criteria broken."
+    ]
+   }
+  },
+  {
+   "symbol": "EDGE17A",
+   "score": {
+    "total": 17,
+    "technical": 10,
+    "fundamentals": 7,
+    "macro": 0,
+    "state": "Watch"
+   },
+   "matchedRules": [],
+   "fields": {
+    "epsBeat": {
+     "value": true,
+     "agreement": "agree",
+     "verified": true,
+     "carriedFrom": null
+    },
+    "guidanceCut": {
+     "value": false,
+     "agreement": "agree",
+     "verified": true,
+     "carriedFrom": null
+    },
+    "guidanceRaised": {
+     "value": true,
+     "agreement": "agree",
+     "verified": true,
+     "carriedFrom": null
+    },
+    "productCatalyst": {
+     "value": true,
+     "agreement": "agree",
+     "verified": true,
+     "carriedFrom": null
+    },
+    "revenueAccelerating": {
+     "value": true,
+     "agreement": "agree",
+     "verified": true,
+     "carriedFrom": null
+    },
+    "revenueDeclining": {
+     "value": false,
+     "agreement": "agree",
+     "verified": true,
+     "carriedFrom": null
+    }
+   },
+   "expiredFields": [],
+   "technicals": {
+    "date": "2026-10-08",
+    "close": 100,
+    "return1dPercent": 0.5,
+    "return5dPercent": -3,
+    "return20dPercent": 2,
+    "return60dPercent": 8,
+    "vsMa20Percent": -2,
+    "vsMa50Percent": 4,
+    "vsMa200Percent": 15,
+    "belowHigh20Percent": 7,
+    "belowHigh52wPercent": 8,
+    "aboveLow52wPercent": 60,
+    "rangePosition52w": 85,
+    "rsi14": 35,
+    "avgVolume20": 1000000,
+    "volumeRatio": 1,
+    "atrPercent14": 2.5,
+    "relativeStrength20": -1,
+    "relativeStrength60": -1,
+    "regime": "downtrend"
+   },
+   "expected": {
+    "action": "WATCH",
+    "sizeTier": "NONE",
+    "ratings": {
+     "company": "Very strong",
+     "entry": "Weak",
+     "catalyst": "Very strong"
+    },
+    "points": {
+     "company": 5,
+     "entry": -3,
+     "catalyst": 5
+    },
+    "unconfirmed": false,
+    "carriedFrom": null,
+    "confirmedFields": [
+     "revenueAccelerating",
+     "revenueDeclining",
+     "epsBeat",
+     "guidanceRaised",
+     "guidanceCut",
+     "productCatalyst"
+    ],
+    "reasons": [
+     "Buy conditions are not met."
+    ]
+   }
+  },
+  {
+   "symbol": "EDGE17B",
+   "score": {
+    "total": 17,
+    "technical": 10,
+    "fundamentals": 7,
+    "macro": 0,
+    "state": "Watch"
+   },
+   "matchedRules": [],
+   "fields": {
+    "revenueAccelerating": {
+     "value": true,
+     "agreement": "agree",
+     "verified": true,
+     "carriedFrom": null
+    }
+   },
+   "expiredFields": [],
+   "technicals": {
+    "date": "2026-10-08",
+    "close": 100,
+    "return1dPercent": 0.5,
+    "return5dPercent": -3,
+    "return20dPercent": 2,
+    "return60dPercent": 8,
+    "vsMa20Percent": -2,
+    "vsMa50Percent": 4,
+    "vsMa200Percent": 15,
+    "belowHigh20Percent": 7,
+    "belowHigh52wPercent": 8,
+    "aboveLow52wPercent": 60,
+    "rangePosition52w": 85,
+    "rsi14": 48,
+    "avgVolume20": 1000000,
+    "volumeRatio": 1,
+    "atrPercent14": 2.5,
+    "relativeStrength20": 1.5,
+    "relativeStrength60": 3,
+    "regime": "pullback"
+   },
+   "expected": {
+    "action": "WATCH",
+    "sizeTier": "NONE",
+    "ratings": {
+     "company": "Good",
+     "entry": "Very strong",
+     "catalyst": "Neutral"
+    },
+    "points": {
+     "company": 2,
+     "entry": 6,
+     "catalyst": 0
+    },
+    "unconfirmed": true,
+    "carriedFrom": null,
+    "confirmedFields": [
+     "revenueAccelerating"
+    ],
+    "reasons": [
+     "Insufficient evidence: 1 confirmed key fields, 2 needed."
+    ]
+   }
+  },
+  {
+   "symbol": "EDGE18A",
+   "score": {
+    "total": 18,
+    "technical": 10,
+    "fundamentals": 8,
+    "macro": 0,
+    "state": "Setup met (>=18)"
+   },
+   "matchedRules": [],
+   "fields": {
+    "epsBeat": {
+     "value": true,
+     "agreement": "agree",
+     "verified": true,
+     "carriedFrom": null
+    },
+    "guidanceCut": {
+     "value": false,
+     "agreement": "agree",
+     "verified": true,
+     "carriedFrom": null
+    },
+    "guidanceRaised": {
+     "value": true,
+     "agreement": "agree",
+     "verified": true,
+     "carriedFrom": null
+    },
+    "productCatalyst": {
+     "value": true,
+     "agreement": "agree",
+     "verified": true,
+     "carriedFrom": null
+    },
+    "revenueAccelerating": {
+     "value": true,
+     "agreement": "agree",
+     "verified": true,
+     "carriedFrom": null
+    },
+    "revenueDeclining": {
+     "value": false,
+     "agreement": "agree",
+     "verified": true,
+     "carriedFrom": null
+    }
+   },
+   "expiredFields": [],
+   "technicals": {
+    "date": "2026-10-08",
+    "close": 100,
+    "return1dPercent": 0.5,
+    "return5dPercent": -3,
+    "return20dPercent": 2,
+    "return60dPercent": 8,
+    "vsMa20Percent": -2,
+    "vsMa50Percent": 4,
+    "vsMa200Percent": 15,
+    "belowHigh20Percent": 7,
+    "belowHigh52wPercent": 8,
+    "aboveLow52wPercent": 60,
+    "rangePosition52w": 85,
+    "rsi14": 48,
+    "avgVolume20": 1000000,
+    "volumeRatio": 1,
+    "atrPercent14": 2.5,
+    "relativeStrength20": 1.5,
+    "relativeStrength60": 3,
+    "regime": "pullback"
+   },
+   "expected": {
+    "action": "HIGH_CONVICTION_ADD",
+    "sizeTier": "ADD_HALF",
+    "ratings": {
+     "company": "Very strong",
+     "entry": "Very strong",
+     "catalyst": "Very strong"
+    },
+    "points": {
+     "company": 5,
+     "entry": 6,
+     "catalyst": 5
+    },
+    "unconfirmed": false,
+    "carriedFrom": null,
+    "confirmedFields": [
+     "revenueAccelerating",
+     "revenueDeclining",
+     "epsBeat",
+     "guidanceRaised",
+     "guidanceCut",
+     "productCatalyst"
+    ],
+    "reasons": [
+     "Conviction conditions met."
+    ]
+   }
+  }
+ ]
+}

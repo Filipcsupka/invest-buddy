@@ -220,3 +220,5 @@ Benchmark. In `DATA_MODE=db` the SPY line comes from `daily_bars` (ticker `SPY`)
 Page. Title "Since <first date>". With fewer than 5 history points the page shows "History builds from <date>; the broker report currently provides only <n> points" instead of a line. The page shows indexed values and percentages only, never EUR amounts or the account id.
 
 The `AI_DAILY_TOKEN_CEILING` setting is currently enforced by extract only. Judge receives the setting in its CronJob but does not check it yet. Calls with missing token usage count against the daily ledger using `AI_UNKNOWN_USAGE_TOKENS` (default 20000).
+
+Golden fixtures: `npx tsx scripts/export-golden.ts YYYY-MM-DD [--from-json judge-input.json]` (read-only) writes `src/engine/fixtures/golden-<date>.json`; `src/engine/golden.test.ts` fails with a per ticker diff when a rule changes.
