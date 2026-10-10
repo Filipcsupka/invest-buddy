@@ -1,4 +1,5 @@
-import pg from "pg";
+import { cache } from "react";
+import { getPool } from "../db/pool";
 import type { ScoreResult } from "../engine";
 import type { Instrument } from "./providers";
 import { scoredUniverse as fixtureUniverse } from "./scored";
@@ -19,63 +20,55 @@ export const stale = (date: string | null, now = Date.now()) => {
   return now - day > limit;
 };
 const fixtureMode = () => process.env.DATA_MODE === "fixture";
-function pool() { if (!process.env.DATABASE_URL) return null; return new pg.Pool({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 3000 }); }
-export async function latestScores(): Promise<StoreData<StoreRow[]>> {
+const pool = getPool;
+async function latestScoresUncached(): Promise<StoreData<StoreRow[]>> {
   if (fixtureMode()) { const rows = await fixtureUniverse(); return { rows, sample: true, lastUpdated: rows[0]?.result.asOf ?? null, stale: false }; }
   const db = pool(); if (!db) return { rows: [], sample: false, lastUpdated: null, stale: false };
-  try {
-    const result = await db.query<{ ticker: string; name: string; sector: string; tier: 1 | 2 | 3 | null; source: Instrument["source"]; audit: ScoreResult; as_of: string }>(`SELECT DISTINCT ON (s.ticker) s.ticker,i.name,i.sector,i.tier,i.source,s.audit,s.as_of::text FROM score_results s JOIN instruments i ON i.ticker=s.ticker WHERE s.audit ? 'scanRunId' ORDER BY s.ticker,s.as_of DESC`);
-    const rows = result.rows.map((row) => ({ instrument: { ticker: row.ticker, name: row.name, sector: row.sector, tier: row.tier, source: row.source }, result: row.audit }));
-    const lastUpdated = result.rows.map((row) => row.as_of).sort().at(-1) ?? null;
-    return { rows, sample: false, lastUpdated, stale: stale(lastUpdated) };
-  } finally { await db.end(); }
+  const result = await db.query<{ ticker: string; name: string; sector: string; tier: 1 | 2 | 3 | null; source: Instrument["source"]; audit: ScoreResult; as_of: string }>(`SELECT DISTINCT ON (s.ticker) s.ticker,i.name,i.sector,i.tier,i.source,s.audit,s.as_of::text FROM score_results s JOIN instruments i ON i.ticker=s.ticker WHERE s.audit ? 'scanRunId' ORDER BY s.ticker,s.as_of DESC`);
+  const rows = result.rows.map((row) => ({ instrument: { ticker: row.ticker, name: row.name, sector: row.sector, tier: row.tier, source: row.source }, result: row.audit }));
+  const lastUpdated = result.rows.map((row) => row.as_of).sort().at(-1) ?? null;
+  return { rows, sample: false, lastUpdated, stale: stale(lastUpdated) };
 }
 /** Ticker universe: fixture instruments in fixture mode, otherwise the instruments table (benchmarks excluded). */
-export async function instrumentUniverse(): Promise<Instrument[]> {
+async function instrumentUniverseUncached(): Promise<Instrument[]> {
   if (fixtureMode()) return fixtureInstruments;
   const db = pool(); if (!db) return [];
-  try {
-    const result = await db.query<Instrument>("SELECT ticker,name,sector,tier,source FROM instruments WHERE source <> 'benchmark' ORDER BY ticker");
-    return result.rows;
-  } finally { await db.end(); }
+  const result = await db.query<Instrument>("SELECT ticker,name,sector,tier,source FROM instruments WHERE source <> 'benchmark' ORDER BY ticker");
+  return result.rows;
 }
 export async function scoreHistory(): Promise<StoreData<StoreRow[]>> {
   if (fixtureMode()) { const rows = fixtureRecord(); return { rows, sample: true, lastUpdated: rows[0]?.result.asOf ?? null, stale: false }; }
   const db = pool(); if (!db) return { rows: [], sample: false, lastUpdated: null, stale: false };
-  try {
-    const result = await db.query<{ ticker: string; name: string; sector: string; tier: 1 | 2 | 3 | null; source: Instrument["source"]; audit: ScoreResult; as_of: string }>("SELECT s.ticker,i.name,i.sector,i.tier,i.source,s.audit,s.as_of::text FROM score_results s JOIN instruments i ON i.ticker=s.ticker WHERE s.audit ? 'scanRunId' ORDER BY s.as_of DESC,s.ticker");
-    const rows = result.rows.map((row) => ({ instrument: { ticker: row.ticker, name: row.name, sector: row.sector, tier: row.tier, source: row.source }, result: row.audit }));
-    const lastUpdated = result.rows[0]?.as_of ?? null;
-    return { rows, sample: false, lastUpdated, stale: stale(lastUpdated) };
-  } finally { await db.end(); }
+  const result = await db.query<{ ticker: string; name: string; sector: string; tier: 1 | 2 | 3 | null; source: Instrument["source"]; audit: ScoreResult; as_of: string }>("SELECT s.ticker,i.name,i.sector,i.tier,i.source,s.audit,s.as_of::text FROM score_results s JOIN instruments i ON i.ticker=s.ticker WHERE s.audit ? 'scanRunId' ORDER BY s.as_of DESC,s.ticker");
+  const rows = result.rows.map((row) => ({ instrument: { ticker: row.ticker, name: row.name, sector: row.sector, tier: row.tier, source: row.source }, result: row.audit }));
+  const lastUpdated = result.rows[0]?.as_of ?? null;
+  return { rows, sample: false, lastUpdated, stale: stale(lastUpdated) };
 }
-export async function latestPortfolio() {
+async function latestPortfolioUncached() {
   if (fixtureMode()) return samplePortfolio;
   const db = pool(); if (!db) return null;
-  try {
-    const snapshot = await new PostgresPortfolioRepository(db).latestPublished(new Date().toISOString().slice(0, 10));
-    return snapshot?.sample ? null : snapshot;
-  }
-  finally { await db.end(); }
+  const snapshot = await new PostgresPortfolioRepository(db).latestPublished(new Date().toISOString().slice(0, 10));
+  return snapshot?.sample ? null : snapshot;
 }
 
 /** Indexed portfolio and real SPY series from the private NAV history. Null in fixture mode. Raw EUR amounts never leave this function. */
 export async function portfolioIndexedSeries(): Promise<IndexedSeries | null> {
   if (fixtureMode()) return null;
   const db = pool(); if (!db) return { points: [], twrPercent: null, benchmarkPercent: null };
-  try {
-    const history = await new PostgresNavHistoryRepository(db).all();
-    const bars = await db.query<{ date: string; close: string }>("SELECT bar_date::text AS date, close FROM daily_bars WHERE ticker='SPY' ORDER BY bar_date");
-    return buildIndexedSeries(history, bars.rows.map((row) => ({ date: row.date, close: Number(row.close) })));
-  } finally { await db.end(); }
+  const history = await new PostgresNavHistoryRepository(db).all();
+  const bars = await db.query<{ date: string; close: string }>("SELECT bar_date::text AS date, close FROM daily_bars WHERE ticker='SPY' ORDER BY bar_date");
+  return buildIndexedSeries(history, bars.rows.map((row) => ({ date: row.date, close: Number(row.close) })));
 }
 
 export async function alertHistory() {
   if (fixtureMode()) return [];
   const db = pool(); if (!db) return [];
-  try {
-    const result = await db.query<{ ticker: string; as_of: string; previous_state: ScoreResult["state"] | null; current_state: ScoreResult["state"]; previous_score: number | null; current_score: number }>(`SELECT a.ticker,a.as_of::text,a.previous_state,a.current_state,a.previous_score,a.current_score
+  const result = await db.query<{ ticker: string; as_of: string; previous_state: ScoreResult["state"] | null; current_state: ScoreResult["state"]; previous_score: number | null; current_score: number }>(`SELECT a.ticker,a.as_of::text,a.previous_state,a.current_state,a.previous_score,a.current_score
       FROM alerts a JOIN score_results s ON s.ticker=a.ticker AND s.as_of=a.as_of WHERE s.audit ? 'scanRunId' ORDER BY a.as_of DESC,a.ticker`);
-    return result.rows.map((row) => ({ ticker: row.ticker, asOf: row.as_of, previousState: row.previous_state, currentState: row.current_state, previousScore: row.previous_score, currentScore: row.current_score }));
-  } finally { await db.end(); }
+  return result.rows.map((row) => ({ ticker: row.ticker, asOf: row.as_of, previousState: row.previous_state, currentState: row.current_state, previousScore: row.previous_score, currentScore: row.current_score }));
 }
+
+/** Per-request memo (React cache): generateMetadata and the page share one query. */
+export const latestScores = cache(latestScoresUncached);
+export const instrumentUniverse = cache(instrumentUniverseUncached);
+export const latestPortfolio = cache(latestPortfolioUncached);
