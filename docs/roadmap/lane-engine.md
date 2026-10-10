@@ -54,6 +54,7 @@ Tasks are ordered by dependency. EN1 first: it freezes today's behaviour so ever
 ---
 
 ### EN1. Golden fixtures for score and signals
+Status: done 2026-10-10, PR #90, merged and live.
 - Synthesis note: this task owns `src/engine/golden.test.ts`. PL10 step 2 points here instead of writing a second golden test. The fixture freezes current main before PR #80 or any rule change; EN3 refreshes it after the owner decides.
 - Why: C5 found no ticker at 18 and several rule gaps; any change needs a before and after. `signals.test.ts` exists (152 lines) but uses small hand-made cases. Source: `src/engine/signals.test.ts`, C5 report.
 - Steps:
@@ -541,6 +542,7 @@ Tasks are ordered by dependency. EN1 first: it freezes today's behaviour so ever
 - Risk or open question: model names and availability change; the cutoff guard (`scanner/anthropic-cutoff.mjs`) must still pass.
 
 ### EN36. Discovery pre-screen on MA200 before the cut
+Status: done 2026-10-10, PR #86, merged and live.
 - Synthesis note: the extra bars calls go through the D8 reserve once it exists, so discovery cannot take the `prices` share.
 - Why: discovery ranks about 367 symbols and screens up to 24; six of 12 screened on 2026-10-09 were rejected for being under MA200, which wastes the slots (tasks-open F7).
 - Steps:

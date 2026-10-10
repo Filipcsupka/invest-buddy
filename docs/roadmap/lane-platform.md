@@ -40,6 +40,7 @@ Make building and running safe while features land, and reach a state where acco
 ## Group A: CI and build
 
 ### PL1. Stop the Docker Hub pull failure in CI
+Status: done 2026-10-10, PR #85, merged and live.
 - Why: two of the last failed `Build` runs died pulling `postgres:16` (logs above). Source: `.github/workflows/build.yml` `services.postgres`. Docker Hub limit terms: https://docs.docker.com/docker-hub/usage/ (not fetched in this session, unverified).
 - Steps: 1) Check the runner image for a preinstalled PostgreSQL: add a throwaway workflow step that prints `pg_lsclusters` and `/usr/lib/postgresql/*/bin/postgres --version` (runner image list: https://github.com/actions/runner-images, unverified). 2) If version 16 is there, replace `services.postgres` in `build.yml` with a step that starts it, creates user `investbuddy` and database `investbuddy_test`, and waits with `pg_isready`. 3) Keep `TEST_DATABASE_URL` and the `npm run migrate` step unchanged. 4) If not available, use PL2 first and point the service at the GHCR mirror.
 - Acceptance: five consecutive PR runs and one main run pass `quality` with no Docker Hub request in the log (`grep -c registry-1.docker.io` is 0 in the "Initialize containers" step); the CI log still shows 0 skipped DB tests (`src/db/*pg.test.ts`, `collectors-pg.test.ts`). No new test needed.
