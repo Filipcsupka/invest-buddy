@@ -5,6 +5,7 @@ import type { MarketDataProvider } from "../data/providers";
 import { DailyLimitError, SymbolNotFoundError, TwelveDataProvider } from "../data/twelvedata";
 import { MemoryPriceRepository, PostgresPriceRepository, type PriceRepository, type PriceRunRecord } from "../db/prices";
 import { loadUniverse } from "../db/universe";
+import { loadVendorSymbols } from "../data/security-master";
 
 export const BENCHMARK = "SPY";
 export const FAILURE_LIMIT = 0.1;
@@ -64,7 +65,7 @@ async function main() {
     if (unknown.length) throw new Error(`Unknown ticker(s): ${unknown.join(", ")}`);
     const tickers = only ?? all;
     const repository = pool ? new PostgresPriceRepository(pool) : new MemoryPriceRepository();
-    const result = await runPrices(new TwelveDataProvider({ apiKey }), repository, tickers, { dryRun });
+    const result = await runPrices(new TwelveDataProvider({ apiKey, ...(pool ? { symbolMap: await loadVendorSymbols(pool, "twelvedata") } : {}) }), repository, tickers, { dryRun });
     process.stdout.write(`Prices: ${result.succeeded}/${result.requested} tickers, ${result.barsWritten} bars written${dryRun ? " (dry run, nothing stored)" : ""}\n`);
     if (result.unmapped.length) process.stderr.write(`Unmapped symbols: ${result.unmapped.join(", ")}\n`);
     for (const failure of result.failures) process.stderr.write(`Failed ${failure.ticker}\n`);

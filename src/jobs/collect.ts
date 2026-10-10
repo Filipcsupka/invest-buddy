@@ -9,7 +9,7 @@ import { requireSecUserAgent } from "../collectors/sec-user-agent";
 import type { CollectedDocument } from "../collectors/types";
 import { documentRetentionDays, MemoryCollectorRepository, PostgresCollectorRepository, type CollectorRepository, type Fact, type CollectorRun } from "../db/collectors";
 import type { Company } from "../collectors/sources/common";
-import { DEFAULT_SYMBOL_MAP } from "../data/twelvedata";
+import { loadStoredCiks, loadVendorSymbols, resolveCik } from "../data/security-master";
 import { EXTRA_SOURCES, LEGACY_SOURCES, type SourceName } from "../collectors/types";
 import type { SourceHttp } from "../collectors/sources/client";
 import { formatPings, isExtra, runExtraSources, runPings } from "../collectors/sources/registry";
@@ -19,7 +19,7 @@ import { loadUniverse } from "../db/universe";
 
 const companies = universe.instruments as Company[];
 const daysAgo = (date: Date, days: number) => new Date(date.getTime() - days * 86400000).toISOString().slice(0, 10);
-export interface CollectOptions { since?: string; sources?: string[]; dryRun?: boolean; now?: () => Date; get?: (url: string) => Promise<string>; http?: SourceHttp; cusips?: CusipStore; companies?: Company[] }
+export interface CollectOptions { since?: string; sources?: string[]; dryRun?: boolean; now?: () => Date; get?: (url: string) => Promise<string>; http?: SourceHttp; cusips?: CusipStore; companies?: Company[]; secSymbols?: Record<string, string>; storedCiks?: Map<string, number> }
 /** Phase A collectors (edgar, rss, fred) run as before. Phase A2 sources (`EXTRA_SOURCES`) run through the source registry. */
 export async function runCollect(repository: CollectorRepository, symbols: string[], options: CollectOptions = {}) {
   const companies = options.companies ?? universe.instruments as Company[];
@@ -86,7 +86,7 @@ async function runLegacyCollect(repository: CollectorRepository, symbols: string
   }
   for (const [index, symbol] of symbols.entries()) {
     try {
-      const cik = ciks?.get(symbol) ?? ciks?.get(DEFAULT_SYMBOL_MAP[symbol] ?? symbol);
+      const cik = resolveCik(symbol, options.storedCiks ?? new Map(), ciks, options.secSymbols);
       if (sources.includes("edgar") && !cik) throw new Error(`No EDGAR CIK for ${symbol}`);
       const docs = [ ...(cik ? await collectEdgar(symbol, cik, since, get, daysAgo(now, 90)) : []), ...rss.filter((doc) => (doc.meta.symbols as string[]).includes(symbol)) ];
       documentsParsed += docs.length;
@@ -182,7 +182,7 @@ async function main() {
     const unknown = symbols.filter((s) => !activeCompanies.some((c) => c.symbol === s));
     if (unknown.length) throw new Error(`Unknown ticker(s): ${unknown.join(", ")}`);
     const repository = pool ? new PostgresCollectorRepository(pool) : new MemoryCollectorRepository();
-    const result = await runCollect(repository, symbols, { since, sources: names as SourceName[] | undefined, dryRun, cusips: pool ? new PostgresCusipStore(pool) : new MemoryCusipStore(), companies: activeCompanies });
+    const result = await runCollect(repository, symbols, { since, sources: names as SourceName[] | undefined, dryRun, cusips: pool ? new PostgresCusipStore(pool) : new MemoryCusipStore(), companies: activeCompanies, secSymbols: pool ? await loadVendorSymbols(pool, "sec") : undefined, storedCiks: pool ? await loadStoredCiks(pool) : undefined });
     process.stdout.write(`Collect: ${result.succeeded}/${result.requested} tickers, ${result.documentsParsed} documents parsed, ${result.factsComputed} facts computed, ${result.documentsWritten} documents written, ${result.factsWritten} facts written${dryRun ? " (dry run, nothing stored)" : ""}\n`);
     for (const failure of result.failures) process.stderr.write(`Failed ${failure.ticker}: ${safeReason(failure.reason)}\n`);
     if (result.stoppedReason) process.stderr.write("Stopped: source limit reached\n");
