@@ -13,6 +13,7 @@ describe("ingest request logging", () => {
     expect(entry).toMatchObject({ event: "http_request", route: "/api/ingest/scan", method: "POST", status: 401, reason: "Unauthorized" });
     expect(entry.durationMs).toBeGreaterThanOrEqual(0);
     expect(response.headers.get("x-request-id")).toBe(entry.requestId);
+    expect(await response.json()).toEqual({ error: "Unauthorized", requestId: entry.requestId });
     expect(lines.join("")).not.toMatch(/secret-token|secret-query|sensitive-body/);
   });
 

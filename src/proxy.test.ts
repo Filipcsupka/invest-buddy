@@ -48,3 +48,19 @@ it.each(["en", "sk"])("opens the %s scanner only with PAYWALL on", async (locale
   expect(response.status).toBe(200);
   expect(response.headers.get("x-request-id")).toBeTruthy();
 });
+
+it("shows the SK title and the request id on the /sk/scanner 404, and keeps a valid incoming id", async () => {
+  delete process.env.PAYWALL;
+  const response = await proxy(new NextRequest("https://example.com/sk/scanner", { headers: { "x-request-id": "abc-12345678" } }));
+  expect(response.status).toBe(404);
+  const body = await response.text();
+  expect(body).toContain("Stránka sa nenašla");
+  expect(body).toContain("abc-12345678");
+  expect(response.headers.get("x-request-id")).toBe("abc-12345678");
+});
+
+it("replaces a malformed incoming id", async () => {
+  process.env.PAYWALL = "on";
+  const response = await proxy(new NextRequest("https://example.com/en/scanner", { headers: { "x-request-id": "bad id<script>" } }));
+  expect(response.headers.get("x-request-id")).toMatch(/^[0-9a-f-]{36}$/);
+});
