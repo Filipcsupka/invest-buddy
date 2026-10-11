@@ -19,7 +19,7 @@ Telegram allows 4096 characters. A longer card loses whole sections, lowest prio
 
 `TELEGRAM_CARD_MODE`:
 
-- `public` (default, any other value too): neutral band labels, no EUR amounts, no action words (Start, Add, Reduce), plan labelled Trigger, Invalidation and Opportunity cost. While `ADVICE_OUTPUT` is off, the card follows `docs/wording-gate.md` and holds back model text, ratings and plan: it shows the state, score line, evidence links, the company link and the disclaimer. With `ADVICE_OUTPUT` on, all sections show, minus EUR and action words.
+- `public` (default, any other value too): neutral band labels (never "Buy zone" on the card, even with `ADVICE_OUTPUT` on), no EUR amounts, no action words (Start, Add, Reduce), plan labelled Trigger, Invalidation and Opportunity cost. While `ADVICE_OUTPUT` is off, the card follows `docs/wording-gate.md` and holds back model text, ratings and plan: it shows the state, score line, evidence links, the company link and the disclaimer. With `ADVICE_OUTPUT` on, all sections show, minus EUR and action words.
 - `owner`: for the owner's **private channel only**. Adds the action word and the EUR band from the idea to the header, and the plan reads When to start, When to add, When to stop, Opportunity cost. It ignores `ADVICE_OUTPUT`. Never set it on a channel others can read: it shows personal amounts and trade wording that ADR-001 keeps out of public output.
 
 ## One-time setup (owner)

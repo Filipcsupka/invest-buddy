@@ -30,6 +30,10 @@ describe("formatIdeaCard", () => {
     expect(text).toContain("not personal advice");
   });
 
+  it("keeps the neutral label even with ADVICE_OUTPUT on", () => {
+    expect(formatIdeaCard({ ...base, adviceOutput: true })).not.toContain("Buy zone");
+  });
+
   it("shows a first rating when there is no previous band", () => {
     expect(formatIdeaCard({ ...base, previous: null })).toContain("First rating: 🟢 Conditions met");
   });
@@ -79,7 +83,7 @@ describe("formatIdeaCard", () => {
     expect(sk).toContain("Firma: Veľmi silné · Vstup: Silné · Katalyzátor: Dobré");
     expect(sk).toContain('<a href="https://example.com/nvda-release">Výsledková správa</a>');
     expect(sk).toContain("https://x.test/sk/company/NVDA");
-    expect(formatIdeaCard({ ...base, locale: "sk" })).toContain("The price closed 7.4% under its 20-day high");
+    expect(formatIdeaCard({ ...base, locale: "sk" })).toContain("the price closed 7.4% under its 20-day high");
   });
 
   it("owner mode in Slovak uses Slovak action and plan labels", () => {

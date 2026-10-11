@@ -238,15 +238,17 @@ export function formatIdeaCard(input: IdeaCardInput): string {
 
   const band = bandOf(input.current.state);
   const ticker = escapeHtml(input.ticker);
-  const head = [`${BAND_EMOJI[band]} <b>${ticker}</b> · ${escapeHtml(bandLabel(locale, band, adviceOutput))}`];
+  // The card always uses the neutral band label; the action word is separate and owner-only.
+  const label = (b: Band) => escapeHtml(bandLabel(locale, b, false));
+  const head = [`${BAND_EMOJI[band]} <b>${ticker}</b> · ${label(band)}`];
   if (owner) {
     const action = getMessages(locale).ideas.actions[input.idea.action];
     const eur = input.idea.amountMaxEur > 0 ? ` · EUR ${input.idea.amountMinEur}-${input.idea.amountMaxEur}` : "";
     head[0] += ` · ${escapeHtml(action)}${eur}`;
   }
-  const now = `${BAND_EMOJI[band]} ${escapeHtml(bandLabel(locale, band, adviceOutput))}`;
+  const now = `${BAND_EMOJI[band]} ${label(band)}`;
   const change = input.previous
-    ? `${text.was}: ${BAND_EMOJI[bandOf(input.previous.state)]} ${escapeHtml(bandLabel(locale, bandOf(input.previous.state), adviceOutput))} → ${text.now}: ${now}`
+    ? `${text.was}: ${BAND_EMOJI[bandOf(input.previous.state)]} ${label(bandOf(input.previous.state))} → ${text.now}: ${now}`
     : `${text.first}: ${now}`;
   const audit = input.audit;
   const points = pointsText(input.current);
