@@ -17,11 +17,13 @@ export async function generateMetadata({ params }: LocaleParams): Promise<Metada
   return { ...pageMetadata(locale, "/insiders", m.meta.insidersTitle, m.meta.insidersDescription), robots: { index: flags().INSIDERS_PAGE, follow: flags().INSIDERS_PAGE } };
 }
 
-async function Insiders({ params }: LocaleParams) {
+async function Insiders({ params, searchParams }: LocaleParams & { searchParams?: Promise<{ ticker?: string | string[] }> }) {
   const locale = await resolveLocale(params);
   if (!flags().INSIDERS_PAGE) notFound();
   const m = getMessages(locale);
-  const events = await insiderEvents();
+  const raw = (await searchParams)?.ticker;
+  const ticker = (Array.isArray(raw) ? raw[0] : raw)?.trim().toUpperCase().slice(0, 12);
+  const events = await insiderEvents(ticker || undefined);
   return <div className="frame page">
     <header className="page-head">
       <h1 className="title">{m.insiders.title}</h1>

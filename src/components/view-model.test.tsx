@@ -2,8 +2,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { ScoreResult } from "@/engine";
 import { scoredUniverse } from "@/data/scored";
-import { inputSources, ruleSources, sourceSummary } from "./view-model";
-import { SourceList } from "./source-list";
+import { inputSources, ruleSourceNotes, ruleSources, sourceSummary } from "./view-model";
+import { SourceList, SourceNotes } from "./source-list";
 
 const XBRL = "https://data.sec.gov/api/xbrl/companyfacts/CIK0001045810.json";
 const RELEASE = "https://www.sec.gov/Archives/edgar/data/1/ex99.htm";
@@ -99,5 +99,59 @@ describe("source summary", () => {
     const r = withSources(await base(), { revenueAccelerating: "xbrl_override" }, { revenueAccelerating: [{ kind: "xbrl", href: XBRL, publishedAt: null }], guidanceRaised: [{ kind: "release", href: RELEASE, publishedAt: "2026-08-26" }], insiderOrInstitutionalBuying: [{ kind: "form4", href: "https://www.sec.gov/a.xml", publishedAt: "2026-09-01" }, { kind: "form4", href: "https://www.sec.gov/b.xml", publishedAt: "2026-09-02" }] });
     expect(sourceSummary("en", r)).toBe("Data sources: Earnings release (1), SEC Form 4 (2), SEC XBRL company facts (1), FRED 10-year yield (1), Cboe VIX (1), Own price bars (1), Own price data (SPY and universe tickers) (1)");
     expect(sourceSummary("sk", r)).toContain("Zdroje údajov: ");
+  });
+});
+
+describe("honest source notes (ST7)", () => {
+  it("computed rules say where they come from and link to the methodology, EN and SK", async () => {
+    const r = await base();
+    const en = (id: string) => ruleSourceNotes("en", r, id, false);
+    expect(en("rotation")).toEqual({ replacesSources: true, notes: [expect.objectContaining({ text: "Computed from price data", href: "/en/methodology#source-labels" })] });
+    expect(en("macro-data").notes[0].text).toBe("Computed from macro data (FRED)");
+    expect(ruleSourceNotes("sk", r, "rotation", false).notes[0]).toMatchObject({ text: "Vypočítané z cenových dát", href: "/sk/methodology#source-labels" });
+    expect(ruleSourceNotes("sk", r, "macro-data", false).notes[0].text).toBe("Vypočítané z makro dát (FRED)");
+  });
+  it("insider rule with no purchase names the Form 4 check, the 90-day range and the ticker link, EN and SK", async () => {
+    const b = await base();
+    const r = { ...b, ticker: "NVDA", asOf: "2026-10-09", inputs: { ...b.inputs, fundamentals: { ...b.inputs.fundamentals, insiderOrInstitutionalAccumulation: false } } };
+    const en = ruleSourceNotes("en", r, "accumulation", false);
+    expect(en.replacesSources).toBe(true);
+    expect(en.notes[0].text).toContain("SEC Form 4: no open-market purchases in the last 90 days");
+    expect(en.notes[0].text).toContain("2026");
+    expect(en.notes[0].href).toBe("/en/insiders?ticker=NVDA");
+    const html = renderToStaticMarkup(<SourceNotes notes={en.notes} />);
+    expect(html).toContain('href="/en/insiders?ticker=NVDA"');
+    expect(html).not.toContain("No source yet");
+    const sk = ruleSourceNotes("sk", r, "accumulation", false);
+    expect(sk.notes[0].text).toContain("žiadne nákupy na voľnom trhu za posledných 90 dní");
+    expect(sk.notes[0].href).toBe("/sk/insiders?ticker=NVDA");
+  });
+  it("insider rule with a stored purchase keeps the Form 4 source and adds no 'none' note", async () => {
+    const r = withSources(await base(), { insiderOrInstitutionalBuying: "xbrl_override" }, { insiderOrInstitutionalBuying: [{ kind: "form4", href: "https://www.sec.gov/a.xml", publishedAt: "2026-09-22" }] });
+    expect(ruleSourceNotes("en", r, "accumulation", false).replacesSources).toBe(false);
+  });
+  it("model readings: single, checked against the quote, two sources, SEC data; EN and SK", async () => {
+    const note = async (field: string, rule: string, agreement: string, locale: "en" | "sk") => ruleSourceNotes(locale, { ...(await base()), agreement: { [field]: agreement } }, rule, false).notes.map((n) => n.text);
+    expect(await note("guidanceRaised", "earnings", "single", "en")).toEqual(["One reading (model), not confirmed by a second source"]);
+    expect(await note("productCatalyst", "catalyst", "verified_single", "en")).toEqual(["One reading (model) checked against the quote"]);
+    expect(await note("epsBeat", "earnings", "agree", "en")).toEqual(["Two independent sources agree"]);
+    expect(await note("revenueAccelerating", "revenue-acceleration", "xbrl_override", "en")).toEqual(["Computed from SEC data"]);
+    expect(await note("productCatalyst", "catalyst", "verified_single", "sk")).toEqual(["Jedno čítanie (model) overené voči citátu"]);
+    expect(await note("epsBeat", "earnings", "agree", "sk")).toEqual(["Dva nezávislé zdroje sa zhodujú"]);
+  });
+  it("unknown rows say what fills them and when, EN and SK; technical rows say computed", async () => {
+    const r = await base();
+    const en = ruleSourceNotes("en", r, "catalyst", true);
+    expect(en.replacesSources).toBe(true);
+    expect(en.notes[0].text).toContain("nightly review");
+    expect(en.notes[0].text).toContain("only for tickers with new filings, up to 6 per night");
+    expect(en.notes[0].text).toContain("Earnings-season filings refresh it");
+    expect(ruleSourceNotes("sk", r, "earnings", true).notes[0].text).toContain("najviac 6 za noc");
+    expect(ruleSourceNotes("en", r, "dip", true).notes[0].text).toContain("price and macro update");
+  });
+  it("agreement labels no longer say 'one source'", async () => {
+    const { getMessages } = await import("@/i18n");
+    for (const l of ["en", "sk"] as const) expect(JSON.stringify(getMessages(l).agreement)).not.toMatch(/one source|jeden zdroj/);
+    expect(getMessages("en").agreement.verified_single).toBe("one reading (model), checked against the quote");
   });
 });

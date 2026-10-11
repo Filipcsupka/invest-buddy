@@ -162,3 +162,41 @@ export function sourceSummary(locale: Locale, result: ScoreResult): string | nul
   const counts = KINDS.map((kind) => [kind, [...all.values()].filter((s) => s.kind === kind).length] as const).filter(([, n]) => n > 0);
   return counts.length ? `${m.summary}: ${counts.map(([kind, n]) => `${m.kinds[kind]} (${n})`).join(", ")}` : null;
 }
+
+/** One plain line under a rule row's sources: what the source is, optionally with a link. */
+export type SourceNote = { key: string; text: string; href: string | null; linkLabel: string | null };
+
+const READING_KEYS = { single: "readingSingle", verified_single: "readingChecked", agree: "readingTwo", xbrl_override: "readingSec" } as const;
+const isoDay = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+
+/**
+ * Honest label under a rule row. Computed rules say where the numbers come from, an insider flag without a purchase
+ * names the Form 4 check and its date range, model readings say how many readings back them, and unknown rows say
+ * what fills them and when. `replacesSources` means the stored source chips would only repeat or contradict the note.
+ */
+export function ruleSourceNotes(locale: Locale, result: ScoreResult, ruleId: string, unknown: boolean): { notes: SourceNote[]; replacesSources: boolean } {
+  const m = getMessages(locale).sources;
+  const methodology = { href: `/${locale}/methodology#source-labels`, linkLabel: m.methodology };
+  const spec = RULE_SPECS[ruleId];
+  const computed = ruleId === "rotation" ? m.computedPrices : ruleId === "macro-data" ? m.computedMacro : null;
+  if (unknown) return { notes: [{ key: "unknown", text: spec?.fixed ? m.unknownComputed : m.unknownReview, href: null, linkLabel: null }], replacesSources: true };
+  if (computed) return { notes: [{ key: "computed", text: computed, ...methodology }], replacesSources: true };
+  const notes: SourceNote[] = [];
+  let replacesSources = false;
+  if (ruleId === "accumulation" && result.inputs.fundamentals.insiderOrInstitutionalAccumulation === false && !itemsFor(result, spec).some((s) => s.kind === "form4" && (s.href || s.publishedAt))) {
+    const end = Date.parse(`${result.asOf.slice(0, 10)}T00:00:00Z`);
+    const range = Number.isNaN(end) ? { from: "", to: "" } : { from: isoDay(end - 90 * 86_400_000), to: isoDay(end) };
+    const ticker = result.ticker;
+    notes.push({ key: "insider-none", text: fill(m.insiderNone, { from: range.from ? formatDate(locale, range.from) : "", to: range.to ? formatDate(locale, range.to) : "" }), href: `/${locale}/insiders?ticker=${encodeURIComponent(ticker)}`, linkLabel: fill(m.insiderLink, { ticker }) });
+    replacesSources = true;
+  }
+  const seen = new Set<string>();
+  for (const [field, known] of spec?.fields ?? []) {
+    const agreement = result.agreement?.[field];
+    if (!known(result) || !agreement || !(agreement in READING_KEYS) || seen.has(agreement)) continue;
+    if (replacesSources && field === "insiderOrInstitutionalBuying") continue;
+    seen.add(agreement);
+    notes.push({ key: `reading-${agreement}`, text: m[READING_KEYS[agreement as keyof typeof READING_KEYS]], href: null, linkLabel: null });
+  }
+  return { notes, replacesSources };
+}

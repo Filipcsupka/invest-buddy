@@ -15,8 +15,8 @@ import { OperatorDisclosure } from "@/components/operator-disclosure";
 import { StatusPanel } from "@/components/status-slider";
 import { statusView } from "@/engine/status";
 import { ScoreMark } from "@/components/score-mark";
-import { SourceList } from "@/components/source-list";
-import { inputSources, ruleSources, sourceSummary } from "@/components/view-model";
+import { SourceList, SourceNotes } from "@/components/source-list";
+import { inputSources, ruleSourceNotes, ruleSources, sourceSummary } from "@/components/view-model";
 import { companyIdea, companyReview } from "@/data/ideas-store";
 import { instrumentUniverse, latestPortfolio, latestScores } from "@/data/store";
 import { DataStatus } from "@/components/data-status";
@@ -231,7 +231,10 @@ async function Company({ params }: Params) {
                             <span className="rule-name">{m.rules[rule.id]}</span>
                           </span>
                           {hit ? <span className="rule-def num">{ruleDetail(locale, hit, result)}</span> : null}
-                          {hit ? <span className="rule-def rule-src"><SourceList locale={locale} items={ruleSources(locale, result, rule.id)} emptyNote={rule.id === "catalyst"} /></span> : null}
+                          {hit ? <span className="rule-def rule-src">{(() => {
+                            const { notes, replacesSources } = ruleSourceNotes(locale, result, rule.id, unknown);
+                            return <>{replacesSources ? null : <SourceList locale={locale} items={ruleSources(locale, result, rule.id)} />}{replacesSources || !notes.length ? null : " "}<SourceNotes notes={notes} /></>;
+                          })()}</span> : null}
                         </th>
                         <td className="num rule-points">{met ? `+${rule.points}` : unknown ? m.status.noData : "0"}</td>
                       </tr>
