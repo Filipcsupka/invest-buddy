@@ -1,0 +1,23 @@
+{
+  "themes": [
+    {"id":"ai_compute","name":"AI compute, semiconductors, networking and optics","segments":["chips","networking","optics"],"searchHints":["AI accelerator orders","semiconductor interconnect","optical networking"]},
+    {"id":"datacenter_power","name":"Datacenter power, cooling and electrical infrastructure","segments":["power","cooling","electrical infrastructure"],"searchHints":["datacenter power contract","liquid cooling order"]},
+    {"id":"cloud_data","name":"Cloud, software and data","segments":["cloud","software","data platforms"],"searchHints":["cloud revenue acceleration","enterprise software contract"]},
+    {"id":"cyber","name":"Cybersecurity and AI agent security","segments":["cybersecurity","agent security"],"searchHints":["security platform launch","AI agent security contract"]},
+    {"id":"robotics","name":"Robotics, physical AI and industrial automation","segments":["robot OEMs","industrial automation","machine vision and sensors","actuators and motion control","simulation and software","edge compute and chips","enabling suppliers"],"searchHints":["robotics production contract","industrial automation backlog","machine vision supplier"]},
+    {"id":"autonomy","name":"Drones and autonomous systems","segments":["drones","autonomous vehicles","autonomous systems"],"searchHints":["autonomous system contract","drone procurement"]},
+    {"id":"biotech_medtech","name":"Biotech, genomics and medical technology","segments":["biotech","genomics","medical technology","FDA and clinical milestones"],"searchHints":["FDA approval","clinical trial milestone","medical device clearance"]},
+    {"id":"fintech","name":"Fintech and payments","segments":["payments","financial software"],"searchHints":["payments growth","fintech platform launch"]},
+    {"id":"energy_grid","name":"Energy, grid, storage and nuclear","segments":["energy","grid","storage","nuclear"],"searchHints":["grid equipment contract","battery storage order","nuclear supply chain"]},
+    {"id":"space","name":"Satellites and launch","segments":["satellites","launch"],"searchHints":["satellite contract","launch backlog"]},
+    {"id":"defense_tech","name":"Defense technology","segments":["defense software","defense hardware"],"searchHints":["defense award notice","military technology contract"]},
+    {"id":"advanced_manufacturing","name":"Advanced manufacturing and materials","segments":["manufacturing","materials"],"searchHints":["advanced manufacturing capacity","materials supply agreement"]},
+    {"id":"new_themes","name":"Other secular themes","segments":["emerging value chains"],"searchHints":["new secular demand shift","industry economics change"]}
+  ],
+  "weeklyGroups": [
+    {"id":"ai_infrastructure","themes":["ai_compute","datacenter_power","cloud_data","cyber"]},
+    {"id":"robotics","themes":["robotics"]},
+    {"id":"other","themes":["autonomy","biotech_medtech","fintech","energy_grid","space","defense_tech","advanced_manufacturing","new_themes"]}
+  ],
+  "discoverySignals": ["earnings surprises and guidance changes","accelerating revenue, ARR, orders, backlog or free cash flow","reliable estimate revisions","major contracts","product and platform launches","regulatory, FDA and clinical milestones","capex cycles","M&A","insider and company capital allocation","technology shifts","unusual price and volume moves with a fundamental cause","changing industry economics"]
+}
