@@ -1,0 +1,195 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "research output: run metadata written by the runner, findings written by the model. Facts only: no points, ratings, actions or amounts (docs/research-engine.md)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "run", "output"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "run": { "$ref": "#/$defs/run" },
+    "output": { "$ref": "#/$defs/modelOutput" }
+  },
+  "$defs": {
+    "symbol": { "type": "string", "pattern": "^[A-Z0-9][A-Z0-9.-]{0,11}$" },
+    "httpsUrl": { "type": "string", "pattern": "^https://[^\\s]+$", "maxLength": 500 },
+    "date": { "type": "string", "format": "date" },
+    "nullableDate": { "type": ["string", "null"], "format": "date" },
+    "themeId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{1,39}$" },
+    "findingId": { "type": "string", "pattern": "^f[0-9]{1,3}$" },
+    "count": { "type": ["integer", "null"], "minimum": 0 },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runId", "runType", "asOf", "generatedAt", "promptVersion", "adapter", "scope", "limits", "usage", "status", "stopReason"],
+      "properties": {
+        "runId": { "type": "string", "format": "uuid" },
+        "runType": { "type": "string", "enum": ["weekly_discovery", "daily_watch", "deep_dive"] },
+        "asOf": { "$ref": "#/$defs/date" },
+        "generatedAt": { "type": "string", "format": "date-time" },
+        "promptVersion": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "adapter": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "model", "authSource"],
+          "properties": {
+            "name": { "type": "string", "enum": ["claude", "codex"] },
+            "model": { "type": "string", "minLength": 1, "maxLength": 60 },
+            "authSource": { "type": "string", "enum": ["subscription", "api", "codex"] }
+          }
+        },
+        "scope": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["themes", "symbols", "deepDiveSymbol"],
+          "properties": {
+            "themes": { "type": "array", "maxItems": 40, "items": { "$ref": "#/$defs/themeId" } },
+            "symbols": { "type": "array", "maxItems": 300, "items": { "$ref": "#/$defs/symbol" } },
+            "deepDiveSymbol": { "type": ["string", "null"], "pattern": "^[A-Z0-9][A-Z0-9.-]{0,11}$" }
+          }
+        },
+        "limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["maxTurns", "maxSearches", "maxFetches", "maxFindings", "timeoutS"],
+          "properties": {
+            "maxTurns": { "type": "integer", "minimum": 1, "maximum": 60 },
+            "maxSearches": { "type": "integer", "minimum": 0, "maximum": 100 },
+            "maxFetches": { "type": "integer", "minimum": 0, "maximum": 200 },
+            "maxFindings": { "type": "integer", "minimum": 1, "maximum": 60 },
+            "timeoutS": { "type": "integer", "minimum": 30, "maximum": 3600 }
+          }
+        },
+        "usage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["inputTokens", "outputTokens", "cacheReadTokens", "cacheCreationTokens", "webSearches", "webFetches", "costUsd", "durationS"],
+          "properties": {
+            "inputTokens": { "$ref": "#/$defs/count" },
+            "outputTokens": { "$ref": "#/$defs/count" },
+            "cacheReadTokens": { "$ref": "#/$defs/count" },
+            "cacheCreationTokens": { "$ref": "#/$defs/count" },
+            "webSearches": { "$ref": "#/$defs/count" },
+            "webFetches": { "$ref": "#/$defs/count" },
+            "costUsd": { "type": ["number", "null"], "minimum": 0 },
+            "durationS": { "type": ["number", "null"], "minimum": 0 }
+          }
+        },
+        "status": { "type": "string", "enum": ["ok", "partial", "cutoff", "failed"] },
+        "stopReason": { "type": ["string", "null"], "maxLength": 200 }
+      }
+    },
+    "modelOutput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["findings", "candidates", "chains", "notes"],
+      "properties": {
+        "findings": { "type": "array", "maxItems": 60, "items": { "$ref": "#/$defs/finding" } },
+        "candidates": { "type": "array", "maxItems": 20, "items": { "$ref": "#/$defs/candidate" } },
+        "chains": { "type": "array", "maxItems": 10, "items": { "$ref": "#/$defs/chain" } },
+        "notes": { "type": ["string", "null"], "maxLength": 600 }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "symbol", "companyName", "exchange", "kind", "field", "polarity", "claim", "eventDate", "themes", "evidence", "figures", "confidence", "lead"],
+      "properties": {
+        "id": { "$ref": "#/$defs/findingId" },
+        "symbol": { "$ref": "#/$defs/symbol" },
+        "companyName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "exchange": { "type": ["string", "null"], "maxLength": 20 },
+        "kind": { "type": "string", "enum": ["earnings", "guidance", "contract", "regulatory", "clinical", "product", "partnership", "capex", "m_and_a", "capital_allocation", "insider", "narrative", "supply_chain", "unusual_move", "risk"] },
+        "field": { "type": ["string", "null"], "enum": ["productCatalyst", "guidanceRaised", "guidanceCut", "narrativeChanged", null] },
+        "polarity": { "type": "string", "enum": ["positive", "negative", "neutral"] },
+        "claim": { "type": "string", "minLength": 1, "maxLength": 240 },
+        "eventDate": { "$ref": "#/$defs/nullableDate" },
+        "themes": { "type": "array", "maxItems": 5, "items": { "$ref": "#/$defs/themeId" } },
+        "evidence": { "type": "array", "minItems": 1, "maxItems": 4, "items": { "$ref": "#/$defs/evidence" } },
+        "figures": { "type": "array", "maxItems": 5, "items": { "$ref": "#/$defs/figure" } },
+        "confidence": { "type": "string", "enum": ["high", "medium", "low"] },
+        "lead": { "type": "boolean" }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url", "quote", "publishedAt", "sourceName", "sourceClassHint"],
+      "properties": {
+        "url": { "$ref": "#/$defs/httpsUrl" },
+        "quote": { "type": "string", "minLength": 20, "maxLength": 500 },
+        "publishedAt": { "$ref": "#/$defs/nullableDate" },
+        "sourceName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "sourceClassHint": { "type": "string", "enum": ["primary", "press", "aggregator", "social"] }
+      }
+    },
+    "figure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label", "value", "evidenceIndex"],
+      "properties": {
+        "label": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "value": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "evidenceIndex": { "type": "integer", "minimum": 0, "maximum": 3 }
+      }
+    },
+    "cardLine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text", "findingIds"],
+      "properties": {
+        "text": { "type": "string", "minLength": 1, "maxLength": 300 },
+        "findingIds": { "type": "array", "minItems": 1, "maxItems": 4, "items": { "$ref": "#/$defs/findingId" } }
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["symbol", "companyName", "exchange", "themes", "thesis", "findingIds", "upgradeTriggers", "invalidation", "card"],
+      "properties": {
+        "symbol": { "$ref": "#/$defs/symbol" },
+        "companyName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "exchange": { "type": ["string", "null"], "maxLength": 20 },
+        "themes": { "type": "array", "maxItems": 5, "items": { "$ref": "#/$defs/themeId" } },
+        "thesis": { "type": "string", "minLength": 1, "maxLength": 300 },
+        "findingIds": { "type": "array", "minItems": 1, "maxItems": 8, "items": { "$ref": "#/$defs/findingId" } },
+        "upgradeTriggers": { "type": "array", "minItems": 1, "maxItems": 3, "items": { "type": "string", "minLength": 1, "maxLength": 200 } },
+        "invalidation": { "type": "array", "minItems": 1, "maxItems": 2, "items": { "type": "string", "minLength": 1, "maxLength": 200 } },
+        "card": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["verdict", "whatHappened", "whyItMatters", "opportunityCost"],
+          "properties": {
+            "verdict": { "type": "string", "minLength": 1, "maxLength": 200 },
+            "whatHappened": { "type": "array", "minItems": 2, "maxItems": 3, "items": { "$ref": "#/$defs/cardLine" } },
+            "whyItMatters": { "type": "array", "minItems": 1, "maxItems": 2, "items": { "$ref": "#/$defs/cardLine" } },
+            "opportunityCost": { "type": ["string", "null"], "maxLength": 300 }
+          }
+        }
+      }
+    },
+    "chain": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "development", "developmentFindingId", "spendingPool", "links"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^c[0-9]{1,2}$" },
+        "development": { "type": "string", "minLength": 1, "maxLength": 240 },
+        "developmentFindingId": { "$ref": "#/$defs/findingId" },
+        "spendingPool": { "type": "string", "minLength": 1, "maxLength": 240 },
+        "links": { "type": "array", "minItems": 1, "maxItems": 12, "items": { "$ref": "#/$defs/chainLink" } }
+      }
+    },
+    "chainLink": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["symbol", "companyName", "relation", "outcome", "findingIds"],
+      "properties": {
+        "symbol": { "$ref": "#/$defs/symbol" },
+        "companyName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "relation": { "type": "string", "enum": ["partner", "supplier", "customer", "infrastructure", "competitor", "indirect"] },
+        "outcome": { "type": "string", "enum": ["winner", "loser", "unclear"] },
+        "findingIds": { "type": "array", "minItems": 1, "maxItems": 4, "items": { "$ref": "#/$defs/findingId" } }
+      }
+    }
+  }
+}
