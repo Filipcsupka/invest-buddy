@@ -50,10 +50,11 @@ Updated 2026-10-11 evening. One table per state. A PR that finishes a task moves
 | RS2 | Source verifier `src/research/verify.ts` | worker running |
 | RS5 | Research CronJobs, caps and kill switch | PR in progress; schedules suspended |
 | RS4 | Judge integration and fact feed | PR open, local checks passed |
+| RS6 | Private research cards, materiality and owner page | PR open, targeted checks passed |
 
 ## Queued, in order
 
-1. RS1 researcher runner and prompts, RS3 tables and pipeline state machine, RS6 Telegram research cards, RS8 evaluation on the six old cards (after RS0 merges). RS7 Codex adapter and secret later.
+1. RS1 researcher runner and prompts, RS3 tables and pipeline state machine, RS8 evaluation on the six old cards (after RS0 merges). RS7 Codex adapter and secret later.
 2. Web: W5 page cache, W3 performance baseline, W21 OG images, W23 native Slovak review, W32 tier map, W35 CSV export.
 3. Engine: EN4, EN5, EN28.
 4. Data: D36 roll out 150 names (after D35 criteria), D26 FX, D28 EPS history, D13 corporate actions.
@@ -63,6 +64,7 @@ Updated 2026-10-11 evening. One table per state. A PR that finishes a task moves
 ## Waiting on the owner
 
 - `TELEGRAM_CARD_MODE=owner` for the private channel (action word and EUR band).
+- A private research page password (`OWNER_RESEARCH_PASSWORD`) alongside `OWNER_VIEW=on`; the page challenges the owner before showing facts.
 - Weekly summary CronJob: un-suspend after the format is approved.
 - Research runner: Claude first, OpenAI token later through a sealed secret; Anthropic terms for unattended runs on a subscription token to be decided before any schedule.
 - GDELT daily collect (infra CronJob suspended).

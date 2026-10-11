@@ -7,6 +7,7 @@ import { rateLimit, rateLimitRetryAfter } from "@/security/rate-limit";
 import { writeHttpLog } from "@/app/api/ingest/request-log";
 import { resolveRequestId } from "@/app/request-id";
 import { statusPage } from "@/app/status-page";
+import { ownerResearchAuthorized } from "@/app/[locale]/owner/research/auth";
 
 /** Resolve unavailable pages before a streamed layout can commit a 200 response. */
 export async function proxy(request: NextRequest) {
@@ -20,13 +21,19 @@ export async function proxy(request: NextRequest) {
   incoming.set("x-request-start-ms", String(Date.now()));
   const [, locale, section, ticker] = request.nextUrl.pathname.split("/");
   const featureFlags = flags();
+  if (section === "owner" && ticker === "research" && featureFlags.OWNER_VIEW &&
+    !ownerResearchAuthorized(request.headers.get("authorization"), process.env.OWNER_RESEARCH_PASSWORD)) {
+    return new NextResponse("Authentication required", { status: 401, headers: { "WWW-Authenticate": 'Basic realm="Research"', "Cache-Control": "no-store" } });
+  }
   const unavailable = (section === "scanner" && !featureFlags.PAYWALL)
     || (section === "sizing" && !featureFlags.ADVICE_OUTPUT)
     || (section === "ideas" && (!ideasEnabled() || !featureFlags.ADVICE_OUTPUT))
     || (section === "owner-allocation" && !ownerViewEnabled())
+    || (section === "owner" && ticker === "research" && !featureFlags.OWNER_VIEW)
     || (section === "company" && (!ticker || !(await instrumentUniverse()).some((item) => item.ticker === ticker.toUpperCase())));
   if (!unavailable) {
     const response = NextResponse.next({ request: { headers: incoming } });
+    if (section === "owner" && ticker === "research") response.headers.set("Cache-Control", "private, no-store");
     response.headers.set("x-request-id", requestId);
     response.headers.set("server-timing", `rid;desc="${requestId}"`);
     return response;
