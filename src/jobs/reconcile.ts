@@ -3,7 +3,7 @@ import pg from "pg";
 import { liveVerifier, offVerifier, fixtureVerifier, type EvidenceRef, type EvidenceVerifier } from "../data/evidence";
 import { pgDocumentLookup, storedFirstVerifier, storedOnlyVerifier } from "../data/stored-evidence";
 import { epsBeatMinSurprisePct, type EpsResult } from "../data/eps";
-import { secRevenue, type RevenueResult } from "../data/sec";
+import { secRevenue, revenueLookup, type RevenueResult } from "../data/sec";
 import { requireSecUserAgent } from "../collectors/sec-user-agent";
 import { carryField, carryForwardEnabled, type CarriedField, type ConsensusRow } from "../data/carry-forward";
 import { isIsoDate } from "../db/iso-date";
@@ -158,7 +158,8 @@ async function main() {
     if (!["live","off","fixture"].includes(mode)) throw new Error("Invalid RECONCILE_VERIFY");
     guardReconcileUserAgent(mode, process.env);
     const verifier = selectVerifier(mode, pool);
-    const secLookup = mode === "live" ? secRevenue : async () => null;
+    // Stored SEC facts (fundamentals_pit) first; the live SEC fetch only in live mode and only when the store has no answer.
+    const secLookup = revenueLookup(pool, mode === "live" ? secRevenue : undefined);
     // A single extractor's finding is checked only against stored, display-allowed text, and only in live mode.
     const storedVerify = mode === "live" ? storedOnlyVerifier(pgDocumentLookup(pool)) : undefined;
     const count = await runReconcile(pool,asOf,verifier,secLookup,undefined,{ storedVerify });
