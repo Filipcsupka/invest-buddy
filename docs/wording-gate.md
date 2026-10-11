@@ -118,3 +118,7 @@ Each row quotes one current dictionary string containing buy, add, start, reduce
 | `sk.ownerAllocation.reasons.RESERVE_LIMIT` | Owner | Novú pozíciu obmedzila rezerva na prikúpenie. |
 | `sk.ownerAllocation.reasons.ADD_ALREADY_THIS_MONTH` | Owner | Pri tomto tickeri už bolo v mesiaci zaznamenané prikúpenie. |
 | `sk.ownerAllocation.reasons.ADD_HISTORY_UNKNOWN` | Owner | Chýba história vykonaných prikúpení; pred pridelením sumy ju treba potvrdiť. |
+
+## Status label (ST1)
+
+`status.advice.setup` ("Buy zone", "Zóna nákupu") and `status.headlineAdvice.setup` are used only when `ADVICE_OUTPUT` is on. With the flag off the green state reads "Conditions met" / "Podmienky splnené".
