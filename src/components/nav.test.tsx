@@ -20,5 +20,5 @@ it.each(["en", "sk"])("keeps the shared footer free of fixture labels in db mode
   process.env.DATA_MODE = "db";
   scores.mockResolvedValue({ rows: [], sample: false, lastUpdated: null, stale: false });
   const html = renderToStaticMarkup(await Footer({ locale: locale as "en" | "sk" }));
-  expect(html).not.toMatch(/SAMPLE DATA|UKÁŽKOVÉ DÁTA|sample data|ukážkových údajoch/i);
+  expect(html).not.toMatch(/SAMPLE DATA|UKÁŽKOVÉ ÚDAJE|sample data|ukážkových údajoch/i);
 });

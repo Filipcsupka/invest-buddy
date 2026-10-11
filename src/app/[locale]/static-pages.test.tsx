@@ -13,7 +13,7 @@ it.each(["en", "sk"])("renders informational pages without sample stamps in db m
   try {
     for (const page of [Methodology, Sizing, Privacy, Terms]) {
       const html = renderToStaticMarkup(await page(props(locale)));
-      expect(html).not.toMatch(/SAMPLE DATA|UKÁŽKOVÉ DÁTA|synthetic|sample data|syntetick|ukážkov/i);
+      expect(html).not.toMatch(/SAMPLE DATA|UKÁŽKOVÉ ÚDAJE|synthetic|sample data|syntetick|ukážkov/i);
     }
   } finally { process.env.DATA_MODE = original; }
 });

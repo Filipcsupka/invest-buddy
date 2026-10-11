@@ -33,6 +33,23 @@ describe("dictionaries", () => {
     for (const [key, value] of en) expect(placeholders(sk.get(key) ?? ""), key).toEqual(placeholders(value));
   });
 
+  it("has no English fallback in the Slovak dictionary", () => {
+    // Slovak values equal to English only for names, codes and loanwords listed here.
+    const same = new Set(["meta.siteName", "meta.companyTitle", "sources.kinds.form4", "sources.kinds.vix", "sectors.Fintech", "table.ticker", "trackRecord.ticker", "insiders.ticker", "insiders.insider", "ownerAllocation.symbol", "portfolio.symbol", "ideas.headline", "ideas.headlinePublic", "ideas.headlineTier", "ideas.model"]);
+    for (const [key, value] of sk) if (value === en.get(key) && /[A-Za-z]{4,}/.test(value)) expect(same.has(key), `${key} is still English: ${value}`).toBe(true);
+    const stopwords = /\b(the|and|with|from|this|that|your|you|are|not|for)\b/i;
+    for (const [key, value] of sk) expect(stopwords.test(value.replace(/\{\w+\}/g, "")), `${key}: ${value}`).toBe(false);
+  });
+
+  it("uses one Slovak term per concept", () => {
+    const outdated = /\b(dáta|dát|dátach|dátový|benchmark|Nastavenie splnené|Porušené kritériá|titul)\b/i;
+    for (const [key, value] of sk) expect(outdated.test(value), `${key}: ${value}`).toBe(false);
+  });
+
+  it("names each rule state the same way everywhere", () => {
+    for (const m of [messages.en, messages.sk]) for (const key of ["broken", "ignore", "wait", "watch", "setup", "insufficient"] as const) expect(m.states[key]).toBe(m.status.labels[key]);
+  });
+
   it("keep dashes and stock filler words out of copy", () => {
     for (const [key, value] of [...en, ...sk]) expect(banned.test(value), `${key}: ${value}`).toBe(false);
   });

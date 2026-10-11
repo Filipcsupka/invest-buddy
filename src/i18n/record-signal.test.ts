@@ -6,7 +6,7 @@ afterEach(() => { if (originalAdvice === undefined) delete process.env.ADVICE_OU
 
 it("localizes score and judge record codes", () => {
   process.env.ADVICE_OUTPUT = "on";
-  expect(recordSignalLabel("sk", { tier: "BROKEN", state: "Criteria broken" })).toBe("Porušené kritériá");
+  expect(recordSignalLabel("sk", { tier: "BROKEN", state: "Criteria broken" })).toBe("Kritériá porušené");
   expect(recordSignalLabel("sk", { tier: "ADD_THIRD", state: "ADD" })).toBe("Prikúpiť 1/3");
   expect(recordSignalLabel("en", { tier: "SETUP", state: "Setup met (>=18)" })).toBe("Setup · Setup met ≥18");
 });
