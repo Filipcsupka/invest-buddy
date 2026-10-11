@@ -21,6 +21,6 @@ export function recordSignalLabel(locale: Locale, signal: { tier: string; state:
     ?? m.ideas.actions[signal.state as keyof typeof m.ideas.actions]
     ?? signal.state;
   // These tiers already say what the state says ("Add 1/3" for ADD, "Criteria broken" for the broken state); do not repeat it.
-  const repeats = (signal.tier === "BROKEN" && signal.state === "Criteria broken") || (signal.tier.startsWith("ADD_") && signal.state === "ADD");
+  const repeats = (signal.tier === "BROKEN" && signal.state === "Criteria broken") || (signal.tier === "SETUP" && signal.state === "Setup met (>=18)") || (signal.tier.startsWith("ADD_") && signal.state === "ADD");
   return repeats ? tier : `${tier} · ${state}`;
 }

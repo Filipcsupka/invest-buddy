@@ -35,7 +35,7 @@ describe("dictionaries", () => {
 
   it("has no English fallback in the Slovak dictionary", () => {
     // Slovak values equal to English only for names, codes and loanwords listed here.
-    const same = new Set(["meta.siteName", "meta.companyTitle", "sources.kinds.form4", "sources.kinds.vix", "sectors.Fintech", "table.ticker", "trackRecord.ticker", "insiders.ticker", "insiders.insider", "ownerAllocation.symbol", "portfolio.symbol", "ideas.headline", "ideas.headlinePublic", "ideas.headlineTier", "ideas.model"]);
+    const same = new Set(["meta.siteName", "meta.companyTitle", "sources.kinds.form4", "sources.kinds.vix", "sectors.Fintech", "table.ticker", "trackRecord.ticker", "insiders.ticker", "insiders.insider", "ownerAllocation.symbol", "portfolio.symbol", "ideas.headline", "ideas.headlinePublic", "ideas.headlineTier", "ideas.model", "plurals.tickers.one"]);
     for (const [key, value] of sk) if (value === en.get(key) && /[A-Za-z]{4,}/.test(value)) expect(same.has(key), `${key} is still English: ${value}`).toBe(true);
     const stopwords = /\b(the|and|with|from|this|that|your|you|are|not|for)\b/i;
     for (const [key, value] of sk) expect(stopwords.test(value.replace(/\{\w+\}/g, "")), `${key}: ${value}`).toBe(false);
