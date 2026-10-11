@@ -176,6 +176,7 @@ export interface IdeaCardInput {
   /** ADVICE_OUTPUT. Off in public mode: the card shows no model text, ratings or plan (docs/wording-gate.md). */
   adviceOutput: boolean;
   site: string;
+  research?: { coverage: string; history: string; unconfirmed?: boolean; ownerPath?: string; evidence?: { url: string; label: string }[] };
 }
 
 interface CardText {
@@ -216,6 +217,7 @@ function localizedBody(idea: StoredIdea, locale: AlertLocale): CardBody {
 }
 
 const ACTION_CODE = /\b(?:START_POSITION|HIGH_CONVICTION_ADD|ADD|REDUCE|THESIS_BROKEN)\b/;
+const PUBLIC_RESEARCH_BANNED = /\b(?:EUR|buy|sell|hold|add|reduce|target|rating|recommend|outperform|underperform|start.position|high.conviction|add.ready|start.ready|thesis.broken)\b|€/i;
 const bullet = (value: string) => `• ${escapeHtml(value)}`;
 const field = (label: string, value: string) => `<b>${escapeHtml(label)}:</b> ${escapeHtml(value)}`;
 
@@ -288,12 +290,21 @@ export function formatIdeaCard(input: IdeaCardInput): string {
   const method = `${site}/${locale}/methodology`;
   const links = `<a href="${escapeHtml(company)}">${escapeHtml(text.open(input.ticker))}</a> · <a href="${escapeHtml(method)}">${escapeHtml(text.methodology)}</a>`;
   const evidence = body.evidence.filter((e) => keep(e.label)).map((e) => `• <a href="${escapeHtml(e.url)}">${escapeHtml(e.label)}</a>`);
+  if (input.research?.evidence) for (const item of input.research.evidence) {
+    if (/^https:\/\//.test(item.url) && (owner || !PUBLIC_RESEARCH_BANNED.test(item.label))) evidence.push(`• <a href="${escapeHtml(item.url)}">${escapeHtml(item.label)}</a>`);
+  }
+  let researchLines = input.research && owner ? [
+    escapeHtml(input.research.coverage), escapeHtml(input.research.history),
+    ...(input.research.unconfirmed ? [locale === "sk" ? "NEPOTVRDENÉ" : "UNCONFIRMED"] : []),
+  ] : [];
+  const ownerLink = owner && input.research?.ownerPath ? ` · <a href="${escapeHtml(`${site}/${locale}${input.research.ownerPath}`)}">${locale === "sk" ? "Stránka vlastníka" : "Owner page"}</a>` : "";
 
   const render = (parts: Section[], evidenceLines: string[]): string => [
     ...head, change, score,
     ...parts.sort((a, b) => b.priority - a.priority).flatMap((s) => ["", ...s.lines]),
     ...(evidenceLines.length ? ["", `<b>${escapeHtml(card.evidence)}</b>`, ...evidenceLines] : []),
-    "", links, escapeHtml(text.disclaimer),
+    ...(researchLines.length ? ["", ...researchLines] : []),
+    "", links + ownerLink, escapeHtml(text.disclaimer),
   ].join("\n");
 
   let parts = sections;
@@ -306,6 +317,10 @@ export function formatIdeaCard(input: IdeaCardInput): string {
   }
   while (out.length > TELEGRAM_LIMIT && evidenceLines.length) {
     evidenceLines = evidenceLines.slice(0, -1);
+    out = render(parts, evidenceLines);
+  }
+  while (out.length > TELEGRAM_LIMIT && researchLines.length) {
+    researchLines = researchLines.slice(0, -1);
     out = render(parts, evidenceLines);
   }
   return out;
