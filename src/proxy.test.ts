@@ -49,6 +49,17 @@ it.each(["en", "sk"])("opens the %s scanner only with PAYWALL on", async (locale
   expect(response.headers.get("x-request-id")).toBeTruthy();
 });
 
+it("passes api requests through and limits a caller over the cap", async () => {
+  process.env.RATE_LIMIT_API_PER_MIN = "1";
+  const { resetRateLimits } = await import("@/security/rate-limit");
+  resetRateLimits();
+  const call = () => proxy(new NextRequest("https://example.com/api/other", { headers: { "x-forwarded-for": "2.2.2.2" } }));
+  expect((await call()).status).toBe(200);
+  expect((await call()).status).toBe(429);
+  delete process.env.RATE_LIMIT_API_PER_MIN;
+  resetRateLimits();
+});
+
 it("shows the SK title and the request id on the /sk/scanner 404, and keeps a valid incoming id", async () => {
   delete process.env.PAYWALL;
   const response = await proxy(new NextRequest("https://example.com/sk/scanner", { headers: { "x-request-id": "abc-12345678" } }));
@@ -63,4 +74,20 @@ it("replaces a malformed incoming id", async () => {
   process.env.PAYWALL = "on";
   const response = await proxy(new NextRequest("https://example.com/en/scanner", { headers: { "x-request-id": "bad id<script>" } }));
   expect(response.headers.get("x-request-id")).toMatch(/^[0-9a-f-]{36}$/);
+});
+
+it.each([["en", "Too many requests"], ["sk", "Príliš veľa"]])("renders the %s 429 page with request id and Retry-After", async (locale) => {
+  process.env.RATE_LIMIT_PAGES_PER_MIN = "1";
+  const { resetRateLimits } = await import("@/security/rate-limit");
+  resetRateLimits();
+  const call = () => proxy(new NextRequest(`https://example.com/${locale}/dashboard`, { headers: { "x-forwarded-for": "3.3.3.3", "x-request-id": "rl-12345678" } }));
+  expect((await call()).status).toBe(200);
+  const limited = await call();
+  expect(limited.status).toBe(429);
+  expect(limited.headers.get("content-type")).toContain("text/html");
+  expect(Number(limited.headers.get("retry-after"))).toBeGreaterThan(0);
+  expect(limited.headers.get("x-request-id")).toBe("rl-12345678");
+  expect(await limited.text()).toContain("rl-12345678");
+  delete process.env.RATE_LIMIT_PAGES_PER_MIN;
+  resetRateLimits();
 });

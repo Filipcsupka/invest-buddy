@@ -3,14 +3,18 @@ import { instrumentUniverse } from "@/data/store";
 import { ideasEnabled } from "@/data/ideas-store";
 import { ownerViewEnabled } from "@/data/owner-allocation";
 import { flags } from "@/config/flags";
+import { rateLimit, rateLimitRetryAfter } from "@/security/rate-limit";
 import { writeHttpLog } from "@/app/api/ingest/request-log";
 import { resolveRequestId } from "@/app/request-id";
 import { statusPage } from "@/app/status-page";
 
 /** Resolve unavailable pages before a streamed layout can commit a 200 response. */
 export async function proxy(request: NextRequest) {
+  if (request.nextUrl.pathname.startsWith("/api/")) return (rateLimit(request) as NextResponse | undefined) ?? NextResponse.next();
   const start = performance.now();
   const requestId = resolveRequestId(request.headers);
+  const retryAfter = rateLimitRetryAfter(request);
+  if (retryAfter !== undefined) return statusPage("rateLimited", 429, request.nextUrl.pathname.split("/")[1] === "sk" ? "sk" : "en", requestId, retryAfter);
   const incoming = new Headers(request.headers);
   incoming.set("x-request-id", requestId);
   incoming.set("x-request-start-ms", String(Date.now()));
@@ -32,4 +36,4 @@ export async function proxy(request: NextRequest) {
   return response;
 }
 
-export const config = { matcher: ["/", "/(en|sk)/:path*"] };
+export const config = { matcher: ["/", "/(en|sk)/:path*", "/api/:path*"] };
