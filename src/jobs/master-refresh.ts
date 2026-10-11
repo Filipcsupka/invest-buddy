@@ -1,13 +1,13 @@
 import pg from "pg";
-import { getText } from "../src/collectors/http";
-import { requireSecUserAgent } from "../src/collectors/sec-user-agent";
-import { refreshMaster } from "../src/data/master-refresh";
-import { runLoggedJob } from "../src/jobs/job-log";
+import { getText } from "../collectors/http";
+import { requireSecUserAgent } from "../collectors/sec-user-agent";
+import { refreshMaster } from "../data/master-refresh";
+import { runLoggedJob } from "./job-log";
 
-/** Weekly refresh of the security master from SEC (company_tickers.json and submissions). Usage: tsx scripts/master-refresh.ts [--dry-run] */
+/** Weekly refresh of the security master from SEC (company_tickers.json and submissions). Usage: tsx src/jobs/master-refresh.ts [--dry-run] */
 async function main() {
   const args = process.argv.slice(2);
-  if (args.some((arg) => arg !== "--dry-run")) throw new Error("Usage: tsx scripts/master-refresh.ts [--dry-run]");
+  if (args.some((arg) => arg !== "--dry-run")) throw new Error("Usage: tsx src/jobs/master-refresh.ts [--dry-run]");
   if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required");
   requireSecUserAgent(process.env.SEC_USER_AGENT);
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });

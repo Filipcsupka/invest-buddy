@@ -23,6 +23,17 @@ describe("daily pipeline order", () => {
     expect(job("holder-events")).toContain("suspend: true");
     expect(job("holder-events")).toContain('args: ["--source", "getcurrent"]');
   });
+  it("keeps the weekly master refresh suspended, on Sunday, outside the nightly chain", () => {
+    const doc = job("master-refresh");
+    expect(minutes("master-refresh").days).toBe("0");
+    expect(doc).toContain("suspend: true");
+    expect(doc).toContain('command: ["node", "dist/jobs/master-refresh.js"]');
+    expect(doc).toContain("name: DATABASE_URL");
+    expect(doc).toContain("name: SEC_USER_AGENT");
+    expect(doc).toContain("activeDeadlineSeconds:");
+    for (const text of ["runAsNonRoot: true", "automountServiceAccountToken: false", "allowPrivilegeEscalation: false", "readOnlyRootFilesystem: true", 'drop: ["ALL"]', "type: RuntimeDefault", "concurrencyPolicy: Forbid"]) expect(doc).toContain(text);
+    expect(readFileSync(join(base, "kustomization.yaml"), "utf8")).toContain("- master-refresh-cronjob.yaml");
+  });
   const chain = ["prices", "collect", "detect", "extract", "macro", "reconcile", "daily", "judge"];
   it("uses the night schedule in Bratislava", () => {
     const expected = ["00:30", "01:00", "01:35", "01:50", "04:00", "04:10", "04:25", "05:30"];
