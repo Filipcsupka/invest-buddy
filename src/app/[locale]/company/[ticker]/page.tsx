@@ -156,45 +156,6 @@ async function Company({ params }: Params) {
         <ScoreMark size="lg" state={state} matched={scored ? result.ruleHits.filter((hit) => hit.matched).map((hit) => hit.id) : null} unknown={scored ? view.coverage.unknownRules : undefined} groupLabels={groupLabels(locale, result).map((group, index) => ({ ...group, note: groupNoData(ruleGroups[index]) ? fill(m.status.groupNoData, { n: groupNoData(ruleGroups[index]) }) : undefined }))} label={scored ? fill(m.mark.label, { total: result.total, fundamentals: result.fundamentals, technical: result.technical, macro: result.macro }) + (view.coverage.unknownRules.length ? `. ${fill(m.status.markNoData, { n: 25 - view.coverage.pointsKnown })}` : "") : m.mark.none} />
       </div>
 
-      {ideaRow && (
-        <section className="sheet-section" aria-labelledby="idea">
-          <div className="section-head">
-            <h2 id="idea">{adviceOutput ? m.company.ideaTitle : m.ideas.evidence}</h2>
-            {adviceOutput && <p className="muted small">{m.company.ideaNote}</p>}
-          </div>
-          <PaywallSegment id="idea-card"><IdeaCard idea={ideaRow.idea} locale={locale} showAmounts={false} stateLabel={m.states[state]} nested /></PaywallSegment>
-        </section>
-      )}
-      {!ideaRow && (
-        <section className="sheet-section" aria-labelledby="idea">
-          <div className="section-head">
-            <h2 id="idea">{m.company.ideaTitle}</h2>
-          </div>
-          <p className="muted">{m.company.noIdea}</p>
-        </section>
-      )}
-
-      <section className="sheet-section" aria-labelledby="chart">
-        <div className="section-head">
-          <h2 id="chart">{data.sample ? m.company.chartTitle : m.company.chartTitleLive}</h2>
-          {data.sample && <p className="muted small">{m.company.chartNote}</p>}
-        </div>
-        <Chart
-          animate
-          bars={result.inputs.bars}
-          locale={locale}
-          labels={{ name: instrument.ticker, aria: m.chart.label, close: m.chart.close, ma50: m.chart.ma50, ma200: m.chart.ma200, dip: m.chart.dip, last: m.chart.last }}
-        />
-      </section>
-
-      <section className="sheet-section" aria-labelledby="history">
-        <div className="section-head">
-          <h2 id="history">{m.company.history.title}</h2>
-          <p className="muted small">{m.company.history.note}</p>
-        </div>
-        <PaywallSegment id="score-history"><div><ScoreHistory ticker={instrument.ticker} rows={history} locale={locale} /></div></PaywallSegment>
-      </section>
-
       <div className="company-grid">
         <section className="sheet-section" aria-labelledby="rules">
           <div className="section-head">
@@ -279,6 +240,45 @@ async function Company({ params }: Params) {
           </section>
         </aside>
       </div>
+
+      {ideaRow && (
+        <section className="sheet-section" aria-labelledby="idea">
+          <div className="section-head">
+            <h2 id="idea">{adviceOutput ? m.company.ideaTitle : m.ideas.evidence}</h2>
+            {adviceOutput && <p className="muted small">{m.company.ideaNote}</p>}
+          </div>
+          <PaywallSegment id="idea-card"><IdeaCard idea={ideaRow.idea} locale={locale} showAmounts={false} stateLabel={m.states[state]} nested /></PaywallSegment>
+        </section>
+      )}
+      {!ideaRow && (
+        <section className="sheet-section" aria-labelledby="idea">
+          <div className="section-head">
+            <h2 id="idea">{m.company.ideaTitle}</h2>
+          </div>
+          <p className="muted">{m.company.noIdea}</p>
+        </section>
+      )}
+
+      <section className="sheet-section" aria-labelledby="chart">
+        <div className="section-head">
+          <h2 id="chart">{data.sample ? m.company.chartTitle : m.company.chartTitleLive}</h2>
+          {data.sample && <p className="muted small">{m.company.chartNote}</p>}
+        </div>
+        <Chart
+          animate
+          bars={result.inputs.bars}
+          locale={locale}
+          labels={{ name: instrument.ticker, aria: m.chart.label, close: m.chart.close, ma50: m.chart.ma50, ma200: m.chart.ma200, dip: m.chart.dip, last: m.chart.last }}
+        />
+      </section>
+
+      <section className="sheet-section" aria-labelledby="history">
+        <div className="section-head">
+          <h2 id="history">{m.company.history.title}</h2>
+          <p className="muted small">{m.company.history.note}</p>
+        </div>
+        <PaywallSegment id="score-history"><div><ScoreHistory ticker={instrument.ticker} rows={history} locale={locale} /></div></PaywallSegment>
+      </section>
     </div>
   );
 }

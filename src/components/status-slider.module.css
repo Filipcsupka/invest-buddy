@@ -39,7 +39,7 @@
 .methodLink:focus-visible, .ruleLink:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
 .points { display: grid; gap: var(--s1); justify-items: end; text-align: right; }
 .pointsLine { margin: 0; font-size: var(--t-sm); color: var(--ink-2); }
-.pointsNum { font-size: var(--t-h2); font-weight: 700; color: var(--ink); }
+.pointsNum { font-size: var(--t-h2); font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums lining-nums; }
 .pointsLine s { color: var(--ink-3); }
 .groups { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0 var(--s3); margin: 0; font-size: var(--t-xs); color: var(--ink-2); }
 .groups abbr { font-weight: 700; text-decoration: none; }
@@ -127,6 +127,9 @@
 .chip[data-confirm="no-data"] { border: 1px dashed var(--rule-strong); }
 
 @media (max-width: 40rem) {
+  .panel { gap: var(--s3); padding: var(--s4) 0 var(--s5); }
+  .label { font-size: 1.1875rem; }
+  .sub { gap: 0 var(--s2); }
   .row { grid-template-columns: minmax(0, 1fr); }
   .points, .groups { justify-items: start; justify-content: flex-start; text-align: left; }
   .stepLabel, .range { display: none; }
