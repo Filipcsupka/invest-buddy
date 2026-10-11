@@ -37,6 +37,8 @@ export interface ScoreResult {
   coverage?: number;
   /** evidencedMax is under 20, so the best state is Watch. */
   incompleteData?: boolean;
+  /** Input fields treated as no data because their source is planned (EN45). Absent when none. */
+  plannedFields?: string[];
   scanRunId?: string;
   scanRunIds?: Record<string, string>;
   agreement?: Record<string, string>;

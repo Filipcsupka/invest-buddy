@@ -3,13 +3,17 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { ruleGroups } from "../i18n/rules";
 import { absoluteBand, evidencedMaxOf, relativeScore } from "./relative";
+import { anyOf } from "./score";
 
 /**
  * EN45 replay: the old absolute rule and the new relative rule applied to stored score audits.
  * fixtures/replay-audits.json is a read-only export of the live score_results audits (2026-10-02 to 2026-10-09), reduced to ticker, date,
- * total, stored state and the ids of matched and unknown rules. The test prints the band counts per date, old against new, and pins them.
+ * total, stored state, the ids of matched and unknown rules, and the stored epsBeat and guidanceRaised inputs. The new rule also applies
+ * the three-valued earnings rule (rules version 2026-10-11.2): EPS beat or guidance raised is unknown when neither is true and one has no
+ * data. The accumulation rule of these older audits read insider data only, so its stored flags are kept as they are.
+ * The test prints the band counts per date, old against new, and pins them.
  */
-interface ReplayRow { ticker: string; asOf: string; total: number; state: string; matched: string[]; unknown: string[] }
+interface ReplayRow { ticker: string; asOf: string; total: number; state: string; matched: string[]; unknown: string[]; epsBeat: boolean | null; guidanceRaised: boolean | null }
 const rows = (JSON.parse(readFileSync(join(__dirname, "fixtures", "replay-audits.json"), "utf8")) as { rows: ReplayRow[] }).rows;
 
 const STATES = ["setup", "watch", "wait", "ignore", "broken", "insufficient"] as const;
@@ -19,7 +23,8 @@ const rules = ruleGroups.flatMap((group) => group.rules);
 
 function replay(row: ReplayRow) {
   const old = KEY[row.state];
-  const hits = rules.map((rule) => ({ id: rule.id, points: rule.points, matched: row.matched.includes(rule.id), unknown: row.unknown.includes(rule.id) }));
+  const earningsUnknown = anyOf(row.epsBeat, row.guidanceRaised) === null;
+  const hits = rules.map((rule) => ({ id: rule.id, points: rule.points, matched: row.matched.includes(rule.id), unknown: row.unknown.includes(rule.id) || (rule.id === "earnings" && earningsUnknown) }));
   const relative = relativeScore(row.total, evidencedMaxOf(hits));
   const kept = old === "broken" || old === "insufficient";
   return { old, next: kept ? old : relative.band, incomplete: !kept && relative.incompleteData, relative };
@@ -59,11 +64,11 @@ describe("EN45 replay of stored audits, old rule against new", () => {
     console.log(`EN45 replay, band counts old → new\n${table}`);
     const pinned: Record<string, { old: number[]; next: number[]; incomplete: number }> = {
       "2026-10-02": { old: [0, 0, 0, 26, 9, 0], next: [0, 17, 0, 9, 9, 0], incomplete: 26 },
-      "2026-10-05": { old: [1, 6, 3, 17, 8, 0], next: [4, 7, 5, 11, 8, 0], incomplete: 9 },
-      "2026-10-06": { old: [0, 7, 5, 19, 5, 0], next: [3, 7, 7, 14, 5, 0], incomplete: 9 },
-      "2026-10-07": { old: [1, 7, 8, 14, 6, 0], next: [4, 9, 9, 8, 6, 0], incomplete: 9 },
-      "2026-10-08": { old: [0, 6, 5, 18, 7, 0], next: [4, 8, 3, 14, 7, 0], incomplete: 11 },
-      "2026-10-09": { old: [0, 8, 6, 16, 6, 0], next: [4, 6, 10, 10, 6, 0], incomplete: 10 },
+      "2026-10-05": { old: [1, 6, 3, 17, 8, 0], next: [4, 8, 4, 11, 8, 0], incomplete: 9 },
+      "2026-10-06": { old: [0, 7, 5, 19, 5, 0], next: [3, 9, 6, 13, 5, 0], incomplete: 9 },
+      "2026-10-07": { old: [1, 7, 8, 14, 6, 0], next: [4, 10, 9, 7, 6, 0], incomplete: 9 },
+      "2026-10-08": { old: [0, 6, 5, 18, 7, 0], next: [4, 8, 5, 12, 7, 0], incomplete: 11 },
+      "2026-10-09": { old: [0, 8, 6, 16, 6, 0], next: [4, 9, 8, 9, 6, 0], incomplete: 10 },
     };
     expect(dates).toEqual(Object.keys(pinned));
     for (const d of dates) {

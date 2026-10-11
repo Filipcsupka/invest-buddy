@@ -22,9 +22,31 @@ describe("engine", () => {
     expect(accumulationRule(false, true)).toBe(true);
     expect(accumulationRule(null, true)).toBe(true);
     expect(accumulationRule(true, null)).toBe(true);
-    expect(accumulationRule(false, null)).toBe(false);
-    expect(accumulationRule(null, false)).toBe(false);
+    // EN45: partial data is unknown, never a failed check.
+    expect(accumulationRule(false, null)).toBeNull();
+    expect(accumulationRule(null, false)).toBeNull();
+    expect(accumulationRule(false, false)).toBe(false);
     expect(accumulationRule(null, null)).toBeNull();
+  });
+  it("leaves the earnings rule unknown when no input is true and one has no data (EN45)", () => {
+    const hit = (epsBeat: boolean | null, guidanceRaised: boolean | null) => score({ ...input(), fundamentals: { ...fixtureFundamentals("NVDA"), epsBeat, guidanceRaised } }).ruleHits.find((rule) => rule.id === "earnings")!;
+    expect(hit(false, null)).toMatchObject({ matched: false, unknown: true });
+    expect(hit(null, false)).toMatchObject({ matched: false, unknown: true });
+    expect(hit(null, true)).toMatchObject({ matched: true, unknown: false });
+    expect(hit(false, false)).toMatchObject({ matched: false, unknown: false });
+  });
+  it("treats a planned field exactly like no data (EN45)", () => {
+    const base = input();
+    base.fundamentals = { ...base.fundamentals, epsBeat: false, guidanceRaised: false, productCatalyst: false };
+    const known = score(base);
+    const planned = score(base, { planned: ["epsBeat", "productCatalyst", "dataTailwind"] });
+    const unknown = score({ ...base, fundamentals: { ...base.fundamentals, epsBeat: null, productCatalyst: null }, macro: { ...base.macro, dataTailwind: null } });
+    expect(planned.ruleHits).toEqual(unknown.ruleHits);
+    expect({ total: planned.total, state: planned.state, evidencedMax: planned.evidencedMax }).toEqual({ total: unknown.total, state: unknown.state, evidencedMax: unknown.evidencedMax });
+    expect(planned.evidencedMax).toBe(known.evidencedMax! - 3 - 2 - 3);
+    expect(planned.plannedFields).toEqual(["dataTailwind", "epsBeat", "productCatalyst"]);
+    expect(planned.inputs.fundamentals.epsBeat).toBeNull();
+    expect(known.plannedFields).toBeUndefined();
   });
   it("scores insider buying when volume is weak", () => {
     const candidate = input();
