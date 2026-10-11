@@ -37,7 +37,7 @@ describe("data inventory (Postgres)", () => {
     const log: string[] = [];
     const logged: Queryable = { query: (text, values) => { log.push(text); return client.query(text, values); } };
     try {
-      await client.query("BEGIN");
+      await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ");
       const before = await collectInventory(logged);
       await client.query("INSERT INTO instruments (ticker,name,sector,tier,source) VALUES ('ZZINV','Inventory test','Test',1,'guide')");
       for (const day of ["2031-03-03", "2031-03-04"]) {

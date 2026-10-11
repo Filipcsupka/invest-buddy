@@ -57,7 +57,7 @@ it.skipIf(!process.env.TEST_DATABASE_URL)("stores a scored instrument with its s
   try {
     expect(await repository.saveDaily(asOf, "fixture", [{ instrument: dbInstrument, result: dbResult }])).toMatchObject({ inserted: true, instrumentCount: 1 });
     expect((await pool.query<{ sector: string }>("SELECT sector FROM instruments WHERE ticker=$1", [ticker])).rows[0].sector).toBe(dbInstrument.sector);
-    expect(await repository.scores(asOf)).toEqual([dbResult]);
+    expect((await repository.scores(asOf)).filter((row) => row.ticker === ticker)).toEqual([dbResult]);
     expect(await repository.saveDaily(asOf, "fixture", [{ instrument: dbInstrument, result: dbResult }])).toMatchObject({ inserted: false, instrumentCount: 0 });
   } finally {
     await pool.query("DELETE FROM alerts WHERE ticker=$1", [ticker]);

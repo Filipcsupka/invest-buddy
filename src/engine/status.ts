@@ -1,5 +1,6 @@
 import { ruleGroups, type RuleId, type StateKey } from "../i18n/rules";
 import { hasEvidence, POINTS_MAX, relativeScore, RELATIVE_RULES } from "./relative";
+import { displayScore } from "./display-score";
 
 /**
  * One status per ticker for the web and Telegram. Pure: no I/O, no flags read here.
@@ -72,6 +73,7 @@ export interface StatusView {
   incompleteData: boolean;
   confirmations: StatusConfirmation[];
   coverage: StatusCoverage;
+  display: ReturnType<typeof displayScore>;
 }
 
 const bands: Record<StateKey, { band: StatusBand; position: StatusPosition | null }> = {
@@ -139,5 +141,6 @@ export function statusView(input: StatusInput): StatusView {
       state: confirmationState(signals[chip.signal], chip.rule ? byId.get(chip.rule) : undefined),
     })),
     coverage: cover,
+    display: displayScore(state, input.ruleHits ?? []),
   };
 }

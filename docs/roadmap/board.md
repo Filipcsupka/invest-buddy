@@ -20,6 +20,7 @@ Updated 2026-10-11 night. One table per state. A PR that finishes a task moves i
 | D10 refresh | Security master refresh in the image | #130 | run once: 36 of 37 CIKs filled |
 | EN3, EN27, EN40 | Thresholds, outcomes at 1/5/20/60 days, macro inflation | #107, #120, #113, #122 | |
 | EN45 | Relative scoring, planned and partial data count as no data, rules version in the daily fingerprint | #140, #142, #149 | recompute 2026-10-11: 4 Setup, 12 Watch, 7 Wait, 7 Ignore, 6 Broken |
+| EN46 | Score shown as percent of core rules, catalyst as separate bonus, methodology EN+SK | PR pending | no engine, weight or stored audit change |
 | ST0 to ST3 | Status slider: design spec, engine module, slider and company header, dashboard rows and legend | #134, #133, #136, #137 | slider live on the company page |
 | ST5 | Catalyst rule from stored 8-K text | #139 | |
 | ST6 | Revenue acceleration from stored SEC facts | #138 | |

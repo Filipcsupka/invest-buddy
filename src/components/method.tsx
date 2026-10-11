@@ -1,4 +1,5 @@
-import { fill, getMessages, type Locale } from "@/i18n";
+import { getMessages, type Locale } from "@/i18n";
+import { BONUS_RULE_IDS } from "@/engine/display-score";
 import { ruleGroups } from "@/i18n/rules";
 import { MiniTrack, StatusIcon, statusLabel, steps } from "./status-slider";
 import styles from "./status-slider.module.css";
@@ -21,12 +22,12 @@ export function RuleBook({ locale, definitions = false }: { locale: Locale; defi
             <th scope="rowgroup" colSpan={1}>
               {m.groups[group.group]}
             </th>
-            <td className="num">{fill(m.methodology.groupMax, { max: group.max })}</td>
+            <td />
           </tr>
           {group.rules.map((rule) => (
             <tr key={rule.id}>
               <th scope="row">
-                <span className="rule-name">{m.rules[rule.id]}</span>
+                <span className="rule-name">{m.rules[rule.id]} <small>({BONUS_RULE_IDS.includes(rule.id) ? m.status.bonusLabel : m.status.coreLabel})</small></span>
                 {definitions ? <span className="rule-def">{m.ruleDefinitions[rule.id]}</span> : null}
               </th>
               <td className="num rule-points">+{rule.points}</td>
