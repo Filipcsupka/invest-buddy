@@ -38,6 +38,7 @@ const reasonKeys: Record<string, keyof Messages["reasons"]> = {
   "Invalid price series": "invalidSeries",
   "Invalid fundamentals": "invalidFundamentals",
   "Invalid macro inputs": "invalidMacro",
+  stale_prices: "stalePrices",
 };
 
 /** Translate an engine rejection or validation reason; unknown reasons pass through unchanged. */

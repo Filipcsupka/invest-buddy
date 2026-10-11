@@ -12,7 +12,7 @@ const html = (idea = add, locale: "en" | "sk" = "en") => renderToStaticMarkup(<I
 
 it.each(["en", "sk"] as const)("hides actions, size tiers, plans and amounts when ADVICE_OUTPUT is off (%s)", (locale) => {
   process.env.ADVICE_OUTPUT = "off";
-  const out = renderToStaticMarkup(<IdeaCard idea={add} locale={locale} stateLabel={locale === "en" ? "Setup met" : "Nastavenie splnené"} />);
+  const out = renderToStaticMarkup(<IdeaCard idea={add} locale={locale} stateLabel={locale === "en" ? "Conditions met" : "Podmienky splnené"} />);
   expect(out).toContain("NVDA");
   expect(out).toContain("example.com");
   expect(out).toContain("Sample earnings release");

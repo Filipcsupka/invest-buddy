@@ -15,12 +15,12 @@ it.each(["en", "sk"])("shows empty and stale live states on home in %s", async (
   scores.mockResolvedValue({ rows: [], sample: false, lastUpdated: null, stale: false });
   const empty = renderToStaticMarkup(await Home(props(locale)));
   expect(empty).toContain(locale === "en" ? "No data yet" : "Zatiaľ tu nie sú údaje");
-  expect(empty).not.toMatch(/SAMPLE DATA|UKÁŽKOVÉ DÁTA/);
+  expect(empty).not.toMatch(/SAMPLE DATA|UKÁŽKOVÉ ÚDAJE/);
   const rows = (await scoredUniverse()).slice(0, 1);
   scores.mockResolvedValue({ rows, sample: false, lastUpdated: "2026-01-01", stale: true });
   const old = renderToStaticMarkup(await Home(props(locale)));
   expect(old).toContain(locale === "en" ? "Stale since" : "Zastarané od");
-  expect(old).not.toMatch(/SAMPLE DATA|UKÁŽKOVÉ DÁTA|Sample extension/);
+  expect(old).not.toMatch(/SAMPLE DATA|UKÁŽKOVÉ ÚDAJE|Sample extension/);
   expect(old).not.toMatch(/Sample datasheet|Ukážkový list|Operator position disclosure|Zverejnenie pozícií prevádzkovateľa/);
 });
 

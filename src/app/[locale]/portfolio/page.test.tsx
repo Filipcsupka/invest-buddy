@@ -15,7 +15,7 @@ it.each(["en", "sk"])("shows an empty live portfolio in %s", async (locale) => {
   snapshot.mockResolvedValue(null);
   const html = renderToStaticMarkup(await PortfolioPage(props(locale)));
   expect(html).toContain(locale === "en" ? "No data yet" : "Zatiaľ tu nie sú údaje");
-  expect(html).not.toMatch(/SAMPLE DATA|UKÁŽKOVÉ DÁTA|Synthetic benchmark/);
+  expect(html).not.toMatch(/SAMPLE DATA|UKÁŽKOVÉ ÚDAJE|Synthetic benchmark/);
 });
 
 it("uses only the live indexed series and no fixture figure in db mode", async () => {

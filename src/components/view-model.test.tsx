@@ -72,7 +72,7 @@ describe("rule sources by agreement type", () => {
   it("Slovak labels", async () => {
     const r = withSources(await base(), { guidanceRaised: "verified_single" }, { guidanceRaised: [{ kind: "form4", href: null, publishedAt: null }] });
     expect(inputSources("sk", r, "guidanceRaised")[0].label).toBe("SEC Form 4");
-    expect(ruleSources("sk", r, "dip")[0].label).toBe("Vlastné cenové dáta");
+    expect(ruleSources("sk", r, "dip")[0].label).toBe("Vlastné cenové údaje");
   });
 });
 
@@ -108,8 +108,8 @@ describe("honest source notes (ST7)", () => {
     const en = (id: string) => ruleSourceNotes("en", r, id, false);
     expect(en("rotation")).toEqual({ replacesSources: true, notes: [expect.objectContaining({ text: "Computed from price data", href: "/en/methodology#source-labels" })] });
     expect(en("macro-data").notes[0].text).toBe("Computed from macro data (FRED)");
-    expect(ruleSourceNotes("sk", r, "rotation", false).notes[0]).toMatchObject({ text: "Vypočítané z cenových dát", href: "/sk/methodology#source-labels" });
-    expect(ruleSourceNotes("sk", r, "macro-data", false).notes[0].text).toBe("Vypočítané z makro dát (FRED)");
+    expect(ruleSourceNotes("sk", r, "rotation", false).notes[0]).toMatchObject({ text: "Vypočítané z cenových údajov", href: "/sk/methodology#source-labels" });
+    expect(ruleSourceNotes("sk", r, "macro-data", false).notes[0].text).toBe("Vypočítané z makro údajov (FRED)");
   });
   it("insider rule with no purchase names the Form 4 check, the 90-day range and the ticker link, EN and SK", async () => {
     const b = await base();

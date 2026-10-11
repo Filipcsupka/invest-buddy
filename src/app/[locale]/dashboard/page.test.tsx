@@ -18,11 +18,11 @@ describe("merged stock screen", () => {
     scores.mockResolvedValue({ rows: [], sample: false, lastUpdated: null, stale: false });
     const empty = renderToStaticMarkup(await Dashboard(props(locale)));
     expect(empty).toContain(locale === "en" ? "No data yet" : "Zatiaľ tu nie sú údaje");
-    expect(empty).not.toMatch(/SAMPLE DATA|UKÁŽKOVÉ DÁTA/);
+    expect(empty).not.toMatch(/SAMPLE DATA|UKÁŽKOVÉ ÚDAJE/);
     scores.mockResolvedValue({ rows: [], sample: false, lastUpdated: "2026-01-01", stale: true });
     const old = renderToStaticMarkup(await Dashboard(props(locale)));
     expect(old).toContain(locale === "en" ? "Stale since" : "Zastarané od");
-    expect(old).not.toMatch(/SAMPLE DATA|UKÁŽKOVÉ DÁTA/);
+    expect(old).not.toMatch(/SAMPLE DATA|UKÁŽKOVÉ ÚDAJE/);
   });
   it("uses dashboard metadata and includes the controls and state groups", async () => {
     const rows = await scoredUniverse();

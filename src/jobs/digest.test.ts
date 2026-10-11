@@ -9,8 +9,8 @@ describe("digest", () => {
   it("uses rule states and informational wording in English and Slovak", () => {
     const en = buildDigest("reader@example.com", alert.asOf, [alert], "en");
     const sk = buildDigest("reader@example.com", alert.asOf, [alert], "sk");
-    expect(en.text).toContain("NVDA: Watch → Setup met ≥18");
-    expect(sk.text).toContain("NVDA: Sledovanie → Podmienky splnené ≥18");
+    expect(en.text).toContain("NVDA: Watching → Conditions met");
+    expect(sk.text).toContain("NVDA: Sledovanie → Podmienky splnené");
     expect(en.text).toContain("informational screen");
     expect(sk.text).toContain("Zmeny stavov pravidiel");
     expect(sk.text).toContain("informačný skríning");

@@ -16,7 +16,7 @@ it.each(["en", "sk"])("shows an empty live idea list without fixture labels (%s)
   enabled.mockReturnValue(true);
   ideas.mockResolvedValue({ rows: [], sample: false });
   const html = renderToStaticMarkup(await Ideas({ params: Promise.resolve({ locale }) }));
-  expect(html).not.toMatch(/SAMPLE DATA|UKÁŽKOVÉ DÁTA/);
+  expect(html).not.toMatch(/SAMPLE DATA|UKÁŽKOVÉ ÚDAJE/);
   expect(html).toContain(locale === "en" ? "No ideas yet" : "Zatiaľ žiadne nápady");
 });
 

@@ -66,7 +66,7 @@ describe("company page", () => {
     for (const locale of ["en", "sk"]) {
       const html = renderToStaticMarkup(await Company(props(row.instrument.ticker, locale)));
       expect(html).toContain(locale === "en" ? "Stale since" : "Zastarané od");
-      expect(html).not.toMatch(/SAMPLE DATA|UKÁŽKOVÉ DÁTA|Synthetic series|Syntetický rad/);
+      expect(html).not.toMatch(/SAMPLE DATA|UKÁŽKOVÉ ÚDAJE|Synthetic series|Syntetický rad/);
     }
   });
 
