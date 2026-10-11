@@ -13,6 +13,7 @@ resources:
   - macro-cronjob.yaml
   - earnings-calendar-cronjob.yaml
   - holder-events-cronjob.yaml
+  - thirteenf-cronjob.yaml
   - master-refresh-cronjob.yaml
   - weekly-cronjob.yaml
   - backup-cronjob.yaml
