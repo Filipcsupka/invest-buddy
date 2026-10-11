@@ -10,9 +10,10 @@ import { ScoreHistory } from "@/components/score-history";
 import { companyScoreHistory } from "@/data/score-history";
 import { flags } from "@/config/flags";
 import { Disclaimer } from "@/components/disclaimer";
-import { IconArrowLeft, IconArrowRight, IconCheck, IconCross } from "@/components/icons";
+import { IconArrowLeft, IconArrowRight, IconCheck, IconCross, IconNoData } from "@/components/icons";
 import { OperatorDisclosure } from "@/components/operator-disclosure";
-import { StateChip } from "@/components/score-badge";
+import { StatusPanel } from "@/components/status-slider";
+import { statusView } from "@/engine/status";
 import { ScoreMark } from "@/components/score-mark";
 import { SourceList } from "@/components/source-list";
 import { inputSources, ruleSources, sourceSummary } from "@/components/view-model";
@@ -81,6 +82,15 @@ async function Company({ params }: Params) {
     [m.company.inputs.growthSectorRotation, yesNo(mac.growthSectorRotation), "sectorRotationIntoGrowth", "growthSectorRotation"],
     [m.company.inputs.dataTailwind, yesNo(mac.dataTailwind), "dataTailwind", "dataTailwind"],
   ];
+  const view = statusView({
+    state,
+    points: scored ? result.total : null,
+    ruleHits: result.ruleHits,
+    signals: { insiderNetBuy: f.insiderOrInstitutionalAccumulation, epsBeat: f.epsBeat, guidanceRaised: f.guidanceRaised, productCatalyst: f.productCatalyst },
+    adviceOutput,
+  });
+  const unknownIds = new Set<string>(view.coverage.unknownRules);
+  const groupNoData = (group: (typeof ruleGroups)[number]) => group.rules.filter((rule) => unknownIds.has(rule.id)).length;
   const sources = scored ? sourceSummary(locale, result) : null;
   const ideaRow = await companyIdea(instrument.ticker);
   const review = await companyReview(instrument.ticker);
@@ -129,24 +139,22 @@ async function Company({ params }: Params) {
       </header>
 
       <DataStatus locale={locale} lastUpdated={data.lastUpdated} stale={data.stale} />
-      <section className="score-panel" aria-labelledby="score">
-        <h2 id="score" className="visually-hidden">
-          {m.company.scoreTitle}
-        </h2>
-        <div className="score-readout">
-          <p className="score-total num">
-            {scored ? result.total : m.common.noScore}
-            {scored ? <span className="score-of">{m.common.outOf25}</span> : null}
-          </p>
-          <div className="score-state">
-            <StateChip state={state} label={m.states[state]} pullbackLabel={state === "watch" && result.pullbackInUptrend ? m.states.pullback : null} describedBy="score-disclaimer" />
-            <Disclaimer text={m.common.disclaimer} id="score-disclaimer" />
-            <OperatorDisclosure text={m.common.operatorDisclosure} />
-          </div>
-        </div>
-        {sources && <p className="source-summary muted small">{sources}</p>}
-        <ScoreMark size="lg" state={state} matched={scored ? result.ruleHits.filter((hit) => hit.matched).map((hit) => hit.id) : null} groupLabels={groupLabels(locale, result)} label={scored ? fill(m.mark.label, { total: result.total, fundamentals: result.fundamentals, technical: result.technical, macro: result.macro }) : m.mark.none} />
-      </section>
+      <StatusPanel
+        view={view}
+        m={m}
+        adviceOutput={adviceOutput}
+        asOf={result.asOf ? formatDate(locale, result.asOf) : null}
+        methodHref={`/${locale}/methodology#states`}
+        reasons={reasons}
+        pullbackLabel={state === "watch" && result.pullbackInUptrend ? m.states.pullback : null}
+        describedBy="score-disclaimer"
+        groups={scored ? groupLabels(locale, result).map((group, index) => ({ ...group, max: ruleGroups[index].max, noData: groupNoData(ruleGroups[index]) })) : undefined}
+        disclaimer={<><Disclaimer text={m.common.disclaimer} id="score-disclaimer" /><OperatorDisclosure text={m.common.operatorDisclosure} /></>}
+      />
+      {sources && <p className="source-summary muted small">{sources}</p>}
+      <div className="score-strip">
+        <ScoreMark size="lg" state={state} matched={scored ? result.ruleHits.filter((hit) => hit.matched).map((hit) => hit.id) : null} unknown={scored ? view.coverage.unknownRules : undefined} groupLabels={groupLabels(locale, result).map((group, index) => ({ ...group, note: groupNoData(ruleGroups[index]) ? fill(m.status.groupNoData, { n: groupNoData(ruleGroups[index]) }) : undefined }))} label={scored ? fill(m.mark.label, { total: result.total, fundamentals: result.fundamentals, technical: result.technical, macro: result.macro }) + (view.coverage.unknownRules.length ? `. ${fill(m.status.markNoData, { n: 25 - view.coverage.pointsKnown })}` : "") : m.mark.none} />
+      </div>
 
       {ideaRow && (
         <section className="sheet-section" aria-labelledby="idea">
@@ -208,23 +216,24 @@ async function Company({ params }: Params) {
                   <tr className="rulebook-group">
                     <th scope="rowgroup">{m.groups[group.group]}</th>
                     <td className="num">
-                      {result[group.group]}/{group.max}
+                      {result[group.group]}/{group.max}{groupNoData(group) ? `, ${fill(m.status.groupNoData, { n: groupNoData(group) })}` : ""}
                     </td>
                   </tr>
                   {group.rules.map((rule) => {
                     const hit = hits.get(rule.id);
-                    const met = Boolean(hit?.matched);
+                    const unknown = unknownIds.has(rule.id);
+                    const met = !unknown && Boolean(hit?.matched);
                     return (
-                      <tr key={rule.id} className={met ? "is-met" : undefined}>
+                      <tr key={rule.id} id={`rule-${rule.id}`} className={met ? "is-met" : unknown ? "is-unknown" : undefined}>
                         <th scope="row">
                           <span className="rule-line">
-                            {met ? <IconCheck title={m.common.met} /> : <IconCross title={m.common.notMet} />}
+                            {met ? <IconCheck title={m.common.met} /> : unknown ? <IconNoData title={m.status.noData} /> : <IconCross title={m.common.notMet} />}
                             <span className="rule-name">{m.rules[rule.id]}</span>
                           </span>
                           {hit ? <span className="rule-def num">{ruleDetail(locale, hit, result)}</span> : null}
                           {hit ? <span className="rule-def rule-src"><SourceList locale={locale} items={ruleSources(locale, result, rule.id)} emptyNote={rule.id === "catalyst"} /></span> : null}
                         </th>
-                        <td className="num rule-points">{met ? `+${rule.points}` : "0"}</td>
+                        <td className="num rule-points">{met ? `+${rule.points}` : unknown ? m.status.noData : "0"}</td>
                       </tr>
                     );
                   })}

@@ -77,3 +77,42 @@ export const IconReset = (p: IconProps) => (
     <path d="M4.5 1.5v3h3" />
   </Icon>
 );
+
+/** Dashed circle with a question mark: no data. */
+export const IconNoData = (p: IconProps) => (
+  <Icon {...p}>
+    <circle cx="8" cy="8" r="6" strokeDasharray="2 2" />
+    <path d="M6.3 6.4a1.8 1.8 0 1 1 2.5 1.7c-.6.3-.8.7-.8 1.2M8 11.4v.1" />
+  </Icon>
+);
+
+/** Band shapes for the status slider, so a band never rests on colour alone. */
+export const IconBandBroken = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M5 1.5h6L14.5 5v6L11 14.5H5L1.5 11V5z" />
+    <path d="m4.5 11.5 7-7" />
+  </Icon>
+);
+export const IconBandIgnore = (p: IconProps) => (
+  <Icon {...p}>
+    <circle cx="8" cy="8" r="6" />
+    <path d="M5 8h6" />
+  </Icon>
+);
+export const IconBandWait = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M4 2h8M4 14h8M4.5 2c0 3.5 3.5 4 3.5 6s-3.5 2.5-3.5 6M11.5 2c0 3.5-3.5 4-3.5 6s3.5 2.5 3.5 6" />
+  </Icon>
+);
+export const IconBandWatch = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M1 8s2.5-4.5 7-4.500S15 8 15 8s-2.5 4.5-7 4.500S1 8 1 8z" />
+    <circle cx="8" cy="8" r="1.8" />
+  </Icon>
+);
+export const IconBandSetup = (p: IconProps) => (
+  <Icon {...p}>
+    <circle cx="8" cy="8" r="6" />
+    <path d="m5.2 8.3 2 2 3.6-4" />
+  </Icon>
+);

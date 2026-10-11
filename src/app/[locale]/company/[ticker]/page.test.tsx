@@ -146,6 +146,45 @@ describe("company page", () => {
     expect(renderToStaticMarkup(await Company(props(row.instrument.ticker, "sk")))).not.toContain("V portfóliu");
   });
 
+  describe("status header", () => {
+    async function renderStatus(opts: { locale?: string; advice: boolean; state?: "Setup met (>=18)" | "Ignore"; unknown?: string[] }) {
+      process.env.ADVICE_OUTPUT = opts.advice ? "on" : "off";
+      const [row] = await scoredUniverse();
+      const unknown = opts.unknown ?? [];
+      const ruleHits = row.result.ruleHits.map((hit) => (unknown.includes(hit.id) ? { ...hit, matched: false, unknown: true } : hit));
+      const result = { ...row.result, state: opts.state ?? "Setup met (>=18)", total: 19, ruleHits };
+      universe.mockResolvedValue([row.instrument]);
+      scores.mockResolvedValue({ rows: [{ ...row, result }], sample: false, lastUpdated: "2026-10-05", stale: false });
+      idea.mockResolvedValue(null);
+      portfolio.mockResolvedValue(null);
+      return renderToStaticMarkup(await Company(props(row.instrument.ticker, opts.locale)));
+    }
+
+    it("puts the status panel before the chart and drops Buy zone with the flag off", async () => {
+      for (const [locale, off, on] of [["en", "Conditions met", "Buy zone"], ["sk", "Podmienky splnené", "Zóna nákupu"]]) {
+        const html = await renderStatus({ locale, advice: false });
+        expect(html.indexOf('aria-labelledby="status-title"')).toBeGreaterThan(-1);
+        expect(html.indexOf('id="status-title"')).toBeLessThan(html.indexOf('id="chart"'));
+        expect(html).toContain(off);
+        expect(html).not.toContain(on);
+        expect((await renderStatus({ locale, advice: true }))).toContain(on);
+      }
+    });
+
+    it("shows no data instead of 0 for unknown rules in the table", async () => {
+      const html = await renderStatus({ advice: false, unknown: ["catalyst", "macro-data"] });
+      expect(html).toContain('id="rule-catalyst"');
+      expect(html).toContain("Data: 20 of 25 points");
+      const row = (id: string) => html.match(new RegExp(`<tr id="rule-${id}"[\\s\\S]*?</tr>`))?.[0] ?? "";
+      for (const id of ["catalyst", "macro-data"]) {
+        expect(row(id)).toContain("no data");
+        expect(row(id)).not.toMatch(/rule-points">0</);
+      }
+      expect(html).toContain("2 no data");
+      expect(html).toContain("mark-block is-unknown");
+    });
+  });
+
   describe("sources", () => {
     const RELEASE = "https://www.sec.gov/Archives/edgar/data/1/ex99.htm";
     async function renderWith(locale: string) {

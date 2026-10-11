@@ -1,0 +1,146 @@
+/* Status slider (lane STATUS, ST2). Colour comes only from the --st-* tokens in globals.css. */
+.panel {
+  display: grid;
+  gap: var(--s4);
+  padding: var(--s5) 0 var(--s6);
+  border-top: 1px solid var(--ink);
+  border-bottom: 1px solid var(--rule-strong);
+}
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--s3) var(--s6);
+  align-items: baseline;
+}
+.lead { display: grid; gap: var(--s1); }
+.label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+  margin: 0;
+  font-size: var(--t-h2);
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--st-none);
+}
+.panel[data-state="broken"] .label { color: var(--st-broken); }
+.panel[data-state="ignore"] .label { color: var(--st-ignore); }
+.panel[data-state="wait"] .label { color: var(--st-wait); }
+.panel[data-state="watch"] .label { color: var(--st-watch); }
+.panel[data-state="setup"] .label { color: var(--st-setup); }
+.labelText { overflow-wrap: anywhere; }
+.qualifier { font-size: var(--t-sm); font-weight: 560; color: var(--ink-2); }
+.icon { display: inline-flex; flex: none; }
+.icon svg { width: 1.375rem; height: 1.375rem; }
+.sub { display: flex; flex-wrap: wrap; gap: 0 var(--s3); margin: 0; font-size: var(--t-sm); color: var(--ink-3); }
+.methodLink, .ruleLink { color: var(--signal); text-decoration: underline; text-underline-offset: 3px; }
+.methodLink { display: inline-block; padding: var(--s2) 0; }
+.methodLink:focus-visible, .ruleLink:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+.points { display: grid; gap: var(--s1); justify-items: end; text-align: right; }
+.pointsLine { margin: 0; font-size: var(--t-sm); color: var(--ink-2); }
+.pointsNum { font-size: var(--t-h2); font-weight: 700; color: var(--ink); }
+.pointsLine s { color: var(--ink-3); }
+.groups { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0 var(--s3); margin: 0; font-size: var(--t-xs); color: var(--ink-2); }
+.groups abbr { font-weight: 700; text-decoration: none; }
+
+/* The track: five equal steps. The active one is taller, filled, and carries the marker. */
+.track {
+  --gap: 3px;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--gap);
+  width: 100%;
+  max-width: 44rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.step { display: grid; grid-template-rows: 2.25rem auto; position: relative; min-width: 0; }
+.block {
+  position: relative;
+  align-self: end;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 1.25rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--st-none-wash);
+}
+.step[data-state="broken"] { --band: var(--st-broken); --on: var(--st-broken-on); --wash: var(--st-broken-wash); }
+.step[data-state="ignore"] { --band: var(--st-ignore); --on: var(--st-ignore-on); --wash: var(--st-ignore-wash); }
+.step[data-state="wait"] { --band: var(--st-wait); --on: var(--st-wait-on); --wash: var(--st-wait-wash); }
+.step[data-state="watch"] { --band: var(--st-watch); --on: var(--st-watch-on); --wash: var(--st-watch-wash); }
+.step[data-state="setup"] { --band: var(--st-setup); --on: var(--st-setup-on); --wash: var(--st-setup-wash); }
+.step .block { background: var(--wash); }
+.step[data-active] .block {
+  height: 1.5rem;
+  background: var(--band);
+  border-color: var(--band);
+  color: var(--on);
+}
+.step[data-active] .block .icon svg { width: 0.875rem; height: 0.875rem; }
+.marker {
+  position: absolute;
+  top: -0.625rem;
+  left: 50%;
+  width: 0.625rem;
+  height: 0.375rem;
+  margin-left: -0.3125rem;
+  background: var(--ink);
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+}
+.track[data-none] .block { background: var(--sheet); border: 1px dashed var(--st-none); }
+.caption { display: grid; gap: 0; padding-top: var(--s1); text-align: center; }
+.stepLabel { font-size: var(--t-xs); font-weight: 520; line-height: 1.25; color: var(--ink-2); overflow-wrap: anywhere; }
+.range { font-size: var(--t-xs); line-height: 1.25; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.step[data-active] .stepLabel { font-weight: 700; color: var(--band); }
+
+.because { margin: 0; font-size: var(--t-sm); color: var(--ink-2); }
+.coverage { display: grid; gap: var(--s1); }
+.coverageLine { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2); margin: 0; font-size: var(--t-sm); }
+.coverageMain { font-weight: 620; color: var(--ink); }
+.coverage[data-complete] .coverageMain { font-weight: 400; color: var(--ink-2); }
+.coverageRules { color: var(--ink-2); }
+.ruleLink { display: inline-block; padding: var(--s1) 0; }
+.cap { margin: 0; font-size: var(--t-sm); color: var(--ink-3); }
+
+.confirm { display: grid; gap: var(--s2); }
+.confirmHead { display: flex; flex-wrap: wrap; gap: 0 var(--s3); margin: 0; font-size: var(--t-xs); }
+.confirmTitle { font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-2); }
+.confirmNote { color: var(--ink-3); }
+.chips { display: flex; flex-wrap: wrap; gap: var(--s2); margin: 0; padding: 0; list-style: none; }
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  font-size: var(--t-xs);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  color: var(--ink-3);
+  font-weight: 520;
+}
+.chip svg { width: 0.75rem; height: 0.75rem; }
+.chip[data-confirm="met"] { border: 1px solid var(--ink-2); background: var(--sheet); color: var(--ink); font-weight: 620; }
+.chip[data-confirm="no-data"] { border: 1px dashed var(--rule-strong); }
+
+@media (max-width: 40rem) {
+  .row { grid-template-columns: minmax(0, 1fr); }
+  .points, .groups { justify-items: start; justify-content: flex-start; text-align: left; }
+  .stepLabel, .range { display: none; }
+  .step[data-active] .caption, .step[data-edge] .caption { position: absolute; top: 2.25rem; width: max-content; max-width: 10rem; }
+  .step[data-active] .stepLabel, .step[data-edge] .stepLabel { display: block; }
+  .step[data-active] .range { display: block; }
+  .step[data-edge="start"] .caption { left: 0; text-align: left; }
+  .step[data-edge="end"] .caption { right: 0; text-align: right; }
+  .step[data-active]:not([data-edge]) .caption { left: 50%; transform: translateX(-50%); }
+  .step[data-edge]:not([data-active]) .stepLabel { color: var(--ink-3); }
+  .track { margin-bottom: 2.5rem; }
+  .chips { gap: var(--s1); }
+}
+
+@media (forced-colors: active) {
+  .step[data-active] .block { border: 2px solid CanvasText; }
+}
