@@ -46,7 +46,7 @@ it.skipIf(!process.env.TEST_DATABASE_URL)("persists the daily gate and reopens i
     expect((await pool.query("SELECT extracted_at,judged_at FROM scheduled_gates WHERE gate_date=$1", [date])).rows[0]).toMatchObject({ extracted_at: expect.any(Date), judged_at: expect.any(Date) });
     const research = { asOf: date, symbols: ["NVDA"], reasons: { NVDA: ["10-Q", "verified research document 42"] }, accessions: { NVDA: ["0000000000-99-000001"] } };
     const researchGate = await persistGate(pool, research);
-    expect(researchGate.revision).toBe(first.revision + 1);
+    expect(researchGate.revision).toBe((first.revision ?? 0) + 1);
     await pool.query("UPDATE scheduled_gates SET extracted_at=now(),judged_at=now() WHERE gate_date=$1", [date]);
     expect((await persistGate(pool, research)).revision).toBe(researchGate.revision);
     expect((await pool.query("SELECT extracted_at,judged_at FROM scheduled_gates WHERE gate_date=$1", [date])).rows[0]).toMatchObject({ extracted_at: expect.any(Date), judged_at: expect.any(Date) });
