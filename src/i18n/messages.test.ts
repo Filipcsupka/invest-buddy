@@ -73,3 +73,16 @@ describe("negotiateLocale", () => {
     expect(negotiateLocale("en-US,en;q=0.9,sk;q=0.8")).toBe("en");
   });
 });
+
+describe("status strings", () => {
+  const en = leaves(messages.en as unknown as Tree);
+  const sk = leaves(messages.sk as unknown as Tree);
+  it("exist in both locales with the same keys", () => {
+    const keys = (m: Map<string, string>) => [...m.keys()].filter((k) => k.startsWith("status.")).sort();
+    expect(keys(en).length).toBeGreaterThan(20);
+    expect(keys(sk)).toEqual(keys(en));
+  });
+  it("keep action wording out of the flag-off labels", () => {
+    for (const [key, value] of [...en, ...sk]) if (key.startsWith("status.labels.") || key.startsWith("status.headline.")) expect(value, key).not.toMatch(/buy|nákup|zone|zóna/i);
+  });
+});
