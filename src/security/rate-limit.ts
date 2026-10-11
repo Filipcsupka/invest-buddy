@@ -45,18 +45,23 @@ function intEnv(name: string, fallback: number): number {
 let pages: Limiter | undefined;
 let api: Limiter | undefined;
 
-/** Returns a 429 response when the caller is over the limit, otherwise undefined. RATE_LIMIT=off disables. */
-export function rateLimit(request: { nextUrl: { pathname: string }; headers: Headers }, now?: number): Response | undefined {
+/** Seconds to wait when the caller is over the limit, otherwise undefined. RATE_LIMIT=off disables. */
+export function rateLimitRetryAfter(request: { nextUrl: { pathname: string }; headers: Headers }, now?: number): number | undefined {
   if (process.env.RATE_LIMIT === "off") return undefined;
   const { pathname } = request.nextUrl;
   if (rateLimitExempt(pathname, request.headers)) return undefined;
-  const isApi = pathname.startsWith("/api/");
   pages ??= createLimiter({ perMinute: intEnv("RATE_LIMIT_PAGES_PER_MIN", 120) });
   api ??= createLimiter({ perMinute: intEnv("RATE_LIMIT_API_PER_MIN", 60) });
-  const result = (isApi ? api : pages).take(clientKey(request.headers), now);
-  if (result.ok) return undefined;
-  const headers = { "retry-after": String(result.retryAfter), "cache-control": "no-store" };
-  return isApi
+  const result = (pathname.startsWith("/api/") ? api : pages).take(clientKey(request.headers), now);
+  return result.ok ? undefined : result.retryAfter;
+}
+
+/** Returns a 429 response when the caller is over the limit, otherwise undefined. */
+export function rateLimit(request: { nextUrl: { pathname: string }; headers: Headers }, now?: number): Response | undefined {
+  const retryAfter = rateLimitRetryAfter(request, now);
+  if (retryAfter === undefined) return undefined;
+  const headers = { "retry-after": String(retryAfter), "cache-control": "no-store" };
+  return request.nextUrl.pathname.startsWith("/api/")
     ? Response.json({ error: "Too many requests" }, { status: 429, headers })
     : new Response("Too many requests. Try again shortly. / Príliš veľa požiadaviek. Skúste to neskôr.", { status: 429, headers: { ...headers, "content-type": "text/plain; charset=utf-8" } });
 }

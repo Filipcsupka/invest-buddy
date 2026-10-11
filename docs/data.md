@@ -123,6 +123,22 @@ Job. `node dist/jobs/macro.js [--date YYYY-MM-DD] [--no-fetch]` (`npm run macro`
 
 `DatabaseUniverseProvider.macro()` accepts `agree` and `data_rule` for these two fields. Reconcile skips any field that already has a `data_rule` row for the date, so agents cannot overwrite it, and carry-forward does not replace it. The CronJob `invest-buddy-macro` (suspended, 06:50 Tuesday to Saturday, 240 s deadline) runs before reconcile at 07:00. The judge's `confirmed()` in `src/engine/signals.ts` still counts only `agree` and `xbrl_override`; the macro fields are not among the key fields it reads.
 
+### Macro observations (D24, migration 049)
+
+Table `macro_observations` (series_id, obs_date, value, realtime_start, source_id, source_url, observed_at; primary key series, date, realtime_start; `source_id` references `data_sources`). `realtime_start` is the vintage: FRED's own value when the response has one, else the fetch date; Treasury rows use the observation date. A row is written only when the value differs from the newest stored vintage of that observation, so a daily rerun adds nothing and a revision adds a second row. Rows are kept without expiry. FRED rows are `fred` (display false, internal signal only); Treasury rows are `treasury`.
+
+Series (`src/data/macro-series.ts`): FRED `DGS2`, `DGS10`, `DGS3MO`, `T10Y2Y`, `FEDFUNDS` (monthly), `CPIAUCSL` and `PPIACO` (monthly; the two inflation inputs of the macro rule), and from the Treasury daily par yield curve (CSV from home.treasury.gov, a cross-check, not FiscalData) `TSY_3M`, `TSY_2Y`, `TSY_10Y`. A FRED series is added only after `FRED_API_KEY=... npx tsx scripts/fred-check-notes.ts` shows no "Copyright" in its notes; a rejected id goes into `FRED_REJECTED_SERIES` and is never fetched. The script has not been run against the live notes yet: run it before the first backfill. VIX is not stored here: the Cboe source is `internal_only` and its use needs a licence (D42). D25 adds the `RV20_SPY` series later.
+
+The daily macro job also stores the last 80 (daily) or 24 (monthly) FRED observations per series and this year's Treasury curve. `loadInputs` reads `DGS10`, `CPIAUCSL` and `PPIACO` from the table (newest vintage per date, dates up to the scoring date) when it holds at least as many points as the stored FRED document, and falls back to the document otherwise. The document is still written, it is the evidence link. Rule logic and thresholds are unchanged.
+
+Backfill (D34 runner, history from 2023-10-01, one request per series and calendar year, cursor = next year):
+
+- `node dist/jobs/backfill.js --job macro-fred --dry-run` lists the series and their cursors, stores nothing. Needs `FRED_API_KEY` in the environment.
+- `node dist/jobs/backfill.js --job macro-fred [--only DGS10] [--max-requests N]`
+- `node dist/jobs/backfill.js --job macro-treasury` (4 requests to 2026)
+
+Usage is reserved in the D8 ledger against `fred` and `treasury`. Running the backfill and applying migration 049 need the owner's approval.
+
 ## Carry-forward
 
 `CARRY_FORWARD=on` lets a partial scan score the whole universe. It is off by default; with the flag off, reconcile and daily run the same SQL and write the same rows as before migration 009. With it on:
@@ -285,3 +301,29 @@ Extract calls the model and spends tokens; the normal nightly run does the same 
 ## 13F quarterly holdings (D22)
 
 Job `thirteenf` (`dist/jobs/thirteenf.js`, `npm run thirteenf`) reads the newest 13F data set zip, keeps 13F-HR filings of the filers in `src/data/tracked-institutions.ts` (CIKs checked against SEC submissions; 13F-HR/A is ignored) and stores their positions in universe names. CUSIPs go through the existing issuer-name prefilter and OpenFIGI into `cusip_map`. Migration 050: `institutional_filings` (period, filer) and `institutional_holdings` (period, filer, ticker, shares, value, `change_shares`, `prior_period`), kept without expiry. `change_shares` compares a filer with its own previous stored quarter; a filer with no earlier stored filing gets NULL (no baseline), and a closed position is stored with 0 shares. Per ticker the job writes fact `institutional_net_change` (net shares of filers with a baseline, counts up, down, new, closed, holders) and a "13F holdings change" document with the filing links, display allowed as for `sec`. The first quarter only stores the baseline, so facts start with the second quarter. A second run for the same quarter adds nothing. 13F lists positions at quarter end, not trades. The temp zip is deleted. `--dry-run` writes nothing, `--zip FILE` reads a local file, `--period YYYY-MM-DD` picks a quarter. Two suspended CronJobs (`invest-buddy-thirteenf-q3` 20 November, `-q4` 16 February) exist in the mirror; the first real run is planned for 2026-11-20, after a dry run. The accumulation rule weights and reconcile are not changed; reading the fact in the rule is a separate step.
+
+## Weekly discovery (DS1)
+
+The `discovery` job (CronJob `invest-buddy-discovery`, Saturday 09:30, Europe/Bratislava) finds names outside the tracked universe, scores them with the same rules and stores up to `maxCandidatesPerWeek` (10) rows per week in `discovery_candidates` with status `pending`. All values are in `src/jobs/discovery-config.ts`.
+
+Quality filters, applied before and during screening (`src/jobs/discovery-quality.ts`):
+
+- Name and symbol, before the ranking cut: limited partnerships and MLPs, cooperatives and soybean or similar processor entities, LLC membership units, SPACs, ADR or depositary shares, and warrants, units, rights, preferreds, notes, ETFs and trusts (the D35 common-stock check). Skips are listed in the run log with a reason.
+- SEC submissions, for the ranked names: SIC 6770 (blank check) and 6726, and foreign filers (20-F, 40-F or 6-K without 10-K or 10-Q).
+- Market cap, from the last close times SEC shares outstanding (`dei/EntityCommonStockSharesOutstanding`, then `us-gaap/CommonStockSharesOutstanding`): at least 300 million USD (`minMarketCapUsd`). A name with no share count has no market cap and does not pass.
+- Average dollar volume, the mean of close times volume over the last 20 bars: at least 2 million USD (`minAvgDollarVolumeUsd`).
+- The two floors run in the MA200 pre-screen, on bars the job already fetches, so a failing name costs no extra Twelve Data request. A name that fails shows in the log as `pre-screen: market cap ...` or `quality: ...`.
+
+Twelve Data use stays inside the D8 ledger: at most `preScreenTopK` (60) bars requests a week, one per name and none for names with fresh stored bars, against the 700 a day that jobs other than prices may use. SEC reads add one submissions and up to two company-concept requests per ranked name, paced at four a second.
+
+Telegram: when `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are set, the job posts one "New candidates" message for the week (`docs/alerts-telegram.md`).
+
+Promote a candidate after review:
+
+```
+npm run discovery:promote -- SYMBOL --dry-run   # read only: shows the candidate it would promote
+npm run discovery:promote -- SYMBOL
+```
+
+It needs `DATABASE_URL` and, for the real run, `SEC_USER_AGENT`. It refuses a symbol with no pending or approved row. Otherwise it adds the ticker to `universe_membership` (list `discovery`, no tier, criteria version `discovery-v1`) through the D11 change in `scripts/universe-change.ts`, inserts the `instrument_ids` row and fills CIK, SIC, fiscal year end, state and exchange from SEC (`src/data/master-refresh.ts`), then sets the candidate to `approved`. A rerun repeats no step. It prints the next steps. The script runs from a checkout with `tsx`; the jobs do not call it, so it is not built into `dist`.
+

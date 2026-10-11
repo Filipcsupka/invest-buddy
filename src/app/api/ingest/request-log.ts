@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { resolveRequestId } from "../../request-id";
 
 const failureReasons = new Set([
   "Ingest unavailable", "Unauthorized", "Database unavailable", "Invalid query",
@@ -24,18 +24,24 @@ export function recordIngestError(request: Request, error: unknown): void {
 }
 
 export async function logIngestRequest(route: string, request: Request, handle: () => Promise<Response>): Promise<Response> {
-  const requestId = randomUUID();
+  const requestId = resolveRequestId(request.headers);
   const start = performance.now();
   try {
-    const response = await handle();
-    response.headers.set("x-request-id", requestId);
+    let response = await handle();
     let reason: string | undefined;
     if (response.status >= 400) {
       try {
         const body = await response.clone().json() as { error?: unknown };
-        if (typeof body.error === "string" && failureReasons.has(body.error)) reason = body.error;
+        if (typeof body.error === "string") {
+          if (failureReasons.has(body.error)) reason = body.error;
+          // Error JSON carries the id so a caller can quote it.
+          const headers = new Headers(response.headers);
+          headers.delete("content-length");
+          response = Response.json({ ...body, requestId }, { status: response.status, statusText: response.statusText, headers });
+        }
       } catch { /* A non-JSON failure still gets its status. */ }
     }
+    response.headers.set("x-request-id", requestId);
     const stack = caughtStacks.get(request);
     caughtStacks.delete(request);
     writeHttpLog({ route, method: request.method, status: response.status, durationMs: Math.round(performance.now() - start), requestId, ...(reason ? { reason } : {}), ...(stack ? { stack } : {}) });

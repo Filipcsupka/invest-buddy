@@ -22,6 +22,7 @@
     "detect": "tsx src/jobs/detect.ts",
     "watch": "tsx src/jobs/watch.ts",
     "discovery": "tsx src/jobs/discovery.ts",
+    "discovery:promote": "tsx scripts/discovery-promote.ts",
     "retention": "tsx src/jobs/retention.ts",
     "master:refresh": "tsx src/jobs/master-refresh.ts",
     "macro": "tsx src/jobs/macro.ts",
