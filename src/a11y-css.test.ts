@@ -7,7 +7,7 @@ const modules = ["src/components/status-slider.module.css", "src/components/idea
 /** Every declaration block for a selector, including ones inside media queries. */
 function blocks(source: string, selector: string): string[] {
   const out: string[] = [];
-  for (const m of source.matchAll(/([^{}]+)\{([^{}]*)\}/g)) if (m[1].split(",").some((part) => part.trim() === selector)) out.push(m[2]);
+  for (const m of source.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^{}]*)\}/g)) if (m[1].split(",").some((part) => part.trim() === selector)) out.push(m[2]);
   return out;
 }
 const rem = (body: string, property: string) => Number(body.match(new RegExp(`(?:^|[\\s;])${property}:\\s*([\\d.]+)rem`))?.[1] ?? NaN);
