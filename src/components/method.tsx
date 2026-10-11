@@ -1,6 +1,7 @@
 import { fill, getMessages, type Locale } from "@/i18n";
 import { ruleGroups } from "@/i18n/rules";
-import { StateChip } from "./score-badge";
+import { MiniTrack, StatusIcon, statusLabel, steps } from "./status-slider";
+import styles from "./status-slider.module.css";
 
 /** The published rule book: ten rules in three groups, with their points. */
 export function RuleBook({ locale, definitions = false }: { locale: Locale; definitions?: boolean }) {
@@ -37,53 +38,65 @@ export function RuleBook({ locale, definitions = false }: { locale: Locale; defi
   );
 }
 
-/** The 0 to 25 scale, drawn to proportion, with the two states that override it. */
-export function StateScale({ locale }: { locale: Locale }) {
+const legendOrder = ["setup", "watch", "wait", "ignore", "broken", "insufficient"] as const;
+
+/** The five steps plus gray: points, meaning, coverage and what the chips are. Top row is the highest step. */
+export function StatusLegend({ locale, adviceOutput }: { locale: Locale; adviceOutput: boolean }) {
   const m = getMessages(locale);
-  const bands = [
-    { key: "ignore", from: 0, to: 11 },
-    { key: "wait", from: 12, to: 14 },
-    { key: "watch", from: 15, to: 17 },
-    { key: "setup", from: 18, to: 25 },
-  ] as const;
   return (
-    <div className="scale">
-      <ol className="scale-bands">
-        {bands.map((band) => (
-          <li key={band.key} style={{ flexGrow: band.to - band.from + 1, "--span": band.to - band.from + 1 } as React.CSSProperties} data-state={band.key}>
-            <span className="scale-bar" aria-hidden="true" />
-            <StateChip state={band.key} label={m.states[band.key]} />
-            <span className="scale-range num">{m.stateRanges[band.key]}</span>
-          </li>
-        ))}
-      </ol>
-      <div className="scale-axis num" aria-hidden="true">
-        {[0, 12, 15, 18, 25].map((tick) => (
-          <span key={tick} style={{ left: `${(tick / 26) * 100}%` }}>
-            {tick}
-          </span>
-        ))}
-      </div>
-      <dl className="scale-overrides">
-        <div>
-          <dt>
-            <StateChip state="watch" label={m.states.watch} pullbackLabel={m.states.pullback} />
-          </dt>
-          <dd>{m.stateRanges.pullback}</dd>
-        </div>
-        <div>
-          <dt>
-            <StateChip state="broken" label={m.states.broken} />
-          </dt>
-          <dd>{m.stateRanges.broken}</dd>
-        </div>
-        <div>
-          <dt>
-            <StateChip state="insufficient" label={m.states.insufficient} />
-          </dt>
-          <dd>{m.stateRanges.insufficient}</dd>
-        </div>
-      </dl>
+    <div className="status-legend">
+      <p className="prose">{m.status.legendLede}</p>
+      <table className={styles.legend}>
+        <caption className="visually-hidden">{m.status.legendTitle}</caption>
+        <thead>
+          <tr>
+            <th scope="col">{m.status.legendStep}</th>
+            <th scope="col">{m.status.columns.points}</th>
+            <th scope="col">{m.status.legendMeaning}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {legendOrder.map((state) => (
+            <tr key={state} data-state={state}>
+              <th scope="row">
+                <span className={styles.cell} data-state={state}>
+                  <MiniTrack position={state === "insufficient" ? null : steps.indexOf(state)} />
+                  <StatusIcon state={state} />
+                  <span className={styles.cellLabel}>{statusLabel(m, state, adviceOutput)}</span>
+                </span>
+              </th>
+              <td className="num">{m.status.ranges[state]}</td>
+              <td>
+                {m.status.meaning[state]}
+                {state === "broken" ? <> <a className={styles.legendLink} href="#rejection">{m.methodology.rejectionTitle}</a></> : null}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <h3>{m.status.legendMissingTitle}</h3>
+      <p className="prose">{m.status.legendMissing}</p>
+      <h3>{m.status.legendConfirmTitle}</h3>
+      <p className="prose">{m.status.legendConfirm}</p>
     </div>
+  );
+}
+
+/** Static row of the five steps and gray for the home page. */
+export function StatusSteps({ locale, adviceOutput }: { locale: Locale; adviceOutput: boolean }) {
+  const m = getMessages(locale);
+  return (
+    <ol className={styles.stepRow}>
+      {[...steps, "insufficient" as const].map((state, index) => (
+        <li key={state}>
+          <span className={styles.cell} data-state={state}>
+            <MiniTrack position={state === "insufficient" ? null : index} />
+            <StatusIcon state={state} />
+            <span className={styles.cellLabel}>{statusLabel(m, state, adviceOutput)}</span>
+          </span>
+          <span className={styles.stepRange}>{m.status.ranges[state]}</span>
+        </li>
+      ))}
+    </ol>
   );
 }

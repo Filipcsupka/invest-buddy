@@ -26,6 +26,44 @@ export function StatusIcon({ state }: { state: StateKey }) {
   return <span className={styles.icon} data-state={state} aria-hidden="true">{bandIcons[state]()}</span>;
 }
 
+/** Five small steps for rows and the legend. The active step is filled and taller. Position null draws the empty gray track. */
+export function MiniTrack({ position, ariaLabel }: { position: number | null; ariaLabel?: string }) {
+  return (
+    <span className={styles.mini} data-none={position === null ? "" : undefined} {...(ariaLabel ? { role: "img", "aria-label": ariaLabel } : { "aria-hidden": true })}>
+      {steps.map((state, index) => <span key={state} className={styles.miniStep} data-state={state} data-active={position === index ? "" : undefined} />)}
+    </span>
+  );
+}
+
+/** Band icon and label in the band color. Used for group headings and the legend. */
+export function StatusBadge({ state, label }: { state: StateKey; label: string }) {
+  return <span className={styles.badge} data-state={state}><StatusIcon state={state} /><span>{label}</span></span>;
+}
+
+/** Status cell for table rows: mini track, icon and label. The track's aria-label is the full reading, so the visible label is hidden from screen readers. */
+export function StatusCell({ state, position, label, ariaLabel, pullbackLabel, describedBy }: { state: StateKey; position: number | null; label: string; ariaLabel: string; pullbackLabel?: string | null; describedBy?: string }) {
+  return (
+    <span className={styles.cell} data-state={state} aria-describedby={describedBy}>
+      <MiniTrack position={position} ariaLabel={ariaLabel} />
+      <StatusIcon state={state} />
+      <span className={styles.cellLabel} aria-hidden="true">{label}</span>
+      {pullbackLabel ? <span className={styles.qualifier}>{pullbackLabel}</span> : null}
+    </span>
+  );
+}
+
+/** Data column: "23/25" and a no-data mark with the rule list in the title. Empty for an unscored ticker. */
+export function DataCell({ known, noDataRules, scored }: { known: number; noDataRules: string; scored: boolean }) {
+  if (!scored) return null;
+  return (
+    <span className={styles.data} title={noDataRules || undefined}>
+      <span className="num">{known}/25</span>
+      {known < 25 ? <IconNoData /> : null}
+      {noDataRules ? <span className="visually-hidden">{noDataRules}</span> : null}
+    </span>
+  );
+}
+
 /** The five-step track with a marker over the active step. Read-only, so no slider role and no focus. */
 export function StatusTrack({ view, m, adviceOutput }: { view: StatusView; m: Messages; adviceOutput: boolean }) {
   const active = view.position;

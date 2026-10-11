@@ -1,7 +1,8 @@
 import { withPageLog } from "@/app/page-log";
 import type { Metadata } from "next";
 import { Disclaimer } from "@/components/disclaimer";
-import { RuleBook, StateScale } from "@/components/method";
+import { RuleBook, StatusLegend } from "@/components/method";
+import { flags } from "@/config/flags";
 import { getMessages } from "@/i18n";
 import { pageMetadata } from "@/i18n/metadata";
 import { resolveLocale, type LocaleParams } from "../locale";
@@ -30,8 +31,8 @@ async function Methodology({ params }: LocaleParams) {
       </section>
 
       <section aria-labelledby="states">
-        <h2 id="states">{m.methodology.statesTitle}</h2>
-        <StateScale locale={locale} />
+        <h2 id="states">{m.status.legendTitle}</h2>
+        <StatusLegend locale={locale} adviceOutput={flags().ADVICE_OUTPUT} />
       </section>
 
       <section aria-labelledby="rejection">

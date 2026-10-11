@@ -1,9 +1,11 @@
 import type { ScoreResult } from "@/engine";
 import type { Instrument } from "@/data/providers";
+import { flags } from "@/config/flags";
+import { statusView } from "@/engine/status";
 import { httpsUrl, type SourceItem, type SourceKind } from "@/data/sources";
 import { fill, formatDate, getMessages, type Locale } from "@/i18n";
 import { reasonsFor, sectorLabel, stateKey } from "@/i18n/score-text";
-import type { StateKey } from "@/i18n/rules";
+import { ruleGroups, type StateKey } from "@/i18n/rules";
 
 /** Everything a table row needs, already localized and serializable for client components. */
 export type ScreenRow = {
@@ -24,12 +26,28 @@ export type ScreenRow = {
   markLabel: string;
   reasons: string[];
   agreementLabel: string | null;
+  /** Slider step 0 to 4, or null when the ticker is not scored. */
+  position: number | null;
+  /** Points that had data, out of 25. */
+  pointsKnown: number;
+  /** "Catalyst (2), Macro data (3)", empty when every rule had data. */
+  noDataRules: string;
+  /** One sentence for screen readers: label, step, points, data. */
+  statusAria: string;
+  /** "Points not counted: 20" for criteria broken, else null. */
+  pointsNote: string | null;
 };
+
+const ruleWeights = new Map<string, number>(ruleGroups.flatMap((group) => group.rules.map((rule) => [rule.id, rule.points] as const)));
 
 export function toRow(locale: Locale, { instrument, result }: { instrument: Instrument; result: ScoreResult }): ScreenRow {
   const m = getMessages(locale);
   const state = stateKey(result.state);
   const scored = state !== "insufficient";
+  const adviceOutput = flags().ADVICE_OUTPUT;
+  const view = statusView({ state, points: scored ? result.total : null, ruleHits: result.ruleHits, adviceOutput });
+  const label = state === "setup" && adviceOutput ? m.status.advice.setup : m.status.labels[state];
+  const aria = state === "insufficient" ? m.status.summaryAriaNone : state === "broken" ? m.status.summaryAriaBroken : m.status.summaryAria;
   return {
     ticker: instrument.ticker,
     name: instrument.name,
@@ -42,12 +60,17 @@ export function toRow(locale: Locale, { instrument, result }: { instrument: Inst
     technical: result.technical,
     macro: result.macro,
     state,
-    stateLabel: m.states[state],
+    stateLabel: label,
     pullbackLabel: state === "watch" && result.pullbackInUptrend ? m.states.pullback : null,
     matched: scored ? result.ruleHits.filter((hit) => hit.matched).map((hit) => hit.id) : null,
     markLabel: scored ? fill(m.mark.label, { total: result.total, fundamentals: result.fundamentals, technical: result.technical, macro: result.macro }) : m.mark.none,
     reasons: reasonsFor(locale, result),
     agreementLabel: result.agreement ? agreementSummary(m.agreement, Object.values(result.agreement)) : null,
+    position: view.position,
+    pointsKnown: scored ? view.coverage.pointsKnown : 0,
+    noDataRules: scored ? view.coverage.unknownRules.map((id) => `${m.status.ruleShort[id]} (${ruleWeights.get(id)})`).join(", ") : "",
+    statusAria: fill(aria, { label, step: (view.position ?? 0) + 1, points: view.points ?? 0, known: view.coverage.pointsKnown }),
+    pointsNote: state === "broken" ? fill(m.status.pointsNotCounted, { points: result.total }) : null,
   };
 }
 

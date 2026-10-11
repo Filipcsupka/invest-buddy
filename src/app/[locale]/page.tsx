@@ -3,11 +3,13 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { Datasheet } from "@/components/datasheet";
 import { IconArrowRight } from "@/components/icons";
-import { RuleBook, StateScale } from "@/components/method";
+import { RuleBook, StatusSteps } from "@/components/method";
 import { latestScores } from "@/data/store";
 import { DataStatus } from "@/components/data-status";
 export const dynamic = "force-dynamic";
-import { getMessages } from "@/i18n";
+import { statusLabel } from "@/components/status-slider";
+import { flags } from "@/config/flags";
+import { fill, getMessages } from "@/i18n";
 import { pageMetadata } from "@/i18n/metadata";
 import { resolveLocale, type LocaleParams } from "./locale";
 
@@ -53,10 +55,10 @@ async function Home({ params }: LocaleParams) {
 
       <section className="frame ledger" aria-labelledby="states">
         <div className="ledger-head">
-          <h2 id="states">{m.home.statesTitle}</h2>
-          <p className="prose">{m.home.statesBody}</p>
+          <h2 id="states">{m.home.statusTitle}</h2>
+          <p className="prose">{fill(m.home.statusBody, { setup: statusLabel(m, "setup", flags().ADVICE_OUTPUT) })}</p>
         </div>
-        <StateScale locale={locale} />
+        <StatusSteps locale={locale} adviceOutput={flags().ADVICE_OUTPUT} />
       </section>
 
       <section className="frame ledger ledger-quiet" aria-labelledby="leaves-out">
