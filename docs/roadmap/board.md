@@ -6,6 +6,7 @@ Updated 2026-10-11 evening. One table per state. A PR that finishes a task moves
 
 | ID | What | PR | Live check |
 | --- | --- | --- | --- |
+| DOC1 | Architecture diagrams and system map | #160 | docs only |
 | D11 | Universe membership history | #110 | migration 043 applied |
 | D18 | SEC companyfacts history | #109 | migration 034 |
 | D20 | Form 4 transactions and backfill | #118 | backfill run 2026-10-11: 45,999 rows, 35 tickers |
