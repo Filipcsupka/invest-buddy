@@ -34,6 +34,21 @@ describe("daily pipeline order", () => {
     for (const text of ["runAsNonRoot: true", "automountServiceAccountToken: false", "allowPrivilegeEscalation: false", "readOnlyRootFilesystem: true", 'drop: ["ALL"]', "type: RuntimeDefault", "concurrencyPolicy: Forbid"]) expect(doc).toContain(text);
     expect(readFileSync(join(base, "kustomization.yaml"), "utf8")).toContain("- master-refresh-cronjob.yaml");
   });
+  it("keeps the weekly Telegram summary suspended, Sunday 18:00 Bratislava, after the Sunday master refresh", () => {
+    const doc = job("weekly");
+    expect(minutes("weekly")).toEqual({ at: 18 * 60, days: "0" });
+    expect(minutes("weekly").at).toBeGreaterThanOrEqual(minutes("master-refresh").at + startWindow("master-refresh") + deadline("master-refresh"));
+    expect(doc).toContain("suspend: true");
+    expect(doc).toContain("timeZone: Europe/Bratislava");
+    expect(doc).toContain('command: ["node", "dist/jobs/weekly.js"]');
+    expect(doc).toContain("ghcr.io/filipcsupka/invest-buddy:latest");
+    expect(doc).toContain("activeDeadlineSeconds:");
+    expect(deadline("weekly")).toBeLessThanOrEqual(15);
+    for (const name of ["DATABASE_URL", "DIGEST_LOCALE", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"]) expect(doc).toContain(`name: ${name}`);
+    expect(doc).toContain("name: invest-buddy-telegram");
+    for (const text of ["runAsNonRoot: true", "automountServiceAccountToken: false", "allowPrivilegeEscalation: false", "readOnlyRootFilesystem: true", 'drop: ["ALL"]', "type: RuntimeDefault", "concurrencyPolicy: Forbid"]) expect(doc).toContain(text);
+    expect(readFileSync(join(base, "kustomization.yaml"), "utf8")).toContain("- weekly-cronjob.yaml");
+  });
   const chain = ["prices", "collect", "detect", "extract", "macro", "reconcile", "daily", "judge"];
   it("uses the night schedule in Bratislava", () => {
     const expected = ["00:30", "01:00", "01:35", "01:50", "04:00", "04:10", "04:25", "05:30"];

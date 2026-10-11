@@ -14,4 +14,5 @@ resources:
   - earnings-calendar-cronjob.yaml
   - holder-events-cronjob.yaml
   - master-refresh-cronjob.yaml
+  - weekly-cronjob.yaml
   - backup-cronjob.yaml
