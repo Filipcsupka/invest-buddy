@@ -1,5 +1,6 @@
 import { requireSecUserAgent } from "../collectors/sec-user-agent";
 import { REVENUE_CONCEPTS } from "../collectors/sources/frames";
+import { fundamentalsHistory, type Queryable } from "../db/history";
 
 /** SEC companyfacts revenue calculations. Only comparable filed fiscal quarters are used. */
 export interface SecFact { start?: string; end: string; val: number; accn: string; fy: number; fp: string; form: string; filed: string; frame?: string }
@@ -110,4 +111,42 @@ export async function secRevenue(symbol: string, asOf: string): Promise<RevenueR
   const facts = await secJson<CompanyFacts>(url);
   const result = revenueFromCompanyFacts(facts, asOf);
   return result ? { ...result, source: url } : null;
+}
+
+const HISTORY_YEARS = 4;
+const companyfactsSource = (cik: number) => `https://data.sec.gov/api/xbrl/companyfacts/CIK${String(cik).padStart(10, "0")}.json`;
+
+/**
+ * Same calculation as `secRevenue`, but from the SEC facts D18 stored in `fundamentals_pit` (read through `fundamentalsHistory`, so the
+ * `sec` display flag applies). Unknown (null) when the flag is off, the ticker has no stored facts or CIK, a quarter is missing, or the
+ * issuer files 20-F/6-K (no 10-Q or 10-K quarters to compare). Facts filed after `asOf` are ignored.
+ */
+export async function secRevenueStored(db: Queryable, symbol: string, asOf: string): Promise<RevenueResult | null> {
+  const cikRow = await db.query<{ cik: string | number | null }>("SELECT cik FROM instrument_ids WHERE ticker = $1 AND valid_to IS NULL AND cik IS NOT NULL LIMIT 1", [symbol]);
+  const cik = Number(cikRow.rows[0]?.cik);
+  if (!Number.isInteger(cik) || cik <= 0) return null;
+  const from = new Date(`${asOf}T00:00:00Z`);
+  from.setUTCFullYear(from.getUTCFullYear() - HISTORY_YEARS);
+  const usGaap: Record<string, { units: Record<string, SecFact[]> }> = {};
+  for (const concept of REVENUE_CONCEPTS) {
+    const facts: SecFact[] = [];
+    let cursor: string | null = null;
+    do {
+      const page: Awaited<ReturnType<typeof fundamentalsHistory>> = await fundamentalsHistory(db, symbol, concept, { from: from.toISOString().slice(0, 10), to: asOf, limit: 500, cursor });
+      for (const row of page.rows) {
+        if (row.unit !== "USD" || row.fy === null || row.fp === null) continue;
+        facts.push({ ...(row.periodStart ? { start: row.periodStart } : {}), end: row.periodEnd, val: row.value, accn: row.accession, fy: row.fy, fp: row.fp, form: row.form, filed: row.filed });
+      }
+      cursor = page.nextCursor;
+    } while (cursor);
+    if (facts.length) usGaap[concept] = { units: { USD: facts } };
+  }
+  const result = revenueFromCompanyFacts({ facts: { "us-gaap": usGaap }, cik } as CompanyFacts & { cik: number }, asOf);
+  return result ? { ...result, source: companyfactsSource(cik) } : null;
+}
+
+/** Stored SEC facts first; `fallback` (live SEC fetch) only when the store gives no answer. */
+export function revenueLookup(db: Queryable, fallback?: (symbol: string, asOf: string) => Promise<RevenueResult | null>) {
+  return async (symbol: string, asOf: string): Promise<RevenueResult | null> =>
+    (await secRevenueStored(db, symbol, asOf).catch(() => null)) ?? (fallback ? fallback(symbol, asOf) : null);
 }
