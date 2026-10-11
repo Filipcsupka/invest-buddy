@@ -1,6 +1,6 @@
 # Task board
 
-Updated 2026-10-11 evening. One table per state. A PR that finishes a task moves it to Done in the same PR or the next status PR; "implemented" means merged with CI green. Live notes say what was checked on the cluster. Detail per task is in the lane files and in `docs/tasks-open.md` section J.
+Updated 2026-10-11 night. One table per state. A PR that finishes a task moves it to Done in the same PR or the next status PR; "implemented" means merged with CI green. Live notes say what was checked on the cluster. Detail per task is in the lane files and in `docs/tasks-open.md` section J.
 
 ## Done (merged, CI green)
 
@@ -37,24 +37,27 @@ Updated 2026-10-11 evening. One table per state. A PR that finishes a task moves
 | W25 | Design polish pass | #151 | |
 | W33, W34 | Score history, scanner filters | #123, #111 | |
 | PL46, SEC1 | Cheap CI, local security scan script | #143, #144 | first manual Security run passed |
+| D19 | Filing archive with 3-year backfill | #147 | migration 051; CI green, live backfill not run |
+| D24 | Macro observations FRED and Treasury | #150 | migration 049 |
+| W7 | Security headers and rate limit | #145 | no migration |
+| RS0 | Research engine spec, ADR, lane RS, schema | #161 | docs, schema, types |
+| RS1 | Researcher runner and prompts | #163 | not run live |
+| RS2 | Source verifier | #162 | not run live |
+| RS3 | Research tables and pipeline state machine | #164 | migration 052 |
+| RS4 | Judge integration and fact feed | #165 | migration 053 |
+| RS5 | Research CronJobs, caps and kill switch | #167 | jobs suspended, owner unsuspends after RS8 |
+| RS6 | Private research cards, materiality and owner page | #166 | not run live |
 | Telegram | Channel, sealed secret, digest unsuspended | infra #37 to #41, #126 | first alert sent 2026-10-10 |
 
 ## In progress
 
 | ID | What | State |
 | --- | --- | --- |
-| D19 | Filing archive with 3-year backfill | PR #147, CI and rebase |
-| D24 | Macro observations FRED and Treasury | PR #150, migration must be 051 |
-| W7 | Security headers and rate limit | PR #145, rebase |
-| RS0 | Research engine spec, ADR, lane RS, schema | worker running |
-| RS2 | Source verifier `src/research/verify.ts` | worker running |
-| RS5 | Research CronJobs, caps and kill switch | PR in progress; schedules suspended |
-| RS4 | Judge integration and fact feed | PR open, local checks passed |
-| RS6 | Private research cards, materiality and owner page | PR open, targeted checks passed |
+| none | No agent running | wave finished |
 
 ## Queued, in order
 
-1. RS1 researcher runner and prompts, RS3 tables and pipeline state machine, RS8 evaluation on the six old cards (after RS0 merges). RS7 Codex adapter and secret later.
+1. RS8 evaluation on the six old cards (RS0 to RS6 are merged). RS7 Codex adapter and secret later.
 2. Web: W5 page cache, W3 performance baseline, W21 OG images, W23 native Slovak review, W32 tier map, W35 CSV export.
 3. Engine: EN4, EN5, EN28.
 4. Data: D36 roll out 150 names (after D35 criteria), D26 FX, D28 EPS history, D13 corporate actions.
