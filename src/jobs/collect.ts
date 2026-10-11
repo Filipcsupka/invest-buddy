@@ -17,6 +17,7 @@ import { MemoryCusipStore, PostgresCusipStore, type CusipStore } from "../db/sou
 import { PostgresUsageLedger, type UsageLedger } from "../data/usage";
 import { isIsoDate } from "../db/iso-date";
 import { loadUniverse } from "../db/universe";
+import { CATALYST_FACT_KEY, CATALYST_WINDOW_DAYS, catalystFromDocuments, type CatalystDoc } from "../data/catalyst";
 
 const companies = universe.instruments as Company[];
 const daysAgo = (date: Date, days: number) => new Date(date.getTime() - days * 86400000).toISOString().slice(0, 10);
@@ -154,6 +155,17 @@ export async function deriveFacts(symbol: string, docs: CollectedDocument[], ids
   const earnings = docs.filter((doc) => doc.docType === "8-K EX-99.1").sort((a, b) => b.publishedAt.localeCompare(a.publishedAt))[0];
   // Keyed by the filing date, not the run date: the same earnings 8-K must not create a new row (and a new computed_at) every day.
   if (earnings) make("latest_earnings_8k", { date: earnings.publishedAt.slice(0, 10), documentId: ids.get(earnings.url) ?? null }, [earnings], earnings.publishedAt.slice(0, 10));
+  // Product catalyst from stored 8-K text (items 1.01, 2.02, 7.01, 8.01) in the last 90 days. A qualifying filing is dated by its filing date and lives 90 days.
+  // "None found" is dated by the run and only written when 8-K text was read. No 8-K text means no fact, and the rule stays unknown.
+  const eightK: CatalystDoc[] = docs.filter((doc) => doc.source === "edgar").map((doc) => ({ url: doc.url, docType: doc.docType, publishedAt: doc.publishedAt, items: String(doc.meta.items ?? ""), body: doc.body, displayAllowed: doc.meta.display_allowed === true, id: ids.get(doc.url) }));
+  const catalyst = catalystFromDocuments(eightK, asOf);
+  if (catalyst) {
+    const matched = catalyst.present ? eightK.find((doc) => doc.url === catalyst.url) : undefined;
+    const filed = catalyst.publishedAt;
+    facts.push({ symbol, key: CATALYST_FACT_KEY, asOf: filed ?? asOf, value: catalyst, sourceId: "sec",
+      documentIds: matched?.id !== undefined ? [matched.id] : [],
+      ...(filed ? { expiresAt: new Date(Date.parse(`${filed}T00:00:00Z`) + CATALYST_WINDOW_DAYS * 86400000).toISOString() } : {}) });
+  }
   const filer = foreignFilerStatus(docs);
   // Dated by the newest foreign filing, so it does not create a row per day. It lives as long as the 20-F and 6-K documents it comes from.
   if (filer) facts.push({ symbol, key: FOREIGN_FILER_FACT, asOf: filer.asOf, value: filer.value, documentIds: docs.filter((doc) => doc.docType === "20-F" || doc.docType === "6-K").map((doc) => ids.get(doc.url)).filter((id): id is number => id !== undefined), expiresAt: new Date(Date.parse(`${filer.asOf}T00:00:00Z`) + documentRetentionDays("20-F") * 86400000).toISOString() });
