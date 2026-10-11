@@ -1,8 +1,15 @@
 import { technicalIndicators, volumeAccumulation } from "./indicators";
-import type { Fundamentals, Macro, OHLCV, RuleHit, ScoreInputs, ScoreResult } from "./types";
+import { evidencedMaxOf, relativeScore, type RelativeBand } from "./relative";
+import type { AlertState, Fundamentals, Macro, OHLCV, RuleHit, ScoreInputs, ScoreResult } from "./types";
 
-/** Bump when the scoring rules change; each new record snapshot stores this value. */
-export const SCORE_RULES_VERSION = "2026-10-10.1";
+/**
+ * Bump when the scoring rules change; each new record snapshot stores this value.
+ * 2026-10-11.1 (EN45): states use the share of evidenced points and the coverage guard (src/engine/relative.ts).
+ */
+export const SCORE_RULES_VERSION = "2026-10-11.1";
+
+/** Stored state strings stay as they were, so older audits, alerts and the track record still parse. */
+const STATE_FOR_BAND: Record<RelativeBand, AlertState> = { setup: "Setup met (>=18)", watch: "Watch", wait: "Wait", ignore: "Ignore" };
 
 const finite = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
 const boolean = (value: unknown) => typeof value === "boolean" || value === null;
@@ -50,7 +57,7 @@ export function score(input: ScoreInputs): ScoreResult {
   if (invalidReasons.length) return {
     ticker: input.ticker, asOf: "", technical: 0, fundamentals: 0, macro: 0, total: 0,
     state: "Insufficient/invalid data", pullbackInUptrend: false, invalidReasons,
-    inputs: normalized, ruleHits: [], rejectionReasons: [],
+    inputs: normalized, ruleHits: [], rejectionReasons: [], evidencedMax: 0, percent: 0, coverage: 0, incompleteData: true,
   };
   const indicator = technicalIndicators(bars);
   const accumulation = volumeAccumulation(bars);
@@ -85,6 +92,11 @@ export function score(input: ScoreInputs): ScoreResult {
     ...(indicator.ma50 !== null && indicator.ma200 !== null && indicator.ma50 < indicator.ma200 ? ["Long-term downtrend: MA50 below MA200"] : []),
     ...(f.noRevenue || f.memePump ? ["No revenue or meme-pump flag"] : []),
   ];
-  const state = rejectionReasons.length ? "Criteria broken" : total >= 18 ? "Setup met (>=18)" : total >= 15 ? "Watch" : total >= 12 ? "Wait" : "Ignore";
-  return { ticker: input.ticker, asOf: bars.at(-1)?.date ?? "", technical, fundamentals, macro, total, state, pullbackInUptrend, invalidReasons, inputs: normalized, ruleHits: hits, rejectionReasons };
+  // Relative rule: total against the points with evidence; under 20 evidenced points the best state is Watch.
+  const relative = relativeScore(total, evidencedMaxOf(hits));
+  const state: AlertState = rejectionReasons.length ? "Criteria broken" : STATE_FOR_BAND[relative.band];
+  return {
+    ticker: input.ticker, asOf: bars.at(-1)?.date ?? "", technical, fundamentals, macro, total, state, pullbackInUptrend, invalidReasons, inputs: normalized, ruleHits: hits, rejectionReasons,
+    evidencedMax: relative.evidencedMax, percent: relative.percent, coverage: relative.coverage, incompleteData: relative.incompleteData,
+  };
 }

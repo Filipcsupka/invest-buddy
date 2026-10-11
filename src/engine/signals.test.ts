@@ -56,6 +56,24 @@ describe("actions from data only, no portfolio", () => {
     expect(one(sym("S", { technicals: flatEntry, fields: noExecution }))).toMatchObject({ action: "START_POSITION", sizeTier: "STANDARD" });
     expect(one(sym("S", { technicals: flatEntry, fields: starterFields, score: { total: 18, state: "Setup met (>=18)" } }))).toMatchObject({ action: "START_POSITION", sizeTier: "STARTER" });
   });
+  it("relative thresholds (EN45): shares of the evidenced points and a 20-point guard for a start", () => {
+    expect(SIGNAL_RULES.minEvidencedPoints).toBe(20);
+    const at = (total: number, evidencedMax: number, over: Partial<SignalSymbolInput> = {}) => one(sym("R", { score: { total, state: "x", evidencedMax }, ...over }));
+    // 15 of 20 is 75%, at least 18 of 25: a start on an average entry.
+    expect(at(15, 20, { technicals: flatEntry })).toMatchObject({ action: "START_POSITION", sizeTier: "FULL" });
+    // 14 of 20 is 70%: an add (at least 15 of 25), not a start.
+    expect(at(14, 20, { technicals: flatEntry }).reasons.join()).toMatch(/Score 14 of 20 evidenced points is below the start share of 18 of 25; an add needs a strong entry or pullback\.$/);
+    expect(at(14, 20)).toMatchObject({ action: "ADD", sizeTier: "ADD_THIRD" });
+    // 11 of 20 is 55%: below the add share.
+    expect(at(11, 20)).toMatchObject({ action: "WATCH", sizeTier: "NONE" });
+    expect(at(11, 20).reasons.join()).toMatch(/Score 11 of 20 evidenced points is below the add share of 15 of 25\.$/);
+    // 19 evidenced points: under the guard, so no start and no conviction, an add still possible.
+    expect(at(18, 19, { technicals: flatEntry })).toMatchObject({ action: "WATCH", sizeTier: "NONE" });
+    expect(at(18, 19, { technicals: flatEntry }).reasons.join()).toMatch(/Only 19 of 25 points have data, under the 20 needed to start/);
+    expect(at(18, 19)).toMatchObject({ action: "ADD", sizeTier: "ADD_THIRD" });
+    // evidencedMax 25 or absent behaves as before.
+    expect(decision(at(17, 25, { technicals: flatEntry }))).toEqual(decision(one(sym("R", { score: { total: 17, state: "x" }, technicals: flatEntry }))));
+  });
   it("score boundary: START needs 18, ADD needs 15 (Guide s6, s8), below 15 is WATCH", () => {
     expect(SIGNAL_RULES.minScoreForBuy).toBe(18);
     expect(SIGNAL_RULES.minScoreForAdd).toBe(15);
