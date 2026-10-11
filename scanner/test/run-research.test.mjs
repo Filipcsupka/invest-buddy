@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
-import { chmodSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -59,7 +59,7 @@ test("runner argument validation and prompt safety rules", () => {
   }
 });
 
-async function runFake({ response = clone().output, dryRun = false, cutoff = false, cliFailure = false, wrapped = false, type = "daily" } = {}) {
+async function runFake({ response = clone().output, dryRun = false, cutoff = false, cliFailure = false, wrapped = false, type = "daily", enabled = true, dailyCalls = 0 } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "research-test-"));
   const bin = join(dir, "claude");
   const capture = join(dir, "capture.json");
@@ -72,17 +72,16 @@ async function runFake({ response = clone().output, dryRun = false, cutoff = fal
   if (cliFailure) writeFileSync(join(dir, "exit-code"), "1");
   writeFileSync(bin, `#!/usr/bin/env node\nconst fs=require('fs');fs.writeFileSync(process.env.HOME+'/capture.json',JSON.stringify({args:process.argv.slice(2),env:Object.keys(process.env).sort(),cwd:process.cwd()}));process.stdin.resume();process.stdin.on('end',()=>{process.stdout.write(fs.readFileSync(process.env.HOME+'/reply.json','utf8'));if(fs.existsSync(process.env.HOME+'/exit-code'))process.exitCode=1});\n`);
   chmodSync(bin, 0o755);
-  const posts = [];
+  const posts = [], budgets = [];
   const server = createServer((req, res) => {
-    if (req.method === "POST") { let body = ""; req.on("data", (d) => { body += d; }); req.on("end", () => { posts.push(JSON.parse(body)); res.writeHead(200, { "Content-Type": "application/json" }); res.end("{}"); }); }
+    if (req.method === "POST") { let body = ""; req.on("data", (d) => { body += d; }); req.on("end", () => { (req.url === "/api/ingest/research" ? posts : budgets).push(JSON.parse(body)); res.writeHead(200, { "Content-Type": "application/json" }); res.end("{}"); }); }
+    else if (req.url === "/api/ingest/ai-budget?report=research-caps") { res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ day: "2026-10-11", month: "2026-10", monthlyTokens: 0, monthlyUsd: 0, dailyCalls, dailyTokens: 0, sharedDailyTokens: 0 })); }
     else { res.writeHead(500); res.end(); }
   });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
-  const env = { ...process.env, PATH: `${dir}:${process.env.PATH}`, HOME: dir, RESEARCH_OUT_DIR: out, CLAUDE_CODE_OAUTH_TOKEN: "fake-oauth", UNRELATED_SECRET: "must-not-pass" };
-  if (dryRun) delete env.INGEST_TOKEN;
-  else env.INGEST_TOKEN = "test-token";
-  const args = [join(root, "scanner/run-research.mjs"), "--type", type, "--as-of", "2026-10-11", "--input-file", input, "--base-url", dryRun ? "http://127.0.0.1:1" : baseUrl];
+  const env = { ...process.env, PATH: `${dir}:${process.env.PATH}`, HOME: dir, RESEARCH_OUT_DIR: out, CLAUDE_CODE_OAUTH_TOKEN: "fake-oauth", ANTHROPIC_API_KEY: "fake-api", RESEARCH_MONTHLY_USD: "100", RESEARCH_ENABLED: enabled ? "on" : "off", RESEARCH_WINDOW: "00:00-23:59", INGEST_TOKEN: "test-token", UNRELATED_SECRET: "must-not-pass" };
+  const args = [join(root, "scanner/run-research.mjs"), "--type", type, "--as-of", "2026-10-11", "--input-file", input, "--base-url", baseUrl];
   if (dryRun) args.push("--dry-run");
   const result = await new Promise((resolve) => {
     const child = spawn(process.execPath, args, { env });
@@ -91,14 +90,15 @@ async function runFake({ response = clone().output, dryRun = false, cutoff = fal
     child.on("close", (code) => resolve({ code, stdout, stderr }));
   });
   server.close();
-  const files = readdirSync(out).map((name) => JSON.parse(readFileSync(join(out, name), "utf8")));
-  return { ...result, posts, files, capture: JSON.parse(readFileSync(capture, "utf8")), dir };
+  const files = existsSync(out) ? readdirSync(out).map((name) => JSON.parse(readFileSync(join(out, name), "utf8"))) : [];
+  return { ...result, posts, budgets, files, capture: existsSync(capture) ? JSON.parse(readFileSync(capture, "utf8")) : null, dir };
 }
 
 test("valid prose-wrapped reply is posted once with runner metadata and a restricted child", async () => {
   const r = await runFake({ wrapped: true });
   assert.equal(r.code, 0, r.stderr);
   assert.equal(r.posts.length, 1);
+  assert.deepEqual(r.budgets.map((entry) => [entry.action, entry.kind ?? null]), [["reserve", "research"], ["finish", null]]);
   assert.equal(r.posts[0].run.runType, "daily_watch");
   assert.match(r.posts[0].run.runId, /^[0-9a-f-]{36}$/);
   assert.equal(r.posts[0].run.usage.webSearches, null);
@@ -154,9 +154,20 @@ test("weekly discovery makes three separate calls with all thirteen themes", asy
   assert.equal(r.files.length, 3);
 });
 
-test("dry run with input file needs neither network nor ingest token", async () => {
+test("dry run with input file makes no ingest post", async () => {
   const r = await runFake({ dryRun: true });
   assert.equal(r.code, 0, r.stderr);
   assert.equal(r.posts.length, 0);
   assert.equal(r.files.length, 1);
+});
+
+test("kill switch and daily cap log skips without a model call", async () => {
+  for (const [options, status] of [[{ enabled: false }, "killed"], [{ dailyCalls: 4 }, "skipped_cap"]]) {
+    const r = await runFake(options);
+    assert.equal(r.code, 0, r.stderr);
+    assert.equal(r.capture, null);
+    assert.equal(r.budgets.length, 0);
+    assert.equal(r.posts.length, 1);
+    assert.equal(r.posts[0].skip.status, status);
+  }
 });

@@ -25,11 +25,12 @@ export const claudeResearchAdapter = {
       ? { ok: true, reason: null } : { ok: false, reason: "Claude auth is unavailable" };
   },
   async quota() { return null; }, // RS5 owns live quota inspection.
-  async run({ prompt, model = "sonnet", maxTurns, timeoutMs, workDir }) {
+  async run({ prompt, model = "sonnet", maxTurns, timeoutMs, workDir, monitor }) {
     const args = ["-p", "--output-format", "json", "--no-session-persistence", "--permission-mode", "dontAsk", "--tools", "WebSearch,WebFetch", "--allowedTools", "WebSearch,WebFetch", "--max-turns", String(maxTurns), "--model", model];
     let stdout;
-    try { ({ out: stdout } = await runCli("claude", args, prompt, { timeoutMs, cwd: workDir })); }
+    try { ({ out: stdout } = await runCli("claude", args, prompt, { timeoutMs, cwd: workDir, monitor })); }
     catch (error) {
+      if (error.cutoff) throw error;
       let parsed;
       try { parsed = JSON.parse(error.stdout); } catch { /* CLI text */ }
       // A valid result can mention production capacity or limits as a research fact.

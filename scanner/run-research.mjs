@@ -7,6 +7,9 @@ import { fileURLToPath } from "node:url";
 import { extractJson, getToken } from "./run-scan.mjs";
 import { researchAdapter } from "./research-adapters.mjs";
 import { validateResearchOutput } from "./research-validate.mjs";
+import { checkResearchCaps, checkLiveResearchQuota, researchLimits } from "./research-caps.mjs";
+import { fetchLiveUsage } from "./claude-usage.mjs";
+import { reserveBudget, finishBudget } from "./ai-budget.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const typeNames = { weekly: "weekly_discovery", daily: "daily_watch", deepdive: "deep_dive" };
@@ -42,6 +45,17 @@ export function parseArgs(argv, env = process.env) {
 }
 
 const authHeaders = (token) => ({ Authorization: `Bearer ${token}` });
+async function capUsage(baseUrl, token) {
+  if (!token) throw new Error("INGEST_TOKEN is required to check research caps");
+  const response = await fetch(`${baseUrl.replace(/\/$/, "")}/api/ingest/ai-budget?report=research-caps`, { headers: authHeaders(token), signal: AbortSignal.timeout(15000) });
+  if (!response.ok) throw new Error(`research cap usage HTTP ${response.status}`);
+  return response.json();
+}
+async function postSkip(opts, token, adapter, status, reason, runId) {
+  if (opts.dryRun) return;
+  const response = await fetch(`${opts.baseUrl.replace(/\/$/, "")}/api/ingest/research`, { method: "POST", headers: { ...authHeaders(token), "Content-Type": "application/json" }, body: JSON.stringify({ skip: { runId, runType: typeNames[opts.type], asOf: opts.asOf, status, stopReason: reason, adapter } }), signal: AbortSignal.timeout(15000) });
+  if (!response.ok) throw new Error(`research skip ingest HTTP ${response.status}`);
+}
 async function fetchInput(opts, token) {
   if (opts.inputFile) return JSON.parse(readFileSync(opts.inputFile, "utf8"));
   if (!token) throw new Error("INGEST_TOKEN is required to fetch research input");
@@ -67,29 +81,61 @@ export function buildPrompt(opts, input, group, themesConfig) {
 
 const modelOutput = (value) => value?.output && !value?.findings ? value.output : value;
 const statusFrom = (result) => result.cutoff ? "cutoff" : "ok";
-export async function execute(opts, { adapter = researchAdapter(process.env.RESEARCH_ADAPTER || "claude"), log = console.log } = {}) {
-  const token = opts.inputFile && opts.dryRun ? null : getToken();
-  if (!opts.dryRun && !token) throw new Error("INGEST_TOKEN is required to post research output");
+export async function execute(opts, { adapter = researchAdapter(process.env.RESEARCH_ADAPTER || "claude"), log = console.log,
+  env = process.env, now = () => new Date(), usage = capUsage, liveUsage } = {}) {
+  const token = getToken();
+  if (!token) throw new Error("INGEST_TOKEN is required to check research caps");
+  const earlyKill = env.RESEARCH_ENABLED !== "on";
+  if (earlyKill) {
+    const runId = randomUUID();
+    await postSkip(opts, token, adapter.name, "killed", "RESEARCH_ENABLED is not on", runId);
+    return [{ skipped: "killed", posted: !opts.dryRun, errors: [] }];
+  }
   const input = await fetchInput(opts, token);
   const themesConfig = JSON.parse(readFileSync(join(here, "prompts", "research-themes.json"), "utf8"));
   const outDir = process.env.RESEARCH_OUT_DIR || join(here, "out");
   mkdirSync(outDir, { recursive: true });
   const groups = callGroups(opts, input, themesConfig);
   const results = [];
+  const live = liveUsage ?? (() => fetchLiveUsage(env.CLAUDE_CODE_OAUTH_TOKEN));
   for (const group of groups) {
     const runId = randomUUID();
+    let gate;
+    try {
+      gate = await checkResearchCaps({ env, now: now(), type: opts.type, manual: opts.manual,
+        usage: await usage(opts.baseUrl, token), liveUsage: live });
+    } catch (error) { gate = { ok: false, status: "skipped_cap", reason: `research cap check unavailable: ${error.message}` }; }
+    if (!gate.ok) {
+      await postSkip(opts, token, adapter.name, gate.status, gate.reason, runId);
+      log(`${group.id}: ${gate.status} (${gate.reason})`);
+      results.push({ skipped: gate.status, posted: !opts.dryRun, errors: [] });
+      continue;
+    }
+    const budgetId = opts.dryRun ? null : await reserveBudget(opts.baseUrl, token, "research", opts.model, adapter.name, researchLimits(env, opts.type, now()));
+    if (!opts.dryRun && !budgetId) {
+      await postSkip(opts, token, adapter.name, "skipped_cap", "research budget reservation unavailable", runId);
+      results.push({ skipped: "skipped_cap", posted: true, errors: [] });
+      continue;
+    }
     const workDir = mkdtempSync(join(tmpdir(), "invest-research-"));
     const started = performance.now();
     let result, output, error = null, adapterFailed = false;
     try {
       const prompt = buildPrompt(opts, input, group, themesConfig);
-      try { result = await adapter.run({ prompt, schemaPath: join(here, "schema", "research-output.schema.json"), model: opts.model, maxTurns: defaults.maxTurns, timeoutMs: opts.timeoutS * 1000, workDir }); }
+      try { result = await adapter.run({ prompt, schemaPath: join(here, "schema", "research-output.schema.json"), model: opts.model, maxTurns: defaults.maxTurns, timeoutMs: opts.timeoutS * 1000, workDir,
+        monitor: env.ANTHROPIC_API_KEY ? undefined : () => checkLiveResearchQuota({ env, liveUsage: live }) }); }
       catch (caught) { error = caught; adapterFailed = true; }
       if (!adapterFailed) output = result.cutoff ? emptyOutput() : modelOutput(extractJson(result.text));
     } catch (caught) {
       error = caught;
     } finally { rmSync(workDir, { recursive: true, force: true }); }
     const cutoff = Boolean(error?.cutoff || result?.cutoff);
+    let budgetRecorded = true;
+    if (budgetId) {
+      budgetRecorded = await finishBudget(opts.baseUrl, token, budgetId, result?.usage ?? error?.usage, result?.costUsd ?? error?.costUsd,
+        cutoff ? { status: "cutoff", window: error?.cutoff?.window ?? result?.cutoff?.window ?? null } : error ? { status: "failed" } : null);
+      if (!budgetRecorded) log(`${group.id}: research budget finish unavailable`);
+    }
     if (adapterFailed) output = emptyOutput();
     const run = {
       runId, runType: typeNames[opts.type], asOf: opts.asOf, generatedAt: new Date().toISOString(), promptVersion: `research-${opts.type}@2026-10-11.1`,
@@ -109,7 +155,7 @@ export async function execute(opts, { adapter = researchAdapter(process.env.RESE
       if (!response.ok) throw new Error(`research ingest HTTP ${response.status}; file kept at ${file}`);
     }
     log(`${file}: ${run.status}${opts.dryRun ? " (dry run)" : " (posted)"}`);
-    results.push({ file, posted: !opts.dryRun, errors: [], failed: run.status === "failed" });
+    results.push({ file, posted: !opts.dryRun, errors: budgetRecorded ? [] : ["research budget finish unavailable"], failed: run.status === "failed" });
   }
   return results;
 }

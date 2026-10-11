@@ -1,4 +1,5 @@
 import type pg from "pg";
+import { researchCapUsage } from "./research-caps";
 
 export const unknownUsageTokens = (env = process.env) => {
   const value = Number(env.AI_UNKNOWN_USAGE_TOKENS ?? "20000");
@@ -15,7 +16,28 @@ export async function dailyTokenUsage(db: Pick<pg.Pool, "query">): Promise<numbe
   return Number(result.rows[0]?.tokens ?? 0);
 }
 
-export async function reserveCall(db: Pick<pg.Pool, "query">, call: { id: string; kind: "extract" | "judge"; agent: "claude" | "codex"; authSource: "subscription" | "api" | "codex"; model: string }) {
+type ResearchCaps = { monthlyTokens: number; monthlyUsd: number; dailyCalls: number; dailyTokens: number; sharedDailyTokens: number };
+export async function reserveCall(db: Pick<pg.Pool, "query" | "connect">, call: { id: string; kind: "extract" | "judge" | "research"; agent: "claude" | "codex"; authSource: "subscription" | "api" | "codex"; model: string; caps?: ResearchCaps }) {
+  if (call.kind === "research") {
+    if (!call.caps) throw new Error("research caps are required");
+    const client = await db.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("SELECT pg_advisory_xact_lock(77853)");
+      const active = await client.query<{ count: string }>("SELECT count(*)::text AS count FROM ai_budget_calls WHERE kind='research' AND completed_at IS NULL AND created_at > now() - interval '45 minutes'");
+      const usage = await researchCapUsage(client);
+      const capped = Number(active.rows[0]?.count ?? 0) > 0 ||
+        usage.monthlyTokens >= call.caps.monthlyTokens ||
+        (call.authSource === "api" && usage.monthlyUsd >= call.caps.monthlyUsd) ||
+        usage.dailyCalls >= call.caps.dailyCalls || usage.dailyTokens >= call.caps.dailyTokens ||
+        (call.caps.sharedDailyTokens > 0 && usage.sharedDailyTokens >= call.caps.sharedDailyTokens);
+      if (capped) { await client.query("COMMIT"); return { recorded: false }; }
+      await client.query("INSERT INTO ai_budget_calls (id,month,kind,agent,auth_source,model,reserved_tokens,reserved_usd) VALUES ($1,$2,$3,$4,$5,$6,0,0)", [call.id, monthStart(), call.kind, call.agent, call.authSource, call.model]);
+      await client.query("COMMIT");
+      return { recorded: true };
+    } catch (error) { await client.query("ROLLBACK"); throw error; }
+    finally { client.release(); }
+  }
   await db.query("INSERT INTO ai_budget_calls (id,month,kind,agent,auth_source,model,reserved_tokens,reserved_usd) VALUES ($1,$2,$3,$4,$5,$6,0,0)", [call.id, monthStart(), call.kind, call.agent, call.authSource, call.model]);
   return { recorded: true };
 }
