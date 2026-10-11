@@ -5,12 +5,25 @@ const universe = vi.fn();
 vi.mock("@/data/store", () => ({ instrumentUniverse: () => universe() }));
 import { proxy } from "./proxy";
 
-const original = { mode: process.env.DATA_MODE, ideas: process.env.IDEAS_PAGE, owner: process.env.OWNER_VIEW, paywall: process.env.PAYWALL, advice: process.env.ADVICE_OUTPUT };
+const original = { mode: process.env.DATA_MODE, ideas: process.env.IDEAS_PAGE, owner: process.env.OWNER_VIEW, password: process.env.OWNER_RESEARCH_PASSWORD, paywall: process.env.PAYWALL, advice: process.env.ADVICE_OUTPUT };
 afterEach(() => {
   universe.mockReset();
-  for (const [key, value] of [["DATA_MODE", original.mode], ["IDEAS_PAGE", original.ideas], ["OWNER_VIEW", original.owner], ["PAYWALL", original.paywall], ["ADVICE_OUTPUT", original.advice]] as const) {
+  for (const [key, value] of [["DATA_MODE", original.mode], ["IDEAS_PAGE", original.ideas], ["OWNER_VIEW", original.owner], ["OWNER_RESEARCH_PASSWORD", original.password], ["PAYWALL", original.paywall], ["ADVICE_OUTPUT", original.advice]] as const) {
     if (value === undefined) delete process.env[key]; else process.env[key] = value;
   }
+});
+
+it("challenges for private research and accepts only the owner password", async () => {
+  process.env.OWNER_VIEW = "on";
+  process.env.OWNER_RESEARCH_PASSWORD = "private-test-password";
+  const url = "https://example.com/en/owner/research/SMPL";
+  const missing = await proxy(new NextRequest(url));
+  expect(missing.status).toBe(401);
+  expect(missing.headers.get("www-authenticate")).toContain("Basic");
+  expect((await proxy(new NextRequest(url, { headers: { authorization: `Basic ${Buffer.from("owner:wrong").toString("base64")}` } }))).status).toBe(401);
+  expect((await proxy(new NextRequest(url, { headers: { authorization: `Basic ${Buffer.from("owner:private-test-password").toString("base64")}` } }))).status).toBe(200);
+  process.env.OWNER_VIEW = "off";
+  expect((await proxy(new NextRequest(url))).status).toBe(404);
 });
 
 it.each(["en", "sk"])("returns a real 404 for unavailable %s routes", async (locale) => {
