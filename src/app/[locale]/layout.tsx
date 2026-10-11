@@ -4,7 +4,8 @@ import { notFound } from "next/navigation";
 import { Footer, Nav } from "@/components/nav";
 import { themeScript } from "@/components/theme-toggle";
 import { getMessages, isLocale, locales } from "@/i18n";
-import { siteUrl } from "@/i18n/metadata";
+import { JsonLd } from "@/components/json-ld";
+import { siteJsonLd, siteNoindex, siteUrl } from "@/i18n/metadata";
 import "../globals.css";
 
 const sans = Archivo({ subsets: ["latin", "latin-ext"], axes: ["wdth"], variable: "--font-sans", display: "swap" });
@@ -32,6 +33,7 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
     description: m.meta.homeDescription,
     applicationName: m.meta.siteName,
     icons: { icon: "/favicon.svg" },
+    ...(siteNoindex() ? { robots: { index: false, follow: false } } : {}),
   };
 }
 
@@ -45,6 +47,7 @@ export default async function LocaleLayout({ children, params }: { children: Rea
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body>
+        <JsonLd data={siteJsonLd(locale)} />
         <a className="skip-link" href="#main">
           {m.common.skipToContent}
         </a>

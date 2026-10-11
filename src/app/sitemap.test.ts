@@ -1,20 +1,41 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import sitemap, { dynamic } from "./sitemap";
+import { instruments } from "@/data/fixtures";
 
 describe("sitemap", () => {
-  const originalAdvice = process.env.ADVICE_OUTPUT;
-  afterEach(() => { if (originalAdvice === undefined) delete process.env.ADVICE_OUTPUT; else process.env.ADVICE_OUTPUT = originalAdvice; });
+  const original = { advice: process.env.ADVICE_OUTPUT, mode: process.env.DATA_MODE };
+  beforeEach(() => { process.env.DATA_MODE = "fixture"; });
+  afterEach(() => {
+    if (original.advice === undefined) delete process.env.ADVICE_OUTPUT; else process.env.ADVICE_OUTPUT = original.advice;
+    if (original.mode === undefined) delete process.env.DATA_MODE; else process.env.DATA_MODE = original.mode;
+  });
   it("reads the legal flag at request time", () => expect(dynamic).toBe("force-dynamic"));
-  it("lists the canonical stock screen in both locales without the retired scanner URL", () => {
-    const urls = sitemap().map((entry) => entry.url);
+  it("lists the canonical stock screen in both locales without the retired scanner URL", async () => {
+    const urls = (await sitemap()).map((entry) => entry.url);
     expect(urls.some((url) => url.endsWith("/en/dashboard"))).toBe(true);
     expect(urls.some((url) => url.endsWith("/sk/dashboard"))).toBe(true);
     expect(urls.some((url) => url.endsWith("/scanner"))).toBe(false);
   });
-  it("omits sizing until ADVICE_OUTPUT is on", () => {
+  it("omits sizing until ADVICE_OUTPUT is on", async () => {
     process.env.ADVICE_OUTPUT = "off";
-    expect(sitemap().some((entry) => entry.url.endsWith("/sizing"))).toBe(false);
+    expect((await sitemap()).some((entry) => entry.url.endsWith("/sizing"))).toBe(false);
     process.env.ADVICE_OUTPUT = "on";
-    expect(sitemap().filter((entry) => entry.url.endsWith("/sizing"))).toHaveLength(2);
+    expect((await sitemap()).filter((entry) => entry.url.endsWith("/sizing"))).toHaveLength(2);
+  });
+  it("lists one company page per instrument and locale", async () => {
+    const urls = (await sitemap()).map((entry) => entry.url);
+    for (const { ticker } of instruments) {
+      expect(urls.filter((url) => url.endsWith(`/en/company/${ticker}`))).toHaveLength(1);
+      expect(urls.filter((url) => url.endsWith(`/sk/company/${ticker}`))).toHaveLength(1);
+    }
+    expect(urls.filter((url) => url.includes("/company/"))).toHaveLength(instruments.length * 2);
+  });
+  it("dates every entry from the data and links both languages", async () => {
+    for (const entry of await sitemap()) {
+      expect(entry.lastModified).toMatch(/^\d{4}-\d{2}-\d{2}/);
+      const languages = entry.alternates?.languages as Record<string, string>;
+      expect(Object.keys(languages).sort()).toEqual(["en-GB", "sk-SK", "x-default"]);
+      expect(languages["x-default"]).toBe(languages["en-GB"]);
+    }
   });
 });
