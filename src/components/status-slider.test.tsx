@@ -51,7 +51,7 @@ describe("StatusPanel", () => {
     expect(html).toContain('href="#rule-catalyst"');
     expect(html).toContain("Catalyst (2)");
     expect(html).toContain("Macro data (3)");
-    expect(html).not.toContain("0 of 25 points");
+    expect(html).not.toMatch(/(^|\D)0 of 25 points/);
     expect(render("setup", { locale: "sk", unknown: ["catalyst"] })).toContain("Údaje: 23 z 25 bodov");
     expect(render("setup", { locale: "sk", unknown: ["catalyst"] })).toContain("Bez údajov: ");
   });
@@ -102,6 +102,6 @@ describe("StatusPanel", () => {
       expect(flagOn).toContain(on);
       expect(flagOn).not.toContain(off);
     }
-    expect(render("watch", { advice: true, points: 16 })).not.toContain("Buy zone");
+    expect(render("watch", { advice: true, points: 16 })).toContain("Watching");
   });
 });

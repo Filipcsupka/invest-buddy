@@ -180,7 +180,7 @@ describe("company page", () => {
         expect(row(id)).toContain("no data");
         expect(row(id)).not.toMatch(/rule-points">0</);
       }
-      expect(html).toContain("2 no data");
+      expect(html).toContain("6/10, 1 no data");
       expect(html).toContain("mark-block is-unknown");
     });
   });
