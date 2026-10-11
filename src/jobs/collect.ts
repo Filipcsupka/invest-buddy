@@ -98,7 +98,7 @@ async function runLegacyCollect(repository: CollectorRepository, symbols: string
     try {
       const cik = resolveCik(symbol, options.storedCiks ?? new Map(), ciks, options.secSymbols);
       if (sources.includes("edgar") && !cik) throw new Error(`No EDGAR CIK for ${symbol}`);
-      const docs = [ ...(cik ? await collectEdgar(symbol, cik, since, get, daysAgo(now, 90)) : []), ...rss.filter((doc) => (doc.meta.symbols as string[]).includes(symbol)) ];
+      const docs = [ ...(cik ? await collectEdgar(symbol, cik, since, get, daysAgo(now, 90), options.dryRun ? undefined : repository.archiveFiling?.bind(repository)) : []), ...rss.filter((doc) => (doc.meta.symbols as string[]).includes(symbol)) ];
       documentsParsed += docs.length;
       const ids = new Map<string, number>();
       for (const doc of docs) {

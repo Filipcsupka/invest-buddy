@@ -103,6 +103,16 @@ Insider flag. Reconcile sets `insiderOrInstitutionalBuying` from the stored `ins
 
 Evidence check. With `RECONCILE_VERIFY=live` (the default), reconcile checks a citation against the stored `source_documents` text when the url is stored: same normalisation as `src/data/evidence.ts`, `publishedAt` equal to the stored date, same freshness window. Only a url that is not stored is fetched live. `off` and `fixture` behave as before.
 
+## Filing text archive (D19)
+
+`filings` (migration 051) keeps the full text of every SEC file the collectors read, with no expiry: 10-K, 10-Q, 8-K, their amendments, 20-F, 6-K, and the 8-K exhibits (EX-99.1 and the free-named earnings exhibits). Form 4 is not here; D20 stores it as transactions. The body sits gzip in `raw_snapshots` (D17, key `filing:<accession>:<file>`); `filings` holds one row per file: accession, file name, ticker, CIK, form, doc type, 8-K items, filing date, URL, size, content hash, snapshot id, `source_id` and `licence_class` (D3). `source_documents` stays the short-lived extraction input and still expires.
+
+- Daily: `collectEdgar` hands every non-Form-4 file it fetches to `archiveFiling`, so the 100-day look-back also lands here. A dry run archives nothing.
+- Backfill: `node dist/jobs/backfill.js --job filings [--only NVDA] [--max-requests N] [--dry-run]`, the D34 runner. Per ticker it reads the submissions list and its `files` pages that end on or after 2023-10-01, then one request per primary document, and for an 8-K one index request plus one per exhibit. Filings already archived are skipped without a request. Every request is reserved in the D8 ledger (`sec`), the SEC rate limiter applies, and the job refuses to start without a valid `SEC_USER_AGENT`. The cursor holds the remaining work, so a crash, a daily cap or `--max-requests` resumes at the next request. `--dry-run` lists the tickers and cursors and makes no request and no write.
+- Same file again: nothing changes. A different body for the same accession and file replaces the pointer; the old snapshot stays.
+- No CronJob. The backfill runs as one-off Jobs the owner approves; the live run and migration wait for that approval.
+- Size: not measured yet. The first live run reports requests per ticker; D38 turns that into growth figures.
+
 ## Macro rules (placeholder, no AI)
 
 Two score fields, `dataTailwind` and `sectorRotationIntoGrowth` (macro score 0 to 5), had no source in the script-first pipeline: the agent macro scan is gone, so every ticker showed them as one source, unverified. `src/jobs/macro.ts` now computes both from stored data with the rules in `src/data/macro-rules.ts`. The thresholds are placeholders for owner review, not a tested strategy. Each can be changed by environment variable without a code change.
