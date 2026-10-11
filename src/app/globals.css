@@ -21,6 +21,25 @@
   --signal-wash: light-dark(#dde3f8, #1c2547);
   --hatch: color-mix(in srgb, var(--ink) 22%, transparent);
   --shadow: light-dark(rgb(21 25 28 / 0.07), rgb(0 0 0 / 0.45));
+  /* Status bands (lane STATUS). Only the status slider uses these. */
+  --st-broken: light-dark(#b3261e, #ff8a7d);
+  --st-broken-on: light-dark(#ffffff, #1a0705);
+  --st-broken-wash: light-dark(#f6dcd8, #3d1b17);
+  --st-ignore: light-dark(#b54708, #ffa463);
+  --st-ignore-on: light-dark(#ffffff, #1f0e02);
+  --st-ignore-wash: light-dark(#fbede2, #3a2412);
+  --st-wait: light-dark(#8a6500, #f2c84b);
+  --st-wait-on: light-dark(#ffffff, #1c1500);
+  --st-wait-wash: light-dark(#f7f0d9, #3a2f0d);
+  --st-watch: light-dark(#2340c4, #8fa3ff);
+  --st-watch-on: light-dark(#ffffff, #0b0f1a);
+  --st-watch-wash: light-dark(#dde3f8, #1c2547);
+  --st-setup: light-dark(#16703f, #5fd391);
+  --st-setup-on: light-dark(#ffffff, #04170c);
+  --st-setup-wash: light-dark(#d5ecdd, #123524);
+  --st-none: light-dark(#5d666d, #a9b2b6);
+  --st-none-on: light-dark(#ffffff, #101315);
+  --st-none-wash: light-dark(#e3e6e4, #262c30);
 
   /* Type */
   --sans: var(--font-sans), "Arial Narrow", Arial, sans-serif;
@@ -598,6 +617,10 @@ h2 {
 }
 .mark[data-state="insufficient"] .mark-block {
   border-style: dashed;
+}
+.mark-block.is-unknown {
+  border-style: dashed;
+  background: repeating-linear-gradient(45deg, color-mix(in srgb, var(--ink) 10%, transparent) 0 1px, transparent 1px 4px);
 }
 .mark-lg {
   width: 100%;
@@ -1420,31 +1443,6 @@ th[aria-sort] .sort .icon {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   background: var(--sheet);
 }
-.score-panel {
-  display: grid;
-  gap: var(--s5);
-  padding: var(--s5) 0 var(--s6);
-  border-top: 1px solid var(--ink);
-  border-bottom: 1px solid var(--rule-strong);
-}
-.score-readout {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: var(--s4) var(--s7);
-}
-.score-state {
-  display: grid;
-  gap: var(--s2);
-  padding-top: var(--s1);
-}
-.score-state .chip {
-  font-size: var(--t-base);
-  padding: 0.1875rem 0.625rem;
-}
-.score-panel .mark-lg {
-  max-width: 48rem;
-}
 .company .sheet-section:first-of-type {
   margin-top: var(--s7);
 }
@@ -1927,3 +1925,15 @@ th[aria-sort] .sort .icon {
 
 .insider-table td, .insider-table th { vertical-align: top; }
 .insider-codes ul { margin: 0; padding-left: 1.2rem; }
+
+.rule-table tr.is-unknown .rule-name,
+.rule-table tr.is-unknown .rule-points {
+  color: var(--ink-3);
+}
+.rule-table tr.is-unknown .rule-points {
+  font-size: var(--t-xs);
+  font-weight: 520 !important;
+}
+.score-strip {
+  padding: var(--s4) 0 var(--s5);
+}
