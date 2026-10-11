@@ -1,7 +1,8 @@
-/** Posts plain-text messages to one Telegram chat or channel through the Bot API sendMessage method. */
+/** Posts HTML-formatted messages (parse_mode HTML, no link preview) to one Telegram chat or channel through the Bot API sendMessage method. */
 
 export const TELEGRAM_MAX_LENGTH = 4096;
 
+/** Text is Telegram HTML: callers escape <, > and & in anything that is not markup. */
 export interface Notifier { send(text: string): Promise<void> }
 
 export interface TelegramOptions {
@@ -59,7 +60,7 @@ export class TelegramNotifier implements Notifier {
 
   private async sendChunk(text: string): Promise<void> {
     const url = `${this.apiBase}/bot${this.options.token}/sendMessage`;
-    const body = JSON.stringify({ chat_id: this.options.chatId, text, link_preview_options: { is_disabled: true } });
+    const body = JSON.stringify({ chat_id: this.options.chatId, text, parse_mode: "HTML", link_preview_options: { is_disabled: true } });
     for (let attempt = 0; ; attempt++) {
       let response: Response;
       try {

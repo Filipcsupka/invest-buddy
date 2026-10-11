@@ -4,12 +4,12 @@ The digest job (`src/jobs/digest.ts`, CronJob `invest-buddy-digest`, 07:30 Tue t
 
 ## How it works
 
-- After the daily scoring run, the job reads `alerts` for the latest `ingest_runs.as_of` and builds one message: state changes with the old and new state and score, the informational-screening line, and a link to the dashboard. Language comes from `DIGEST_LOCALE` (the CronJob sets `sk`).
-- When `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are both set, the message goes to Telegram (Bot API `sendMessage`, plain text, no link preview). Otherwise the job keeps the old behaviour and prints to the log, which needs `DIGEST_TO`.
+- After the daily scoring run, the job reads `alerts` for the latest `ingest_runs.as_of` and posts one message per ticker whose status band changed (`src/notify/format.ts`): band emoji slider with a marker, was and now with points, optional confirmation chips and data coverage, links to the company page and methodology, and the informational-screening line. Bands follow `docs/roadmap/lane-status.md`; missing data shows as "no data", never 0 points. With `ADVICE_OUTPUT` off the green band reads "Conditions met" ("Podmienky splnené"). Language comes from `DIGEST_LOCALE` (the CronJob sets `sk`).
+- When `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are both set, the message goes to Telegram (Bot API `sendMessage`, parse mode HTML, no link preview). Otherwise the job keeps the old behaviour and prints to the log, which needs `DIGEST_TO`.
 - Days with no state change are skipped. Set `TELEGRAM_POST_EMPTY=on` to post them anyway.
-- Each post is recorded in `notification_deliveries` (migration 044) before it is sent, keyed by channel, chat, day and language. A rerun of the same day posts nothing. If the send fails, the row is removed, so the next run tries again.
+- Each post is recorded in `notification_deliveries` (migration 044) before it is sent, keyed by channel, chat, day, language and ticker. A rerun of the same day posts nothing. If a send fails, only that ticker's row is removed and the others still go out, so the next run retries just the failed one.
 - On HTTP 429 the job waits for Telegram's `retry_after`. Errors from 5xx and the network are retried up to 3 times. Errors never include the bot token.
-- Job counts in the log show `telegram: sent | duplicate | empty`.
+- Job counts in the log show `telegram: sent | duplicate | empty` plus `sent` and `duplicates` counts.
 
 ## One-time setup (owner)
 

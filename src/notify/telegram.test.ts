@@ -18,12 +18,12 @@ const sleeps: number[] = [];
 const sleep = async (ms: number) => { sleeps.push(ms); };
 
 describe("TelegramNotifier", () => {
-  it("posts plain text to the chat without link previews", async () => {
+  it("posts HTML to the chat without link previews", async () => {
     const { impl, calls } = fakeFetch([{ status: 200, body: { ok: true } }]);
     await new TelegramNotifier({ token: "123:secret", chatId: "@invest_test", fetch: impl, sleep }).send("hello");
     expect(calls).toHaveLength(1);
     expect(calls[0].url).toBe("https://api.telegram.org/bot123:secret/sendMessage");
-    expect(calls[0].body).toMatchObject({ chat_id: "@invest_test", text: "hello", link_preview_options: { is_disabled: true } });
+    expect(calls[0].body).toMatchObject({ chat_id: "@invest_test", text: "hello", parse_mode: "HTML", link_preview_options: { is_disabled: true } });
   });
 
   it("waits retry_after on 429 and then succeeds", async () => {
