@@ -1,13 +1,11 @@
 name: CodeQL
 on:
-  pull_request:
-  push:
-    branches: [main]
+  workflow_dispatch:
   schedule:
     - cron: "23 3 * * 1"
 concurrency:
-  group: codeql-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: false
 permissions: {}
 jobs:
   analyze:
