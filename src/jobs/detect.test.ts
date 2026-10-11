@@ -44,6 +44,12 @@ it.skipIf(!process.env.TEST_DATABASE_URL)("persists the daily gate and reopens i
     await pool.query("UPDATE scheduled_gates SET extracted_at=now(),judged_at=now() WHERE gate_date=$1", [date]);
     await persistGate(pool, { asOf: date, symbols: ["NVDA"], reasons: { NVDA: ["10-Q"] }, accessions: { NVDA: ["0000000000-99-000001"] } });
     expect((await pool.query("SELECT extracted_at,judged_at FROM scheduled_gates WHERE gate_date=$1", [date])).rows[0]).toMatchObject({ extracted_at: expect.any(Date), judged_at: expect.any(Date) });
+    const research = { asOf: date, symbols: ["NVDA"], reasons: { NVDA: ["10-Q", "verified research document 42"] }, accessions: { NVDA: ["0000000000-99-000001"] } };
+    const researchGate = await persistGate(pool, research);
+    expect(researchGate.revision).toBe((first.revision ?? 0) + 1);
+    await pool.query("UPDATE scheduled_gates SET extracted_at=now(),judged_at=now() WHERE gate_date=$1", [date]);
+    expect((await persistGate(pool, research)).revision).toBe(researchGate.revision);
+    expect((await pool.query("SELECT extracted_at,judged_at FROM scheduled_gates WHERE gate_date=$1", [date])).rows[0]).toMatchObject({ extracted_at: expect.any(Date), judged_at: expect.any(Date) });
     const second = await persistGate(pool, { asOf: date, symbols: ["AMD"], reasons: { AMD: ["approved discovery candidate"] }, accessions: { AMD: [] } });
     expect(second.symbols).toEqual(["AMD", "NVDA"]);
     expect((await pool.query("SELECT extracted_at,judged_at FROM scheduled_gates WHERE gate_date=$1", [date])).rows[0]).toMatchObject({ extracted_at: null, judged_at: null });
@@ -53,4 +59,10 @@ it.skipIf(!process.env.TEST_DATABASE_URL)("persists the daily gate and reopens i
 it("includes a promoted discovery name even without a filing", () => {
   const gate = gateSymbols({ today: "2026-10-07", filings: [], insiders: [], drawdowns: [], valuations: [], newSymbols: ["F7ZZ"] }, ["NVDA", "F7ZZ"]);
   expect(gate).toEqual({ symbols: ["F7ZZ"], reasons: { F7ZZ: ["approved discovery candidate awaiting first extraction"] } });
+});
+
+it("gates a newly verified research document once its extraction is due", () => {
+  const base = { today: "2026-10-11", filings: [], insiders: [], drawdowns: [], valuations: [] };
+  expect(gateSymbols({ ...base, researchDocuments: [{ symbol: "NVDA", id: 42 }] }, ["NVDA"]))
+    .toEqual({ symbols: ["NVDA"], reasons: { NVDA: ["verified research document 42"] } });
 });

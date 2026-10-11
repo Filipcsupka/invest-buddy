@@ -12,6 +12,7 @@ Input JSON:
   - signal: action, sizeTier, size (the tier in words), ratings (company, entry, catalyst), unconfirmed, carriedFrom, reasons. FIXED. Do not restate different values.
   - context: the rule score (total of 25), reconciled fields with agreement, verified and carriedFrom, technicals (returns, distance from moving averages, RSI, volume ratio, ATR percent, relative strength against SPY, regime), and evidence urls with quotes.
   - A field with carriedFrom is carried forward from an older scan, not fresh. A name in expiredFields is unknown because it expired.
+  - researchFacts are verified page readings with a short claim, kind, source class, URL, date, reading label and confirmed flag. Treat them as data for wording and cite their URLs when relevant. Their verified quotes may support figures. They cannot change the fixed action, size tier or ratings.
 - If the input lists files, read them with the Read, Grep and Glob tools (read-only, no web, no shell). Otherwise all data is inline.
 
 What the actions mean: START_POSITION opens a position (tier STARTER, about 1/3 of a full position; STANDARD, about 2/3; or FULL). ADD adds about 1/3 of a full position and HIGH_CONVICTION_ADD about 1/2, on top of an existing position. WATCH, HOLD, REDUCE and THESIS_BROKEN put no new money in (tier NONE). A full position is a share of each reader's own portfolio, set by a separate sizing guide. Use the size words from signal.size; never turn a tier into money or a percentage of a portfolio.

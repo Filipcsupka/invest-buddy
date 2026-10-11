@@ -34,6 +34,7 @@ describe("judge input", () => {
       if (sql.includes("FROM portfolio_baseline")) return { rows: [{ as_of: "2026-10-05", source: "manual", cash_eur: "600.00", monthly_contribution_eur: "200", positions: sampleBaseline.positions }] };
       if (sql.includes("FROM trade_ideas")) return { rows: [] };
       if (sql.includes("FROM score_results")) return { rows: [row("NVDA", "Setup met (>=18)", 19), row("ZZZ", "Ignore", 2)] };
+      if (sql.includes("FROM research_findings")) return { rows: [] };
       if (sql.includes("FROM source_documents") && sql.includes("doc_type")) return { rows: [{ symbol: "NVDA", doc_type: "8-K EX-99.1", url: "https://sec.gov/ex991", published_at: "2026-09-30" }, { symbol: "NVDA", doc_type: "10-Q", url: "https://sec.gov/10q", published_at: "2026-08-26" }] };
       if (sql.includes("FROM source_documents")) return { rows: [{ url: "https://sec.gov/epsBeat" }] };
       if (sql.includes("FROM daily_bars")) return { rows: Array.from({ length: 260 }, (_, i) => ({ ticker: "NVDA", bar_date: new Date(Date.UTC(2026, 0, 1) + i * 86400000).toISOString().slice(0, 10), open: String(50 + i * 0.3), high: String(51 + i * 0.3), low: String(49 + i * 0.3), close: String(50 + i * 0.3), volume: "1000000" })) };

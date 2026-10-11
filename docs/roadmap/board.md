@@ -48,10 +48,11 @@ Updated 2026-10-11 evening. One table per state. A PR that finishes a task moves
 | W7 | Security headers and rate limit | PR #145, rebase |
 | RS0 | Research engine spec, ADR, lane RS, schema | worker running |
 | RS2 | Source verifier `src/research/verify.ts` | worker running |
+| RS4 | Judge integration and fact feed | PR open, local checks passed |
 
 ## Queued, in order
 
-1. RS1 researcher runner and prompts, RS3 tables and pipeline state machine, RS4 judge integration, RS5 CronJobs and caps, RS6 Telegram research cards, RS8 evaluation on the six old cards (after RS0 merges). RS7 Codex adapter and secret later.
+1. RS1 researcher runner and prompts, RS3 tables and pipeline state machine, RS5 CronJobs and caps, RS6 Telegram research cards, RS8 evaluation on the six old cards (after RS0 merges). RS7 Codex adapter and secret later.
 2. Web: W5 page cache, W3 performance baseline, W21 OG images, W23 native Slovak review, W32 tier map, W35 CSV export.
 3. Engine: EN4, EN5, EN28.
 4. Data: D36 roll out 150 names (after D35 criteria), D26 FX, D28 EPS history, D13 corporate actions.

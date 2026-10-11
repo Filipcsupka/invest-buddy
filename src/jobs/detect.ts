@@ -8,6 +8,7 @@ import { GATE } from "./gate-config";
 export interface Filing { symbol: string; accession: string; form: string; items: string }
 export interface InsiderFiling { symbol: string; accession: string; date: string; ownerCik: string | null; trades: { code: string; date: string }[]; isNew?: boolean }
 export interface Band { symbol: string; current: number; previous: number }
+export interface ResearchDocument { symbol: string; id: number }
 export const relevantFiling = (f: Pick<Filing, "form" | "items">) =>
   /^(10-Q|10-K)(\/A)?$/.test(f.form) || /^8-K(\/A)?$/.test(f.form) && /(?:^|[,\s])(?:2\.02|4\.02|5\.02|7\.01|8\.01)(?:$|[,\s])/.test(f.items);
 
@@ -39,10 +40,11 @@ export function insiderCluster(rows: InsiderFiling[], today: string, count = GAT
 export const drawdownHit = (band: Band, threshold = GATE.drawdownPct) => band.current <= -threshold && band.previous > -threshold;
 export const valuationHit = (band: Band, threshold = GATE.valuationPe) => band.current <= threshold && band.previous > threshold;
 
-export function gateSymbols(input: { filings: Filing[]; insiders: InsiderFiling[]; drawdowns: Band[]; valuations: Band[]; newSymbols?: string[]; catalystReviews?: string[]; today: string }, order: string[]) {
+export function gateSymbols(input: { filings: Filing[]; insiders: InsiderFiling[]; drawdowns: Band[]; valuations: Band[]; researchDocuments?: ResearchDocument[]; newSymbols?: string[]; catalystReviews?: string[]; today: string }, order: string[]) {
   const reasons: Record<string, string[]> = {};
   const add = (symbol: string, reason: string) => { (reasons[symbol] ??= []).push(reason); };
   for (const f of input.filings) if (relevantFiling(f)) add(f.symbol, `${f.form} ${f.accession}`);
+  for (const d of input.researchDocuments ?? []) add(d.symbol, `verified research document ${d.id}`);
   for (const symbol of insiderCluster(input.insiders, input.today)) add(symbol, "opportunistic insider buy cluster");
   for (const b of input.drawdowns) if (drawdownHit(b)) add(b.symbol, `drawdown band ${GATE.drawdownPct}%`);
   for (const b of input.valuations) if (valuationHit(b)) add(b.symbol, `valuation P/E band ${GATE.valuationPe}`);
@@ -61,9 +63,9 @@ export async function persistGate(db: Pick<pg.Pool, "query">, gate: GatePayload)
        symbols=ARRAY(SELECT DISTINCT unnest(scheduled_gates.symbols || EXCLUDED.symbols) ORDER BY 1),
        reasons=scheduled_gates.reasons || EXCLUDED.reasons,
        accessions=scheduled_gates.accessions || EXCLUDED.accessions,
-       revision=scheduled_gates.revision + CASE WHEN EXCLUDED.symbols <@ scheduled_gates.symbols AND scheduled_gates.accessions @> EXCLUDED.accessions THEN 0 ELSE 1 END,
-       extracted_at=CASE WHEN EXCLUDED.symbols <@ scheduled_gates.symbols AND scheduled_gates.accessions @> EXCLUDED.accessions THEN scheduled_gates.extracted_at ELSE NULL END,
-       judged_at=CASE WHEN EXCLUDED.symbols <@ scheduled_gates.symbols AND scheduled_gates.accessions @> EXCLUDED.accessions THEN scheduled_gates.judged_at ELSE NULL END,
+       revision=scheduled_gates.revision + CASE WHEN EXCLUDED.symbols <@ scheduled_gates.symbols AND scheduled_gates.accessions @> EXCLUDED.accessions AND scheduled_gates.reasons @> EXCLUDED.reasons THEN 0 ELSE 1 END,
+       extracted_at=CASE WHEN EXCLUDED.symbols <@ scheduled_gates.symbols AND scheduled_gates.accessions @> EXCLUDED.accessions AND scheduled_gates.reasons @> EXCLUDED.reasons THEN scheduled_gates.extracted_at ELSE NULL END,
+       judged_at=CASE WHEN EXCLUDED.symbols <@ scheduled_gates.symbols AND scheduled_gates.accessions @> EXCLUDED.accessions AND scheduled_gates.reasons @> EXCLUDED.reasons THEN scheduled_gates.judged_at ELSE NULL END,
        detected_at=now()
      RETURNING gate_date::text,symbols,reasons,accessions,revision`,
     [gate.asOf, gate.symbols, JSON.stringify(gate.reasons), JSON.stringify(gate.accessions)],
@@ -117,6 +119,14 @@ async function main() {
         row_number() OVER (PARTITION BY symbol ORDER BY as_of DESC) AS rn FROM collected_facts WHERE fact_key='valuation_pe')
       SELECT symbol,pe::text AS current,previous::text FROM ranked WHERE rn=1 AND previous IS NOT NULL`);
     const newSymbols = await unextractedDiscoverySymbols(pool);
+    const researchDocuments = await pool.query<ResearchDocument>(`SELECT DISTINCT d.symbol,d.id FROM source_documents d
+      JOIN research_findings f ON f.symbol=d.symbol
+      JOIN LATERAL jsonb_array_elements(f.evidence) AS item(value) ON (item.value->>'documentId')::bigint=d.id
+      WHERE d.doc_type='research_page' AND d.symbol IS NOT NULL AND f.verification_status='verified'
+        AND item.value->>'status'='verified' AND NOT f.lead
+        AND ($1::date IS NULL OR d.published_at >= $1::date)
+        AND NOT EXISTS (SELECT 1 FROM extraction_runs e WHERE e.symbol=d.symbol AND e.status='ok'
+          AND e.applied_at IS NOT NULL AND e.applied_at >= d.fetched_at)`, [since]);
     const universe = (await loadUniverse(pool)).map((u) => u.symbol);
     const consensus = await pool.query<CatalystConsensus>(`SELECT i.ticker AS symbol, c.as_of::text AS "asOf", c.value
       FROM instruments i LEFT JOIN LATERAL (
@@ -125,7 +135,7 @@ async function main() {
     const catalystReviews = catalystReviewSymbols(consensus.rows, today);
     const result = gateSymbols({ filings: filings.rows, insiders: docs.rows.map((r) => ({ symbol: r.symbol, accession: r.accession, date: r.date, ownerCik: r.owner_cik, trades: Array.isArray(r.trades) ? r.trades : [], isNew: r.is_new })),
       drawdowns: bars.rows.flatMap((r) => { const peak = Number(r.high); return peak > 0 ? [{ symbol: r.symbol, current: 100 * (Number(r.close) / peak - 1), previous: 100 * (Number(r.previous) / peak - 1) }] : []; }),
-      valuations: valuations.rows.map((r) => ({ symbol: r.symbol, current: Number(r.current), previous: Number(r.previous) })), newSymbols, catalystReviews, today }, universe);
+      valuations: valuations.rows.map((r) => ({ symbol: r.symbol, current: Number(r.current), previous: Number(r.previous) })), researchDocuments: researchDocuments.rows, newSymbols, catalystReviews, today }, universe);
     const payload = await persistGate(pool, { asOf: today, ...result, accessions: Object.fromEntries(result.symbols.map((symbol) => [symbol, [...new Set([...filings.rows.filter((f) => f.symbol === symbol && relevantFiling(f)).map((f) => f.accession), ...docs.rows.filter((d) => d.symbol === symbol && d.is_new && d.accession).map((d) => d.accession)])]])) });
     const json = JSON.stringify(payload) + "\n";
     if (out) writeFileSync(out, json);
