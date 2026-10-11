@@ -1,0 +1,72 @@
+name: Security
+# Heavy scans run nightly, on demand and before launch, not on every PR or push. See docs/ci.md.
+on:
+  schedule:
+    - cron: "15 3 * * *"
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: Image tag to scan (default latest, the newest main build)
+        default: latest
+        required: false
+  pull_request:
+    paths:
+      - package.json
+      - package-lock.json
+concurrency:
+  group: security-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+permissions: {}
+jobs:
+  trivy:
+    # Scans the published images from GHCR, no rebuild. A failure here is a visible red run and does not block deploys.
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: read
+    env:
+      TAG: ${{ inputs.image_tag || 'latest' }}
+      TRIVY_USERNAME: ${{ github.actor }}
+      TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Scan web image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ghcr.io/filipcsupka/invest-buddy:${{ env.TAG }}
+          format: table
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: HIGH,CRITICAL
+          vuln-type: os,library
+          # npm and corepack ship inside the node base image and only run the migrate init container; app dependencies and OS packages are still scanned.
+          skip-dirs: /usr/local/lib/node_modules/npm,/usr/local/lib/node_modules/corepack
+      - name: Scan scanner image
+        # Run the second scan even if the first one found issues, so one run reports both.
+        if: ${{ !cancelled() }}
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ghcr.io/filipcsupka/invest-buddy-scanner:${{ env.TAG }}
+          format: table
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: HIGH,CRITICAL
+          vuln-type: os,library
+          skip-dirs: /usr/local/lib/node_modules/npm,/usr/local/lib/node_modules/corepack
+
+  dependency-review:
+    # Needs the dependency graph, which is a GitHub Advanced Security feature on private repositories. Set repository variable GHAS_ENABLED=true after enabling it.
+    if: github.event_name == 'pull_request' && vars.GHAS_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
