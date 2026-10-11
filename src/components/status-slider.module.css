@@ -41,6 +41,8 @@
 .pointsLine { margin: 0; font-size: var(--t-sm); color: var(--ink-2); }
 .pointsNum { font-size: var(--t-h2); font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums lining-nums; }
 .pointsLine s { color: var(--ink-3); }
+.points [data-bonus] { max-width: 17rem; text-align: right; font-size: var(--t-xs); }
+.points [data-bonus] ul { margin: var(--s1) 0 0; padding: 0; list-style: none; }
 .groups { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0 var(--s3); margin: 0; font-size: var(--t-xs); color: var(--ink-2); }
 .groups abbr { font-weight: 700; text-decoration: none; }
 

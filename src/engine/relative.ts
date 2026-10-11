@@ -51,7 +51,7 @@ export const meetsPercent = (total: number, evidencedMax: number, percent: numbe
 /** total reaches the share of evidencedMax that `guidePoints` is of 25. Used where the Guide states a point threshold, e.g. 15 or 18. */
 export const meetsGuidePoints = (total: number, evidencedMax: number, guidePoints: number) => evidencedMax > 0 && total * POINTS_MAX >= guidePoints * evidencedMax;
 
-export function relativeScore(total: number, evidencedMax: number, rules = RELATIVE_RULES): RelativeScore {
+export function relativeScore(total: number, evidencedMax: number, rules: { setupPercent: number; watchPercent: number; waitPercent: number; minEvidencedPoints: number } = RELATIVE_RULES): RelativeScore {
   const max = Math.min(POINTS_MAX, Math.max(0, evidencedMax));
   const share: RelativeBand = meetsPercent(total, max, rules.setupPercent) ? "setup"
     : meetsPercent(total, max, rules.watchPercent) ? "watch"

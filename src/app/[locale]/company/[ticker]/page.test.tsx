@@ -167,21 +167,21 @@ describe("company page", () => {
         expect(html.indexOf('id="status-title"')).toBeLessThan(html.indexOf('id="chart"'));
         expect(html).toContain(off);
         expect(html).not.toContain(on);
-        expect((await renderStatus({ locale, advice: true }))).toContain(on);
+        expect((await renderStatus({ locale, advice: true }))).not.toContain(on);
       }
     });
 
     it("shows no data instead of 0 for unknown rules in the table", async () => {
       const html = await renderStatus({ advice: false, unknown: ["catalyst", "macro-data"] });
       expect(html).toContain('id="rule-catalyst"');
-      expect(html).toContain("Data: 20 of 25 points");
+      expect(html).toContain("Data from 8 of 9 core rules");
       const row = (id: string) => html.match(new RegExp(`<tr id="rule-${id}"[\\s\\S]*?</tr>`))?.[0] ?? "";
       for (const id of ["catalyst", "macro-data"]) {
         expect(row(id)).toContain("no data");
         expect(row(id)).not.toMatch(/rule-points">0</);
       }
-      expect(html).toMatch(/\d+\/10, 1 no data/);
-      expect(html).toContain("mark-block is-unknown");
+      expect(html).toContain("Bonus findings");
+      expect(html).not.toContain("mark-block is-unknown");
     });
   });
 

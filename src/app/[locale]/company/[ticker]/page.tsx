@@ -3,7 +3,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Chart } from "@/components/chart";
-import { groupLabels, TitleBlock } from "@/components/datasheet";
+import { TitleBlock } from "@/components/datasheet";
 import { IdeaCard } from "@/components/idea-card";
 import { PaywallSegment } from "@/components/paywall-segment";
 import { ScoreHistory } from "@/components/score-history";
@@ -14,7 +14,6 @@ import { IconArrowLeft, IconArrowRight, IconCheck, IconCross, IconNoData } from 
 import { OperatorDisclosure } from "@/components/operator-disclosure";
 import { StatusPanel } from "@/components/status-slider";
 import { statusView } from "@/engine/status";
-import { ScoreMark } from "@/components/score-mark";
 import { SourceList, SourceNotes } from "@/components/source-list";
 import { inputSources, ruleSourceNotes, ruleSources, sourceSummary } from "@/components/view-model";
 import { companyIdea, companyReview } from "@/data/ideas-store";
@@ -24,6 +23,7 @@ export const dynamic = "force-dynamic";
 import { fill, formatDate, formatPercent, getMessages, isLocale, type Locale } from "@/i18n";
 import { pageMetadata } from "@/i18n/metadata";
 import { ruleGroups } from "@/i18n/rules";
+import { BONUS_RULE_IDS } from "@/engine/display-score";
 import { reasonsFor, ruleDetail, sectorLabel, stateKey } from "@/i18n/score-text";
 
 type Params = { params: Promise<{ locale: string; ticker: string }> };
@@ -90,7 +90,6 @@ async function Company({ params }: Params) {
     adviceOutput,
   });
   const unknownIds = new Set<string>(view.coverage.unknownRules);
-  const groupNoData = (group: (typeof ruleGroups)[number]) => group.rules.filter((rule) => unknownIds.has(rule.id)).length;
   const sources = scored ? sourceSummary(locale, result) : null;
   const ideaRow = await companyIdea(instrument.ticker);
   const review = await companyReview(instrument.ticker);
@@ -140,6 +139,7 @@ async function Company({ params }: Params) {
 
       <DataStatus locale={locale} lastUpdated={data.lastUpdated} stale={data.stale} />
       <StatusPanel
+        locale={locale}
         view={view}
         m={m}
         adviceOutput={adviceOutput}
@@ -148,14 +148,9 @@ async function Company({ params }: Params) {
         reasons={reasons}
         pullbackLabel={state === "watch" && result.pullbackInUptrend ? m.states.pullback : null}
         describedBy="score-disclaimer"
-        groups={scored ? groupLabels(locale, result).map((group, index) => ({ ...group, max: ruleGroups[index].max, noData: groupNoData(ruleGroups[index]) })) : undefined}
         disclaimer={<><Disclaimer text={m.common.disclaimer} id="score-disclaimer" /><OperatorDisclosure text={m.common.operatorDisclosure} /></>}
       />
       {sources && <p className="source-summary muted small">{sources}</p>}
-      <div className="score-strip">
-        <ScoreMark size="lg" state={state} matched={scored ? result.ruleHits.filter((hit) => hit.matched).map((hit) => hit.id) : null} unknown={scored ? view.coverage.unknownRules : undefined} groupLabels={groupLabels(locale, result).map((group, index) => ({ ...group, note: groupNoData(ruleGroups[index]) ? fill(m.status.groupNoData, { n: groupNoData(ruleGroups[index]) }) : undefined }))} label={scored ? fill(m.mark.label, { total: result.total, fundamentals: result.fundamentals, technical: result.technical, macro: result.macro }) + (view.coverage.unknownRules.length ? `. ${fill(m.status.markNoData, { n: 25 - view.coverage.pointsKnown })}` : "") : m.mark.none} />
-      </div>
-
       <div className="company-grid">
         <section className="sheet-section" aria-labelledby="rules">
           <div className="section-head">
@@ -177,7 +172,7 @@ async function Company({ params }: Params) {
                   <tr className="rulebook-group">
                     <th scope="rowgroup">{m.groups[group.group]}</th>
                     <td className="num">
-                      {result[group.group]}/{group.max}{groupNoData(group) ? `, ${fill(m.status.groupNoData, { n: groupNoData(group) })}` : ""}
+
                     </td>
                   </tr>
                   {group.rules.map((rule) => {
@@ -189,7 +184,7 @@ async function Company({ params }: Params) {
                         <th scope="row">
                           <span className="rule-line">
                             {met ? <IconCheck title={m.common.met} /> : unknown ? <IconNoData title={m.status.noData} /> : <IconCross title={m.common.notMet} />}
-                            <span className="rule-name">{m.rules[rule.id]}</span>
+                            <span className="rule-name">{m.rules[rule.id]} <small>({BONUS_RULE_IDS.includes(rule.id) ? m.status.bonusLabel : m.status.coreLabel})</small></span>
                           </span>
                           {hit ? <span className="rule-def num">{ruleDetail(locale, hit, result)}</span> : null}
                           {hit ? <span className="rule-def rule-src">{(() => {

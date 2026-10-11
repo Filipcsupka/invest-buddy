@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import { fill, type Messages } from "@/i18n";
-import { ruleGroups, type RuleId, type StateKey } from "@/i18n/rules";
+import { fill, formatScorePercent, type Locale, type Messages } from "@/i18n";
+import { type StateKey } from "@/i18n/rules";
 import type { StatusView } from "@/engine/status";
 import { IconBandBroken, IconBandIgnore, IconBandSetup, IconBandWait, IconBandWatch, IconCheck, IconCross, IconNoData } from "./icons";
 import styles from "./status-slider.module.css";
@@ -19,7 +19,8 @@ const bandIcons: Record<StateKey, () => ReactNode> = {
 
 /** Label for a state. Only the green label changes with ADVICE_OUTPUT. */
 export function statusLabel(m: Messages, state: StateKey, adviceOutput: boolean): string {
-  return state === "setup" && adviceOutput ? m.status.advice.setup : m.status.labels[state];
+  void adviceOutput;
+  return m.status.labels[state];
 }
 
 export function StatusIcon({ state }: { state: StateKey }) {
@@ -52,21 +53,14 @@ export function StatusCell({ state, position, label, ariaLabel, pullbackLabel, d
   );
 }
 
-/** Data column: "23/25" and a no-data mark with the rule list in the title. Empty for an unscored ticker. */
-export function DataCell({ known, noDataRules, scored }: { known: number; noDataRules: string; scored: boolean }) {
-  if (!scored) return null;
-  return (
-    <span className={styles.data} title={noDataRules || undefined}>
-      <span className="num">{known}/25</span>
-      {known < 25 ? <IconNoData /> : null}
-      {noDataRules ? <span className="visually-hidden">{noDataRules}</span> : null}
-    </span>
-  );
+/** Plain-language completeness in compact rows. */
+export function DataCell({ known, total, scored, label }: { known: number; total: number; scored: boolean; label: string }) {
+  return scored ? <span className={styles.data}>{fill(label, { known, total })}</span> : null;
 }
 
 /** The five-step track with a marker over the active step. Read-only, so no slider role and no focus. */
 export function StatusTrack({ view, m, adviceOutput }: { view: StatusView; m: Messages; adviceOutput: boolean }) {
-  const active = view.position;
+  const active = view.display.state === "insufficient" ? null : steps.indexOf(view.display.state);
   const setup = statusLabel(m, "setup", adviceOutput);
   return (
     <ol className={styles.track} data-none={active === null ? "" : undefined} aria-label={fill(m.status.scaleAria, { setup })}>
@@ -87,47 +81,31 @@ export function StatusTrack({ view, m, adviceOutput }: { view: StatusView; m: Me
   );
 }
 
-export function summarySentence(view: StatusView, m: Messages, adviceOutput: boolean): string {
-  const label = statusLabel(m, view.state, adviceOutput);
-  if (view.state === "insufficient") return fill(m.status.summaryAriaNone, { label });
-  if (view.state === "broken") return fill(m.status.summaryAriaBroken, { label });
-  return fill(m.status.summaryAria, { label, step: (view.position ?? 0) + 1, points: view.points ?? 0, known: view.coverage.pointsKnown });
+export function summarySentence(view: StatusView, m: Messages, adviceOutput: boolean, locale: Locale): string {
+  const label = statusLabel(m, view.display.state, adviceOutput);
+  if (view.display.state === "insufficient") return fill(m.status.summaryAriaNone, { label });
+  if (view.display.state === "broken") return fill(m.status.summaryAriaBroken, { label });
+  return fill(m.status.summaryAria, { label, step: (activeStep(view.display.state) ?? 0) + 1, percent: formatScorePercent(locale, view.display.percent ?? 0), known: view.display.coreKnown, total: view.display.coreTotal });
 }
 
-/** Split a template at {points}; null marks where the number goes. */
-function pointsParts(template: string): (string | null)[] {
-  return template.split("{points}").flatMap((part, index) => (index === 0 ? [part] : [null, part]) as (string | null)[]);
+const activeStep = (state: StateKey) => state === "insufficient" ? null : steps.indexOf(state);
+
+/** Completeness counts core rules; bonus findings have their own line. */
+export function StatusCoverage({ view, m }: { view: StatusView; m: Messages; adviceOutput?: boolean }) {
+  if (view.display.state === "insufficient") return null;
+  const d = view.display;
+  return <div className={styles.coverage}>
+    <p className={styles.coverageLine}><IconNoData /><span>{fill(m.status.coreData, { known: d.coreKnown, total: d.coreTotal })}</span></p>
+    {d.unknownCore.length ? <p className={styles.coverageRules}>{m.status.dataMissing.split("{rules}")[0]}{d.unknownCore.map((id, index) => <span key={id}>{index ? ", " : ""}<a className={styles.ruleLink} href={`#rule-${id}`}>{m.status.ruleShort[id]}</a></span>)}</p> : null}
+    {d.incomplete && d.state !== "broken" ? <p className={styles.cap}>{m.status.coverageCapPlain}</p> : null}
+  </div>;
 }
 
-const ruleWeights = new Map<string, number>(ruleGroups.flatMap((group) => group.rules.map((rule) => [rule.id, rule.points] as const)));
-
-/** "Data: 19 of 25 points" and the rules that had no data. Unknown rules are never shown as 0. */
-export function StatusCoverage({ view, m, adviceOutput }: { view: StatusView; m: Messages; adviceOutput: boolean }) {
-  if (view.state === "insufficient") return null;
-  const { pointsKnown, unknownRules } = view.coverage;
-  const full = unknownRules.length === 0;
-  // EN45 coverage guard: under 20 evidenced points the best band is Watch.
-  const cap = !full && view.coverage.incomplete && view.state !== "broken";
-  return (
-    <div className={styles.coverage} data-complete={full ? "" : undefined}>
-      <p className={styles.coverageLine}>
-        {full ? <IconCheck /> : <IconNoData />}
-        <span className={styles.coverageMain}>{full ? m.status.dataFull : fill(m.status.dataSome, { known: pointsKnown })}</span>
-        {!full && (
-          <span className={styles.coverageRules}>
-            {m.status.dataMissing.split("{rules}")[0]}
-            {unknownRules.map((id: RuleId, index) => (
-              <span key={id}>
-                {index > 0 ? ", " : ""}
-                <a className={styles.ruleLink} href={`#rule-${id}`}>{m.status.ruleShort[id]} ({ruleWeights.get(id)})</a>
-              </span>
-            ))}
-          </span>
-        )}
-      </p>
-      {cap && <p className={styles.cap}>{fill(m.status.coverageCap, { setup: statusLabel(m, "setup", adviceOutput) })}</p>}
-    </div>
-  );
+export function BonusBlock({ view, m }: { view: StatusView; m: Messages }) {
+  if (view.display.state === "insufficient") return null;
+  return <div className={styles.coverage} data-bonus=""><strong>{m.status.bonusTitle}</strong><span> {m.status.bonusNote}</span>
+    <ul>{view.display.bonus.map(({ id, hit }) => <li key={id}><a href={`#rule-${id}`}>{m.status.ruleShort[id]}</a>: {hit?.matched ? m.common.met : !hit || hit.unknown ? m.status.noData : m.common.notMet}</li>)}</ul>
+  </div>;
 }
 
 /** Five fixed chips. They explain the score and never change the band. */
@@ -158,6 +136,7 @@ export function ConfirmationChips({ view, m }: { view: StatusView; m: Messages }
 export interface StatusPanelProps {
   view: StatusView;
   m: Messages;
+  locale: Locale;
   adviceOutput: boolean;
   /** Formatted session date, or null when there is none. */
   asOf: string | null;
@@ -171,16 +150,16 @@ export interface StatusPanelProps {
 }
 
 /** Header of the company page: label, points, track, coverage, chips. */
-export function StatusPanel({ view, m, adviceOutput, asOf, methodHref, reasons, groups, pullbackLabel, disclaimer, describedBy }: StatusPanelProps) {
-  const label = statusLabel(m, view.state, adviceOutput);
-  const scored = view.state !== "insufficient";
-  const broken = view.state === "broken";
+export function StatusPanel({ view, m, locale, adviceOutput, asOf, methodHref, reasons, pullbackLabel, disclaimer, describedBy }: StatusPanelProps) {
+  const label = statusLabel(m, view.display.state, adviceOutput);
+  const scored = view.display.state !== "insufficient";
+  const broken = view.display.state === "broken";
   return (
-    <section className={styles.panel} data-state={view.state} aria-labelledby="status-title">
+    <section className={styles.panel} data-state={view.display.state} aria-labelledby="status-title">
       <div className={styles.row}>
         <div className={styles.lead}>
           <h2 id="status-title" className={styles.label} aria-describedby={describedBy}>
-            <StatusIcon state={view.state} />
+            <StatusIcon state={view.display.state} />
             <span className={styles.labelText}>{label}</span>
             {pullbackLabel ? <span className={styles.qualifier}>{pullbackLabel}</span> : null}
           </h2>
@@ -189,24 +168,9 @@ export function StatusPanel({ view, m, adviceOutput, asOf, methodHref, reasons, 
             <a className={styles.methodLink} href={methodHref}>{m.status.methodLink}</a>
           </p>
         </div>
-        {scored && view.points !== null ? (
-          <div className={styles.points}>
-            <p className={styles.pointsLine}>
-              {pointsParts(broken ? m.status.pointsNotCounted : m.status.points).map((part, index) => part === null
-                ? (broken ? <s key={index} className="num">{view.points}</s> : <span key={index} className={`${styles.pointsNum} num`}>{view.points}</span>)
-                : <span key={index}>{part}</span>)}
-            </p>
-            {groups && (
-              <p className={`${styles.groups} num`}>
-                {groups.map((group) => (
-                  <span key={group.short}><abbr title={group.name}>{group.short}</abbr> {group.score}/{group.max}{group.noData ? `, ${fill(m.status.groupNoData, { n: group.noData })}` : ""}</span>
-                ))}
-              </p>
-            )}
-          </div>
-        ) : null}
+        {scored && <div className={styles.points}><p className={styles.pointsLine}>{broken ? m.status.pointsNotCountedPlain : <span className={`${styles.pointsNum} num`}>{formatScorePercent(locale, view.display.percent ?? 0)}</span>}</p><BonusBlock view={view} m={m} /></div>}
       </div>
-      <p className="visually-hidden" id="status-summary">{summarySentence(view, m, adviceOutput)}</p>
+      <p className="visually-hidden" id="status-summary">{summarySentence(view, m, adviceOutput, locale)}</p>
       <StatusTrack view={view} m={m} adviceOutput={adviceOutput} />
       {reasons.length > 0 && (broken || !scored) ? <p className={styles.because}>{fill(broken ? m.status.brokenBecause : m.status.insufficientBecause, { reasons: reasons.join("; ") })}</p> : null}
       <StatusCoverage view={view} m={m} adviceOutput={adviceOutput} />

@@ -1,10 +1,10 @@
 "use client";
 import Link from "next/link";
 import { useId, useMemo, useState } from "react";
+import { fill, getMessages } from "@/i18n";
 import { stateOrder, type StateKey } from "@/i18n/rules";
 import { IconReset, IconSearch, IconSort } from "./icons";
-import { ScoreMark } from "./score-mark";
-import { DataCell, StatusBadge, StatusCell, StatusIcon } from "./status-slider";
+import { StatusBadge, StatusCell, StatusIcon } from "./status-slider";
 import type { ScreenRow } from "./view-model";
 
 type SortKey = "ticker" | "sector" | "total" | "fundamentals" | "technical" | "macro" | "state";
@@ -56,7 +56,7 @@ export function ScannerTable({ locale, rows, text, heldTickers = [] }: { locale:
             ? a[k].localeCompare(b[k], locale)
             : k === "state"
               ? stateOrder.indexOf(a.state) - stateOrder.indexOf(b.state)
-              : a[k] - b[k];
+              : k === "total" ? (a.percent ?? -1) - (b.percent ?? -1) : a[k] - b[k];
         return primary * sign || b.pointsKnown - a.pointsKnown || a.ticker.localeCompare(b.ticker);
       });
   }, [rows, query, state, sort, locale]);
@@ -93,12 +93,7 @@ export function ScannerTable({ locale, rows, text, heldTickers = [] }: { locale:
           {header("ticker", text.columns.ticker)}
           {header("sector", text.columns.sector, "col-sector")}
           {header("total", text.columns.score, "col-score")}
-          {header("fundamentals", text.columns.f, "col-part", text.columns.fName)}
-          {header("technical", text.columns.t, "col-part", text.columns.tName)}
-          {header("macro", text.columns.m, "col-part", text.columns.mName)}
-          <th scope="col" className="col-mark">{text.columns.rules}</th>
           {header("state", text.columns.state)}
-          <th scope="col" className="col-data">{text.columns.data}</th>
           {group === "broken" && <th scope="col" className="col-reason">{text.columns.criteria}</th>}
         </tr></thead>
         <tbody>{list.map((row) => (
@@ -112,13 +107,8 @@ export function ScannerTable({ locale, rows, text, heldTickers = [] }: { locale:
               </span>
             </th>
             <td className="col-sector muted">{row.sector}</td>
-            <td className="col-score num" aria-describedby={disclaimerId}>{row.state === "insufficient" ? <span className="muted">{text.noScore}</span> : row.pointsNote ? <span title={row.pointsNote}>(<s>{row.total}</s>)<span className="visually-hidden">{row.pointsNote}</span></span> : row.total}</td>
-            <td className="col-part num">{row.fundamentals}</td>
-            <td className="col-part num">{row.technical}</td>
-            <td className="col-part num">{row.macro}</td>
-            <td className="col-mark"><ScoreMark matched={row.matched} state={row.state} label={row.markLabel} /></td>
+            <td className="col-score num" aria-describedby={disclaimerId}>{row.percent === null ? <span className="muted">{text.noScore}</span> : <>{row.percentLabel}<span className="small muted"> {row.bonusLabel}</span><span className="small muted">{` · ${fill(getMessages(locale as "en" | "sk").status.coreData, { known: row.pointsKnown, total: row.coreTotal })}`}</span></>}</td>
             <td><StatusCell state={row.state} position={row.position} label={row.stateLabel} ariaLabel={row.statusAria} pullbackLabel={row.pullbackLabel} describedBy={disclaimerId} /></td>
-            <td className="col-data"><DataCell known={row.pointsKnown} noDataRules={row.noDataRules} scored={row.state !== "insufficient"} /></td>
             {group === "broken" && <td className="col-reason muted">{row.reasons.length ? row.reasons.join("; ") : text.noRejection}</td>}
           </tr>
         ))}</tbody>

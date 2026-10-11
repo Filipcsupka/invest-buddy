@@ -5,11 +5,11 @@ import { withPageLog } from "@/app/page-log";
 import { flags } from "@/config/flags";
 import { SampleStamp, OperatorDisclosure } from "@/components/operator-disclosure";
 import { PaywallSegment } from "@/components/paywall-segment";
-import { DataCell, StatusCell, statusLabel } from "@/components/status-slider";
+import { StatusCell, statusLabel } from "@/components/status-slider";
 import { toRow, byScore } from "@/components/view-model";
 import { DataStatus } from "@/components/data-status";
 import { latestPortfolio, latestScores } from "@/data/store";
-import { getMessages, type Locale } from "@/i18n";
+import { fill, getMessages, type Locale } from "@/i18n";
 import { pageMetadata } from "@/i18n/metadata";
 import { stateOrder } from "@/i18n/rules";
 import { sectorLabel } from "@/i18n/score-text";
@@ -75,7 +75,7 @@ async function Scanner({ params, searchParams }: Props) {
     <p className={styles.summary} aria-live="polite">{c.result.replace("{count}", String(visible.length)).replace("{total}", String(data.rows.length))}</p>
     <p className="muted small">{c.sourceNote}</p>
     <PaywallSegment id="scanner-rows-full"><section aria-label={m.scanner.title}>
-      {visible.length ? <div className="table-scroll" role="region" tabIndex={0} aria-label={m.scanner.title}><table className="screen"><caption className="visually-hidden">{m.scanner.title}</caption><thead><tr><th scope="col">{m.table.ticker}</th><th scope="col" className="col-sector">{m.table.sector}</th><th scope="col">{m.table.score}</th><th scope="col" className="col-part">{m.groups.fundamentalsShort}</th><th scope="col" className="col-part">{m.groups.technicalShort}</th><th scope="col" className="col-part">{m.groups.macroShort}</th><th scope="col">{m.status.columns.status}</th><th scope="col" className="col-data">{m.status.columns.data}</th></tr></thead><tbody>{visible.map((row) => <tr key={row.ticker}><th scope="row" className="col-company"><Link className="ticker" href={`/${locale}/company/${row.ticker}`}>{row.ticker}</Link><span className="company-name">{row.name}{held.has(row.ticker) ? <span className="tag">{m.portfolio.held}</span> : null}</span></th><td className="col-sector muted">{row.sector}</td><td className="num" aria-describedby="scanner-disclaimer">{row.state === "insufficient" ? m.common.noScore : row.total}</td><td className="col-part num">{row.fundamentals}</td><td className="col-part num">{row.technical}</td><td className="col-part num">{row.macro}</td><td><StatusCell state={row.state} position={row.position} label={row.stateLabel} ariaLabel={row.statusAria} pullbackLabel={row.pullbackLabel} describedBy="scanner-disclaimer" /></td><td className="col-data"><DataCell known={row.pointsKnown} noDataRules={row.noDataRules} scored={row.state !== "insufficient"} /></td></tr>)}</tbody></table></div> : <p className="empty-line">{c.empty}</p>}
+      {visible.length ? <div className="table-scroll" role="region" tabIndex={0} aria-label={m.scanner.title}><table className="screen"><caption className="visually-hidden">{m.scanner.title}</caption><thead><tr><th scope="col">{m.table.ticker}</th><th scope="col" className="col-sector">{m.table.sector}</th><th scope="col">{m.table.score}</th><th scope="col">{m.status.columns.status}</th></tr></thead><tbody>{visible.map((row) => <tr key={row.ticker}><th scope="row" className="col-company"><Link className="ticker" href={`/${locale}/company/${row.ticker}`}>{row.ticker}</Link><span className="company-name">{row.name}{held.has(row.ticker) ? <span className="tag">{m.portfolio.held}</span> : null}</span></th><td className="col-sector muted">{row.sector}</td><td className="num" aria-describedby="scanner-disclaimer">{row.percent === null ? m.common.noScore : `${row.percentLabel} · ${row.bonusLabel} · ${fill(m.status.coreData, { known: row.pointsKnown, total: row.coreTotal })}`}</td><td><StatusCell state={row.state} position={row.position} label={row.stateLabel} ariaLabel={row.statusAria} pullbackLabel={row.pullbackLabel} describedBy="scanner-disclaimer" /></td></tr>)}</tbody></table></div> : <p className="empty-line">{c.empty}</p>}
     </section></PaywallSegment>
     <p className="disclaimer is-compact" id="scanner-disclaimer">{m.common.disclaimer}</p>
   </div>;

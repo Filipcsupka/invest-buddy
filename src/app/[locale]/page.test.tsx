@@ -24,7 +24,7 @@ it.each(["en", "sk"])("shows empty and stale live states on home in %s", async (
   expect(old).not.toMatch(/Sample datasheet|Ukážkový list|Operator position disclosure|Zverejnenie pozícií prevádzkovateľa/);
 });
 
-it.each([["en", "Ten rules add up to 25 points", "Five steps from Criteria broken to Conditions met", "Buy zone"], ["sk", "Desať pravidiel dáva spolu 25 bodov", "Päť stupňov od Kritériá porušené po Podmienky splnené", "Zóna nákupu"]])("keeps the 25 point text and adds the status line on home in %s, flag-aware", async (locale, build, status, advice) => {
+it.each([["en", "Nine core rules make the public percentage", "Five steps from Criteria broken to Conditions met", "Buy zone"], ["sk", "Deväť hlavných pravidiel tvorí verejné percento", "Päť stupňov od Kritériá porušené po Podmienky splnené", "Zóna nákupu"]])("explains the core percentage and status in %s", async (locale, build, status, advice) => {
   scores.mockResolvedValue({ rows: [], sample: false, lastUpdated: null, stale: false });
   const original = process.env.ADVICE_OUTPUT;
   try {
@@ -36,6 +36,7 @@ it.each([["en", "Ten rules add up to 25 points", "Five steps from Criteria broke
     process.env.ADVICE_OUTPUT = "on";
     const on = renderToStaticMarkup(await Home(props(locale)));
     expect(on).toContain(build);
-    expect(on).toContain(advice);
+    expect(on).toContain(status);
+    expect(on).not.toContain(advice);
   } finally { if (original === undefined) delete process.env.ADVICE_OUTPUT; else process.env.ADVICE_OUTPUT = original; }
 });

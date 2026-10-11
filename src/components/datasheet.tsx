@@ -1,14 +1,14 @@
 import Link from "next/link";
 import type { ScoreResult } from "@/engine";
 import type { Instrument } from "@/data/providers";
-import { fill, formatDate, getMessages, type Locale } from "@/i18n";
+import { fill, formatDate, formatScorePercent, getMessages, type Locale } from "@/i18n";
 import { ruleGroups } from "@/i18n/rules";
+import { displayScore, BONUS_RULE_IDS } from "@/engine/display-score";
 import { sectorLabel, stateKey } from "@/i18n/score-text";
 import { Disclaimer } from "./disclaimer";
 import { IconArrowRight, IconCheck, IconCross } from "./icons";
 import { OperatorDisclosure, SampleStamp } from "./operator-disclosure";
 import { StateChip } from "./score-badge";
-import { ScoreMark } from "./score-mark";
 
 /** Title block: the field grid at the head of every datasheet. */
 export function TitleBlock({ fields, stamp }: { fields: { label: string; value: React.ReactNode; wide?: boolean }[]; stamp?: string }) {
@@ -40,6 +40,7 @@ export function Datasheet({ locale, instrument, result, sample = true }: { local
   const state = stateKey(result.state);
   const met = new Set(result.ruleHits.filter((hit) => hit.matched).map((hit) => hit.id));
   const date = formatDate(locale, result.asOf);
+  const display = displayScore(state, result.ruleHits);
   return (
     <figure className="sheet specimen">
       <TitleBlock
@@ -53,15 +54,15 @@ export function Datasheet({ locale, instrument, result, sample = true }: { local
       />
       <div className="specimen-score">
         <p className="score-total num">
-          {result.total}
-          <span className="score-of">{m.common.outOf25}</span>
+          {display.percent === null ? m.common.noScore : formatScorePercent(locale, display.percent)}
         </p>
         <div className="specimen-state">
-          <StateChip state={state} label={m.states[state]} pullbackLabel={state === "watch" && result.pullbackInUptrend ? m.states.pullback : null} />
+          <StateChip state={display.state} label={m.states[display.state]} pullbackLabel={display.state === "watch" && result.pullbackInUptrend ? m.states.pullback : null} />
           <Disclaimer text={m.common.disclaimer} compact />
         </div>
       </div>
-      <ScoreMark size="lg" matched={[...met]} state={state} groupLabels={groupLabels(locale, result)} label={fill(m.mark.label, { total: result.total, fundamentals: result.fundamentals, technical: result.technical, macro: result.macro })} />
+      <p className="small">{fill(m.status.coreData, { known: display.coreKnown, total: display.coreTotal })}</p>
+      <p className="small">{m.status.bonusTitle}: {display.bonus.map(({ id, hit }) => `${m.status.ruleShort[id]} ${hit?.matched ? m.common.met : !hit || hit.unknown ? m.status.noData : m.common.notMet}`).join(", ")}</p>
       <ul className="hit-list">
         {ruleGroups.flatMap((group) =>
           group.rules.map((rule) => {
@@ -69,7 +70,7 @@ export function Datasheet({ locale, instrument, result, sample = true }: { local
             return (
               <li key={rule.id} className={hit ? "is-met" : undefined}>
                 {hit ? <IconCheck title={m.common.met} /> : <IconCross title={m.common.notMet} />}
-                <span>{m.rules[rule.id]}</span>
+                <span>{m.rules[rule.id]} ({BONUS_RULE_IDS.includes(rule.id) ? m.status.bonusLabel : m.status.coreLabel})</span>
                 <span className="num hit-points">{hit ? `+${rule.points}` : "0"}</span>
               </li>
             );

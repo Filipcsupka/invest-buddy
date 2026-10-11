@@ -47,6 +47,10 @@ export function formatPercent(locale: Locale, ratio: number, digits = 1): string
   return new Intl.NumberFormat(intlTag[locale], { style: "percent", minimumFractionDigits: digits, maximumFractionDigits: digits }).format(ratio);
 }
 
+export function formatScorePercent(locale: Locale, percent: number): string {
+  return formatPercent(locale, percent / 100, Number.isInteger(percent) ? 0 : 1);
+}
+
 export function formatCompact(locale: Locale, value: number): string {
   return new Intl.NumberFormat(intlTag[locale], { notation: "compact", maximumFractionDigits: 2 }).format(value);
 }

@@ -1,5 +1,7 @@
 # Open tasks
 
+- EN46-display (#169): public score shown as a core-rule percentage with a separate catalyst bonus, EN/SK methodology and rule labels. No stored rows rescored.
+
 State on 2026-10-09. Live state was read from khtz on 2026-10-09; see the open list in section H. A1 to A7 are done (see the notes under each). Each task can be picked up alone or given to one agent. "Approval" means the owner must say yes before the step runs (cluster, push, secrets, money). Pick the lowest open task in a group whose dependencies are done. Tick the box and add one line on what changed.
 
 Groups: A first live run, B web, C pipeline quality, D data and accounts, E operations, F cadence.

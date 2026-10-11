@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { ScoreResult } from "@/engine";
 import { scoredUniverse } from "@/data/scored";
-import { inputSources, ruleSourceNotes, ruleSources, sourceSummary } from "./view-model";
+import { inputSources, ruleSourceNotes, ruleSources, sourceSummary, toRow } from "./view-model";
 import { SourceList, SourceNotes } from "./source-list";
 
 const XBRL = "https://data.sec.gov/api/xbrl/companyfacts/CIK0001045810.json";
@@ -153,5 +153,30 @@ describe("honest source notes (ST7)", () => {
     const { getMessages } = await import("@/i18n");
     for (const l of ["en", "sk"] as const) expect(JSON.stringify(getMessages(l).agreement)).not.toMatch(/one source|jeden zdroj/);
     expect(getMessages("en").agreement.verified_single).toBe("one reading (model), checked against the quote");
+  });
+});
+
+
+describe("public score view model", () => {
+  it("uses core hits for percent and keeps the stored total untouched", async () => {
+    const { instrument, result } = (await scoredUniverse())[0];
+    const allCore = result.ruleHits.map((hit) => ({ ...hit, matched: hit.id !== "catalyst", unknown: hit.id === "catalyst" }));
+    const a = toRow("en", { instrument, result: { ...result, state: "Watch", total: 25, ruleHits: allCore } });
+    const b = toRow("en", { instrument, result: { ...result, state: "Watch", total: 25, ruleHits: allCore.map((hit) => hit.id === "catalyst" ? { ...hit, matched: true, unknown: false } : hit) } });
+    expect(a.total).toBe(25);
+    expect(a.percent).toBe(100);
+    expect(b.percent).toBe(100);
+    expect(a.state).toBe("setup");
+    expect(a.coreTotal).toBe(9);
+    expect(a.bonusLabel).toContain("no data");
+    expect(b.bonusLabel).toContain("Met");
+  });
+
+  it("localizes core completeness and bonus in Slovak", async () => {
+    const { instrument, result } = (await scoredUniverse())[0];
+    const item = toRow("sk", { instrument, result: { ...result, state: "Watch", ruleHits: result.ruleHits.map((hit) => ({ ...hit, matched: hit.id !== "catalyst" && hit.id !== "earnings", unknown: hit.id === "catalyst" || hit.id === "earnings" })) } });
+    expect(item.pointsKnown).toBe(8);
+    expect(item.statusAria).toContain("hlavných pravidiel");
+    expect(item.bonusLabel).toContain("Katalyzátor");
   });
 });

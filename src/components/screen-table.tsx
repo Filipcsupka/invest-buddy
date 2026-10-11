@@ -1,7 +1,6 @@
 import Link from "next/link";
-import { getMessages, type Locale } from "@/i18n";
-import { ScoreMark } from "./score-mark";
-import { DataCell, StatusCell } from "./status-slider";
+import { fill, getMessages, type Locale } from "@/i18n";
+import { StatusCell } from "./status-slider";
 import type { ScreenRow } from "./view-model";
 
 export type Column = "date" | "company" | "sector" | "score" | "state" | "reason";
@@ -24,9 +23,7 @@ export function ScreenTable({ locale, rows, columns, caption, disclaimerId, labe
                 {m.table.score}
               </th>
             ) : null}
-            {has("score") ? <th scope="col" className="col-mark">{m.table.rules}</th> : null}
             {has("state") ? <th scope="col">{m.status.columns.status}</th> : null}
-            {has("state") ? <th scope="col" className="col-data">{m.status.columns.data}</th> : null}
             {has("reason") ? <th scope="col" className="col-reason">{m.table.criteria}</th> : null}
           </tr>
         </thead>
@@ -45,22 +42,12 @@ export function ScreenTable({ locale, rows, columns, caption, disclaimerId, labe
                 </span>
               </th>
               {has("sector") ? <td className="col-sector muted">{row.sector}</td> : null}
-              {has("score") ? (
-                <td className="col-score num" aria-describedby={disclaimerId}>
-                  {row.state === "insufficient" ? <span className="muted">{m.common.noScore}</span> : row.pointsNote ? <span title={row.pointsNote}>(<s>{row.total}</s>)<span className="visually-hidden">{row.pointsNote}</span></span> : row.total}
-                </td>
-              ) : null}
-              {has("score") ? (
-                <td className="col-mark">
-                  <ScoreMark matched={row.matched} state={row.state} label={row.markLabel} />
-                </td>
-              ) : null}
+              {has("score") ? <td className="col-score num" aria-describedby={disclaimerId}>{row.percent === null ? <span className="muted">{m.common.noScore}</span> : <>{row.percentLabel}<span className="small muted"> {row.bonusLabel}</span><span className="small muted">{` · ${fill(m.status.coreData, { known: row.pointsKnown, total: row.coreTotal })}`}</span></>}</td> : null}
               {has("state") ? (
                 <td>
                   <StatusCell state={row.state} position={row.position} label={row.stateLabel} ariaLabel={row.statusAria} pullbackLabel={row.pullbackLabel} describedBy={disclaimerId} />
                 </td>
               ) : null}
-              {has("state") ? <td className="col-data"><DataCell known={row.pointsKnown} noDataRules={row.noDataRules} scored={row.state !== "insufficient"} /></td> : null}
               {has("reason") ? <td className="col-reason muted">{row.reasons.length ? row.reasons.join("; ") : m.table.noRejection}</td> : null}
             </tr>
           ))}
