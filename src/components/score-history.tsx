@@ -32,6 +32,7 @@ export function ScoreHistory({ ticker, rows, locale }: { ticker: string; rows: S
       ) : <p className="muted">{h.empty}</p>}
       <details>
         <summary>{h.tableLabel}</summary>
+        <div className="table-scroll" role="region" tabIndex={0} aria-label={h.tableLabel}>
         <table className="rule-table">
           <thead>
             <tr>
@@ -56,6 +57,7 @@ export function ScoreHistory({ ticker, rows, locale }: { ticker: string; rows: S
             ))}
           </tbody>
         </table>
+        </div>
       </details>
     </div>
   );

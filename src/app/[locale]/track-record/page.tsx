@@ -58,7 +58,7 @@ async function TrackRecord({ params }: LocaleParams) {
       </section></PaywallSegment>
       <PaywallSegment id="track-record-signals"><section className="sheet-section" aria-labelledby="signals">
         <h2 id="signals">{m.trackRecord.signalsTitle}</h2>
-        {record.signals.length === 0 ? <p className="muted">{record.snapshotCount === 0 ? m.trackRecord.empty : m.trackRecord.noSignals}</p> : <div className="table-scroll"><table className="screen">
+        {record.signals.length === 0 ? <p className="muted">{record.snapshotCount === 0 ? m.trackRecord.empty : m.trackRecord.noSignals}</p> : <div className="table-scroll" role="region" tabIndex={0} aria-label={m.trackRecord.signalsTitle}><table className="screen">
           <thead><tr><th scope="col">{m.trackRecord.date}</th><th scope="col">{m.trackRecord.ticker}</th><th scope="col">{flags().ADVICE_OUTPUT ? m.trackRecord.state : m.trackRecord.stateOnly}</th>{WINDOWS.map((days) => <th scope="col" key={days}>{m.trackRecord[`return${days}`]}</th>)}</tr></thead>
           <tbody>{record.signals.map((signal) => <tr key={signal.id}>
             <td>{formatDate(locale, signal.asOf)}</td><td>{signal.ticker}</td><td>{recordSignalLabel(locale, signal)}</td>
@@ -112,7 +112,7 @@ async function TrackRecord({ params }: LocaleParams) {
               <span className="muted num">{plural(locale, m.plurals.tickers, list.length)}</span>
             </span>
           );
-          const table = <ScreenTable locale={locale} rows={list} columns={["company", "score", "state", "reason"]} disclaimerId={id} caption={<Disclaimer text={m.common.disclaimer} id={id} compact />} />;
+          const table = <ScreenTable locale={locale} rows={list} columns={["company", "score", "state", "reason"]} disclaimerId={id} label={m.trackRecord.logTitle} caption={<Disclaimer text={m.common.disclaimer} id={id} compact />} />;
           return (
             <details key={date} className="disclosure-block snapshot" open={i === 0}>
               <summary>{title}</summary>

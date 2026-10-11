@@ -16,7 +16,7 @@ export function InsiderPanel({ locale, events, ticker }: { locale: Locale; event
   };
   return <section className="sheet-section" aria-label={ticker ?? m.title}>
     {ticker && <h2>{ticker}</h2>}
-    {events.length === 0 ? <p className="muted">{m.empty}</p> : <div className="table-scroll"><table className="screen insider-table">
+    {events.length === 0 ? <p className="muted">{m.empty}</p> : <div className="table-scroll" role="region" tabIndex={0} aria-label={ticker ?? m.title}><table className="screen insider-table">
       <thead><tr>
         <th scope="col">{m.date}</th>
         {!ticker && <th scope="col">{m.ticker}</th>}

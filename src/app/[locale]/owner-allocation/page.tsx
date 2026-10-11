@@ -41,7 +41,7 @@ async function OwnerAllocationPage({ params }: LocaleParams) {
       </section></PaywallSegment>
       <PaywallSegment id="owner-suggestions"><section className="sheet-section" aria-labelledby="owner-suggestions">
         <h2 id="owner-suggestions">{m.suggestions}</h2>
-        {data.result.suggestions.length ? <div className="table-scroll"><table className="screen">
+        {data.result.suggestions.length ? <div className="table-scroll" role="region" tabIndex={0} aria-label={m.suggestions}><table className="screen">
           <thead><tr><th scope="col">{m.symbol}</th><th scope="col">{m.tier}</th><th scope="col">{m.amount}</th><th scope="col">{m.reason}</th></tr></thead>
           <tbody>{data.result.suggestions.map((suggestion) => <tr key={`${suggestion.symbol}-${suggestion.tier}`}>
             <th scope="row">{suggestion.symbol}</th><td>{m.tiers[suggestion.tier]}</td><td className="num">{suggestion.amountEur ? euro(suggestion.amountEur) : m.wait}</td><td>{m.reasons[suggestion.reason]}{suggestion.capped ? ` ${m.capped}` : ""}</td>
