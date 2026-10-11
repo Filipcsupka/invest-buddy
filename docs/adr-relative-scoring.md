@@ -1,6 +1,6 @@
 # ADR: relative scoring (EN45)
 
-Date: 2026-10-11. Score rules version `2026-10-11.1`, signal rules version `2026-10-11.1`. The point table and the Guide thresholds (InvestingGuide s6 and s8) stay. ADR-001 still applies: the result is informational screening.
+Date: 2026-10-11. Score rules version `2026-10-11.2`, signal rules version `2026-10-11.1`. The point table and the Guide thresholds (InvestingGuide s6 and s8) stay. ADR-001 still applies: the result is informational screening.
 
 ## Context
 
@@ -14,6 +14,8 @@ A ticker's points are measured against the points that have evidence.
 - `percent` is `total / evidencedMax`.
 - States: Setup at 72% or more, Watch at 60%, Wait at 48%, otherwise Ignore. On a fully evidenced ticker these are the Guide's 18, 15 and 12 of 25. The comparison uses whole numbers (`total * 100 >= 72 * evidencedMax`), so 18 of 25 is exactly 72%.
 - Coverage guard: when `evidencedMax` is under 20 (80% of 25), the best state is Watch and the result is flagged `incompleteData`.
+- A rule built from two inputs uses three-valued logic. "EPS beat or guidance raised" and "volume or insider accumulation" are met when one input is true, unknown when neither is true and one has no data, and not met only when both are false (version `2026-10-11.2`).
+- A field whose source is planned (paid data or not built yet) is treated exactly like no data. `score()` takes the planned fields as an option, sets them to null before scoring and lists them in the audit as `plannedFields`. No scored field is planned today; the registry for it comes with ST7.
 - Rejection rules and invalid data work as before.
 - The raw points, the part scores and the stored state strings stay as they were. The audit also stores `evidencedMax`, `percent`, `coverage` and `incompleteData`.
 - Signals use the same shares for the add check (15 of 25) and the start and conviction checks (18 of 25). A start or conviction also needs 20 evidenced points. A signal input without `evidencedMax` counts all 25 points.
@@ -22,7 +24,7 @@ The rule lives in `src/engine/relative.ts`. `score.ts`, `status.ts` and `signals
 
 ## Impact on stored data
 
-`src/engine/replay.test.ts` applies both rules to the stored audits from 2026-10-02 to 2026-10-09. On 2026-10-09 the counts move from 0 to 4 in Setup (AMD, DDOG, NVDA and SNOW, each 17 of 23), 8 to 6 in Watch, 6 to 10 in Wait and 16 to 10 in Ignore. Criteria broken stays at 6. Ten scored tickers are flagged incomplete data.
+`src/engine/replay.test.ts` applies both rules to the stored audits from 2026-10-02 to 2026-10-09, including the three-valued earnings rule. The accumulation rule in those audits read insider data only, so its stored flags are kept. On 2026-10-09 the counts move from 0 to 4 in Setup (AMD, DDOG, NVDA and SNOW, each 17 of 23), 8 to 9 in Watch, 6 to 8 in Wait and 16 to 9 in Ignore. Criteria broken stays at 6. Ten scored tickers are flagged incomplete data.
 
 ## Risks
 

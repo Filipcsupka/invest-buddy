@@ -5,8 +5,23 @@ import type { AlertState, Fundamentals, Macro, OHLCV, RuleHit, ScoreInputs, Scor
 /**
  * Bump when the scoring rules change; each new record snapshot stores this value.
  * 2026-10-11.1 (EN45): states use the share of evidenced points and the coverage guard (src/engine/relative.ts).
+ * 2026-10-11.2 (EN45): a rule built from two inputs is unknown when no input is true and one has no data; planned fields count as no data.
  */
-export const SCORE_RULES_VERSION = "2026-10-11.1";
+export const SCORE_RULES_VERSION = "2026-10-11.2";
+
+/**
+ * Three-valued OR: true when any input is true, unknown (null) when none is true and one has no data, else false.
+ * A rule with partial data is never counted as a failed check.
+ */
+export function anyOf(...parts: (boolean | null | undefined)[]): boolean | null {
+  if (parts.some((part) => part === true)) return true;
+  return parts.some((part) => part === null || part === undefined) ? null : false;
+}
+
+/** Input fields a planned data source would fill (paid data or not built yet). The scorer treats each one exactly like no data. */
+export type PlannedField = keyof Fundamentals | keyof Macro;
+export interface ScoreOptions { planned?: readonly PlannedField[] }
+const MACRO_FIELDS: readonly string[] = ["growthSectorRotation", "dataTailwind"];
 
 /** Stored state strings stay as they were, so older audits, alerts and the track record still parse. */
 const STATE_FOR_BAND: Record<RelativeBand, AlertState> = { setup: "Setup met (>=18)", watch: "Watch", wait: "Wait", ignore: "Ignore" };
@@ -15,9 +30,7 @@ const finite = (value: unknown): value is number => typeof value === "number" &&
 const boolean = (value: unknown) => typeof value === "boolean" || value === null;
 
 export function accumulationRule(volume: boolean | null, insider: boolean | null): boolean | null {
-  if (volume === true || insider === true) return true;
-  if (volume === null && insider === null) return null;
-  return false;
+  return anyOf(volume, insider);
 }
 
 function validDate(value: unknown): value is string {
@@ -50,14 +63,20 @@ function validate(bars: OHLCV[], fundamentals: Fundamentals, macro: Macro): stri
   return reasons;
 }
 
-export function score(input: ScoreInputs): ScoreResult {
+export function score(input: ScoreInputs, options: ScoreOptions = {}): ScoreResult {
   const bars = Array.isArray(input.bars) ? input.bars.map((bar) => bar && { ...bar }) : [];
   const normalized: ScoreInputs = { ticker: input.ticker, bars, fundamentals: { ...input.fundamentals }, macro: { ...input.macro } };
-  const invalidReasons = validate(input.bars, input.fundamentals, input.macro);
+  const planned = [...new Set(options.planned ?? [])].sort();
+  for (const field of planned) {
+    const target = (MACRO_FIELDS.includes(field) ? normalized.macro : normalized.fundamentals) as unknown as Record<string, unknown>;
+    target[field] = null;
+  }
+  const plannedAudit = planned.length ? { plannedFields: planned } : {};
+  const invalidReasons = validate(input.bars, planned.length ? normalized.fundamentals : input.fundamentals, planned.length ? normalized.macro : input.macro);
   if (invalidReasons.length) return {
     ticker: input.ticker, asOf: "", technical: 0, fundamentals: 0, macro: 0, total: 0,
     state: "Insufficient/invalid data", pullbackInUptrend: false, invalidReasons,
-    inputs: normalized, ruleHits: [], rejectionReasons: [], evidencedMax: 0, percent: 0, coverage: 0, incompleteData: true,
+    inputs: normalized, ruleHits: [], rejectionReasons: [], evidencedMax: 0, percent: 0, coverage: 0, incompleteData: true, ...plannedAudit,
   };
   const indicator = technicalIndicators(bars);
   const accumulation = volumeAccumulation(bars);
@@ -66,7 +85,8 @@ export function score(input: ScoreInputs): ScoreResult {
   const hits: RuleHit[] = [];
   const add = (id: string, label: string, points: number, matched: boolean | null, detail: string, unknown = false) => hits.push({ id, label, points, matched: matched === true, detail, unknown });
   add("revenue-acceleration", "Revenue growth accelerated", 4, (f.revenueAccelerating ?? (f.revenueGrowthCurrent !== null && f.revenueGrowthPrior !== null && f.revenueGrowthCurrent > f.revenueGrowthPrior)) && f.revenueDeclining === false, f.revenueAccelerating === null ? "unknown" : `${f.revenueGrowthPrior ?? "unknown"}% → ${f.revenueGrowthCurrent ?? "unknown"}%`, f.revenueAccelerating === null || (f.revenueAccelerating === undefined && (f.revenueGrowthCurrent === null || f.revenueGrowthPrior === null)));
-  add("earnings", "EPS beat or guidance raised", 3, f.epsBeat || f.guidanceRaised, `EPS beat: ${f.epsBeat ?? "unknown"}; guidance raised: ${f.guidanceRaised ?? "unknown"}` , f.epsBeat === null && f.guidanceRaised === null);
+  const earnings = anyOf(f.epsBeat, f.guidanceRaised);
+  add("earnings", "EPS beat or guidance raised", 3, earnings, `EPS beat: ${f.epsBeat ?? "unknown"}; guidance raised: ${f.guidanceRaised ?? "unknown"}`, earnings === null);
   add("catalyst", "Curated product catalyst", 2, f.productCatalyst, String(f.productCatalyst ?? "unknown"), f.productCatalyst === null);
   const accumulationMatched = accumulationRule(accumulation.matched, f.insiderOrInstitutionalAccumulation);
   add("accumulation", "Institutional or insider accumulation", 1,
@@ -97,6 +117,6 @@ export function score(input: ScoreInputs): ScoreResult {
   const state: AlertState = rejectionReasons.length ? "Criteria broken" : STATE_FOR_BAND[relative.band];
   return {
     ticker: input.ticker, asOf: bars.at(-1)?.date ?? "", technical, fundamentals, macro, total, state, pullbackInUptrend, invalidReasons, inputs: normalized, ruleHits: hits, rejectionReasons,
-    evidencedMax: relative.evidencedMax, percent: relative.percent, coverage: relative.coverage, incompleteData: relative.incompleteData,
+    evidencedMax: relative.evidencedMax, percent: relative.percent, coverage: relative.coverage, incompleteData: relative.incompleteData, ...plannedAudit,
   };
 }
