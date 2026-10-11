@@ -37,7 +37,7 @@ export function createFilingsBackfillJob(db: Pick<pg.Pool, "query">, get: (url: 
     async step(ticker, previous) {
       const subject = subjects.find((row) => row.ticker === ticker);
       if (!subject) throw new Error(`Unknown filings subject ${ticker}`);
-      let cursor = previous as Cursor | null;
+      const cursor = previous as Cursor | null;
       const finish = (next: Cursor) => ({ cursor: next, done: !next.todo.length && !next.pages.length });
       if (!cursor) {
         const data = JSON.parse(await get(submissionUrl(subject.cik))) as { filings: { recent: Recent; files?: SubmissionsPage[] } };
