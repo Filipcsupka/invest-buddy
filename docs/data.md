@@ -123,6 +123,22 @@ Job. `node dist/jobs/macro.js [--date YYYY-MM-DD] [--no-fetch]` (`npm run macro`
 
 `DatabaseUniverseProvider.macro()` accepts `agree` and `data_rule` for these two fields. Reconcile skips any field that already has a `data_rule` row for the date, so agents cannot overwrite it, and carry-forward does not replace it. The CronJob `invest-buddy-macro` (suspended, 06:50 Tuesday to Saturday, 240 s deadline) runs before reconcile at 07:00. The judge's `confirmed()` in `src/engine/signals.ts` still counts only `agree` and `xbrl_override`; the macro fields are not among the key fields it reads.
 
+### Macro observations (D24, migration 049)
+
+Table `macro_observations` (series_id, obs_date, value, realtime_start, source_id, source_url, observed_at; primary key series, date, realtime_start; `source_id` references `data_sources`). `realtime_start` is the vintage: FRED's own value when the response has one, else the fetch date; Treasury rows use the observation date. A row is written only when the value differs from the newest stored vintage of that observation, so a daily rerun adds nothing and a revision adds a second row. Rows are kept without expiry. FRED rows are `fred` (display false, internal signal only); Treasury rows are `treasury`.
+
+Series (`src/data/macro-series.ts`): FRED `DGS2`, `DGS10`, `DGS3MO`, `T10Y2Y`, `FEDFUNDS` (monthly), `CPIAUCSL` and `PPIACO` (monthly; the two inflation inputs of the macro rule), and from the Treasury daily par yield curve (CSV from home.treasury.gov, a cross-check, not FiscalData) `TSY_3M`, `TSY_2Y`, `TSY_10Y`. A FRED series is added only after `FRED_API_KEY=... npx tsx scripts/fred-check-notes.ts` shows no "Copyright" in its notes; a rejected id goes into `FRED_REJECTED_SERIES` and is never fetched. The script has not been run against the live notes yet: run it before the first backfill. VIX is not stored here: the Cboe source is `internal_only` and its use needs a licence (D42). D25 adds the `RV20_SPY` series later.
+
+The daily macro job also stores the last 80 (daily) or 24 (monthly) FRED observations per series and this year's Treasury curve. `loadInputs` reads `DGS10`, `CPIAUCSL` and `PPIACO` from the table (newest vintage per date, dates up to the scoring date) when it holds at least as many points as the stored FRED document, and falls back to the document otherwise. The document is still written, it is the evidence link. Rule logic and thresholds are unchanged.
+
+Backfill (D34 runner, history from 2023-10-01, one request per series and calendar year, cursor = next year):
+
+- `node dist/jobs/backfill.js --job macro-fred --dry-run` lists the series and their cursors, stores nothing. Needs `FRED_API_KEY` in the environment.
+- `node dist/jobs/backfill.js --job macro-fred [--only DGS10] [--max-requests N]`
+- `node dist/jobs/backfill.js --job macro-treasury` (4 requests to 2026)
+
+Usage is reserved in the D8 ledger against `fred` and `treasury`. Running the backfill and applying migration 049 need the owner's approval.
+
 ## Carry-forward
 
 `CARRY_FORWARD=on` lets a partial scan score the whole universe. It is off by default; with the flag off, reconcile and daily run the same SQL and write the same rows as before migration 009. With it on:

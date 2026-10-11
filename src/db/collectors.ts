@@ -2,6 +2,8 @@ import type pg from "pg";
 import type { CollectedDocument } from "../collectors/types";
 import type { Form4Transaction } from "../collectors/edgar";
 import type { HolderEvent } from "../collectors/sources/common";
+import type { MacroObservation } from "../collectors/macro-observations";
+import { insertMacroObservations, insertMemoryMacroObservations } from "./macro-observations";
 import { freshnessDays } from "../data/evidence";
 import { insiderFromFact, netBuyFromTransactions, INSIDER_WINDOW_DAYS, type InsiderNetBuy, type InsiderTxRow, DEFAULT_INSIDER_MIN_NET_BUY_USD, INSIDER_FACT_DAYS, INSIDER_FACT_LEAD_DAYS, type InsiderDocument, type InsiderResult } from "../data/insider";
 import { FACT_SOURCE_IDS, licenceClassFor, sourceIdFor } from "../data/sources-registry";
@@ -29,6 +31,8 @@ export interface CollectorRepository extends SourceState {
   upsertDocument(doc: CollectedDocument): Promise<{ id: number; written: boolean }>;
   upsertInsiderTransactions?(accession: string, ticker: string, filedAt: string, rows: Form4Transaction[]): Promise<void>;
   upsertHolderEvent?(event: HolderEvent): Promise<boolean>;
+  /** Stores macro observations (D24). Returns the rows written; an unchanged value is not written again. */
+  upsertMacroObservations?(rows: MacroObservation[]): Promise<number>;
   /** 90-day net open-market buying from stored Form 4 lines, with the ids of the stored Form 4 filings behind it. null when the ticker has no line in the window. */
   insiderNetBuy?(symbol: string, asOf: string): Promise<(InsiderNetBuy & { documentIds: number[] }) | null>;
   upsertFact(fact: Fact): Promise<boolean>;
@@ -41,6 +45,8 @@ export class MemoryCollectorRepository implements CollectorRepository {
   readonly runs: CollectorRun[] = [];
   readonly insiderTransactions = new Map<string, Form4Transaction>();
   readonly holderEvents = new Map<string, HolderEvent>();
+  readonly macroObservations: MacroObservation[] = [];
+  async upsertMacroObservations(rows: MacroObservation[]) { return insertMemoryMacroObservations(this.macroObservations, rows); }
   async upsertHolderEvent(event: HolderEvent) {
     if (this.holderEvents.has(event.accession)) return false;
     this.holderEvents.set(event.accession, structuredClone(event));
@@ -104,6 +110,7 @@ export async function loadInsider(pool: pg.Pool, symbol: string, asOf: string, m
 }
 export class PostgresCollectorRepository implements CollectorRepository {
   constructor(private readonly pool: pg.Pool) {}
+  async upsertMacroObservations(rows: MacroObservation[]) { return insertMacroObservations(this.pool, rows); }
   async upsertHolderEvent(event: HolderEvent) {
     const result = await this.pool.query(`INSERT INTO holder_events (accession,ticker,filer_name,filer_cik,form,filed_at,percent,shares)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (accession) DO NOTHING`,

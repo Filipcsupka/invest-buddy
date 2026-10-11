@@ -10,6 +10,8 @@ import { PostgresCollectorRepository, type CollectorRepository } from "../db/col
 import { lastCompletedSession } from "../data/trading-calendar";
 import { isIsoDate } from "../db/iso-date";
 import { loadUniverse } from "../db/universe";
+import { storedMacroSeries } from "../db/macro-observations";
+import { storeDailyMacroObservations } from "./macro-observations";
 import { evaluateDataTailwind, evaluateSectorRotation, macroConfig, MACRO_RULES_VERSION, type Bar, type MacroConfig, type MacroResult, type VixPoint, type YieldPoint } from "../data/macro-rules";
 
 export const BENCHMARK = "SPY";
@@ -47,16 +49,25 @@ export async function loadInputs(pool: pg.Pool, asOf: string, tickers: string[] 
   const docs = await pool.query<DocRow>("SELECT url,meta FROM source_documents WHERE url = ANY($1::text[])", [[yieldUrl, cpiUrl, ppiUrl, VIX_DOC_URL]]);
   const doc = (url: string) => docs.rows.find((row) => row.url === url);
   const yieldDoc = doc(yieldUrl), cpiDoc = doc(cpiUrl), ppiDoc = doc(ppiUrl), vixDoc = doc(VIX_DOC_URL);
-  const series = (row: DocRow | undefined): YieldPoint[] | null => {
+  const docSeries = (row: DocRow | undefined): YieldPoint[] | null => {
     const observations = row?.meta.observations;
     return Array.isArray(observations) ? observations.filter((p) => typeof p.date === "string" && Number.isFinite(p.value)) : null;
+  };
+  // D24: prefer the stored observations (same window sizes as the document). The document stays the evidence link and the fallback.
+  // Stored observations are used only when they are at least as many as the document's, so the rule never sees less history than before.
+  const yieldStored = await storedMacroSeries(pool, FRED_YIELD_SERIES, asOf, 80);
+  const cpiStored = await storedMacroSeries(pool, FRED_CPI_SERIES, asOf, 24);
+  const ppiStored = await storedMacroSeries(pool, FRED_PPI_SERIES, asOf, 24);
+  const series = (row: DocRow | undefined, stored: YieldPoint[]): YieldPoint[] | null => {
+    const fromDoc = docSeries(row);
+    return stored.length && stored.length >= (fromDoc?.length ?? 0) ? stored : fromDoc;
   };
   const vixMeta = vixDoc?.meta;
   const vix = vixMeta ? [...(vixMeta.recent ?? []), ...(vixMeta.date && Number.isFinite(vixMeta.close) ? [{ date: vixMeta.date, close: vixMeta.close as number }] : [])].filter((p) => typeof p.date === "string" && Number.isFinite(p.close)) : null;
   const rows = await pool.query<{ ticker: string; date: string; close: number }>("SELECT ticker,bar_date::text AS date,close::float8 AS close FROM daily_bars WHERE ticker = ANY($1::text[]) AND bar_date <= $2::date AND bar_date > $2::date - 90 ORDER BY ticker,bar_date", [[...tickers, BENCHMARK], asOf]);
   const byTicker: Record<string, Bar[]> = {};
   for (const row of rows.rows) (byTicker[row.ticker] ??= []).push({ date: row.date, close: row.close });
-  return { yields: series(yieldDoc), yieldUrl: yieldDoc ? yieldUrl : null, cpi: series(cpiDoc), cpiUrl: cpiDoc ? cpiUrl : null, ppi: series(ppiDoc), ppiUrl: ppiDoc ? ppiUrl : null, vix, vixUrl: vixDoc ? VIX_DOC_URL : null,
+  return { yields: series(yieldDoc, yieldStored), yieldUrl: yieldDoc ? yieldUrl : null, cpi: series(cpiDoc, cpiStored), cpiUrl: cpiDoc ? cpiUrl : null, ppi: series(ppiDoc, ppiStored), ppiUrl: ppiDoc ? ppiUrl : null, vix, vixUrl: vixDoc ? VIX_DOC_URL : null,
     universe: Object.fromEntries(tickers.map((ticker) => [ticker, byTicker[ticker] ?? []])), spy: byTicker[BENCHMARK] ?? null };
 }
 
@@ -70,6 +81,8 @@ export async function fetchMacroInputs(repository: CollectorRepository, deps: Fe
     try { await repository.upsertDocument(await collectFredSeries(key, series, deps.get, limit)); }
     catch (error) { failures.push(`fred ${series}: ${error instanceof Error ? error.message : String(error)}`); }
   }
+  const stored = await storeDailyMacroObservations(repository, { key, http: deps.http ?? defaultHttp(), get: deps.get, now });
+  failures.push(...stored.failures);
   try {
     const output = await collectVix({ http: deps.http ?? defaultHttp(), companies: [] as Company[], symbols: [], since: now.toISOString().slice(0, 10), now, env });
     for (const document of output.documents) await repository.upsertDocument(document);

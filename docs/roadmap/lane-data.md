@@ -578,6 +578,7 @@ Risk or open question: terms for display on a paid product often need a sales co
 - D18: EN25 reads `fundamentals_as_of(date)` from here.
 - D19: notes that 424B5 text from EN42 is archived here.
 - D24: notes that EN40's CPI, PPI and FOMC inputs are not collected today (no CronJob runs `bls` or `fed`).
+- D24 (built): Treasury par yield curve comes from the home.treasury.gov CSV, not FiscalData (FiscalData has no par curve dataset); migration took number 049; VIX is not stored (Cboe is internal_only).
 - D28: EN41 step 3 is this task; recorded the live state read on 2026-10-09 (Alpha Vantage CronJob not suspended, key present, no run yet).
 - D29: the engine lane read Finnhub's terms as no business use without written approval; added dependency D42 (written approval) and left the task unscheduled.
 - D34: plug-ins land with their source tasks (D18, D19, D20, EN22).
