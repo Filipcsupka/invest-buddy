@@ -5,10 +5,14 @@ import { ideasEnabled } from "@/data/ideas-store";
 import { ownerViewEnabled } from "@/data/owner-allocation";
 import { flags } from "@/config/flags";
 import { getMessages, type Locale } from "@/i18n";
+import { rateLimit } from "@/security/rate-limit";
 import { writeHttpLog } from "@/app/api/ingest/request-log";
 
 /** Resolve unavailable pages before a streamed layout can commit a 200 response. */
 export async function proxy(request: NextRequest) {
+  const limited = rateLimit(request);
+  if (limited) return limited as NextResponse;
+  if (request.nextUrl.pathname.startsWith("/api/")) return NextResponse.next();
   const start = performance.now();
   const requestId = randomUUID();
   const incoming = new Headers(request.headers);
@@ -35,4 +39,4 @@ export async function proxy(request: NextRequest) {
   return response;
 }
 
-export const config = { matcher: ["/", "/(en|sk)/:path*"] };
+export const config = { matcher: ["/", "/(en|sk)/:path*", "/api/:path*"] };

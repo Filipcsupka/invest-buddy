@@ -48,3 +48,14 @@ it.each(["en", "sk"])("opens the %s scanner only with PAYWALL on", async (locale
   expect(response.status).toBe(200);
   expect(response.headers.get("x-request-id")).toBeTruthy();
 });
+
+it("passes api requests through and limits a caller over the cap", async () => {
+  process.env.RATE_LIMIT_API_PER_MIN = "1";
+  const { resetRateLimits } = await import("@/security/rate-limit");
+  resetRateLimits();
+  const call = () => proxy(new NextRequest("https://example.com/api/other", { headers: { "x-forwarded-for": "2.2.2.2" } }));
+  expect((await call()).status).toBe(200);
+  expect((await call()).status).toBe(429);
+  delete process.env.RATE_LIMIT_API_PER_MIN;
+  resetRateLimits();
+});
