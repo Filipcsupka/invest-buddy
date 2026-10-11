@@ -200,3 +200,53 @@ describe("GDELT collector proposal", () => {
     for (const text of ["runAsNonRoot: true", "automountServiceAccountToken: false", "allowPrivilegeEscalation: false", "readOnlyRootFilesystem: true", 'drop: ["ALL"]', "type: RuntimeDefault", "concurrencyPolicy: Forbid"]) expect(doc).toContain(text);
   });
 });
+
+describe("RS5 research schedule", () => {
+  const names = ["weekly", "daily", "verify", "pipeline-early", "pipeline", "notify", "deepdive"];
+  it("keeps every research CronJob suspended with bounded jobs", () => {
+    for (const name of names) {
+      const doc = job(`research-${name}`);
+      expect(doc, name).toContain("suspend: true");
+      expect(doc, name).toContain("concurrencyPolicy: Forbid");
+      expect(doc, name).toContain("backoffLimit: 1");
+      expect(deadline(`research-${name}`), name).toBeLessThanOrEqual(["weekly", "daily", "deepdive"].includes(name) ? 40 : 20);
+      expect(doc, name).toContain("timeZone: Europe/Bratislava");
+    }
+  });
+  it("passes the kill switch to each model runner", () => {
+    for (const name of ["weekly", "daily", "deepdive"]) {
+      const doc = job(`research-${name}`);
+      expect(doc).toContain("run-research.mjs");
+      expect(doc).toContain("name: RESEARCH_ENABLED");
+      expect(doc).toContain("key: RESEARCH_ENABLED");
+      expect(doc).toContain("key: AI_DAILY_TOKEN_CEILING");
+    }
+    expect(job("research-weekly")).toContain("--timeout-s 700");
+  });
+  it("orders the research work around daily score, judge and digest", () => {
+    const order = ["research-daily", "research-verify", "research-pipeline-early", "daily", "research-pipeline", "judge", "research-notify", "digest"];
+    for (let i = 1; i < order.length; i++) expect(minutes(order[i]).at, order[i]).toBeGreaterThan(minutes(order[i - 1]).at);
+    expect(minutes("research-weekly")).toEqual({ at: 60, days: "0" });
+    expect(minutes("research-daily")).toEqual({ at: 160, days: "2-6" });
+    expect(minutes("research-verify").days).toBe("0-6");
+    expect(job("research-deepdive")).toContain('schedule: "0 0 1 1 *"');
+  });
+  it("limits the verifier policy to the verifier pod", () => {
+    const policy = readFileSync(join(base, "research-verify-networkpolicy.yaml"), "utf8");
+    expect(policy).toContain("kind: NetworkPolicy");
+    expect(policy).toContain("app.kubernetes.io/component: research-verify");
+    expect(policy).toContain("app: invest-buddy-postgres");
+    expect(policy).toContain("port: 5432");
+    expect(job("research-verify")).toContain("app.kubernetes.io/component: research-verify");
+    for (const name of names.filter((name) => name !== "verify")) expect(job(`research-${name}`)).not.toContain("app.kubernetes.io/component: research-verify");
+  });
+  it("uses the owner chat for the suspended notify template", () => {
+    const doc = job("research-notify");
+    expect(doc).toContain("name: TELEGRAM_OWNER_CHAT_ID");
+    expect(doc).toContain("name: invest-buddy-telegram-owner");
+    expect(doc).toContain("name: TELEGRAM_CARD_MODE");
+    expect(doc).toContain("value: owner");
+    expect(doc).toContain("name: RESEARCH_PUBLIC_CARDS");
+    expect(doc).not.toContain("name: TELEGRAM_CHAT_ID");
+  });
+});

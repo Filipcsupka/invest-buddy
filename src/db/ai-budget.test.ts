@@ -25,3 +25,18 @@ it("charges an unknown usage floor instead of zero", async () => {
   await finishCall(db as never, { id: "x", tokens: null, usd: null });
   expect(values[0][1]).toBe(20000);
 });
+
+it("serializes research reservations and rejects an overlapping call", async () => {
+  const sql: string[] = [];
+  const client = { query: async (statement: string) => {
+    sql.push(statement);
+    if (statement.includes("count(*)::text")) return { rows: [{ count: "1" }] };
+    if (statement.includes("WITH clock")) return { rows: [{ day: "2026-10-11", month: "2026-10", monthly_tokens: "10", monthly_usd: "0", daily_calls: "1", daily_tokens: "10", shared_daily_tokens: "10" }] };
+    return { rows: [] };
+  }, release: () => {} };
+  const db = { query: client.query, connect: async () => client };
+  const result = await reserveCall(db as never, { id: "00000000-0000-4000-8000-000000000021", kind: "research", agent: "claude", authSource: "subscription", model: "sonnet", caps: { monthlyTokens: 1000, monthlyUsd: 0, dailyCalls: 4, dailyTokens: 500, sharedDailyTokens: 1000 } });
+  expect(result).toEqual({ recorded: false });
+  expect(sql).toContain("SELECT pg_advisory_xact_lock(77853)");
+  expect(sql.some((statement) => statement.includes("INSERT INTO ai_budget_calls"))).toBe(false);
+});

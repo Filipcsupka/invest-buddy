@@ -18,3 +18,11 @@ test("a completed call reports token and dollar usage", async () => {
     assert.deepEqual(body, { action: "finish", id: "123", tokens: 17, usd: 0.12, status: "ok", window: null, resetAt: null, resetHint: null, inputTokens: 5, outputTokens: 7, cacheReadTokens: 3, cacheCreationTokens: 2 });
   } finally { globalThis.fetch = original; }
 });
+
+test("a rejected research reservation never starts a model call", async () => {
+  const original = globalThis.fetch;
+  try {
+    globalThis.fetch = async () => Response.json({ recorded: false });
+    assert.equal(await reserveBudget("http://x", "token", "research", "sonnet", "claude", { monthlyTokens: 100, monthlyUsd: 0, dailyCalls: 4, dailyTokens: 100, sharedDailyTokens: 100 }), null);
+  } finally { globalThis.fetch = original; }
+});

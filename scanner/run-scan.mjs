@@ -108,16 +108,34 @@ export function agentEnv(source = process.env) {
   return Object.fromEntries(Object.entries(source).filter(([key, value]) => value !== undefined && (allowed.has(key) || /^LC_[A-Z_]+$/.test(key))));
 }
 
-export function runCli(cmd, args, input, { timeoutMs, cwd }) {
+export function runCli(cmd, args, input, { timeoutMs, cwd, monitor, monitorIntervalMs = 180000 }) {
   return new Promise((resolve, reject) => {
     const child = spawn(cmd, args, { cwd, env: agentEnv(), stdio: ["pipe", "pipe", "pipe"] });
-    let out = "", err = "", timedOut = false;
+    let out = "", err = "", timedOut = false, monitorError = null, checking = false;
     const timer = setTimeout(() => { timedOut = true; child.kill("SIGTERM"); setTimeout(() => child.kill("SIGKILL"), 5000).unref(); }, timeoutMs);
+    const monitorTimer = monitor && setInterval(async () => {
+      if (checking || monitorError) return;
+      checking = true;
+      try {
+        const gate = await monitor();
+        if (!gate.ok) {
+          monitorError = Object.assign(new Error(`research quota stop: ${gate.reason}`), { cutoff: { window: gate.reason.startsWith("seven-day") ? "weekly" : "5h" } });
+          child.kill("SIGTERM");
+          setTimeout(() => child.kill("SIGKILL"), 5000).unref();
+        }
+      } catch (error) {
+        monitorError = Object.assign(new Error(`research quota check failed: ${error.message}`), { cutoff: { window: "unknown" } });
+        child.kill("SIGTERM");
+        setTimeout(() => child.kill("SIGKILL"), 5000).unref();
+      } finally { checking = false; }
+    }, monitorIntervalMs);
     child.stdout.on("data", (d) => { out += d; });
     child.stderr.on("data", (d) => { err += d; });
-    child.on("error", (e) => { clearTimeout(timer); reject(e); });
+    child.on("error", (e) => { clearTimeout(timer); if (monitorTimer) clearInterval(monitorTimer); reject(e); });
     child.on("close", (code) => {
       clearTimeout(timer);
+      if (monitorTimer) clearInterval(monitorTimer);
+      if (monitorError) return reject(monitorError);
       if (timedOut) return reject(new Error(`timeout after ${timeoutMs / 1000}s`));
       if (code !== 0) return reject(Object.assign(new Error(`${cmd} exited ${code}`), { stdout: out, stderr: err, code }));
       resolve({ out, err });
