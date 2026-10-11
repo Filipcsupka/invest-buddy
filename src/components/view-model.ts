@@ -143,11 +143,11 @@ function itemsFor(result: ScoreResult, spec: Spec | undefined): SourceItem[] {
 
 /** Localizes items. An href survives only as a plain https url on a kind that may be linked. */
 export function toSourceLinks(locale: Locale, items: SourceItem[]): SourceLink[] {
-  const kinds = getMessages(locale).sources.kinds;
+  const { kinds, secItem } = getMessages(locale).sources;
   return items.map((s) => {
     const href = NO_LINK.has(s.kind) ? null : httpsUrl(s.href);
     const date = s.publishedAt && /^\d{4}-\d{2}-\d{2}$/.test(s.publishedAt) ? s.publishedAt : null;
-    return { key: itemKey({ ...s, href }), kind: s.kind, label: kinds[s.kind], date, dateLabel: date ? formatDate(locale, date) : null, href };
+    return { key: itemKey({ ...s, href }), kind: s.kind, label: s.item ? fill(secItem, { item: s.item }) : kinds[s.kind], date, dateLabel: date ? formatDate(locale, date) : null, href };
   });
 }
 /** Sources for one rule row in "Rule by rule". Empty means "No source yet". */

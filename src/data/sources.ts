@@ -5,7 +5,7 @@
  * Third-party data that may not be displayed (Alpha Vantage, FRED, Cboe VIX) keeps a kind and no href.
  */
 export type SourceKind = "release" | "10-Q" | "10-K" | "8-K" | "form4" | "filing" | "xbrl" | "alphavantage" | "fred" | "vix" | "prices" | "pricesUniverse" | "unstored";
-export interface SourceItem { kind: SourceKind; publishedAt: string | null; href: string | null }
+export interface SourceItem { kind: SourceKind; publishedAt: string | null; href: string | null; /** 8-K item number when the catalyst rule cites a filing item, shown as "SEC 8-K item X". */ item?: string }
 /** What the lookup knows about a stored document. */
 export interface StoredDocInfo { docType: string; publishedAt: string | null; displayAllowed: boolean }
 export interface SourceRow { field: string; verified: boolean; agreement: string; evidence_refs: { url?: string; publishedAt?: string; fiscalPeriod?: string }[] }
@@ -51,7 +51,8 @@ export function classifyRef(ref: { url?: string; publishedAt?: string; fiscalPer
   let kind: SourceKind = xbrl ? "xbrl" : (doc && docKind(doc.docType)) || hostKind(ref.url) || (ref.fiscalPeriod?.startsWith("Form 4") ? "form4" : doc?.displayAllowed ? "filing" : "unstored");
   if (!xbrl && !doc?.displayAllowed && !THIRD_PARTY.has(kind) && kind !== "form4") kind = "unstored";
   const href = xbrl ? httpsUrl(ref.url) : doc?.displayAllowed && !THIRD_PARTY.has(kind) ? httpsUrl(ref.url) : null;
-  return { kind, href, publishedAt: isoDay(ref.publishedAt) ?? isoDay(doc?.publishedAt) };
+  const item = (kind === "8-K" || kind === "release") && href ? /^SEC 8-K item (\d{1,2}\.\d{2})$/.exec(ref.fiscalPeriod ?? "")?.[1] : undefined;
+  return { kind, href, publishedAt: isoDay(ref.publishedAt) ?? isoDay(doc?.publishedAt), ...(item ? { item } : {}) };
 }
 
 export const sourceKey = (item: SourceItem) => item.href ?? `${item.kind}:${item.publishedAt ?? ""}`;

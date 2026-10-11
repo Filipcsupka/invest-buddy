@@ -48,7 +48,8 @@ const en = {
   sources: {
     label: "Source",
     none: "No source yet",
-    noneCatalyst: "Needs an SEC filing or press release from the last 90 days. Checked nightly, up to 6 stocks a night.",
+    secItem: "SEC 8-K item {item}",
+    noneCatalyst: "No SEC 8-K from the last 90 days with a launch, new product, partnership, FDA approval or contract award, or no 8-K text stored yet. Checked every night against items 1.01, 2.02, 7.01 and 8.01.",
     summary: "Data sources",
     newTab: "opens in a new tab",
     kinds: {
@@ -656,7 +657,8 @@ const sk: Messages = {
   sources: {
     label: "Zdroj",
     none: "Zatiaľ bez zdroja",
-    noneCatalyst: "Treba podanie SEC alebo tlačovú správu z posledných 90 dní. Kontrola beží každú noc, najviac pre 6 akcií.",
+    secItem: "SEC 8-K, položka {item}",
+    noneCatalyst: "Žiadne podanie SEC 8-K z posledných 90 dní so spustením, novým produktom, partnerstvom, schválením FDA alebo zákazkou, alebo ešte nie je uložený text 8-K. Kontrola beží každú noc podľa položiek 1.01, 2.02, 7.01 a 8.01.",
     summary: "Zdroje údajov",
     newTab: "otvorí sa na novej karte",
     kinds: {

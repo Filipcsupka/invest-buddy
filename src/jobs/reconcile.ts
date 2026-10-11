@@ -9,6 +9,7 @@ import { carryField, carryForwardEnabled, type CarriedField, type ConsensusRow }
 import { isIsoDate } from "../db/iso-date";
 import { insiderMinNetBuyUsd, type InsiderResult } from "../data/insider";
 import { loadEpsSurprise, loadInsider } from "../db/collectors";
+import { loadCatalyst, type CatalystResult } from "../data/catalyst";
 
 type Agent = "claude" | "codex";
 /**
@@ -30,7 +31,7 @@ const valueOf = (finding: AgentFinding | undefined, field: string): boolean | nu
  * `storedVerify` checks a quote against stored, display-allowed source_documents text only (no live fetch). Without it a single
  * extractor's finding stays `single`. `eps` is the Alpha Vantage rule result for epsBeat.
  */
-export interface ReconcileExtras { storedVerify?: EvidenceVerifier; eps?: EpsResult | null }
+export interface ReconcileExtras { storedVerify?: EvidenceVerifier; eps?: EpsResult | null; catalyst?: CatalystResult | null }
 export async function reconcileField(symbol: string, field: string, asOf: string, findings: AgentFinding[], verify: EvidenceVerifier, sec?: RevenueResult | null, insider?: InsiderResult | null, extras: ReconcileExtras = {}): Promise<ConsensusField> {
   const agents = Object.fromEntries(findings.map((item) => [item.runner.name, item])) as Partial<Record<Agent, AgentFinding>>;
   const agentValues = Object.fromEntries(findings.map((item) => [item.runner.name, { value: valueOf(item, field), runId: item.runId }]));
@@ -82,6 +83,12 @@ export async function reconcileField(symbol: string, field: string, asOf: string
     agreement = "data_rule"; value = eps.value; verified = true; reason = conflict ? `${eps.reason}; overrides agent claim` : eps.reason;
     evidenceRefs.splice(0, evidenceRefs.length, ...eps.refs);
   }
+  if (field === "productCatalyst" && extras.catalyst && extras.catalyst.value !== null && !(verified && value !== null && (agreement === "agree" || agreement === "verified_single"))) {
+    // Stored 8-K text decides, unless a verified extractor result already stands (two agreeing agents, or one whose quote matched stored text).
+    const rule = extras.catalyst;
+    agreement = "data_rule"; value = rule.value; verified = true; reason = rule.reason;
+    evidenceRefs.splice(0, evidenceRefs.length, ...rule.refs);
+  }
   if (FORCED_NULL_FIELDS.has(field)) {
     value = null; verified = false; reason = "No written rule confirms this narrative field";
   }
@@ -95,8 +102,9 @@ const upsertFresh = upsertLegacy.replace("reconciled_at=now()", "carried_from=NU
 const upsertCarried = `INSERT INTO consensus_findings (symbol,field,as_of,value,agreement,agent_values,evidence_refs,verified,reason,carried_from)
       VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8,$9,$10)
       ON CONFLICT (symbol,field,as_of) DO UPDATE SET value=EXCLUDED.value,agreement=EXCLUDED.agreement,agent_values=EXCLUDED.agent_values,evidence_refs=EXCLUDED.evidence_refs,verified=EXCLUDED.verified,reason=EXCLUDED.reason,carried_from=EXCLUDED.carried_from,reconciled_at=now()`;
-export interface RunExtras { storedVerify?: EvidenceVerifier; epsLookup?: (symbol: string, asOf: string) => Promise<EpsResult | null> }
+export interface RunExtras { storedVerify?: EvidenceVerifier; epsLookup?: (symbol: string, asOf: string) => Promise<EpsResult | null>; catalystLookup?: (symbol: string, asOf: string) => Promise<CatalystResult | null> }
 export async function runReconcile(pool: pg.Pool, asOf: string, verify: EvidenceVerifier, secLookup: (symbol: string, asOf: string) => Promise<RevenueResult | null> = secRevenue, insiderLookup: (symbol: string, asOf: string) => Promise<InsiderResult | null> = (symbol, date) => loadInsider(pool, symbol, date, insiderMinNetBuyUsd()), extras: RunExtras = {}) {
+  const catalystLookup = extras.catalystLookup ?? ((symbol: string, date: string) => loadCatalyst(pool, symbol, date));
   const epsLookup = extras.epsLookup ?? ((symbol: string, date: string) => loadEpsSurprise(pool, symbol, date, epsBeatMinSurprisePct()));
   const result = await pool.query<{ symbol: string; run_id: string; runner: { name: Agent }; fundamentals: Record<string, unknown>; evidence: { items: EvidenceRef[] }; confidence: string }>("SELECT symbol,run_id,runner,fundamentals,evidence,confidence FROM scan_findings WHERE as_of=$1 AND superseded_by IS NULL AND runner->>'name' IN ('claude','codex') ORDER BY symbol,received_at DESC", [asOf]);
   const grouped = new Map<string, AgentFinding[]>();
@@ -111,9 +119,11 @@ export async function runReconcile(pool: pg.Pool, asOf: string, verify: Evidence
     const sec = await secLookup(symbol, asOf).catch(() => null);
     const insider = await insiderLookup(symbol, asOf);
     const eps = await epsLookup(symbol, asOf);
+    const catalyst = await catalystLookup(symbol, asOf);
     for (const field of fields) {
-      if (ruleRows.has(`${symbol}:${field}`)) continue;
-      const item = await reconcileField(symbol, field, asOf, MACRO_FIELDS.has(field) ? macroFindings : findings, verify, sec, insider, { storedVerify: extras.storedVerify, eps });
+      // Reconcile writes its own productCatalyst data_rule rows, so a rerun may refresh them; macro rows stay untouched.
+      if (ruleRows.has(`${symbol}:${field}`) && field !== "productCatalyst") continue;
+      const item = await reconcileField(symbol, field, asOf, MACRO_FIELDS.has(field) ? macroFindings : findings, verify, sec, insider, { storedVerify: extras.storedVerify, eps, catalyst });
       pending.push(item);
     }
   }
