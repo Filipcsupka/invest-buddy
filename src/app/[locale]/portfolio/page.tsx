@@ -56,7 +56,7 @@ async function PortfolioPage({ params }: LocaleParams) {
     </section></PaywallSegment>
     <PaywallSegment id="portfolio-weights"><section className="sheet-section" aria-labelledby="portfolio-weights">
       <h2 id="portfolio-weights">{m.portfolio.weightsTitle}</h2>
-      <div className="table-scroll"><table className="data-table"><thead><tr><th scope="col">{m.portfolio.symbol}</th><th scope="col">{m.portfolio.weight}</th></tr></thead><tbody>{snapshot.weights.map((position) => <tr key={position.symbol}><th scope="row">{position.symbol}</th><td className="num">{formatNumber(locale, position.weightPercent, 1)} %</td></tr>)}</tbody></table></div>
+      <div className="table-scroll" role="region" tabIndex={0} aria-label={m.portfolio.weightsTitle}><table className="data-table"><thead><tr><th scope="col">{m.portfolio.symbol}</th><th scope="col">{m.portfolio.weight}</th></tr></thead><tbody>{snapshot.weights.map((position) => <tr key={position.symbol}><th scope="row">{position.symbol}</th><td className="num">{formatNumber(locale, position.weightPercent, 1)} %</td></tr>)}</tbody></table></div>
     </section></PaywallSegment>
   </div>;
 }

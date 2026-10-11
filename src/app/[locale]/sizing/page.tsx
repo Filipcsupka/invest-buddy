@@ -40,7 +40,7 @@ async function Sizing({ params }: LocaleParams) {
         <h2 id="sizing-matrix">{m.matrixTitle}</h2>
         <p className="prose">{m.matrixNote}</p>
         <p className="muted small">{m.draft}</p>
-        <div className={styles.scroll}>
+        <div className={styles.scroll} role="region" tabIndex={0} aria-label={m.matrixTitle}>
           <table className={styles.matrix}>
             <thead><tr><th scope="col">{m.account}</th>{accounts.map((label) => <th scope="col" key={label}>{label}</th>)}</tr></thead>
             <tbody>

@@ -46,6 +46,7 @@ export function StatusLegend({ locale, adviceOutput }: { locale: Locale; adviceO
   return (
     <div className="status-legend">
       <p className="prose">{m.status.legendLede}</p>
+      <div className="table-scroll" role="region" tabIndex={0} aria-label={m.status.legendTitle}>
       <table className={styles.legend}>
         <caption className="visually-hidden">{m.status.legendTitle}</caption>
         <thead>
@@ -74,6 +75,7 @@ export function StatusLegend({ locale, adviceOutput }: { locale: Locale; adviceO
           ))}
         </tbody>
       </table>
+      </div>
       <h3>{m.status.legendMissingTitle}</h3>
       <p className="prose">{m.status.legendMissing}</p>
       <h3>{m.status.legendConfirmTitle}</h3>

@@ -83,10 +83,12 @@ export function ScannerTable({ locale, rows, text, heldTickers = [] }: { locale:
   const filtered = query !== "" || state !== "all";
   const groups = ["setup", "watch", "broken", "lower"] as const;
   const groupRows = (group: (typeof groups)[number]) => visible.filter((row) => group === "lower" ? !["setup", "watch", "broken"].includes(row.state) : row.state === group);
-  const table = (list: ScreenRow[], group: string) => (
-    <div className="table-scroll" key={group}>
+  const table = (list: ScreenRow[], group: string) => {
+    const label = text.board ? (group === "lower" ? text.board.lowerTitle : text.states[group as StateKey]) : text.showing.replace("{shown}", String(list.length)).replace("{total}", String(rows.length));
+    return (
+    <div className="table-scroll" role="region" tabIndex={0} aria-label={label} key={group}>
       <table className="screen">
-        <caption className="visually-hidden">{text.board ? (group === "lower" ? text.board.lowerTitle : text.states[group as StateKey]) : text.showing.replace("{shown}", String(list.length)).replace("{total}", String(rows.length))}</caption>
+        <caption className="visually-hidden">{label}</caption>
         <thead><tr>
           {header("ticker", text.columns.ticker)}
           {header("sector", text.columns.sector, "col-sector")}
@@ -122,7 +124,8 @@ export function ScannerTable({ locale, rows, text, heldTickers = [] }: { locale:
         ))}</tbody>
       </table>
     </div>
-  );
+    );
+  };
 
   return (
     <div className="scanner">

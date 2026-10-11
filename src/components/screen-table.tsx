@@ -7,11 +7,11 @@ import type { ScreenRow } from "./view-model";
 export type Column = "date" | "company" | "sector" | "score" | "state" | "reason";
 
 /** Dense, read-only screen table. The caption carries the disclaimer every score must sit beside. */
-export function ScreenTable({ locale, rows, columns, caption, disclaimerId }: { locale: Locale; rows: ScreenRow[]; columns: Column[]; caption: React.ReactNode; disclaimerId: string }) {
+export function ScreenTable({ locale, rows, columns, caption, disclaimerId, label }: { locale: Locale; rows: ScreenRow[]; columns: Column[]; caption: React.ReactNode; disclaimerId: string; label?: string }) {
   const m = getMessages(locale);
   const has = (column: Column) => columns.includes(column);
   return (
-    <div className="table-scroll">
+    <div className="table-scroll" role="region" tabIndex={0} aria-label={label ?? m.dashboard.title}>
       <table className="screen">
         <caption>{caption}</caption>
         <thead>

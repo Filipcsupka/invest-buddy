@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "ci:verify": "npm run lint && npm run typecheck && npm test && npm run build && npm run build:jobs",
     "test": "vitest run src scripts && node --test scanner/test/*.test.mjs",
+    "check:contrast": "tsx scripts/check-contrast.ts",
     "migrate": "tsx scripts/migrate.ts",
     "ai-usage": "tsx scripts/ai-usage-report.ts",
     "data:inventory": "tsx scripts/data-inventory.ts",
