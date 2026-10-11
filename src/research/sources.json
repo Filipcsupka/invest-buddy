@@ -1,0 +1,114 @@
+{
+  "comment": "Host lists for the research source verifier (RS2). A host matches a domain when it is that domain or a subdomain. Social is checked first, then primary, press, aggregator. Unknown hosts are aggregator.",
+  "primary": [
+    "sec.gov",
+    "fda.gov",
+    "clinicaltrials.gov",
+    "federalregister.gov",
+    "usaspending.gov",
+    "defense.gov",
+    "federalreserve.gov",
+    "treasury.gov",
+    "bls.gov",
+    "bea.gov",
+    "census.gov",
+    "ftc.gov",
+    "justice.gov",
+    "cftc.gov",
+    "nrc.gov",
+    "energy.gov",
+    "ecb.europa.eu",
+    "ema.europa.eu",
+    "europa.eu",
+    "bankofengland.co.uk",
+    "bis.org",
+    "imf.org",
+    "oecd.org",
+    "stlouisfed.org",
+    "esma.europa.eu",
+    "fca.org.uk",
+    "mhra.gov.uk",
+    "asx.com.au"
+  ],
+  "press": [
+    "reuters.com",
+    "apnews.com",
+    "bloomberg.com",
+    "ft.com",
+    "wsj.com",
+    "cnbc.com",
+    "barrons.com",
+    "economist.com",
+    "nikkei.com",
+    "marketwatch.com",
+    "globenewswire.com",
+    "prnewswire.com",
+    "businesswire.com",
+    "fiercebiotech.com",
+    "statnews.com",
+    "techcrunch.com",
+    "theinformation.com"
+  ],
+  "aggregator": [
+    "seekingalpha.com",
+    "finance.yahoo.com",
+    "yahoo.com",
+    "marketscreener.com",
+    "investing.com",
+    "benzinga.com",
+    "fool.com",
+    "zacks.com",
+    "tipranks.com",
+    "stocktitan.net",
+    "stockanalysis.com",
+    "marketbeat.com",
+    "finviz.com",
+    "gurufocus.com",
+    "simplywall.st",
+    "morningstar.com",
+    "tradingview.com"
+  ],
+  "social": [
+    "x.com",
+    "twitter.com",
+    "reddit.com",
+    "stocktwits.com",
+    "youtube.com",
+    "youtu.be",
+    "substack.com",
+    "linkedin.com",
+    "t.me",
+    "telegram.org",
+    "discord.com",
+    "discord.gg",
+    "facebook.com",
+    "tiktok.com",
+    "threads.net",
+    "medium.com",
+    "bsky.app"
+  ],
+  "dataSources": {
+    "sec.gov": "sec",
+    "api.fda.gov": "openfda",
+    "open.fda.gov": "openfda",
+    "clinicaltrials.gov": "clinicaltrials",
+    "usaspending.gov": "usaspending"
+  },
+  "ir": {
+    "WULF": [
+      "investors.terawulf.com"
+    ],
+    "VRT": [
+      "investors.vertiv.com"
+    ],
+    "MOD": [
+      "investors.modine.com"
+    ],
+    "ANET": [
+      "investors.arista.com"
+    ],
+    "PCVX": [
+      "investors.vaxcyte.com"
+    ]
+  }
+}
