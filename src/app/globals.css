@@ -1953,3 +1953,39 @@ th[aria-sort] .sort .icon {
 .score-strip {
   padding: var(--s4) 0 var(--s5);
 }
+
+/* W25 design polish. Same tokens, no new colours. Rhythm: sections s7 apart, rows s2, heads s4. */
+.company-grid + .sheet-section { margin-top: var(--s7); }
+.section-head > h2, .sheet-section > h2 { margin-bottom: 0; }
+.section-head { margin-bottom: var(--s3); }
+.sheet-section > h2 { margin-bottom: var(--s3); }
+.section-head > .small { max-width: 60ch; }
+.rule-table tr:not(.rulebook-group) th,
+.rule-table tr:not(.rulebook-group) td { padding: var(--s2) 0; }
+.rulebook-group th, .rulebook-group td { padding-top: var(--s5); }
+.rule-table .rule-def { line-height: 1.4; overflow-wrap: anywhere; }
+.rule-name { overflow-wrap: anywhere; }
+.rule-points { min-width: 4.5rem; font-variant-numeric: tabular-nums lining-nums; }
+.input-list > div { padding: var(--s2) 0; }
+.input-list dd { font-variant-numeric: tabular-nums lining-nums; }
+.tally-count, .board-count, .segment-count { font-variant-numeric: tabular-nums lining-nums; }
+.tally { margin-top: var(--s4); }
+.board-section { margin-top: var(--s6); }
+.board-head { gap: var(--s1); margin-bottom: var(--s3); }
+.board-head h2 { gap: var(--s2); }
+.empty-line { padding: var(--s4) 0; }
+.screen tbody th, .screen tbody td { padding-block: 0.625rem; }
+.caption-row { margin-bottom: var(--s2); }
+.company .score-strip { padding: var(--s3) 0 var(--s5); }
+.company .source-summary { margin-top: var(--s2); }
+@media (max-width: 640px) {
+  .company-grid { gap: var(--s6); }
+  .company-grid + .sheet-section, .sheet-section + .sheet-section, .company .sheet-section:first-of-type { margin-top: var(--s6); }
+  .board-section { margin-top: var(--s5); }
+  .rule-points { min-width: 3.5rem; padding-left: var(--s3) !important; }
+  .rule-table .rule-def { padding-left: 0; }
+  .col-company { min-width: 8rem; }
+  .screen .col-reason { min-width: 10rem; }
+  .input-list > div { flex-wrap: wrap; gap: var(--s1) var(--s3); }
+  .input-list dd { text-align: left; }
+}
