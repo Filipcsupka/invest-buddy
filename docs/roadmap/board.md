@@ -1,0 +1,66 @@
+# Task board
+
+Updated 2026-10-11 evening. One table per state. A PR that finishes a task moves it to Done in the same PR or the next status PR; "implemented" means merged with CI green. Live notes say what was checked on the cluster. Detail per task is in the lane files and in `docs/tasks-open.md` section J.
+
+## Done (merged, CI green)
+
+| ID | What | PR | Live check |
+| --- | --- | --- | --- |
+| D11 | Universe membership history | #110 | migration 043 applied |
+| D18 | SEC companyfacts history | #109 | migration 034 |
+| D20 | Form 4 transactions and backfill | #118 | backfill run 2026-10-11: 45,999 rows, 35 tickers |
+| D20b | Insider flag computed from stored Form 4 | #129 | 34 tickers have `insider_net_buy_90d` |
+| D21 | 13D, 13G and 8-K holder events | #128 | migration 047 applied, job suspended |
+| D22 | 13F quarterly holdings job | #148 | migration 050, job suspended, first run planned 2026-11-20 |
+| D27 | Earnings calendar snapshot | #117 | migration 046, job suspended |
+| D31 | News sources, GDELT hardening | #108 | migration 042 |
+| D35 | Universe criteria and selection script | #146, #157 | script only |
+| D43 | History read model | #116 | used by W33 |
+| D10 refresh | Security master refresh in the image | #130 | run once: 36 of 37 CIKs filled |
+| EN3, EN27, EN40 | Thresholds, outcomes at 1/5/20/60 days, macro inflation | #107, #120, #113, #122 | |
+| EN45 | Relative scoring, planned and partial data count as no data, rules version in the daily fingerprint | #140, #142, #149 | recompute 2026-10-11: 4 Setup, 12 Watch, 7 Wait, 7 Ignore, 6 Broken |
+| ST0 to ST3 | Status slider: design spec, engine module, slider and company header, dashboard rows and legend | #134, #133, #136, #137 | slider live on the company page |
+| ST5 | Catalyst rule from stored 8-K text | #139 | |
+| ST6 | Revenue acceleration from stored SEC facts | #138 | |
+| ST7 | Honest source labels, planned data | #141 | |
+| AL1 | Telegram event alert per ticker | #132 | digest live Tue to Sat 07:30 |
+| AL2 | Weekly Telegram summary job | #135 | test post sent, CronJob suspended |
+| AL3 | Telegram idea card (public and owner mode) | #156 | default mode public |
+| SK1 | /insiders page EN and SK | #127 | live with real rows |
+| DS1 | Discovery filters, weekly candidates post, promote script | #158 | discovery CronJob live Saturday 09:30 |
+| W6 | Error pages and request id | #152 | |
+| W10 | Advice-like output behind `ADVICE_OUTPUT` | #121 | |
+| W20 | SEO, sitemap, JSON-LD | #153 | |
+| W22 | EN and SK copy audit, glossary | #154 | |
+| W24 | Accessibility and mobile checks | #155 | |
+| W25 | Design polish pass | #151 | |
+| W33, W34 | Score history, scanner filters | #123, #111 | |
+| PL46, SEC1 | Cheap CI, local security scan script | #143, #144 | first manual Security run passed |
+| Telegram | Channel, sealed secret, digest unsuspended | infra #37 to #41, #126 | first alert sent 2026-10-10 |
+
+## In progress
+
+| ID | What | State |
+| --- | --- | --- |
+| D19 | Filing archive with 3-year backfill | PR #147, CI and rebase |
+| D24 | Macro observations FRED and Treasury | PR #150, migration must be 051 |
+| W7 | Security headers and rate limit | PR #145, rebase |
+| RS0 | Research engine spec, ADR, lane RS, schema | worker running |
+| RS2 | Source verifier `src/research/verify.ts` | worker running |
+
+## Queued, in order
+
+1. RS1 researcher runner and prompts, RS3 tables and pipeline state machine, RS4 judge integration, RS5 CronJobs and caps, RS6 Telegram research cards, RS8 evaluation on the six old cards (after RS0 merges). RS7 Codex adapter and secret later.
+2. Web: W5 page cache, W3 performance baseline, W21 OG images, W23 native Slovak review, W32 tier map, W35 CSV export.
+3. Engine: EN4, EN5, EN28.
+4. Data: D36 roll out 150 names (after D35 criteria), D26 FX, D28 EPS history, D13 corporate actions.
+5. Infra sync: copy the new suspended CronJobs from the app mirror to infra (D19, D22, D35, DS1 if they add any) and un-suspend one by one after a test run, with owner approval.
+6. Last: membership, billing, client work (W27 to W45) stay deferred by owner decision.
+
+## Waiting on the owner
+
+- `TELEGRAM_CARD_MODE=owner` for the private channel (action word and EUR band).
+- Weekly summary CronJob: un-suspend after the format is approved.
+- Research runner: Claude first, OpenAI token later through a sealed secret; Anthropic terms for unattended runs on a subscription token to be decided before any schedule.
+- GDELT daily collect (infra CronJob suspended).
+- Notes for ops-brain from the capture ledger (PR #80 status mismatch, W10 allowlist lesson, GitHub billing incident).

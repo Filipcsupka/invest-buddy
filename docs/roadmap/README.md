@@ -4,7 +4,7 @@ Master plan for 2026-10-12 to 2026-12-31. Written 2026-10-09 from the four lane 
 
 ## Status
 
-2026-10-10 evening: week 3 wave merged, with CI and tests passing. Added since the 08:30 note: D11, D18, D20, D27, D31, D43, EN3, EN27, W10, W33, W34, the Telegram digest, and fixes #113, #114, #115, #119, #122. Migrations 042 to 046 are merged; live apply is not yet verified. Running: D21, SK1 (insiders page). Details and PR numbers are in the progress log under section J of `docs/tasks-open.md`.
+2026-10-10 evening: week 3 wave merged, with CI and tests passing. Added since the 08:30 note: D11, D18, D20, D27, D31, D43, EN3, EN27, W10, W33, W34, the Telegram digest, and fixes #113, #114, #115, #119, #122. Migrations 042 to 046 are merged; live apply is not yet verified. Running: D21, SK1 (insiders page). Details and PR numbers are in the progress log under section J of `docs/tasks-open.md`. Task board with every task and its state: `docs/roadmap/board.md`.
 
 2026-10-10 08:30: weeks 1 and 2 of the first data wave are merged and live. Done: D1, D2, D3, D5, D6, D7, D8, D10, D12, D14, D15, D16, D17, D34, D42, EN1, EN36, PL1, W1, W2, plus the buy threshold PR #80 (EN2 decision default). Details and PR numbers are in the progress log under section J of `docs/tasks-open.md`.
 
