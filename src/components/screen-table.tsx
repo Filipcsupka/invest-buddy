@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getMessages, type Locale } from "@/i18n";
 import { ScoreMark } from "./score-mark";
-import { StateChip } from "./score-badge";
+import { DataCell, StatusCell } from "./status-slider";
 import type { ScreenRow } from "./view-model";
 
 export type Column = "date" | "company" | "sector" | "score" | "state" | "reason";
@@ -25,7 +25,8 @@ export function ScreenTable({ locale, rows, columns, caption, disclaimerId }: { 
               </th>
             ) : null}
             {has("score") ? <th scope="col" className="col-mark">{m.table.rules}</th> : null}
-            {has("state") ? <th scope="col">{m.table.state}</th> : null}
+            {has("state") ? <th scope="col">{m.status.columns.status}</th> : null}
+            {has("state") ? <th scope="col" className="col-data">{m.status.columns.data}</th> : null}
             {has("reason") ? <th scope="col" className="col-reason">{m.table.criteria}</th> : null}
           </tr>
         </thead>
@@ -46,7 +47,7 @@ export function ScreenTable({ locale, rows, columns, caption, disclaimerId }: { 
               {has("sector") ? <td className="col-sector muted">{row.sector}</td> : null}
               {has("score") ? (
                 <td className="col-score num" aria-describedby={disclaimerId}>
-                  {row.state === "insufficient" ? <span className="muted">{m.common.noScore}</span> : row.total}
+                  {row.state === "insufficient" ? <span className="muted">{m.common.noScore}</span> : row.pointsNote ? <span title={row.pointsNote}>(<s>{row.total}</s>)<span className="visually-hidden">{row.pointsNote}</span></span> : row.total}
                 </td>
               ) : null}
               {has("score") ? (
@@ -56,9 +57,10 @@ export function ScreenTable({ locale, rows, columns, caption, disclaimerId }: { 
               ) : null}
               {has("state") ? (
                 <td>
-                  <StateChip state={row.state} label={row.stateLabel} pullbackLabel={row.pullbackLabel} describedBy={disclaimerId} />
+                  <StatusCell state={row.state} position={row.position} label={row.stateLabel} ariaLabel={row.statusAria} pullbackLabel={row.pullbackLabel} describedBy={disclaimerId} />
                 </td>
               ) : null}
+              {has("state") ? <td className="col-data"><DataCell known={row.pointsKnown} noDataRules={row.noDataRules} scored={row.state !== "insufficient"} /></td> : null}
               {has("reason") ? <td className="col-reason muted">{row.reasons.length ? row.reasons.join("; ") : m.table.noRejection}</td> : null}
             </tr>
           ))}

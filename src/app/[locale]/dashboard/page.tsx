@@ -4,6 +4,9 @@ import { OperatorDisclosure, SampleStamp } from "@/components/operator-disclosur
 import { ScannerTable } from "@/components/scanner-table";
 import { byScore, toRow } from "@/components/view-model";
 import { latestPortfolio, latestScores } from "@/data/store";
+import { statusLabel } from "@/components/status-slider";
+import { flags } from "@/config/flags";
+import { stateOrder, type StateKey } from "@/i18n/rules";
 import { DataStatus } from "@/components/data-status";
 import { fill, formatDate, getMessages, plural } from "@/i18n";
 import { pageMetadata } from "@/i18n/metadata";
@@ -36,10 +39,10 @@ async function Dashboard({ params }: LocaleParams) {
       empty: m.scanner.empty, showing: m.scanner.showing, sortBy: m.table.sortBy,
       disclaimer: m.common.disclaimer, extension: m.common.extension, noScore: m.common.noScore, noRejection: m.table.noRejection,
       held: m.portfolio.held, heldNoSignal: m.portfolio.heldNoSignal,
-      columns: { ticker: m.table.ticker, sector: m.table.sector, score: m.table.score, rules: m.table.rules, state: m.table.state, criteria: m.table.criteria,
+      columns: { ticker: m.table.ticker, sector: m.table.sector, score: m.table.score, rules: m.table.rules, state: m.status.columns.status, data: m.status.columns.data, criteria: m.table.criteria,
         f: m.groups.fundamentalsShort, t: m.groups.technicalShort, m: m.groups.macroShort,
         fName: m.groups.fundamentals, tName: m.groups.technical, mName: m.groups.macro },
-      states: m.states,
+      states: Object.fromEntries(stateOrder.map((key) => [key, statusLabel(m, key, flags().ADVICE_OUTPUT)])) as Record<StateKey, string>,
       board: { summaryLabel: m.dashboard.summaryLabel, lowerTitle: m.dashboard.lowerTitle, lowerBody: m.dashboard.lowerBody,
         showLower: m.dashboard.showLower, empty: m.dashboard.empty, stateNotes: m.dashboard.stateNotes },
     }} />

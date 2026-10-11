@@ -4,7 +4,7 @@ import { useId, useMemo, useState } from "react";
 import { stateOrder, type StateKey } from "@/i18n/rules";
 import { IconReset, IconSearch, IconSort } from "./icons";
 import { ScoreMark } from "./score-mark";
-import { StateChip } from "./score-badge";
+import { DataCell, StatusBadge, StatusCell, StatusIcon } from "./status-slider";
 import type { ScreenRow } from "./view-model";
 
 type SortKey = "ticker" | "sector" | "total" | "fundamentals" | "technical" | "macro" | "state";
@@ -21,7 +21,7 @@ type Text = {
   extension: string;
   noScore: string;
   noRejection: string;
-  columns: { ticker: string; sector: string; score: string; rules: string; state: string; criteria: string; f: string; t: string; m: string; fName: string; tName: string; mName: string };
+  columns: { ticker: string; sector: string; score: string; rules: string; state: string; data: string; criteria: string; f: string; t: string; m: string; fName: string; tName: string; mName: string };
   states: Record<StateKey, string>;
   held: string;
   heldNoSignal: string;
@@ -57,7 +57,7 @@ export function ScannerTable({ locale, rows, text, heldTickers = [] }: { locale:
             : k === "state"
               ? stateOrder.indexOf(a.state) - stateOrder.indexOf(b.state)
               : a[k] - b[k];
-        return primary * sign || a.ticker.localeCompare(b.ticker);
+        return primary * sign || b.pointsKnown - a.pointsKnown || a.ticker.localeCompare(b.ticker);
       });
   }, [rows, query, state, sort, locale]);
 
@@ -96,6 +96,7 @@ export function ScannerTable({ locale, rows, text, heldTickers = [] }: { locale:
           {header("macro", text.columns.m, "col-part", text.columns.mName)}
           <th scope="col" className="col-mark">{text.columns.rules}</th>
           {header("state", text.columns.state)}
+          <th scope="col" className="col-data">{text.columns.data}</th>
           {group === "broken" && <th scope="col" className="col-reason">{text.columns.criteria}</th>}
         </tr></thead>
         <tbody>{list.map((row) => (
@@ -109,12 +110,13 @@ export function ScannerTable({ locale, rows, text, heldTickers = [] }: { locale:
               </span>
             </th>
             <td className="col-sector muted">{row.sector}</td>
-            <td className="col-score num" aria-describedby={disclaimerId}>{row.state === "insufficient" ? <span className="muted">{text.noScore}</span> : row.total}</td>
+            <td className="col-score num" aria-describedby={disclaimerId}>{row.state === "insufficient" ? <span className="muted">{text.noScore}</span> : row.pointsNote ? <span title={row.pointsNote}>(<s>{row.total}</s>)<span className="visually-hidden">{row.pointsNote}</span></span> : row.total}</td>
             <td className="col-part num">{row.fundamentals}</td>
             <td className="col-part num">{row.technical}</td>
             <td className="col-part num">{row.macro}</td>
             <td className="col-mark"><ScoreMark matched={row.matched} state={row.state} label={row.markLabel} /></td>
-            <td><StateChip state={row.state} label={row.stateLabel} pullbackLabel={row.pullbackLabel} describedBy={disclaimerId} /></td>
+            <td><StatusCell state={row.state} position={row.position} label={row.stateLabel} ariaLabel={row.statusAria} pullbackLabel={row.pullbackLabel} describedBy={disclaimerId} /></td>
+            <td className="col-data"><DataCell known={row.pointsKnown} noDataRules={row.noDataRules} scored={row.state !== "insufficient"} /></td>
             {group === "broken" && <td className="col-reason muted">{row.reasons.length ? row.reasons.join("; ") : text.noRejection}</td>}
           </tr>
         ))}</tbody>
@@ -142,7 +144,7 @@ export function ScannerTable({ locale, rows, text, heldTickers = [] }: { locale:
               return (
                 <label key={key} className="segment" data-state={key} data-empty={count === 0 || undefined}>
                   <input type="radio" name="state" value={key} checked={state === key} disabled={count === 0} onChange={() => setState(key)} />
-                  <span>{key === "all" ? text.allStates : text.states[key]}</span>
+                  {key === "all" ? null : <StatusIcon state={key} />}<span>{key === "all" ? text.allStates : text.states[key]}</span>
                   <span className="num segment-count">{count}</span>
                 </label>
               );
@@ -157,7 +159,7 @@ export function ScannerTable({ locale, rows, text, heldTickers = [] }: { locale:
       </div>
       <p className="disclaimer is-compact" id={disclaimerId}>{text.disclaimer}</p>
       {text.board ? <>
-        <table className="tally"><caption className="visually-hidden">{text.board.summaryLabel}</caption><tbody><tr>{stateOrder.map((key) => <td key={key} data-state={key}><a href={key === "wait" || key === "ignore" || key === "insufficient" ? "#lower" : `#state-${key}`} className="tally-cell"><span className="tally-label">{text.states[key]}</span><span className="num tally-count">{counts.get(key) ?? 0}</span></a></td>)}</tr></tbody></table>
+        <table className="tally"><caption className="visually-hidden">{text.board.summaryLabel}</caption><tbody><tr>{stateOrder.map((key) => <td key={key} data-state={key}><a href={key === "wait" || key === "ignore" || key === "insufficient" ? "#lower" : `#state-${key}`} className="tally-cell"><span className="tally-label"><StatusIcon state={key} /> {text.states[key]}</span><span className="num tally-count">{counts.get(key) ?? 0}</span></a></td>)}</tr></tbody></table>
         {groups.map((group) => {
           const list = groupRows(group);
           if (group === "lower") return <section className="board-section" aria-labelledby="lower" key={group}>
@@ -166,7 +168,7 @@ export function ScannerTable({ locale, rows, text, heldTickers = [] }: { locale:
           </section>;
           if (!list.length && filtered) return null;
           return <section className="board-section" aria-labelledby={`state-${group}`} key={group}>
-            <div className="board-head"><h2 id={`state-${group}`}><StateChip state={group} label={text.states[group]} /><span className="num board-count">{list.length}</span></h2><p className="board-note">{text.board!.stateNotes[group]}</p></div>
+            <div className="board-head"><h2 id={`state-${group}`}><StatusBadge state={group} label={text.states[group]} /><span className="num board-count">{list.length}</span></h2><p className="board-note">{text.board!.stateNotes[group]}</p></div>
             {list.length ? table(list, group) : <p className="empty-line">{text.board!.empty}</p>}
           </section>;
         })}

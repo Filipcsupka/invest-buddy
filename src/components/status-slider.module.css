@@ -144,3 +144,32 @@
 @media (forced-colors: active) {
   .step[data-active] .block { border: 2px solid CanvasText; }
 }
+
+/* Rows, group headings and the legend (ST3). Same --st-* tokens, no new colors. */
+.mini { display: inline-flex; align-items: flex-end; gap: 2px; flex: none; height: 0.625rem; }
+.miniStep { width: 10px; height: 6px; background: var(--rule); border-radius: 1px; }
+.mini[data-none] .miniStep { background: transparent; border: 1px dashed var(--st-none); box-sizing: border-box; }
+.miniStep[data-active] { height: 10px; }
+.miniStep[data-state="broken"][data-active] { background: var(--st-broken); }
+.miniStep[data-state="ignore"][data-active] { background: var(--st-ignore); }
+.miniStep[data-state="wait"][data-active] { background: var(--st-wait); }
+.miniStep[data-state="watch"][data-active] { background: var(--st-watch); }
+.miniStep[data-state="setup"][data-active] { background: var(--st-setup); }
+.cell, .badge { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2); color: var(--st-none); }
+.cell[data-state="broken"], .badge[data-state="broken"] { color: var(--st-broken); }
+.cell[data-state="ignore"], .badge[data-state="ignore"] { color: var(--st-ignore); }
+.cell[data-state="wait"], .badge[data-state="wait"] { color: var(--st-wait); }
+.cell[data-state="watch"], .badge[data-state="watch"] { color: var(--st-watch); }
+.cell[data-state="setup"], .badge[data-state="setup"] { color: var(--st-setup); }
+.cell .icon svg, .badge .icon svg { width: 0.875rem; height: 0.875rem; }
+.cellLabel { font-size: var(--t-sm); font-weight: 620; }
+.badge { font-weight: 700; }
+.data { display: inline-flex; align-items: center; gap: var(--s1); color: var(--ink-2); }
+.data svg { width: 0.75rem; height: 0.75rem; }
+.legend { width: 100%; border-collapse: collapse; }
+.legend th, .legend td { padding: var(--s2) var(--s3) var(--s2) 0; text-align: left; vertical-align: top; border-bottom: 1px solid var(--rule); }
+.legend thead th { font-size: var(--t-xs); color: var(--ink-3); font-weight: 600; }
+.legendLink { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
+.stepRow { display: flex; flex-wrap: wrap; gap: var(--s3) var(--s5); margin: 0; padding: 0; list-style: none; }
+.stepRow li { display: grid; gap: var(--s1); }
+.stepRange { font-size: var(--t-xs); color: var(--ink-3); font-variant-numeric: tabular-nums; }
