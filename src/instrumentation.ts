@@ -8,6 +8,7 @@ export const onRequestError: Instrumentation.onRequestError = (error, request, c
   const requestId = request.headers["x-request-id"];
   const start = Number(request.headers["x-request-start-ms"]);
   const durationMs = Number.isFinite(start) && start > 0 ? Math.max(0, Date.now() - start) : 0;
+  const digest = (error as { digest?: unknown } | null)?.digest;
   const stack = error instanceof Error ? error.stack?.split("\n").slice(1).filter((line: string) => /^\s*at\s/.test(line)).join("\n") : undefined;
-  console.error(JSON.stringify({ event: "http_request", route, locale, status: 500, durationMs, requestId, message: "Page render failed", ...(stack ? { stack } : {}) }));
+  console.error(JSON.stringify({ event: "http_request", route, locale, status: 500, durationMs, requestId, message: "Page render failed", ...(typeof digest === "string" ? { digest } : {}), ...(stack ? { stack } : {}) }));
 };

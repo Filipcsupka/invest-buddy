@@ -6,9 +6,9 @@ afterEach(() => vi.restoreAllMocks());
 it("records a server render failure without its sensitive message", async () => {
   const lines: string[] = [];
   vi.spyOn(console, "error").mockImplementation((line) => { lines.push(String(line)); });
-  await onRequestError(new Error("secret-token"), { path: "/en/dashboard", headers: { "x-request-id": "req-1" } } as never, { routeType: "render", routePath: "/[locale]/dashboard" } as never);
+  await onRequestError(Object.assign(new Error("secret-token"), { digest: "d-1" }), { path: "/en/dashboard", headers: { "x-request-id": "req-1" } } as never, { routeType: "render", routePath: "/[locale]/dashboard" } as never);
   expect(lines).toHaveLength(1);
-  expect(JSON.parse(lines[0])).toMatchObject({ event: "http_request", route: "/[locale]/dashboard", locale: "en", status: 500, requestId: "req-1", message: "Page render failed" });
+  expect(JSON.parse(lines[0])).toMatchObject({ event: "http_request", route: "/[locale]/dashboard", locale: "en", status: 500, requestId: "req-1", digest: "d-1", message: "Page render failed" });
   expect(lines[0]).not.toContain("secret-token");
 });
 
