@@ -6,7 +6,7 @@ import { chmodSync, mkdtempSync, readFileSync, readdirSync, writeFileSync, exist
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseArgs, validateJudgeOutput, normalizeOutput, changedSignals, mergeIdeas, buildModelInput, inventedFigures, figureContext, judgeHash, agentModeArgs, parseAgentEnvelope, amountText, slovakRawCode } from "../run-judge.mjs";
+import { parseArgs, validateJudgeOutput, normalizeOutput, changedSignals, mergeIdeas, buildModelInput, inventedFigures, figureInput, figureContext, judgeHash, agentModeArgs, parseAgentEnvelope, amountText, slovakRawCode } from "../run-judge.mjs";
 import { figureValuesIn, sameFigureValues, sameProtectedTokens } from "../figure-tokens.mjs";
 import { callAgentNoTools } from "../run-extract.mjs";
 
@@ -154,6 +154,21 @@ test("figures: input numbers and common rule windows pass, others are rejected",
   const inp = { score: 19, below: 7.4, text: "price 1,200.50" };
   assert.deepEqual(inventedFigures(["score 19, 7.40 percent under the 20-day high, RSI 14, 1200.5"], inp), []);
   assert.deepEqual(inventedFigures(["target 150 and 33.1"], inp), [150, 33.1]);
+});
+
+test("a verified research quote supports its figure and cannot license an invented one", () => {
+  const item = figureInput({ context: { researchFacts: [{ claim: "Outlook rose 13%", quote: "The company raised its outlook by 12%.", confirmed: true }] } });
+  assert.deepEqual(inventedFigures(["Outlook rose 12%."], item), []);
+  assert.deepEqual(inventedFigures(["Outlook rose 13%."], item), [13]);
+});
+test("the judge can cite a verified research fact supplied for its symbol", () => {
+  const i = input();
+  const url = "https://example.com/verified-research";
+  i.symbols[0].researchFacts = [{ claim: "Raised outlook", kind: "guidance", sourceClass: "primary", url, date: "2026-10-01", readingLabel: "quote checked", confirmed: true, quote: "Outlook rose 12%." }];
+  const idea = words("NVDA");
+  idea.evidence.push({ url, label: "Company release" });
+  idea.sk.evidence.push({ url, label: "Správa spoločnosti" });
+  assert.doesNotThrow(() => merge([idea, words("AMD", { evidence: [] })], i));
 });
 
 test("figures: digits in urls, dates, ids and accession numbers are not allowed figures", () => {

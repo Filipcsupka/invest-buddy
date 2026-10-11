@@ -1,10 +1,31 @@
 import { describe, expect, it } from "vitest";
 import type pg from "pg";
-import { guardReconcileUserAgent, reconcileField, selectVerifier, type AgentFinding } from "./reconcile";
+import { guardReconcileUserAgent, primaryResearchReadings, reconcileField, selectVerifier, type AgentFinding, type ResearchReading, type ResearchRow } from "./reconcile";
 import { fixtureVerifier, liveVerifier, offVerifier } from "../data/evidence";
 import { storedOnlyVerifier } from "../data/stored-evidence";
 import { epsBeatMinSurprisePct, epsFromFact } from "../data/eps";
 const finding = (name: "claude" | "codex", value: boolean): AgentFinding => ({ runId: `${name}-run`, runner: { name }, fundamentals: { epsBeat: value }, evidence: { items: [{ claim: "fundamentals.epsBeat", url: "https://example.com/result", publishedAt: "2026-10-03", fiscalPeriod: "Q2 FY2027", quote: "Revenue rose." }] }, confidence: "high" });
+it("reconciles checked primary research with extraction and leaves a lone reading uncounted", async () => {
+  const research: ResearchReading[] = [{ field: "guidanceRaised", runId: "research", url: "https://example.com/ir", quote: "Outlook rises 12%.", publishedAt: "2026-10-03", value: true }];
+  const extract = (value: boolean): AgentFinding => ({ ...finding("claude", value), fundamentals: { guidanceRaised: value }, evidence: { items: [{ claim: "fundamentals.guidanceRaised", url: research[0].url, publishedAt: research[0].publishedAt, fiscalPeriod: "FY2026", quote: research[0].quote }] } });
+  expect(await reconcileField("NVDA", "guidanceRaised", "2026-10-04", [], async () => true, null, null, { research }))
+    .toMatchObject({ agreement: "research_verified", value: true, verified: true });
+  expect(await reconcileField("NVDA", "guidanceRaised", "2026-10-04", [extract(true)], async () => true, null, null, { research }))
+    .toMatchObject({ agreement: "agree", value: true, verified: true });
+  expect(await reconcileField("NVDA", "guidanceRaised", "2026-10-04", [extract(false)], async () => true, null, null, { research }))
+    .toMatchObject({ agreement: "disputed", value: null, verified: false });
+  expect(await reconcileField("NVDA", "guidanceRaised", "2026-10-04", [extract(true)], async () => false, null, null, { research }))
+    .not.toMatchObject({ agreement: "agree" });
+});
+it("keeps unconfirmed, press, aggregator and lead research out of reconciliation", () => {
+  const base: ResearchRow = { symbol: "NVDA", field: "guidanceRaised", run_id: "run", verification_status: "verified", confirmed: true,
+    source_class: "primary", lead: false, polarity: "positive", evidence: [{ url: "https://example.com/ir", status: "verified", sourceClass: "primary" }],
+    original_evidence: [{ url: "https://example.com/ir", quote: "Outlook rose 12%.", publishedAt: "2026-10-03" }] };
+  expect(primaryResearchReadings([base], "2026-10-04").get("NVDA")).toHaveLength(1);
+  for (const changed of [{ confirmed: false }, { source_class: "press" }, { source_class: "aggregator" }, { lead: true }, { verification_status: "quote_not_found" }, { evidence: [{ ...base.evidence[0], status: "fetch_failed" }] }]) {
+    expect(primaryResearchReadings([{ ...base, ...changed }], "2026-10-04").size).toBe(0);
+  }
+});
 it("keeps a disagreement unknown and retains both agent runs", async () => {
   const result = await reconcileField("NVDA", "epsBeat", "2026-10-04", [finding("claude",true), finding("codex",false)], async () => true);
   expect(result).toMatchObject({ agreement: "disputed", value: null, verified: false, agentValues: { claude: { runId: "claude-run" }, codex: { runId: "codex-run" } } });
