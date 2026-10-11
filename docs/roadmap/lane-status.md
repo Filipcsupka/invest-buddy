@@ -39,6 +39,8 @@ Weekly summary: counts per band, tickers in green and blue as links, who moved u
 
 ## Tasks
 
+All rows are merged except where the board says otherwise: see `docs/roadmap/board.md` for status and PR numbers.
+
 | ID | Task | Owner files | Depends on |
 | --- | --- | --- | --- |
 | ST0 | Design spec: slider, chips, coverage line, dashboard rows, methodology legend, accessibility (not color only), Telegram mockups. Reads the competitor notes in the vault (Danelfin, Stockopedia, Seeking Alpha, TipRanks, Simply Wall St) and says what is borrowed. Output `docs/design/status-slider.md`. | docs only | none |
