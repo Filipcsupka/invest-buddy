@@ -55,7 +55,7 @@ export class PostgresInstitutionalStore implements InstitutionalStore {
   }
   /** One transaction on a pool, so a crash cannot leave a filing without its rows (the rerun would skip it). */
   async addFiling(filing: FilingRow, rows: HoldingRow[]) {
-    if (!("connect" in this.db)) return this.insert(this.db, filing, rows);
+    if (!("totalCount" in this.db)) return this.insert(this.db, filing, rows);
     const client = await (this.db as pg.Pool).connect();
     try {
       await client.query("BEGIN");
