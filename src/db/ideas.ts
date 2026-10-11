@@ -166,3 +166,13 @@ export async function latestIdeaPerSymbol(pool: Pick<pg.Pool, "query">): Promise
   const r = await pool.query<IdeaRow>(`SELECT DISTINCT ON (symbol) ${COLUMNS} FROM trade_ideas WHERE expires_at > now() ORDER BY symbol, as_of DESC, id DESC`);
   return r.rows.map(mapIdea);
 }
+
+/** Ideas stored for one date, one per symbol (latest id), under the same display rule as the ideas list. Used by the Telegram digest. */
+export async function ideasForDate(pool: Pick<pg.Pool, "query">, asOf: string): Promise<StoredIdea[]> {
+  const r = await pool.query<IdeaRow>(`SELECT DISTINCT ON (symbol) ${COLUMNS} FROM trade_ideas i WHERE i.as_of=$1 AND i.expires_at > now()
+    AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(i.evidence_urls) ref
+      WHERE ref->>'url' NOT LIKE 'https://data.sec.gov/api/xbrl/%'
+        AND NOT EXISTS (SELECT 1 FROM source_documents d WHERE d.url = ref->>'url' AND d.meta->>'display_allowed' = 'true'))
+    ORDER BY symbol, id DESC`, [asOf]);
+  return r.rows.map(mapIdea);
+}
