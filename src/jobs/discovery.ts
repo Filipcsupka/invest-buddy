@@ -18,8 +18,15 @@ import { DailyLimitError, SymbolNotFoundError, TwelveDataProvider } from "../dat
 import { CapReached, PostgresUsageLedger } from "../data/usage";
 import { filingUrl } from "../collectors/edgar";
 import { previousTradingDay } from "./macro";
+import { liquidityReason, loadSecProfile, nameExclusion, profileExclusion, type SecProfile } from "./discovery-quality";
+import { PostgresDeliveryLog } from "../db/notifications";
+import { telegramFromEnv } from "../notify/telegram";
+import { deliverNewCandidates, loadWeekCandidates } from "../notify/discovery";
+import { flags } from "../config/flags";
 
-export interface CandidateSource { kind: "edgar" | "price_volume" | "theme" | "frames" | "clinical_trial" | "ownership" | "thirteenf"; url: string; detail: string }
+export interface CandidateSource { kind: "edgar" | "price_volume" | "theme" | "frames" | "clinical_trial" | "ownership" | "thirteenf"; url: string; detail: string; growth?: { current: number; prior: number } }
+/** Returns why a name fails the quality floor (market cap, dollar volume), or null. */
+export type QualityCheck = (row: DiscoveryCandidate, bars: OHLCV[]) => string | null | undefined;
 export interface DiscoveryCandidate { symbol: string; name: string; sector: string; theme: string | null; score: number; sources: CandidateSource[];
   growth?: { current: number; prior: number }; ruleScore?: number; ruleState?: string; signalDate?: string; benchmarkClose?: number | null }
 export const weekStart = (date: string): string => {
@@ -81,7 +88,7 @@ export function frameCandidates(items: { ticker?: string | null; name: string; y
   return items.filter((item) => item.ticker && item.revenue >= 50_000_000 && item.yoyPercent >= DISCOVERY.minRevenueGrowthPct && item.accelerationPp > 0)
     .map((item) => ({ symbol: item.ticker!.toUpperCase(), name: item.name, sector: "Growth", theme: null,
       score: Math.min(6, 3 + Math.floor(item.accelerationPp / 10)), growth: { current: item.yoyPercent, prior: item.priorYoyPercent },
-      sources: [{ kind: "frames", url, detail: "SEC XBRL quarterly revenue growth and acceleration" }] }));
+      sources: [{ kind: "frames", url, detail: "SEC XBRL quarterly revenue growth and acceleration", growth: { current: item.yoyPercent, prior: item.priorYoyPercent } }] }));
 }
 
 /** SEC frames covers US filers outside the tracked universe; its collector already makes a bounded, revenue-qualified ranking. */
@@ -243,6 +250,33 @@ export function nonCommonStockReason(symbol: string): string | null {
   return null;
 }
 
+/** SEC company_tickers.json as ticker to CIK. */
+export async function tickerCiks(get: (url: string) => Promise<string> = getText): Promise<Map<string, number>> {
+  const rows = JSON.parse(await get("https://www.sec.gov/files/company_tickers.json")) as Record<string, { cik_str: number; ticker: string }>;
+  return new Map(Object.values(rows).map((row) => [row.ticker.toUpperCase(), row.cik_str]));
+}
+
+/**
+ * Reads each ranked name's SEC profile (SIC, filer type, registered name, shares outstanding) and drops blank-check, foreign-filer and
+ * excluded-name issuers before any Twelve Data call. A failed read keeps the name with a null profile: it then fails the market cap floor, which needs shares.
+ */
+export async function profileFilter(rows: DiscoveryCandidate[], ciks: Map<string, number>, get: (url: string) => Promise<string> = getText) {
+  const kept: DiscoveryCandidate[] = [];
+  const excluded: { symbol: string; reason: string }[] = [];
+  const profiles = new Map<string, SecProfile | null>();
+  for (const row of rows) {
+    const cik = ciks.get(row.symbol);
+    let profile: SecProfile | null = null;
+    if (cik !== undefined) {
+      try { profile = await loadSecProfile(cik, get); } catch (error) { process.stderr.write(`${row.symbol}: SEC profile failed: ${error instanceof Error ? error.message : String(error)}\n`); }
+    }
+    profiles.set(row.symbol, profile);
+    const reason = profile ? profileExclusion(row.symbol, profile) : null;
+    if (reason) excluded.push({ symbol: row.symbol, reason }); else kept.push(row);
+  }
+  return { kept, excluded, profiles };
+}
+
 /** Rows per source for the run log, so an empty week shows which source returned nothing or failed. */
 export function sourceSummary(results: { name: string; rows?: DiscoveryCandidate[]; error?: string }[]) {
   return results.map(({ name, rows, error }) => error === undefined ? { name, rows: rows?.length ?? 0 } : { name, rows: 0, error });
@@ -252,7 +286,7 @@ export function sourceSummary(results: { name: string; rows?: DiscoveryCandidate
 export function shortlistCandidates(rows: DiscoveryCandidate[], known: Set<string>, limit: number = DISCOVERY.maxCandidatesPerWeek) {
   const skipped = new Map<string, string>();
   const common = rows.filter((row) => {
-    const reason = known.has(row.symbol) ? null : nonCommonStockReason(row.symbol);
+    const reason = known.has(row.symbol) ? null : nonCommonStockReason(row.symbol) ?? nameExclusion(row.symbol, row.name);
     if (reason) skipped.set(row.symbol, reason);
     return !reason;
   });
@@ -264,7 +298,8 @@ export function shortlistCandidates(rows: DiscoveryCandidate[], known: Set<strin
  * The caller's barsFor should cache per symbol so the full screen reuses these bars (one call per name).
  * Names whose bars cannot be judged (fewer than 200 bars, fetch failure) stay in rank order and are decided by the full screen.
  */
-export async function preScreenMa200(rows: DiscoveryCandidate[], date: string, barsFor: (symbol: string) => Promise<OHLCV[]>, limit: number = DISCOVERY.maxScreenedPerWeek) {
+export async function preScreenMa200(rows: DiscoveryCandidate[], date: string, barsFor: (symbol: string) => Promise<OHLCV[]>, limit: number = DISCOVERY.maxScreenedPerWeek,
+  reject?: QualityCheck) {
   const kept: DiscoveryCandidate[] = [];
   const dropped: { symbol: string; reason: string }[] = [];
   const skipped: { symbol: string; reason: string }[] = [];
@@ -276,6 +311,8 @@ export async function preScreenMa200(rows: DiscoveryCandidate[], date: string, b
     calls++;
     try {
       const bars = (await barsFor(row.symbol)).filter((bar) => bar.date <= date);
+      const quality = reject?.(row, bars);
+      if (quality) { dropped.push({ symbol: row.symbol, reason: `pre-screen: ${quality}` }); continue; }
       const ma200 = movingAverage(bars, 200);
       const close = bars.at(-1)?.close;
       if (ma200 !== null && close !== undefined && close < ma200) { dropped.push({ symbol: row.symbol, reason: `pre-screen: close ${close} below MA200 ${ma200.toFixed(2)}` }); continue; }
@@ -293,10 +330,12 @@ export async function preScreenMa200(rows: DiscoveryCandidate[], date: string, b
 
 export async function screenCandidates(rows: DiscoveryCandidate[], date: string, barsFor: (symbol: string) => Promise<OHLCV[]>,
   macro: { growthSectorRotation: boolean | null; dataTailwind: boolean | null }, benchmarkClose: number | null | ((date: string) => Promise<number | null>),
-  notPassed: { symbol: string; reason: string }[] = []): Promise<DiscoveryCandidate[]> {
+  notPassed: { symbol: string; reason: string }[] = [], reject?: QualityCheck): Promise<DiscoveryCandidate[]> {
   const screened: DiscoveryCandidate[] = [];
   for (const row of rows) {
     const bars = (await barsFor(row.symbol)).filter((bar) => bar.date <= date);
+    const quality = reject?.(row, bars);
+    if (quality) { notPassed.push({ symbol: row.symbol, reason: `quality: ${quality}` }); continue; }
     const growth = row.growth;
     const result = score({ ticker: row.symbol, bars, fundamentals: {
       revenueGrowthCurrent: growth?.current ?? null, revenueGrowthPrior: growth?.prior ?? null,
@@ -317,7 +356,7 @@ export async function screenCandidates(rows: DiscoveryCandidate[], date: string,
 }
 
 export async function screenDiscoveryShortlist(rows: DiscoveryCandidate[], date: string, barsFor: (symbol: string) => Promise<OHLCV[]>,
-  macro: { growthSectorRotation: boolean | null; dataTailwind: boolean | null }, benchmarkClose: number | null | ((date: string) => Promise<number | null>)) {
+  macro: { growthSectorRotation: boolean | null; dataTailwind: boolean | null }, benchmarkClose: number | null | ((date: string) => Promise<number | null>), reject?: QualityCheck) {
   const screened: DiscoveryCandidate[] = [];
   const skipped: { symbol: string; reason: string }[] = [];
   const failures: { symbol: string; reason: string }[] = [];
@@ -325,7 +364,7 @@ export async function screenDiscoveryShortlist(rows: DiscoveryCandidate[], date:
   for (const row of rows) {
     const reason = nonCommonStockReason(row.symbol);
     if (reason) { skipped.push({ symbol: row.symbol, reason }); continue; }
-    try { screened.push(...await screenCandidates([row], date, barsFor, macro, benchmarkClose, notPassed)); }
+    try { screened.push(...await screenCandidates([row], date, barsFor, macro, benchmarkClose, notPassed, reject)); }
     catch (error) {
       if (error instanceof SymbolNotFoundError) { skipped.push({ symbol: row.symbol, reason: "symbol not accepted by Twelve Data" }); continue; }
       failures.push({ symbol: row.symbol, reason: error instanceof Error ? error.message : String(error) });
@@ -378,6 +417,22 @@ export async function reviewCandidate(db: pg.Pool, symbol: string, approve: bool
   finally { client.release(); }
 }
 
+/** One Telegram post per week and language for the stored candidates; a send error is logged and does not fail the run. */
+async function notifyWeek(pool: pg.Pool, week: string): Promise<string> {
+  const notifier = telegramFromEnv();
+  if (!notifier) return "off";
+  try {
+    const rows = await loadWeekCandidates(pool, week);
+    if (!rows.length) return "empty";
+    const result = await deliverNewCandidates({ week, rows, locale: process.env.DIGEST_LOCALE === "sk" ? "sk" : "en", notifier, log: new PostgresDeliveryLog(pool),
+      target: process.env.TELEGRAM_CHAT_ID!.trim(), adviceOutput: flags().ADVICE_OUTPUT, site: process.env.SITE_URL ?? "https://invest.filipcsupka.online" });
+    return result.sent ? "sent" : "duplicate";
+  } catch (error) {
+    process.stderr.write(`Discovery Telegram post failed: ${error instanceof Error ? error.message : String(error)}\n`);
+    return "failed";
+  }
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const arg = (flag: string) => { const i = args.indexOf(flag); return i < 0 ? undefined : args[i + 1]; };
@@ -422,7 +477,11 @@ async function main() {
       }
     });
     const preScreen = DISCOVERY.preScreenMa200;
-    const { shortlist: ranked, skipped: filtered } = shortlistCandidates(sources, known, preScreen ? Math.max(DISCOVERY.preScreenTopK, DISCOVERY.maxScreenedPerWeek) : DISCOVERY.maxScreenedPerWeek);
+    const { shortlist: rankedAll, skipped: filtered } = shortlistCandidates(sources, known, preScreen ? Math.max(DISCOVERY.preScreenTopK, DISCOVERY.maxScreenedPerWeek) : DISCOVERY.maxScreenedPerWeek);
+    const profiled = await profileFilter(rankedAll, await tickerCiks(getText), getText);
+    const ranked = profiled.kept;
+    filtered.push(...profiled.excluded);
+    const quality: QualityCheck = (row, bars) => liquidityReason(bars, profiled.profiles.get(row.symbol)?.sharesOutstanding ?? null);
     if (!process.env.TWELVE_DATA_API_KEY) throw new Error("TWELVE_DATA_API_KEY is required to apply the scoring rules to discovery candidates");
     const usage = new PostgresUsageLedger(pool);
     const provider = new TwelveDataProvider({ apiKey: process.env.TWELVE_DATA_API_KEY, reserve: () => usage.reserve("twelvedata", 1, { job: "discovery", credits: 1 }) });
@@ -459,20 +518,21 @@ async function main() {
     let preScreened: { preScreened: number; dropped: { symbol: string; reason: string }[]; apiRequests: number } | null = null;
     if (preScreen) {
       const before = provider.requests;
-      const pre = await preScreenMa200(ranked, date, barsFor);
+      const pre = await preScreenMa200(ranked, date, barsFor, DISCOVERY.maxScreenedPerWeek, quality);
       shortlist = pre.kept;
       filtered.push(...pre.skipped);
       preScreened = { preScreened: pre.calls, dropped: pre.dropped, apiRequests: provider.requests - before };
       process.stderr.write(`Discovery pre-screen: ${pre.calls} of ${ranked.length} ranked names checked, ${pre.dropped.length} dropped under MA200, ${shortlist.length} go to the full screen, ${preScreened.apiRequests} Twelve Data requests${pre.stoppedByLimit ? " (daily limit reached, rest passed through)" : ""}\n`);
     }
-    const result = await screenDiscoveryShortlist(shortlist, date, barsFor, macro, benchmarkClose);
+    const result = await screenDiscoveryShortlist(shortlist, date, barsFor, macro, benchmarkClose, quality);
     const { screened, failureCount, failures } = result;
     const skipped = [...filtered, ...result.skipped];
     const skippedCount = skipped.length;
     for (const failure of failures) process.stderr.write(`${failure.symbol}: screening failed: ${failure.reason}\n`);
     const selected = screened.sort((a, b) => (b.ruleScore ?? 0) - (a.ruleScore ?? 0) || b.score - a.score || a.symbol.localeCompare(b.symbol)).slice(0, DISCOVERY.maxCandidatesPerWeek);
     const saved = await saveCandidates(pool, week, selected);
-    process.stdout.write(`${JSON.stringify({ weekStart: week, sourceRows: summary, uniqueSymbols: new Set(sources.map((row) => row.symbol)).size, ranked: ranked.length, preScreened: preScreened?.preScreened ?? 0, preScreenDropped: preScreened?.dropped.length ?? 0, preScreenDroppedNames: preScreened?.dropped ?? [], twelveDataRequests: provider.requests, screened: shortlist.length, shortlisted: shortlist.length, candidates: saved, notPassed: result.notPassed, skippedCount, skipped, failureCount, failures })}\n`);
+    const telegram = await notifyWeek(pool, week);
+    process.stdout.write(`${JSON.stringify({ weekStart: week, sourceRows: summary, uniqueSymbols: new Set(sources.map((row) => row.symbol)).size, ranked: ranked.length, preScreened: preScreened?.preScreened ?? 0, preScreenDropped: preScreened?.dropped.length ?? 0, preScreenDroppedNames: preScreened?.dropped ?? [], telegram, twelveDataRequests: provider.requests, screened: shortlist.length, shortlisted: shortlist.length, candidates: saved, notPassed: result.notPassed, skippedCount, skipped, failureCount, failures })}\n`);
   } finally { await pool.end(); }
 }
 if (/(?:^|[/\\])discovery\.(?:ts|js)$/.test(process.argv[1] ?? "")) main().catch((error) => { console.error(error instanceof Error ? error.message : error); process.exitCode = 1; });

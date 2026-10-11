@@ -32,6 +32,17 @@ Telegram allows 4096 characters. A longer card loses whole sections, lowest prio
 6. First proof: run the job once by hand, for example `kubectl -n invest create job --from=cronjob/invest-buddy-digest digest-test-1`. Its log should end with `"telegram":"sent"` (or `"empty"` on a day without changes), and the post should appear in the channel.
 7. Done 2026-10-10: the first manual run sent (`"telegram":"sent"`, 9 alerts). After the proof, set `suspend: false` on `invest-buddy-digest` in infra. `src/jobs/cronjob-order.test.ts` asserts the mirror keeps it suspended, so flip that assertion in the same PR.
 
+## New candidates (weekly, DS1)
+
+The discovery job (`src/jobs/discovery.ts`, Saturday 09:30) posts one "New candidates" message per week after it stores candidates (`src/notify/discovery.ts`). It uses the same bot, chat and `DIGEST_LOCALE` as the digest.
+
+- The message lists the week's stored candidates, best rule score first. Each entry has the ticker as a link (the SEC filing that surfaced it, else the SEC company search), the name, the rule score out of 25 with the rule state label, revenue growth when SEC data gave it, and up to three sources with links and kind labels (SEC 8-K, revenue growth, theme, clinical trial, ownership filing, 13F holding, price and volume move). English and Slovak.
+- Wording follows the same gate as the alerts: rule state labels only, "Conditions met" until `ADVICE_OUTPUT` is on, and the informational-screening line. Source details such as a theme chain stay in the language they were stored in.
+- Only sent when both Telegram variables are set. The CronJob entries are `optional`, so the job still runs without the secret `invest-buddy-telegram`.
+- Each post is recorded in `notification_deliveries` before it is sent, with kind `discovery:<locale>` and the week's Monday as the date. A rerun of the same week posts nothing, and a failed send removes the record so the next run retries. A failed send is logged and the job still ends green; the run log field `telegram` shows `sent`, `duplicate`, `empty`, `off` or `failed`.
+- The message is built from the stored rows of the week, so a rerun after a crash between saving and sending still posts them. Messages over 4096 characters are split at line breaks by the notifier.
+- The owner copies the Telegram env entries from the `deploy/gitops` mirror (`invest-buddy-discovery`) into the infra repo.
+
 ## Wording
 
 Messages use rule states and points only, never buy or sell wording (ADR-001). `src/jobs/digest.test.ts` checks the banned words in both languages. A public channel is still a public signal feed, so it falls under the same open lawyer question as the paid feed (tasks-open G5).
