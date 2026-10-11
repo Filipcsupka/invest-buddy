@@ -11,6 +11,17 @@ The digest job (`src/jobs/digest.ts`, CronJob `invest-buddy-digest`, 07:30 Tue t
 - On HTTP 429 the job waits for Telegram's `retry_after`. Errors from 5xx and the network are retried up to 3 times. Errors never include the bot token.
 - Job counts in the log show `telegram: sent | duplicate | empty` plus `sent` and `duplicates` counts.
 
+## Idea card (AL3)
+
+When the judge stored an idea for a ticker that changed band, for the same date, the digest sends the idea card instead of the short message. A ticker with no stored idea still gets the short message above. The card has: band emoji, ticker and label; one line "Was ... Now ..."; a score line such as `Score 17 of 23 evidenced (74 %), data coverage 92 %` (from the audit fields of EN45, plain points when the audit has none); What happened (up to 3 bullets); Why it matters; Setup ratings (Company, Entry, Catalyst); up to 5 numbers; Plan; Evidence as links to the source URLs; the company page and methodology links; the disclaimer. EN or SK follows `DIGEST_LOCALE` and uses the stored Slovak translation, English when none is stored.
+
+Telegram allows 4096 characters. A longer card loses whole sections, lowest priority first: numbers, setup, plan, why it matters, what happened, then evidence links from the end. A link is never cut.
+
+`TELEGRAM_CARD_MODE`:
+
+- `public` (default, any other value too): neutral band labels, no EUR amounts, no action words (Start, Add, Reduce), plan labelled Trigger, Invalidation and Opportunity cost. While `ADVICE_OUTPUT` is off, the card follows `docs/wording-gate.md` and holds back model text, ratings and plan: it shows the state, score line, evidence links, the company link and the disclaimer. With `ADVICE_OUTPUT` on, all sections show, minus EUR and action words.
+- `owner`: for the owner's **private channel only**. Adds the action word and the EUR band from the idea to the header, and the plan reads When to start, When to add, When to stop, Opportunity cost. It ignores `ADVICE_OUTPUT`. Never set it on a channel others can read: it shows personal amounts and trade wording that ADR-001 keeps out of public output.
+
 ## One-time setup (owner)
 
 1. In Telegram, open @BotFather, send `/newbot` and keep the token.

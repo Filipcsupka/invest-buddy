@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { bandChanges, buildDigest, deliverTelegram } from "./digest";
 import { MemoryDeliveryLog } from "../db/notifications";
 import type { AlertChange } from "../db/types";
+import { sampleIdeas } from "../ideas/fixtures";
 
 const alert: AlertChange = { ticker: "NVDA", asOf: "2025-08-09", previousState: "Watch", currentState: "Setup met (>=18)", previousScore: 16, currentScore: 19 };
 
@@ -87,3 +88,29 @@ describe("telegram delivery", () => {
     expect(sent[0]).toContain("Zóna nákupu");
   });
 });
+
+describe("telegram idea card", () => {
+  const sent: string[] = [];
+  const notifier = { send: async (text: string) => { sent.push(text); } };
+  const amd: AlertChange = { ticker: "AMD", asOf: alert.asOf, previousState: "Wait", currentState: "Ignore", previousScore: 13, currentScore: 9 };
+  const base = { asOf: alert.asOf, alerts: [alert, amd], locale: "en" as const, notifier, target: "@invest_test", adviceOutput: true, site: "https://x.test", ideas: { NVDA: sampleIdeas[0] }, audits: { NVDA: { evidencedMax: 23, percent: 73.9, coverage: 92 } } };
+
+  it("sends the card for a ticker with a stored idea and the short message for one without", async () => {
+    sent.length = 0;
+    await deliverTelegram({ ...base, log: new MemoryDeliveryLog() });
+    expect(sent[0]).toContain("<b>AMD</b>");
+    expect(sent[0]).not.toContain("What happened");
+    expect(sent[1]).toContain("<b>What happened</b>");
+    expect(sent[1]).toContain("Score 19 of 23 evidenced (74 %), data coverage 92 %");
+  });
+
+  it("is public by default and shows the owner view only in owner mode", async () => {
+    sent.length = 0;
+    await deliverTelegram({ ...base, alerts: [alert], log: new MemoryDeliveryLog() });
+    await deliverTelegram({ ...base, alerts: [alert], cardMode: "owner", log: new MemoryDeliveryLog() });
+    expect(sent[0]).not.toMatch(/EUR|When to add/);
+    expect(sent[1]).toContain("EUR 60-90");
+    expect(sent[1]).toContain("When to add");
+  });
+});
+

@@ -1,4 +1,7 @@
-/** Telegram HTML event alert: one message per ticker that moved between status bands. EN and SK. */
+/** Telegram HTML event alert: one message per ticker that moved between status bands. EN and SK. Also the idea card (AL3). */
+import type { StoredIdea } from "../db/ideas";
+import { stripEur } from "../ideas/public";
+import { getMessages } from "../i18n";
 
 export type AlertLocale = "en" | "sk";
 export type Band = "red" | "orange" | "yellow" | "blue" | "green" | "gray";
@@ -149,4 +152,159 @@ export function formatEventAlert(input: EventAlertInput): string {
   lines.push(`<a href="${escapeHtml(company)}">${escapeHtml(text.open(input.ticker))}</a> · <a href="${escapeHtml(method)}">${escapeHtml(text.methodology)}</a>`);
   lines.push(escapeHtml(text.disclaimer));
   return lines.join("\n");
+}
+
+// ---- Idea card (AL3) ----
+
+/** public: neutral labels, no EUR, no action words (ADR-001). owner: adds the action word and the EUR band; for a private channel only. */
+export type CardMode = "public" | "owner";
+export const TELEGRAM_LIMIT = 4096;
+
+export function cardModeFromEnv(value: string | undefined): CardMode { return value?.trim() === "owner" ? "owner" : "public"; }
+
+/** Relative score fields of the stored audit (EN45). All optional: audits stored before rules version 2026-10-11.1 lack them. */
+export interface CardAudit { evidencedMax?: number; percent?: number; coverage?: number }
+
+export interface IdeaCardInput {
+  ticker: string;
+  locale: AlertLocale;
+  previous: StatusPoint | null;
+  current: StatusPoint;
+  idea: StoredIdea;
+  audit?: CardAudit;
+  mode: CardMode;
+  /** ADVICE_OUTPUT. Off in public mode: the card shows no model text, ratings or plan (docs/wording-gate.md). */
+  adviceOutput: boolean;
+  site: string;
+}
+
+interface CardText {
+  scoreRelative: (points: number, max: number, percent: number, coverage: number) => string;
+  scorePlain: (points: number) => string;
+  whatHappened: string; whyItMatters: string; setup: string; company: string; entry: string; catalyst: string;
+  numbers: string; plan: string; evidence: string;
+  ratings: Record<string, string>;
+  planOwner: { start: string; add: string; stop: string; cost: string };
+  planPublic: { trigger: string; invalidation: string; cost: string };
+}
+
+const CARD_TEXT: Record<AlertLocale, CardText> = {
+  en: {
+    scoreRelative: (p, m, pct, cov) => `Score ${p} of ${m} evidenced (${pct} %), data coverage ${cov} %`,
+    scorePlain: (p) => `Score ${p} points`,
+    whatHappened: "What happened", whyItMatters: "Why it matters", setup: "Setup", company: "Company", entry: "Entry", catalyst: "Catalyst", numbers: "Numbers", plan: "Plan", evidence: "Evidence",
+    ratings: { "Very strong": "Very strong", Strong: "Strong", Good: "Good", Neutral: "Neutral", Weak: "Weak" },
+    planOwner: { start: "When to start", add: "When to add", stop: "When to stop", cost: "Opportunity cost" },
+    planPublic: { trigger: "Trigger", invalidation: "Invalidation", cost: "Opportunity cost" },
+  },
+  sk: {
+    scoreRelative: (p, m, pct, cov) => `Skóre ${p} z ${m} doložených (${pct} %), pokrytie údajov ${cov} %`,
+    scorePlain: (p) => `Skóre ${p} bodov`,
+    whatHappened: "Čo sa stalo", whyItMatters: "Prečo na tom záleží", setup: "Nastavenie", company: "Firma", entry: "Vstup", catalyst: "Katalyzátor", numbers: "Čísla", plan: "Plán", evidence: "Dôkazy",
+    ratings: { "Very strong": "Veľmi silné", Strong: "Silné", Good: "Dobré", Neutral: "Neutrálne", Weak: "Slabé" },
+    planOwner: { start: "Kedy začať", add: "Kedy prikúpiť", stop: "Kedy skončiť", cost: "Náklady príležitosti" },
+    planPublic: { trigger: "Spúšťač", invalidation: "Čo nápad zruší", cost: "Náklady príležitosti" },
+  },
+};
+
+type CardBody = Pick<StoredIdea, "whatHappened" | "whyItMatters" | "numbers" | "plan" | "evidence">;
+
+/** Slovak fields from the stored translation when present, else the English text. */
+function localizedBody(idea: StoredIdea, locale: AlertLocale): CardBody {
+  const sk = locale === "sk" ? idea.translations?.sk : undefined;
+  return sk ? { whatHappened: sk.whatHappened, whyItMatters: sk.whyItMatters, numbers: sk.numbers, plan: sk.plan, evidence: sk.evidence } : idea;
+}
+
+const ACTION_CODE = /\b(?:START_POSITION|HIGH_CONVICTION_ADD|ADD|REDUCE|THESIS_BROKEN)\b/;
+const bullet = (value: string) => `• ${escapeHtml(value)}`;
+const field = (label: string, value: string) => `<b>${escapeHtml(label)}:</b> ${escapeHtml(value)}`;
+
+interface Section { priority: number; lines: string[] }
+
+/**
+ * One message per ticker with a stored idea. Text over 4096 characters loses whole sections, lowest priority first
+ * (numbers, setup, plan, why, what happened), then evidence links from the end. A link is never cut in half.
+ */
+export function formatIdeaCard(input: IdeaCardInput): string {
+  const { locale, mode, adviceOutput } = input;
+  const text = ALERT_TEXT[locale];
+  const card = CARD_TEXT[locale];
+  const owner = mode === "owner";
+  // Public: ADR-001 strips EUR everywhere. The gate (docs/wording-gate.md) also hides model text, ratings and plan while ADVICE_OUTPUT is off.
+  const showModelText = owner || adviceOutput;
+  const idea = owner ? input.idea : stripEur(input.idea);
+  const body = localizedBody(idea, locale);
+  const keep = (value: string) => owner || !ACTION_CODE.test(value);
+
+  const band = bandOf(input.current.state);
+  const ticker = escapeHtml(input.ticker);
+  const head = [`${BAND_EMOJI[band]} <b>${ticker}</b> · ${escapeHtml(bandLabel(locale, band, adviceOutput))}`];
+  if (owner) {
+    const action = getMessages(locale).ideas.actions[input.idea.action];
+    const eur = input.idea.amountMaxEur > 0 ? ` · EUR ${input.idea.amountMinEur}-${input.idea.amountMaxEur}` : "";
+    head[0] += ` · ${escapeHtml(action)}${eur}`;
+  }
+  const now = `${BAND_EMOJI[band]} ${escapeHtml(bandLabel(locale, band, adviceOutput))}`;
+  const change = input.previous
+    ? `${text.was}: ${BAND_EMOJI[bandOf(input.previous.state)]} ${escapeHtml(bandLabel(locale, bandOf(input.previous.state), adviceOutput))} → ${text.now}: ${now}`
+    : `${text.first}: ${now}`;
+  const audit = input.audit;
+  const points = pointsText(input.current);
+  const score = points === null ? escapeHtml(text.noData)
+    : audit?.evidencedMax && audit.percent !== undefined && audit.coverage !== undefined
+      ? escapeHtml(card.scoreRelative(Number(points), audit.evidencedMax, Math.round(audit.percent), Math.round(audit.coverage)))
+      : escapeHtml(card.scorePlain(Number(points)));
+
+  const sections: Section[] = [];
+  if (showModelText) {
+    const happened = body.whatHappened.filter(keep).slice(0, 3);
+    if (happened.length) sections.push({ priority: 5, lines: [`<b>${escapeHtml(card.whatHappened)}</b>`, ...happened.map(bullet)] });
+    const why = body.whyItMatters.filter(keep).slice(0, 2);
+    if (why.length) sections.push({ priority: 4, lines: [`<b>${escapeHtml(card.whyItMatters)}</b>`, ...why.map(bullet)] });
+    const ratings: [string, keyof StoredIdea["setup"]][] = [[card.company, "company"], [card.entry, "entry"], [card.catalyst, "catalyst"]];
+    sections.push({ priority: 2, lines: [`<b>${escapeHtml(card.setup)}</b>`, ratings.map(([label, key]) => `${escapeHtml(label)}: ${escapeHtml(card.ratings[idea.setup[key]] ?? idea.setup[key])}`).join(" · ")] });
+    const numbers = body.numbers.filter((n) => keep(n.label) && keep(n.value)).slice(0, 5);
+    if (numbers.length) sections.push({ priority: 1, lines: [`<b>${escapeHtml(card.numbers)}</b>`, ...numbers.map((n) => `• ${escapeHtml(n.label)}: ${escapeHtml(n.value)}`)] });
+    const plan: string[] = [];
+    if (owner) {
+      const labels = card.planOwner;
+      if (body.plan.amountNow) plan.push(field(labels.start, body.plan.amountNow));
+      if (body.plan.trigger) plan.push(field(labels.add, body.plan.trigger));
+      if (body.plan.invalidation) plan.push(field(labels.stop, body.plan.invalidation));
+      if (body.plan.opportunityCost) plan.push(field(labels.cost, body.plan.opportunityCost));
+    } else {
+      const labels = card.planPublic;
+      if (body.plan.trigger && keep(body.plan.trigger)) plan.push(field(labels.trigger, body.plan.trigger));
+      if (body.plan.invalidation && keep(body.plan.invalidation)) plan.push(field(labels.invalidation, body.plan.invalidation));
+      if (body.plan.opportunityCost && keep(body.plan.opportunityCost)) plan.push(field(labels.cost, body.plan.opportunityCost));
+    }
+    if (plan.length) sections.push({ priority: 3, lines: [`<b>${escapeHtml(card.plan)}</b>`, ...plan] });
+  }
+
+  const site = input.site.replace(/\/+$/, "");
+  const company = `${site}/${locale}/company/${encodeURIComponent(input.ticker)}`;
+  const method = `${site}/${locale}/methodology`;
+  const links = `<a href="${escapeHtml(company)}">${escapeHtml(text.open(input.ticker))}</a> · <a href="${escapeHtml(method)}">${escapeHtml(text.methodology)}</a>`;
+  const evidence = body.evidence.filter((e) => keep(e.label)).map((e) => `• <a href="${escapeHtml(e.url)}">${escapeHtml(e.label)}</a>`);
+
+  const render = (parts: Section[], evidenceLines: string[]): string => [
+    ...head, change, score,
+    ...parts.sort((a, b) => b.priority - a.priority).flatMap((s) => ["", ...s.lines]),
+    ...(evidenceLines.length ? ["", `<b>${escapeHtml(card.evidence)}</b>`, ...evidenceLines] : []),
+    "", links, escapeHtml(text.disclaimer),
+  ].join("\n");
+
+  let parts = sections;
+  let evidenceLines = evidence;
+  let out = render(parts, evidenceLines);
+  while (out.length > TELEGRAM_LIMIT && parts.length) {
+    const lowest = Math.min(...parts.map((s) => s.priority));
+    parts = parts.filter((s) => s.priority !== lowest);
+    out = render(parts, evidenceLines);
+  }
+  while (out.length > TELEGRAM_LIMIT && evidenceLines.length) {
+    evidenceLines = evidenceLines.slice(0, -1);
+    out = render(parts, evidenceLines);
+  }
+  return out;
 }
