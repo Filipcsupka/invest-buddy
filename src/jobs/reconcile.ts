@@ -1,6 +1,6 @@
 import { runLoggedJob } from "./job-log";
 import pg from "pg";
-import { liveVerifier, offVerifier, fixtureVerifier, type EvidenceRef, type EvidenceVerifier } from "../data/evidence";
+import { liveVerifier, offVerifier, fixtureVerifier, freshnessDays, type EvidenceRef, type EvidenceVerifier } from "../data/evidence";
 import { pgDocumentLookup, storedFirstVerifier, storedOnlyVerifier } from "../data/stored-evidence";
 import { epsBeatMinSurprisePct, type EpsResult } from "../data/eps";
 import { secRevenue, revenueLookup, type RevenueResult } from "../data/sec";
@@ -16,7 +16,7 @@ type Agent = "claude" | "codex";
  * agree: two agents, same value, evidence passed. verified_single: one extractor whose quote matched stored, display-allowed text.
  * xbrl_override: SEC data decides. data_rule: a deterministic rule on a collected fact decides (epsBeat from Alpha Vantage).
  */
-export type Agreement = "agree" | "disputed" | "single" | "xbrl_override" | "verified_single" | "data_rule";
+export type Agreement = "agree" | "disputed" | "single" | "xbrl_override" | "verified_single" | "data_rule" | "research_verified";
 export interface AgentFinding { runId: string; runner: { name: Agent }; fundamentals: Record<string, unknown>; evidence: { items: EvidenceRef[] }; confidence: string }
 export interface ConsensusField { symbol: string; field: string; asOf: string; value: boolean | null; agreement: Agreement; agentValues: Record<string, { value: boolean | null; runId: string }>; evidenceRefs: EvidenceRef[]; verified: boolean; reason: string }
 export const fields = ["revenueAccelerating", "revenueDeclining", "epsBeat", "guidanceRaised", "guidanceCut", "productCatalyst", "insiderOrInstitutionalBuying", "narrativeChanged", "sectorRotationIntoGrowth", "dataTailwind"] as const;
@@ -31,7 +31,26 @@ const valueOf = (finding: AgentFinding | undefined, field: string): boolean | nu
  * `storedVerify` checks a quote against stored, display-allowed source_documents text only (no live fetch). Without it a single
  * extractor's finding stays `single`. `eps` is the Alpha Vantage rule result for epsBeat.
  */
-export interface ReconcileExtras { storedVerify?: EvidenceVerifier; eps?: EpsResult | null; catalyst?: CatalystResult | null }
+export interface ResearchReading { field: "productCatalyst" | "guidanceRaised" | "guidanceCut"; runId: string; url: string; quote: string; publishedAt: string; value: true }
+export interface ResearchRow { symbol: string; field: ResearchReading["field"]; run_id: string; verification_status: string; confirmed: boolean; source_class: string; lead: boolean; polarity: string; evidence: { url: string; status: string; sourceClass: string; pageDate?: string }[]; original_evidence: { url: string; quote: string; publishedAt: string | null }[] }
+export function primaryResearchReadings(rows: ResearchRow[], asOf: string): Map<string, ResearchReading[]> {
+  const bySymbol = new Map<string, ResearchReading[]>();
+  for (const row of rows) {
+    if (row.verification_status !== "verified" || !row.confirmed || row.source_class !== "primary" || row.lead || row.field === "productCatalyst" && row.polarity !== "positive") continue;
+    for (const item of row.evidence) {
+      if (item.status !== "verified" || item.sourceClass !== "primary") continue;
+      const original = row.original_evidence.find((e) => e.url === item.url);
+      const publishedAt = (original?.publishedAt ?? item.pageDate)?.slice(0, 10);
+      const age = publishedAt ? (Date.parse(`${asOf}T00:00:00Z`) - Date.parse(`${publishedAt}T00:00:00Z`)) / 86_400_000 : NaN;
+      if (!original || !Number.isFinite(age) || age < 0 || age > freshnessDays[row.field]) continue;
+      const list = bySymbol.get(row.symbol) ?? [];
+      list.push({ field: row.field, runId: row.run_id, url: item.url, quote: original.quote, publishedAt: publishedAt!, value: true });
+      bySymbol.set(row.symbol, list);
+    }
+  }
+  return bySymbol;
+}
+export interface ReconcileExtras { storedVerify?: EvidenceVerifier; eps?: EpsResult | null; catalyst?: CatalystResult | null; research?: ResearchReading[] }
 export async function reconcileField(symbol: string, field: string, asOf: string, findings: AgentFinding[], verify: EvidenceVerifier, sec?: RevenueResult | null, insider?: InsiderResult | null, extras: ReconcileExtras = {}): Promise<ConsensusField> {
   const agents = Object.fromEntries(findings.map((item) => [item.runner.name, item])) as Partial<Record<Agent, AgentFinding>>;
   const agentValues = Object.fromEntries(findings.map((item) => [item.runner.name, { value: valueOf(item, field), runId: item.runId }]));
@@ -89,6 +108,21 @@ export async function reconcileField(symbol: string, field: string, asOf: string
     agreement = "data_rule"; value = rule.value; verified = true; reason = rule.reason;
     evidenceRefs.splice(0, evidenceRefs.length, ...rule.refs);
   }
+  const research = (extras.research ?? []).filter((item) => item.field === field);
+  if (research.length && agreement !== "data_rule" && agreement !== "xbrl_override") {
+    evidenceRefs.push(...research.map((item) => ({ claim, url: item.url, publishedAt: item.publishedAt, quote: item.quote })));
+    const extractValues = findings.map((item) => valueOf(item, field)).filter((item): item is boolean => item !== null);
+    if (extractValues.includes(false)) {
+      agreement = "disputed"; value = null; verified = false; reason = "Verified primary research conflicts with the extraction reading";
+    } else if (extractValues.includes(true)) {
+      const extractChecked = (await Promise.all(findings.filter((item) => valueOf(item, field) === true && item.confidence !== "low")
+        .flatMap((item) => item.evidence.items.filter((entry) => entry.claim === claim))
+        .map((entry) => verify(entry, asOf)))).some(Boolean);
+      if (extractChecked) { agreement = "agree"; value = true; verified = true; reason = "Extraction and verified primary research agree"; }
+    } else if (!extractValues.length) {
+      agreement = "research_verified"; value = true; verified = true; reason = "Verified primary research; no extraction reading";
+    }
+  }
   if (FORCED_NULL_FIELDS.has(field)) {
     value = null; verified = false; reason = "No written rule confirms this narrative field";
   }
@@ -109,6 +143,17 @@ export async function runReconcile(pool: pg.Pool, asOf: string, verify: Evidence
   const result = await pool.query<{ symbol: string; run_id: string; runner: { name: Agent }; fundamentals: Record<string, unknown>; evidence: { items: EvidenceRef[] }; confidence: string }>("SELECT symbol,run_id,runner,fundamentals,evidence,confidence FROM scan_findings WHERE as_of=$1 AND superseded_by IS NULL AND runner->>'name' IN ('claude','codex') ORDER BY symbol,received_at DESC", [asOf]);
   const grouped = new Map<string, AgentFinding[]>();
   for (const row of result.rows) grouped.set(row.symbol, [...(grouped.get(row.symbol) ?? []), { runId: row.run_id, runner: row.runner, fundamentals: row.fundamentals, evidence: row.evidence, confidence: row.confidence }]);
+  const researchRows = await pool.query<ResearchRow>(
+    `SELECT f.symbol,f.field,f.run_id,f.verification_status,f.confirmed,f.source_class,f.lead,f.polarity,
+       f.evidence,original.item->'evidence' AS original_evidence
+     FROM research_findings f JOIN research_runs r ON r.id=f.run_id
+     JOIN LATERAL jsonb_array_elements(r.model_output->'findings') AS original(item) ON original.item->>'id'=f.finding_key
+     WHERE r.as_of <= $1::date AND f.verification_status='verified' AND f.confirmed AND f.source_class='primary'
+       AND NOT f.lead AND f.field IN ('productCatalyst','guidanceRaised','guidanceCut')
+       AND (f.field <> 'productCatalyst' OR f.polarity='positive')
+       AND (f.event_date IS NULL OR f.event_date <= $1::date)`, [asOf]);
+  const researchBySymbol = primaryResearchReadings(researchRows.rows, asOf);
+  for (const symbol of researchBySymbol.keys()) if (!grouped.has(symbol)) grouped.set(symbol, []);
   const macros = await pool.query<{ run_id: string; data: Record<string, unknown>; evidence: { items: EvidenceRef[] } }>("SELECT run_id,data,evidence FROM macro_findings WHERE as_of=$1 AND superseded_by IS NULL AND data->>'runnerName' IN ('claude','codex')", [asOf]);
   const macroFindings = macros.rows.map((row) => ({ runId: row.run_id, runner: { name: row.data.runnerName as Agent }, fundamentals: row.data, evidence: row.evidence, confidence: "high" }));
   const pending: ConsensusField[] = [];
@@ -123,7 +168,7 @@ export async function runReconcile(pool: pg.Pool, asOf: string, verify: Evidence
     for (const field of fields) {
       // Reconcile writes its own productCatalyst data_rule rows, so a rerun may refresh them; macro rows stay untouched.
       if (ruleRows.has(`${symbol}:${field}`) && field !== "productCatalyst") continue;
-      const item = await reconcileField(symbol, field, asOf, MACRO_FIELDS.has(field) ? macroFindings : findings, verify, sec, insider, { storedVerify: extras.storedVerify, eps, catalyst });
+      const item = await reconcileField(symbol, field, asOf, MACRO_FIELDS.has(field) ? macroFindings : findings, verify, sec, insider, { storedVerify: extras.storedVerify, eps, catalyst, research: researchBySymbol.get(symbol) });
       pending.push(item);
     }
   }

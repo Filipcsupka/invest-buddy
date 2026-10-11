@@ -20,6 +20,7 @@ export interface JudgeField { value: boolean | null; agreement: string; verified
 export interface JudgeEvidence { url: string; field: string; label: string | null; publishedAt: string | null; quote: string | null }
 /** A stored, display-allowed SEC document of the symbol. */
 export interface PrimaryDoc { url: string; docType: string; publishedAt: string }
+export interface JudgeResearchFact { claim: string; kind: string; sourceClass: string; url: string; date: string; readingLabel: string; confirmed: boolean; quote: string }
 export interface JudgeSymbol {
   symbol: string; name: string; sector: string; tier: number | null;
   held: { valueEur: number; weightPercent: number } | null;
@@ -32,6 +33,7 @@ export interface JudgeSymbol {
   expiredFields: string[];
   carriedFrom: string | null;
   evidence: JudgeEvidence[];
+  researchFacts: JudgeResearchFact[];
 }
 export interface JudgeSignal extends Signal { signature: string }
 export interface JudgePrevious { symbol: string; asOf: string; action: IdeaAction; setup: Idea["setup"]; signature: string; sizeTier: SizeTier | null }
@@ -82,7 +84,7 @@ export function collectEvidence(consensus: ConsensusRow[], displayUrls: Set<stri
   return unique.map((e, i) => ({ e, i })).sort((a, b) => (b.e.publishedAt ?? "").localeCompare(a.e.publishedAt ?? "") || a.i - b.i).map((x) => x.e).slice(0, MAX_EVIDENCE_PER_SYMBOL);
 }
 
-export function shapeSymbol(row: ScoreRow, consensus: ConsensusRow[], baseline: Baseline | null, invested: number, technicals: Technicals | null, displayUrls: Set<string> = new Set(), primaryDocs: PrimaryDoc[] = []): JudgeSymbol {
+export function shapeSymbol(row: ScoreRow, consensus: ConsensusRow[], baseline: Baseline | null, invested: number, technicals: Technicals | null, displayUrls: Set<string> = new Set(), primaryDocs: PrimaryDoc[] = [], researchFacts: JudgeResearchFact[] = []): JudgeSymbol {
   const a = row.audit;
   const pos = baseline?.positions.find((p) => p.symbol === row.ticker);
   const fields: Record<string, JudgeField> = {};
@@ -95,7 +97,9 @@ export function shapeSymbol(row: ScoreRow, consensus: ConsensusRow[], baseline: 
     score: { total: a.total, technical: a.technical, fundamentals: a.fundamentals, macro: a.macro, state: a.state, pullbackInUptrend: a.pullbackInUptrend, asOf: a.asOf },
     invalidReasons: a.invalidReasons, technicals,
     matchedRules: a.ruleHits.filter((r) => r.matched).map((r) => r.id),
-    fields, expiredFields: [...(a.expiredFields ?? [])].sort(), carriedFrom: carried[0] ?? null, evidence,
+    fields, expiredFields: [...(a.expiredFields ?? [])].sort(), carriedFrom: carried[0] ?? null,
+    evidence: [...evidence, ...researchFacts.map((f) => ({ url: f.url, field: "research", label: f.kind, publishedAt: f.date, quote: f.quote.slice(0, 240) }))]
+      .filter((e, i, all) => all.findIndex((x) => x.url === e.url) === i).slice(0, MAX_EVIDENCE_PER_SYMBOL), researchFacts,
   };
 }
 
@@ -118,6 +122,24 @@ export async function buildJudgeInput(pool: Pick<pg.Pool, "query">, asOf: string
   const held = new Set((baseline?.positions ?? []).map((p) => p.symbol));
   const picked = pickSymbols(scores.rows, held, new Set(previous.map((p) => p.symbol)), maxSymbols, new Set(requested));
   const tickers = picked.map((r) => r.ticker);
+  const researchRows = tickers.length ? await pool.query<{ symbol: string; claim: string; kind: string; source_class: string; confirmed: boolean; reading_label: string; evidence: { url: string; status: string; sourceClass: string; pageDate?: string }[]; original_evidence: { url: string; quote: string; publishedAt: string | null }[] }>(
+    `SELECT f.symbol,f.claim,f.kind,f.source_class,f.confirmed,f.reading_label,f.evidence,
+       original.item->'evidence' AS original_evidence FROM research_findings f
+     JOIN research_runs r ON r.id=f.run_id
+     JOIN LATERAL jsonb_array_elements(r.model_output->'findings') AS original(item) ON original.item->>'id'=f.finding_key
+     WHERE f.symbol=ANY($1::text[]) AND r.as_of <= $2::date AND f.verification_status='verified'
+       AND NOT f.lead ORDER BY f.verified_at DESC LIMIT 100`, [tickers, asOf]) : { rows: [] as { symbol: string; claim: string; kind: string; source_class: string; confirmed: boolean; reading_label: string; evidence: { url: string; status: string; sourceClass: string; pageDate?: string }[]; original_evidence: { url: string; quote: string; publishedAt: string | null }[] }[] };
+  const researchFacts = new Map<string, JudgeResearchFact[]>();
+  for (const row of researchRows.rows) for (const item of row.evidence) {
+    if (item.status !== "verified") continue;
+    const original = row.original_evidence.find((e) => e.url === item.url);
+    const date = (original?.publishedAt ?? item.pageDate)?.slice(0, 10);
+    const age = date ? (Date.parse(`${asOf}T00:00:00Z`) - Date.parse(`${date}T00:00:00Z`)) / 86_400_000 : NaN;
+    if (!original || !Number.isFinite(age) || age < 0 || age > 90) continue;
+    const list = researchFacts.get(row.symbol) ?? [];
+    list.push({ claim: row.claim, kind: row.kind, sourceClass: item.sourceClass, url: item.url, date: date!, readingLabel: row.reading_label, confirmed: row.confirmed, quote: original.quote });
+    researchFacts.set(row.symbol, list);
+  }
   const consensus = picked.length ? await pool.query<ConsensusRow>(`SELECT DISTINCT ON (symbol, field) symbol, field, value, agreement, verified, reason, carried_from::text, evidence_refs
     FROM consensus_findings WHERE symbol = ANY($1) AND as_of <= $2 ORDER BY symbol, field, as_of DESC`, [tickers, asOf]) : { rows: [] as ConsensusRow[] };
   const evidenceUrls = [...new Set(consensus.rows.flatMap((row) => row.evidence_refs ?? []).map((ref) => ref.url).filter((url): url is string => !!url))];
@@ -139,7 +161,7 @@ export async function buildJudgeInput(pool: Pick<pg.Pool, "query">, asOf: string
   for (const b of barRows.rows) (bars.get(b.ticker) ?? bars.set(b.ticker, []).get(b.ticker)!).push({ date: b.bar_date, open: Number(b.open), high: Number(b.high), low: Number(b.low), close: Number(b.close), volume: Number(b.volume) });
   const invested = (baseline?.positions ?? []).reduce((sum, p) => sum + p.valueEur, 0);
   const portfolio: JudgeInput["portfolio"] = baseline ? { asOf: baseline.asOf, source: baseline.source, currency: "EUR", cashEur: baseline.cashEur, monthlyContributionEur: baseline.monthlyContributionEur ?? null, investedEur: round(invested), positions: baseline.positions.map((p) => ({ symbol: p.symbol, valueEur: p.valueEur })) } : null;
-  const symbols = picked.map((r) => shapeSymbol(r, consensus.rows.filter((c) => c.symbol === r.ticker), baseline, invested, computeTechnicals(bars.get(r.ticker) ?? [], bars.get(BENCH_SPY) ?? null), displayUrls, primaryFor(r.ticker)));
+  const symbols = picked.map((r) => shapeSymbol(r, consensus.rows.filter((c) => c.symbol === r.ticker), baseline, invested, computeTechnicals(bars.get(r.ticker) ?? [], bars.get(BENCH_SPY) ?? null), displayUrls, primaryFor(r.ticker), researchFacts.get(r.ticker) ?? []));
   return {
     asOf, generatedAt: now.toISOString(), ruleConfigVersion: SIGNAL_RULES.version, benchmark: BENCHMARK, portfolio, symbols,
     signals: signalsFor(symbols, portfolio),

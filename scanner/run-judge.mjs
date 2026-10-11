@@ -177,6 +177,9 @@ export function inventedFigures(texts, inputValue) {
   }
   return [...new Set(bad)];
 }
+export function figureInput(item) {
+  return { ...item, context: { ...item.context, researchFacts: (item.context?.researchFacts ?? []).map((fact) => ({ quote: fact.quote, date: fact.date })) } };
+}
 export const wording = (i) => [i.verdict, ...i.whatHappened, ...i.whyItMatters, ...i.numbers.flatMap((n) => [n.label, n.value]), ...i.evidence.map((e) => e.label), i.plan.trigger, i.plan.invalidation, i.plan.opportunityCost, i.downgrade?.reason, i.conflict?.reason].filter(Boolean);
 
 // ---------- fixed decisions plus wording ----------
@@ -237,7 +240,7 @@ export function slovakRawCode(texts) {
 function mergeOne(idea, sig, modelInput, notes) {
   {
     const item = modelInput.items.find((i) => i.signal.symbol === idea.symbol);
-    const urls = new Set((item?.context?.evidence ?? []).map((e) => e.url));
+    const urls = new Set([...(item?.context?.evidence ?? []), ...(item?.context?.researchFacts ?? [])].map((e) => e.url));
     const bad = idea.evidence.filter((e) => !urls.has(e.url));
     if (bad.length) throw new Error(`${idea.symbol}: evidence url not in the input: ${bad[0].url}`);
     if (new Set(idea.evidence.map((e) => e.url)).size !== idea.evidence.length) throw new Error(`${idea.symbol}: duplicate evidence url`);
@@ -251,7 +254,7 @@ function mergeOne(idea, sig, modelInput, notes) {
     if (idea.evidence.length < 2 && !NO_EVIDENCE_OK.includes(sig.action)) throw new Error(`${idea.symbol}: fewer than two evidence links for ${sig.action}`);
     for (const k of ["downgrade", "conflict"]) if (idea[k] && !urls.has(idea[k].evidenceUrl)) throw new Error(`${idea.symbol}: ${k} cites a url not in the input`);
     // English is the canonical text: every figure in it must come from the input. Slovak is checked to carry exactly the same figures as English below, so label forms like 52-týždňový or 60 dní need no separate rule.
-    const figures = inventedFigures(wording(idea), { item });
+    const figures = inventedFigures(wording(idea), { item: figureInput(item) });
     if (figures.length) throw new Error(`${idea.symbol}: figures not in the input: ${figures.slice(0, 5).join(", ")} (${figureContext(wording(idea), figures[0])})`);
     const publicWording = [...wording(idea), ...wording({ ...idea.sk, downgrade: { reason: idea.sk.downgradeReason }, conflict: { reason: idea.sk.conflictReason } })].join(" ");
     if (/\b(?:you should buy|you should sell|buy now|sell now|guaranteed return|price target|mal by si kúpiť|mal by si predať|kúp teraz|predaj teraz|garantovan\w* výnos|cieľov\w* cen\w*)\b/i.test(publicWording)) throw new Error(`${idea.symbol}: ADR-001 wording is not informational`);
@@ -312,7 +315,7 @@ export function agentModeArgs(o) {
 export function writeAgentFiles(dir, input, modelInput) {
   const items = modelInput.items;
   const files = {
-    "facts.json": items.map((i) => ({ symbol: i.signal.symbol, score: i.context?.score, fields: i.context?.fields, expiredFields: i.context?.expiredFields, evidence: i.context?.evidence })),
+    "facts.json": items.map((i) => ({ symbol: i.signal.symbol, score: i.context?.score, fields: i.context?.fields, expiredFields: i.context?.expiredFields, evidence: i.context?.evidence, researchFacts: i.context?.researchFacts })),
     "technicals.json": items.map((i) => ({ symbol: i.signal.symbol, technicals: i.context?.technicals ?? null })),
     "ideas-history.json": (input.previousIdeas ?? []).map((p) => ({ symbol: p.symbol, asOf: p.asOf, action: p.action, setup: p.setup, sizeTier: p.sizeTier ?? null })),
     "signals.json": items.map((i) => i.signal),

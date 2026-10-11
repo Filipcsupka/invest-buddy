@@ -109,6 +109,10 @@ export async function buildBundle(pool: pg.Pool, symbol: string, days = MAX_WIND
   const docs = await pool.query<{ id: string; url: string; source: string; doc_type: string; published_at: Date; meta: unknown; body: string }>(
     `SELECT id::text, url, source, doc_type, published_at, meta, body FROM source_documents
      WHERE (symbol = $1 OR (source IN ('rss', 'gdelt') AND meta->'symbols' ? $1)) AND published_at >= $2::date AND published_at < ($3::date + 1) AND expires_at > now()
+       AND (doc_type <> 'research_page' OR EXISTS (SELECT 1 FROM research_findings f,
+         LATERAL jsonb_array_elements(f.evidence) AS item(value) WHERE f.symbol=source_documents.symbol
+         AND (item.value->>'documentId')::bigint=source_documents.id AND item.value->>'status'='verified'
+         AND f.verification_status='verified' AND NOT f.lead))
      ORDER BY published_at DESC, id LIMIT 200`, [symbol, since, asOf]);
   const facts = await pool.query<{ fact_key: string; as_of: string; value: unknown; document_ids: string[] }>(
     `SELECT fact_key, as_of::text AS as_of, value, document_ids::text[] AS document_ids FROM collected_facts
