@@ -41,6 +41,13 @@ async function Methodology({ params }: LocaleParams) {
         <p className="prose">{m.methodology.historyBody}</p>
       </section>
 
+      <section aria-labelledby="source-labels">
+        <h2 id="source-labels">{m.sources.legendTitle}</h2>
+        <ul className="prose">
+          {([m.sources.legendComputed, m.sources.legendSec, m.sources.legendTwo, m.sources.legendChecked, m.sources.legendSingle, m.sources.legendUnknown]).map((line) => <li key={line}>{line}</li>)}
+        </ul>
+      </section>
+
       <section aria-labelledby="data">
         <h2 id="data">{m.methodology.dataTitle}</h2>
         <p className="prose">{process.env.DATA_MODE === "fixture" ? m.methodology.dataBody : m.methodology.dataBodyLive}</p>

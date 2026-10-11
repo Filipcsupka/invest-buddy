@@ -17,3 +17,9 @@ it.each(["en", "sk"])("renders informational pages without sample stamps in db m
     }
   } finally { process.env.DATA_MODE = original; }
 });
+
+it.each([["en", "One reading (model) checked against the quote"], ["sk", "Jedno čítanie (model) overené voči citátu"]])("methodology has the source label legend (%s)", async (locale, text) => {
+  const html = renderToStaticMarkup(await Methodology(props(locale)));
+  expect(html).toContain('id="source-labels"');
+  expect(html).toContain(text);
+});

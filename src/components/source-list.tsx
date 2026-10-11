@@ -1,5 +1,5 @@
 import { getMessages, type Locale } from "../i18n";
-import type { SourceLink } from "./view-model";
+import type { SourceLink, SourceNote } from "./view-model";
 
 /** Where a flag comes from. A link only when the view model gave an https href; third-party data is a plain text label. No sources: "No source yet", muted; `emptyNote` adds what is missing for the catalyst rule. */
 export function SourceList({ locale, items, prefix = true, emptyNote }: { locale: Locale; items: SourceLink[]; prefix?: boolean; emptyNote?: boolean }) {
@@ -19,6 +19,21 @@ export function SourceList({ locale, items, prefix = true, emptyNote }: { locale
             <span>{s.label}{s.date && s.dateLabel ? <> <time dateTime={s.date}>{s.dateLabel}</time></> : null}</span>
           )}
           {i < items.length - 1 ? "; " : ""}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+/** Plain-language source note under a rule row; the link goes to the methodology or the ticker's insider filings. */
+export function SourceNotes({ notes }: { notes: SourceNote[] }) {
+  if (!notes.length) return null;
+  return (
+    <span className="src src-note">
+      {notes.map((n, i) => (
+        <span key={n.key} className="src-item">
+          {n.text}{n.href && n.linkLabel ? <> · <a href={n.href}>{n.linkLabel}</a></> : null}
+          {i < notes.length - 1 ? "; " : ""}
         </span>
       ))}
     </span>
