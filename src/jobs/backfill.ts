@@ -184,6 +184,11 @@ async function main() {
         registerBackfillJob("macro-fred", () => createMacroFredBackfillJob(new PostgresCollectorRepository(pool), key));
       } else registerBackfillJob("macro-treasury", () => createMacroTreasuryBackfillJob(new PostgresCollectorRepository(pool)));
     }
+    if (args.job === "filings") {
+      const { createFilingsBackfillJob, guardFilingsBackfill } = await import("./filings");
+      guardFilingsBackfill();
+      registerBackfillJob("filings", () => createFilingsBackfillJob(pool));
+    }
     const factory = registry.get(args.job);
     if (!factory) throw new Error(`Unknown backfill job: ${args.job}. Registered: ${registeredBackfillJobs().join(", ") || "none"}`);
     const result = await runBackfill(factory(), new PostgresBackfillStore(pool), new PostgresUsageLedger(pool), { only: args.only, maxRequests: args.maxRequests, dryRun: args.dryRun });

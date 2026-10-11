@@ -1,6 +1,7 @@
 import type pg from "pg";
 import type { CollectedDocument } from "../collectors/types";
-import type { Form4Transaction } from "../collectors/edgar";
+import type { Form4Transaction, FilingFile } from "../collectors/edgar";
+import { archiveFiling } from "../data/filing-archive";
 import type { HolderEvent } from "../collectors/sources/common";
 import type { MacroObservation } from "../collectors/macro-observations";
 import { insertMacroObservations, insertMemoryMacroObservations } from "./macro-observations";
@@ -30,6 +31,8 @@ export interface SourceState {
 export interface CollectorRepository extends SourceState {
   upsertDocument(doc: CollectedDocument): Promise<{ id: number; written: boolean }>;
   upsertInsiderTransactions?(accession: string, ticker: string, filedAt: string, rows: Form4Transaction[]): Promise<void>;
+  /** Archives the full filing text (D19). Absent on stores that do not keep it. */
+  archiveFiling?(file: FilingFile): Promise<unknown>;
   upsertHolderEvent?(event: HolderEvent): Promise<boolean>;
   /** Stores macro observations (D24). Returns the rows written; an unchanged value is not written again. */
   upsertMacroObservations?(rows: MacroObservation[]): Promise<number>;
@@ -137,6 +140,7 @@ export class PostgresCollectorRepository implements CollectorRepository {
     const docs = net.accessions.length ? await this.pool.query<{ id: string }>("SELECT id FROM source_documents WHERE symbol=$1 AND doc_type='4' AND meta->>'accession' = ANY($2::text[]) ORDER BY id", [symbol, net.accessions]) : { rows: [] };
     return { ...net, documentIds: docs.rows.map((row) => Number(row.id)) };
   }
+  archiveFiling(file: FilingFile) { return archiveFiling(this.pool, file); }
   async upsertDocument(doc: CollectedDocument) {
     const sourceId = doc.sourceId ?? sourceIdFor(doc.source);
     const prior = await this.pool.query<{ content_hash: string }>("SELECT content_hash FROM source_documents WHERE url=$1", [doc.url]);

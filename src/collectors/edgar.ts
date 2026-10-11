@@ -127,34 +127,46 @@ export function earningsExhibitNames(names: string[], primary: string, items: st
   return names.filter((name) => /\.html?$/i.test(name) && name !== primary && !/^R\d+\.htm$/i.test(name) && !/index|filingsummary|metalinks/i.test(name)).slice(0, 2);
 }
 
-export async function collectEdgar(symbol: string, cik: number, since: string, get: Get = getText, form4Since = since): Promise<CollectedDocument[]> {
+/** One archived file of a filing (primary document or exhibit), full body as fetched. Form 4 is not archived here (D20). */
+export interface FilingFile {
+  ticker: string; cik: number; accession: string; form: string; docType: string; name: string; url: string; filedAt: string; items: string; body: string;
+}
+export type FilingArchive = (file: FilingFile) => Promise<unknown>;
+type IndexItem = { name: string; type?: string };
+
+/** The 8-K exhibits worth keeping, from the filing's index.json items. Same choice the daily collector makes. */
+export function eightKExhibits(items: IndexItem[], primary: string, itemCodes: string): { name: string; docType: string }[] {
+  const exhibit = items.find((item) => /EX-99\.1/i.test(item.type ?? "") || /(?:ex|exhibit)[-_]?99[.-]?1/i.test(item.name));
+  if (exhibit) return exhibit.name !== primary ? [{ name: exhibit.name, docType: "8-K EX-99.1" }] : [];
+  // Many filers (NVDA: q2fy27pr.htm, q2fy27cfocommentary.htm) name the exhibit freely and index.json gives no form type.
+  return earningsExhibitNames(items.map((item) => item.name), primary, itemCodes)
+    .map((name) => ({ name, docType: /pr|press|release/i.test(name) ? "8-K EX-99.1" : "8-K EX-99.2" }));
+}
+
+export const filingBase = (cik: number, accession: string) => `https://www.sec.gov/Archives/edgar/data/${cik}/${accession.replace(/-/g, "")}/`;
+
+export async function collectEdgar(symbol: string, cik: number, since: string, get: Get = getText, form4Since = since, archive?: FilingArchive): Promise<CollectedDocument[]> {
   if (!Number.isSafeInteger(cik) || cik <= 0) throw new Error(`Invalid CIK for ${symbol}`);
   const submissions = JSON.parse(await get(`https://data.sec.gov/submissions/CIK${String(cik).padStart(10, "0")}.json`)) as { filings: { recent: Recent } };
   const docs: CollectedDocument[] = [];
   for (const row of filingRows(submissions.filings.recent, since, form4Since)) {
-    const base = `https://www.sec.gov/Archives/edgar/data/${cik}/${row.accession.replace(/-/g, "")}/`;
+    const base = filingBase(cik, row.accession);
     const file = row.form === "4" ? form4RawPath(row.primary) : row.primary;
     const url = filingUrl(base, file);
     const raw = await get(url);
     const meta: Record<string, unknown> = { accession: row.accession, items: row.items };
     if (row.form === "4") { meta.trades = parseForm4(raw); meta.ownerCik = form4OwnerCik(raw); meta.transactions = parseForm4Transactions(raw); }
+    else await archive?.({ ticker: symbol, cik, accession: row.accession, form: row.form, docType: row.form, name: row.primary, url, filedAt: row.date, items: row.items, body: raw });
     docs.push(sourceDocument({ source: "edgar", symbol, docType: row.form,
       url, publishedAt: `${row.date}T00:00:00Z`, body: raw, meta }, LICENSES.sec));
     if (row.form === "8-K" || row.form === "8-K/A") {
-      const index = JSON.parse(await get(`${base}index.json`)) as { directory?: { item?: { name: string; type?: string }[] } };
-      const items = index.directory?.item ?? [];
-      const exhibit = items.find((item) => /EX-99\.1/i.test(item.type ?? "") || /(?:ex|exhibit)[-_]?99[.-]?1/i.test(item.name));
-      if (exhibit && exhibit.name !== row.primary) {
+      const index = JSON.parse(await get(`${base}index.json`)) as { directory?: { item?: IndexItem[] } };
+      for (const exhibit of eightKExhibits(index.directory?.item ?? [], row.primary, row.items)) {
         const exhibitUrl = filingUrl(base, exhibit.name);
-        docs.push(sourceDocument({ source: "edgar", symbol, docType: "8-K EX-99.1", url: exhibitUrl,
-          publishedAt: `${row.date}T00:00:00Z`, body: await get(exhibitUrl), meta }, LICENSES.sec));
-      } else if (!exhibit) {
-        // Many filers (NVDA: q2fy27pr.htm, q2fy27cfocommentary.htm) name the exhibit freely and index.json gives no form type.
-        for (const name of earningsExhibitNames(items.map((item) => item.name), row.primary, row.items)) {
-          const exhibitUrl = filingUrl(base, name);
-          docs.push(sourceDocument({ source: "edgar", symbol, docType: /pr|press|release/i.test(name) ? "8-K EX-99.1" : "8-K EX-99.2", url: exhibitUrl,
-            publishedAt: `${row.date}T00:00:00Z`, body: await get(exhibitUrl), meta }, LICENSES.sec));
-        }
+        const body = await get(exhibitUrl);
+        await archive?.({ ticker: symbol, cik, accession: row.accession, form: row.form, docType: exhibit.docType, name: exhibit.name, url: exhibitUrl, filedAt: row.date, items: row.items, body });
+        docs.push(sourceDocument({ source: "edgar", symbol, docType: exhibit.docType, url: exhibitUrl,
+          publishedAt: `${row.date}T00:00:00Z`, body, meta }, LICENSES.sec));
       }
     }
   }
