@@ -1,4 +1,5 @@
 import pg from "pg";
+import { PostgresCollectorRepository } from "../db/collectors";
 import { CapReached, PostgresUsageLedger, type UsageLedger } from "../data/usage";
 import { runLoggedJob } from "./job-log";
 
@@ -174,6 +175,14 @@ async function main() {
       const { createForm4BackfillJob, guardForm4Backfill } = await import("./form4");
       guardForm4Backfill();
       registerBackfillJob("form4", () => createForm4BackfillJob(pool));
+    }
+    if (args.job === "macro-fred" || args.job === "macro-treasury") {
+      const { createMacroFredBackfillJob, createMacroTreasuryBackfillJob } = await import("./macro-observations");
+      if (args.job === "macro-fred") {
+        if (!process.env.FRED_API_KEY) throw new Error("FRED_API_KEY is required for macro-fred");
+        const key = process.env.FRED_API_KEY;
+        registerBackfillJob("macro-fred", () => createMacroFredBackfillJob(new PostgresCollectorRepository(pool), key));
+      } else registerBackfillJob("macro-treasury", () => createMacroTreasuryBackfillJob(new PostgresCollectorRepository(pool)));
     }
     const factory = registry.get(args.job);
     if (!factory) throw new Error(`Unknown backfill job: ${args.job}. Registered: ${registeredBackfillJobs().join(", ") || "none"}`);

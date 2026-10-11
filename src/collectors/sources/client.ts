@@ -42,6 +42,7 @@ export const SOURCE_HOSTS: readonly string[] = [
   "api.fiscaldata.treasury.gov", "api.bls.gov", "news.google.com", "api.gdeltproject.org",
   "cdn.cboe.com", "cdn-api.cboe.com", // VIX file redirects from the first to the second
   "www.alphavantage.co",
+  "home.treasury.gov", // D24 daily par yield curve CSV
 ];
 
 /** Minimum gap between two requests to a host. Documented limits are in the comments. */
@@ -55,6 +56,7 @@ export const MIN_INTERVAL_MS: Record<string, number> = {
   "api.usaspending.gov": 700,
   "api.fiscaldata.treasury.gov": 300,
   "www.federalreserve.gov": 500,
+  "home.treasury.gov": 500,
   "cdn.cboe.com": 500,
   "cdn-api.cboe.com": 500,
   "www.alphavantage.co": 12_000, // free key: 25 requests per day; the source caps itself at 20. Five per minute keeps clear of any burst limit.

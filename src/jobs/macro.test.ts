@@ -17,6 +17,7 @@ const tickers = (universe.instruments as { symbol: string }[]).map((item) => ite
 const day = (offset: number) => new Date(Date.parse(`${ASOF}T00:00:00Z`) - offset * 86_400_000).toISOString().slice(0, 10);
 const fredJson = (slope: number) => JSON.stringify({ observations: Array.from({ length: 40 }, (_, i) => ({ date: day(i), value: (4.2 + i * slope).toFixed(2) })).concat([{ date: day(41), value: "." }]) });
 const vixCsv = (close: number) => `DATE,OPEN,HIGH,LOW,CLOSE\n${[5, 4, 3, 2, 1, 0].map((i) => `${day(i).slice(5, 7)}/${day(i).slice(8)}/${day(i).slice(0, 4)},17,19,16,${close}`).join("\n")}\n`;
+const tsyCsv = () => `Date,"3 Mo","2 Yr","10 Yr"\n${day(0).slice(5, 7)}/${day(0).slice(8)}/${day(0).slice(0, 4)},4.2,4.5,4.3\n`;
 const bars = (n: number, first: number, end: number) => Array.from({ length: n }, (_, i) => ({ date: day(n - 1 - i), close: first + ((end - first) * i) / (n - 1) }));
 const inputs = (over: Partial<MacroInputs> = {}): MacroInputs => ({
   yields: bars(30, 4.4, 4.2).map((b) => ({ date: b.date, value: b.close })), yieldUrl: "https://fred.stlouisfed.org/series/DGS10",
@@ -74,12 +75,13 @@ describe("macro inputs", () => {
   });
   it("fetches four documents, and reports a missing key or a failing source without throwing", async () => {
     const repository = new MemoryCollectorRepository();
-    const http = stubHttp(() => vixCsv(18.5));
+    const http = stubHttp((call) => call.url.includes("treasury.gov") ? tsyCsv() : vixCsv(18.5));
     expect(await fetchMacroInputs(repository, { http, env: { FRED_API_KEY: "k" }, get: async () => fredJson(0.01), now: new Date(`${ASOF}T10:00:00Z`) })).toEqual([]);
     expect([...repository.documents.keys()].sort()).toEqual(["https://fred.stlouisfed.org/series/DGS10", "https://fred.stlouisfed.org/series/CPIAUCSL", "https://fred.stlouisfed.org/series/PPIACO", VIX_DOC_URL].sort());
     expect(repository.documents.get(VIX_DOC_URL)?.meta.display_allowed).toBe(false);
+    expect(new Set(repository.macroObservations.map((row) => row.seriesId))).toEqual(new Set(["DGS2", "DGS10", "DGS3MO", "T10Y2Y", "FEDFUNDS", "CPIAUCSL", "PPIACO", "TSY_3M", "TSY_2Y", "TSY_10Y"]));
     const missing = await fetchMacroInputs(new MemoryCollectorRepository(), { http: stubHttp(() => { throw new Error("down"); }), env: {}, now: new Date(`${ASOF}T10:00:00Z`) });
-    expect(missing).toEqual(["fred: FRED_API_KEY absent", "vix: down"]);
+    expect(missing).toEqual(["fred: FRED_API_KEY absent", "treasury curve: down", "vix: down"]);
   });
 });
 
