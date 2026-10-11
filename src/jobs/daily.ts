@@ -8,6 +8,7 @@ import type { ScoreRepository, ScoredInstrument, SaveOutcome } from "../db/types
 import { PostgresScoreRepository } from "../db/postgres";
 import { MemoryScoreRepository } from "../db/memory";
 import { DatabaseUniverseProvider } from "../data/db-provider";
+import { SCORE_RULES_VERSION } from "../engine/score";
 
 function validDate(value: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00Z`)) && new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value;
@@ -28,7 +29,7 @@ export async function runDaily(provider: UniverseProvider, repository: ScoreRepo
     const throughDate = bars.filter((bar) => bar.date <= date);
     const result = scoreAsOf({ ticker: instrument.ticker, bars, fundamentals, macro }, date);
     const origin = provider instanceof DatabaseUniverseProvider ? provider.provenance.get(instrument.ticker) : undefined;
-    const fingerprint = createHash("sha256").update(JSON.stringify({ consensus: origin?.fingerprintRows ?? { fundamentals, macro }, sources: origin?.sources ?? null, latestBarDate: throughDate.at(-1)?.date ?? null, bars: throughDate })).digest("hex");
+    const fingerprint = createHash("sha256").update(JSON.stringify({ consensus: origin?.fingerprintRows ?? { fundamentals, macro }, sources: origin?.sources ?? null, latestBarDate: throughDate.at(-1)?.date ?? null, bars: throughDate, rules: SCORE_RULES_VERSION })).digest("hex");
     return { instrument, fingerprint, consensusRows: origin?.fingerprintRows, result: { ...result, ...(origin ? { scanRunId: Object.values(origin.runIds)[0], scanRunIds: origin.runIds, agreement: origin.agreement, consensusValues: origin.consensusValues, evidenceUrls: origin.evidenceUrls, sources: origin.sources, ...(origin.carriedFrom ? { carriedFrom: origin.carriedFrom, expiredFields: origin.expiredFields ?? [] } : {}) } : {}) } };
   });
   return repository.saveDaily(date, providerName, records);
