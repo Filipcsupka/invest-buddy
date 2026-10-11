@@ -1,8 +1,11 @@
 import { ruleGroups, type RuleId, type StateKey } from "../i18n/rules";
+import { hasEvidence, POINTS_MAX, relativeScore, RELATIVE_RULES } from "./relative";
 
 /**
  * One status per ticker for the web and Telegram. Pure: no I/O, no flags read here.
- * The caller passes `adviceOutput` (the ADVICE_OUTPUT flag). Thresholds stay in score.ts.
+ * The caller passes `adviceOutput` (the ADVICE_OUTPUT flag). Thresholds live in relative.ts.
+ * The band follows the state, which score.ts sets with the relative rule (EN45): the share of evidenced points, with the
+ * coverage guard capping a ticker under 20 evidenced points at Watch. The view adds that share and the guard flag.
  */
 
 export type StatusBand = "red" | "orange" | "yellow" | "blue" | "green" | "gray";
@@ -11,7 +14,7 @@ export type ConfirmationId = "insider" | "epsBeat" | "guidanceRaised" | "catalys
 /** "met", "not-met" or "no-data". Missing data is never "not-met". */
 export type ConfirmationState = "met" | "not-met" | "no-data";
 
-export const POINTS_MAX = 25;
+export { POINTS_MAX };
 
 /** Dictionary keys, resolved with the locale messages (`status.*`). */
 export type StatusLabelKey = `status.labels.${StateKey}` | "status.advice.setup";
@@ -44,10 +47,12 @@ export interface StatusInput {
 export interface StatusConfirmation { id: ConfirmationId; labelKey: ConfirmationLabelKey; state: ConfirmationState }
 
 export interface StatusCoverage {
-  /** Sum of the weights of rules that had data. */
+  /** Sum of the weights of rules that had data: the evidenced maximum. */
   pointsKnown: number;
   pointsMax: typeof POINTS_MAX;
   unknownRules: RuleId[];
+  /** pointsKnown is under the coverage guard (20 of 25), so the best band is Watch. */
+  incomplete: boolean;
 }
 
 export interface StatusView {
@@ -61,6 +66,10 @@ export interface StatusView {
   /** Placeholders for the headline. `points` is null when no score exists. */
   headlineParams: { points: number | null; max: typeof POINTS_MAX };
   points: number | null;
+  /** Points as a share of the evidenced maximum, in percent with one decimal. null when no score exists or criteria broke. */
+  percent: number | null;
+  /** A scored ticker under the coverage guard: show "incomplete data". */
+  incompleteData: boolean;
   confirmations: StatusConfirmation[];
   coverage: StatusCoverage;
 }
@@ -93,10 +102,10 @@ export function coverage(ruleHits: StatusInput["ruleHits"]): StatusCoverage {
   let pointsKnown = 0;
   for (const rule of allRules) {
     const hit = byId.get(rule.id);
-    if (!hit || hit.unknown === true) unknownRules.push(rule.id);
+    if (!hit || !hasEvidence(hit)) unknownRules.push(rule.id);
     else pointsKnown += rule.points;
   }
-  return { pointsKnown, pointsMax: POINTS_MAX, unknownRules };
+  return { pointsKnown, pointsMax: POINTS_MAX, unknownRules, incomplete: pointsKnown < RELATIVE_RULES.minEvidencedPoints };
 }
 
 function confirmationState(value: boolean | null | undefined, hit: StatusRuleHit | undefined): ConfirmationState {
@@ -113,6 +122,8 @@ export function statusView(input: StatusInput): StatusView {
   const byId = new Map((input.ruleHits ?? []).map((hit) => [hit.id, hit]));
   const signals = input.signals ?? {};
   const advice = input.adviceOutput && state === "setup";
+  const cover = coverage(input.ruleHits);
+  const counted = points !== null && state !== "broken";
   return {
     state, band, position,
     colorToken: `status-${band}`,
@@ -120,11 +131,13 @@ export function statusView(input: StatusInput): StatusView {
     headlineKey: advice ? "status.headlineAdvice.setup" : `status.headline.${state}`,
     headlineParams: { points, max: POINTS_MAX },
     points,
+    percent: counted ? relativeScore(points, cover.pointsKnown).percent : null,
+    incompleteData: state !== "insufficient" && state !== "broken" && cover.incomplete,
     confirmations: chips.map((chip) => ({
       id: chip.id,
       labelKey: `status.confirmations.${chip.id}` as ConfirmationLabelKey,
       state: confirmationState(signals[chip.signal], chip.rule ? byId.get(chip.rule) : undefined),
     })),
-    coverage: coverage(input.ruleHits),
+    coverage: cover,
   };
 }

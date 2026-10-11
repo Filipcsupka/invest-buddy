@@ -18,7 +18,7 @@ export interface GoldenExpected {
 }
 export interface GoldenSymbol {
   symbol: string;
-  score: { total: number; technical: number; fundamentals: number; macro: number; state: string };
+  score: { total: number; technical: number; fundamentals: number; macro: number; state: string; evidencedMax?: number };
   matchedRules: string[];
   fields: Record<string, SignalField>;
   expiredFields: string[];
@@ -36,14 +36,15 @@ export interface GoldenFixture {
 /** The part of a judge-input symbol the golden fixture keeps. Structural, so the route output and test data both fit. */
 export interface GoldenSource {
   symbol: string;
-  score: { total: number; technical: number; fundamentals: number; macro: number; state: string };
+  score: { total: number; technical: number; fundamentals: number; macro: number; state: string; evidencedMax?: number };
   matchedRules: string[];
   fields: Record<string, { value: boolean | null; agreement: string; verified: boolean; carriedFrom: string | null }>;
   expiredFields: string[];
   technicals: Technicals | null;
 }
 
-export const goldenInput = (s: GoldenSymbol): SignalSymbolInput => ({ symbol: s.symbol, held: null, score: { total: s.score.total, state: s.score.state }, fields: s.fields, expiredFields: s.expiredFields, technicals: s.technicals });
+/** evidencedMax (EN45) is passed only when the fixture has it; without it all 25 points count. */
+export const goldenInput = (s: GoldenSymbol): SignalSymbolInput => ({ symbol: s.symbol, held: null, score: { total: s.score.total, state: s.score.state, ...(typeof s.score.evidencedMax === "number" ? { evidencedMax: s.score.evidencedMax } : {}) }, fields: s.fields, expiredFields: s.expiredFields, technicals: s.technicals });
 
 export const expectedFrom = (s: Signal): GoldenExpected => ({
   action: s.action, sizeTier: s.sizeTier, ratings: s.ratings, points: s.points, unconfirmed: s.unconfirmed,
@@ -54,7 +55,7 @@ export const expectedFrom = (s: Signal): GoldenExpected => ({
 export function buildGolden(sources: GoldenSource[], asOf: string, description: string): GoldenFixture {
   const symbols: GoldenSymbol[] = [...sources].sort((a, b) => a.symbol.localeCompare(b.symbol)).map((s) => ({
     symbol: s.symbol,
-    score: { total: s.score.total, technical: s.score.technical, fundamentals: s.score.fundamentals, macro: s.score.macro, state: s.score.state },
+    score: { total: s.score.total, technical: s.score.technical, fundamentals: s.score.fundamentals, macro: s.score.macro, state: s.score.state, ...(typeof s.score.evidencedMax === "number" ? { evidencedMax: s.score.evidencedMax } : {}) },
     matchedRules: [...s.matchedRules],
     fields: Object.fromEntries(Object.entries(s.fields).sort(([a], [b]) => a.localeCompare(b)).map(([k, f]) => [k, { value: f.value, agreement: f.agreement, verified: f.verified, carriedFrom: f.carriedFrom }])),
     expiredFields: [...s.expiredFields].sort(),

@@ -79,8 +79,13 @@ describe("statusView", () => {
   describe("coverage", () => {
     it("counts all 25 points when every rule has data", () => {
       const view = statusView({ state: "wait", points: 13, ruleHits: known(), adviceOutput: false });
-      expect(view.coverage).toEqual({ pointsKnown: 25, pointsMax: 25, unknownRules: [] });
+      expect(view.coverage).toEqual({ pointsKnown: 25, pointsMax: 25, unknownRules: [], incomplete: false });
       expect(POINTS_MAX).toBe(25);
+    });
+
+    it("counts a matched rule as data even when a flag marks it unknown", () => {
+      const hits = known(["revenue-acceleration"]).map((h) => (h.id === "revenue-acceleration" ? { ...h, unknown: true } : h));
+      expect(statusView({ state: "wait", points: 4, ruleHits: hits, adviceOutput: false }).coverage.pointsKnown).toBe(25);
     });
 
     it("never counts an unknown rule as known points", () => {
@@ -107,6 +112,41 @@ describe("statusView", () => {
     it("keeps a known unmatched rule as known (0 points earned, still data)", () => {
       const view = statusView({ state: "ignore", points: 0, ruleHits: known(), adviceOutput: false });
       expect(view.coverage.pointsKnown).toBe(25);
+    });
+  });
+
+  describe("relative scoring", () => {
+    const withUnknown = (unknown: string[], matched: string[] = []) => known(matched).map((h) => (unknown.includes(h.id) ? { ...h, matched: false, unknown: true } : h));
+
+    it("gives the share of evidenced points", () => {
+      // catalyst (2) and macro-data (3) unknown: 20 evidenced points, 15 of them is 75%.
+      const view = statusView({ state: "setup", points: 15, ruleHits: withUnknown(["catalyst", "macro-data"]), adviceOutput: false });
+      expect(view.coverage.pointsKnown).toBe(20);
+      expect(view.percent).toBe(75);
+      expect(view.incompleteData).toBe(false);
+      expect(view.band).toBe("green");
+    });
+
+    it("flags incomplete data under 20 evidenced points", () => {
+      // revenue-acceleration (4) and earnings (3) unknown: 18 evidenced points.
+      const view = statusView({ state: "watch", points: 15, ruleHits: withUnknown(["revenue-acceleration", "earnings"]), adviceOutput: false });
+      expect(view.coverage).toMatchObject({ pointsKnown: 18, incomplete: true });
+      expect(view.incompleteData).toBe(true);
+      expect(view.percent).toBe(83.3);
+    });
+
+    it("does not flag broken or insufficient as incomplete and gives them no share", () => {
+      for (const state of ["broken", "insufficient"] as const) {
+        const view = statusView({ state, points: 10, ruleHits: withUnknown(["revenue-acceleration", "earnings"]), adviceOutput: false });
+        expect(view.incompleteData).toBe(false);
+        expect(view.percent).toBeNull();
+      }
+    });
+
+    it("matches the absolute share on a fully evidenced ticker", () => {
+      expect(statusView({ state: "setup", points: 18, ruleHits: known(), adviceOutput: false }).percent).toBe(72);
+      expect(statusView({ state: "watch", points: 15, ruleHits: known(), adviceOutput: false }).percent).toBe(60);
+      expect(statusView({ state: "wait", points: 12, ruleHits: known(), adviceOutput: false }).percent).toBe(48);
     });
   });
 
@@ -170,5 +210,7 @@ describe("statusView", () => {
     expect(view.state).toBe(key);
     const weight = (id: string) => ruleGroups.flatMap((g) => g.rules).find((r) => r.id === id)?.points ?? 0;
     expect(view.coverage.pointsKnown + view.coverage.unknownRules.reduce((sum, id) => sum + weight(id), 0)).toBe(25);
+    expect(view.coverage.pointsKnown).toBe(result.evidencedMax);
+    expect(view.incompleteData).toBe(key !== "broken" && key !== "insufficient" && result.incompleteData === true);
   });
 });

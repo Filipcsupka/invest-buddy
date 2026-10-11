@@ -1,4 +1,5 @@
 import type { Technicals } from "../data/technicals";
+import { meetsGuidePoints, POINTS_MAX } from "./relative";
 
 /**
  * Deterministic trade signals. Code decides the action, the size tier and the three ratings; the AI judge only explains them.
@@ -14,6 +15,8 @@ import type { Technicals } from "../data/technicals";
  *  2. Held, company rating Weak and a downtrend: REDUCE. A name that is not held goes on and ends as WATCH.
  *  3. Fewer than two confirmed key fields: WATCH, insufficient evidence.
  *  4. ADD conditions: rule score at least 15, company and entry at least Good, no downtrend. START_POSITION needs 18. Not met: HOLD for a held name, WATCH otherwise.
+ *     Score thresholds are shares of the evidenced points (EN45, src/engine/relative.ts): 15 and 18 of 25 on a fully evidenced ticker.
+ *     START_POSITION and conviction also need at least 20 evidenced points. Without `score.evidencedMax` all 25 points count, as before.
  *  5. Conviction (score 18 or more, company, entry and catalyst at least Strong, a fresh confirmed EPS beat or guidance raise, no carried data):
  *       HIGH_CONVICTION_ADD, tier ADD_HALF (add about 1/2 of a full position).
  *     Good entry (entry at least Strong, or a pullback): ADD, tier ADD_THIRD (add about 1/3 of a full position).
@@ -25,13 +28,15 @@ import type { Technicals } from "../data/technicals";
  * The value stays in ACTIONS so older stored ideas still parse.
  */
 export const SIGNAL_RULES = {
-  version: "2026-10-10.1",
+  version: "2026-10-11.1",
   actionsOrder: ["HIGH_CONVICTION_ADD", "ADD", "START_POSITION"],
   /** InvestingGuide s6 and s8: START_POSITION needs 18; a score of 15 to 17 can qualify for ADD. */
   minScoreForBuy: 18,
   /** Guide section 8: an ADD alert needs score 15 or more; a BUY (START_POSITION) alert needs 18. */
   minScoreForAdd: 15,
   convictionScore: 18,
+  /** Coverage guard (EN45): START_POSITION and conviction need at least this many evidenced points of 25. */
+  minEvidencedPoints: 20,
   minConfirmedKeyFields: 2,
   keyFields: ["revenueAccelerating", "revenueDeclining", "epsBeat", "guidanceRaised", "guidanceCut", "productCatalyst"],
   companyPoints: {
@@ -82,7 +87,8 @@ export interface SignalSymbolInput {
   symbol: string;
   /** Optional context from the owner's baseline. Only relabels a non-buy outcome; never changes a buy action or tier. */
   held: { valueEur: number } | null;
-  score: { total: number; state: string };
+  /** evidencedMax: points with data out of 25 (ScoreResult.evidencedMax). Absent: all 25 count. */
+  score: { total: number; state: string; evidencedMax?: number };
   fields: Record<string, SignalField>;
   expiredFields: string[];
   technicals: Technicals | null;
@@ -177,27 +183,34 @@ export function signalFor(s: SignalSymbolInput, rules: SignalRules = SIGNAL_RULE
   }
   if (keyConfirmed.length < rules.minConfirmedKeyFields) { sig.reasons.push(`Insufficient evidence: ${keyConfirmed.length} confirmed key fields, ${rules.minConfirmedKeyFields} needed.`); return sig; }
   const setupOk = atLeast(r.ratings.company, "Good") && atLeast(r.ratings.entry, "Good") && regime !== "downtrend";
-  if (!setupOk || s.score.total < rules.minScoreForAdd) {
-    sig.reasons.push(setupOk
-      ? `Score ${s.score.total} is below the add threshold of ${rules.minScoreForAdd}.`
-      : "Buy conditions are not met.");
+  const evidenced = typeof s.score.evidencedMax === "number" && Number.isFinite(s.score.evidencedMax) ? Math.min(POINTS_MAX, Math.max(0, s.score.evidencedMax)) : POINTS_MAX;
+  const partial = evidenced < POINTS_MAX;
+  const meets = (guidePoints: number) => meetsGuidePoints(s.score.total, evidenced, guidePoints);
+  const below = (guidePoints: number, name: string) => partial
+    ? `Score ${s.score.total} of ${evidenced} evidenced points is below the ${name} share of ${guidePoints} of ${POINTS_MAX}.`
+    : `Score ${s.score.total} is below the ${name} threshold of ${guidePoints}.`;
+  const covered = evidenced >= rules.minEvidencedPoints;
+  if (!setupOk || !meets(rules.minScoreForAdd)) {
+    sig.reasons.push(setupOk ? below(rules.minScoreForAdd, "add") : "Buy conditions are not met.");
     if (s.held) sig.action = "HOLD";
     return sig;
   }
   const execution = confirmed(s, "epsBeat") === true || confirmed(s, "guidanceRaised") === true;
-  const conviction = s.score.total >= rules.convictionScore && atLeast(r.ratings.company, "Strong") && atLeast(r.ratings.entry, "Strong") && atLeast(r.ratings.catalyst, "Strong") && execution && !sig.carriedFrom;
+  const conviction = covered && meets(rules.convictionScore) && atLeast(r.ratings.company, "Strong") && atLeast(r.ratings.entry, "Strong") && atLeast(r.ratings.catalyst, "Strong") && execution && !sig.carriedFrom;
   if (conviction) { sig.action = "HIGH_CONVICTION_ADD"; sig.sizeTier = "ADD_HALF"; sig.reasons.push("Conviction conditions met."); return sig; }
   if (atLeast(r.ratings.entry, "Strong") || regime === "pullback") { sig.action = "ADD"; sig.sizeTier = "ADD_THIRD"; sig.reasons.push("Fundamentals hold and the entry is good."); return sig; }
-  if (s.score.total < rules.minScoreForBuy) {
-    sig.reasons.push(`Score ${s.score.total} is below the start threshold of ${rules.minScoreForBuy}; an add needs a strong entry or pullback.`);
+  if (!covered || !meets(rules.minScoreForBuy)) {
+    sig.reasons.push(covered
+      ? `${below(rules.minScoreForBuy, "start").slice(0, -1)}; an add needs a strong entry or pullback.`
+      : `Only ${evidenced} of ${POINTS_MAX} points have data, under the ${rules.minEvidencedPoints} needed to start; an add needs a strong entry or pullback.`);
     if (s.held) sig.action = "HOLD";
     return sig;
   }
   sig.action = "START_POSITION";
   const { full, standard } = rules.startTiers;
   if (sig.unconfirmed) { sig.sizeTier = "STARTER"; sig.reasons.push("Buy conditions met; unconfirmed or carried data keeps it to a starter."); }
-  else if (s.score.total >= full.minScore && atLeast(r.ratings.company, full.company) && atLeast(r.ratings.catalyst, full.catalyst) && execution) { sig.sizeTier = "FULL"; sig.reasons.push("Buy conditions met with very strong fundamentals and fresh execution."); }
-  else if (s.score.total >= standard.minScore && atLeast(r.ratings.company, standard.company)) { sig.sizeTier = "STANDARD"; sig.reasons.push("Buy conditions met with strong fundamentals."); }
+  else if (meets(full.minScore) && atLeast(r.ratings.company, full.company) && atLeast(r.ratings.catalyst, full.catalyst) && execution) { sig.sizeTier = "FULL"; sig.reasons.push("Buy conditions met with very strong fundamentals and fresh execution."); }
+  else if (meets(standard.minScore) && atLeast(r.ratings.company, standard.company)) { sig.sizeTier = "STANDARD"; sig.reasons.push("Buy conditions met with strong fundamentals."); }
   else { sig.sizeTier = "STARTER"; sig.reasons.push("Buy conditions met; starter position."); }
   return sig;
 }

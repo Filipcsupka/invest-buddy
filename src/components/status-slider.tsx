@@ -106,7 +106,8 @@ export function StatusCoverage({ view, m, adviceOutput }: { view: StatusView; m:
   if (view.state === "insufficient") return null;
   const { pointsKnown, unknownRules } = view.coverage;
   const full = unknownRules.length === 0;
-  const cap = !full && pointsKnown < 18 && view.state !== "broken";
+  // EN45 coverage guard: under 20 evidenced points the best band is Watch.
+  const cap = !full && view.coverage.incomplete && view.state !== "broken";
   return (
     <div className={styles.coverage} data-complete={full ? "" : undefined}>
       <p className={styles.coverageLine}>

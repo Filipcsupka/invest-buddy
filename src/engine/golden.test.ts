@@ -44,6 +44,20 @@ describe("golden fixtures", () => {
   }
 });
 
+describe("golden relative edges (EN45)", () => {
+  const rel = fixtures.find((f) => f.file === "golden-relative.json")!.data;
+  const by = (symbol: string) => rel.symbols.find((s) => s.symbol === symbol)!;
+  it("measures the add and start thresholds against the evidenced points", () => {
+    expect(by("REL13A").expected).toMatchObject({ action: "ADD", sizeTier: "ADD_THIRD" });
+    expect(by("REL13B").expected).toMatchObject({ action: "WATCH", sizeTier: "NONE" });
+    expect(by("REL15A").expected).toMatchObject({ action: "START_POSITION", sizeTier: "FULL" });
+  });
+  it("needs 20 evidenced points to start or for conviction", () => {
+    expect(by("REL15B").expected).toMatchObject({ action: "WATCH", sizeTier: "NONE" });
+    expect(by("REL18C").expected).toMatchObject({ action: "ADD", sizeTier: "ADD_THIRD" });
+  });
+});
+
 describe("golden threshold edges", () => {
   const edges = fixtures.find((f) => f.file === "golden-edges.json")!.data;
   const by = (symbol: string) => edges.symbols.find((s) => s.symbol === symbol)!;
@@ -70,7 +84,9 @@ const allKnown: Fundamentals = { revenueGrowthCurrent: 30, revenueGrowthPrior: 2
 const macroOn: Macro = { growthSectorRotation: true, dataTailwind: true };
 
 const GOLDEN_UP = { total: 23, fundamentals: 10, technical: 8, macro: 5, state: "Setup met (>=18)", matched: ["revenue-acceleration:4", "earnings:3", "catalyst:2", "accumulation:1", "above-ma:3", "uptrend:3", "green-volume:2", "rotation:2", "macro-data:3"] };
-const GOLDEN_UNKNOWN = { total: 13, state: "Wait", unknown: ["revenue-acceleration", "earnings", "catalyst", "rotation", "macro-data"] };
+// EN45: earnings (3), catalyst (2), rotation (2) and macro-data (3) have no data, so 15 points are evidenced. revenue-acceleration is flagged
+// unknown but matched from the growth figures, so it counts as evidence. 13 of 15 is 86.7%, but 15 is under the 20-point guard: Watch.
+const GOLDEN_UNKNOWN = { total: 13, state: "Watch", unknown: ["revenue-acceleration", "earnings", "catalyst", "rotation", "macro-data"], evidencedMax: 15, percent: 86.7, coverage: 60, incompleteData: true };
 const GOLDEN_DOWN = { total: 17, state: "Criteria broken", rejections: ["Long-term downtrend: close below MA200", "Long-term downtrend: MA50 below MA200"] };
 const GOLDEN_VOLUME_ONLY = { total: 18, state: "Setup met (>=18)" };
 
@@ -79,7 +95,8 @@ describe("golden score", () => {
     const up = score({ ticker: "UP", bars: bars(), fundamentals: allKnown, macro: macroOn });
     expect({ total: up.total, fundamentals: up.fundamentals, technical: up.technical, macro: up.macro, state: up.state, matched: up.ruleHits.filter((h) => h.matched).map((h) => `${h.id}:${h.points}`) }).toEqual(GOLDEN_UP);
     const unknown = score({ ticker: "UNK", bars: bars(), fundamentals: { ...allKnown, epsBeat: null, guidanceRaised: null, productCatalyst: null, insiderOrInstitutionalAccumulation: null, revenueAccelerating: null }, macro: { growthSectorRotation: null, dataTailwind: null } });
-    expect({ total: unknown.total, state: unknown.state, unknown: unknown.ruleHits.filter((h) => h.unknown).map((h) => h.id) }).toEqual(GOLDEN_UNKNOWN);
+    expect({ total: unknown.total, state: unknown.state, unknown: unknown.ruleHits.filter((h) => h.unknown).map((h) => h.id), evidencedMax: unknown.evidencedMax, percent: unknown.percent, coverage: unknown.coverage, incompleteData: unknown.incompleteData }).toEqual(GOLDEN_UNKNOWN);
+    expect({ evidencedMax: up.evidencedMax, percent: up.percent, coverage: up.coverage, incompleteData: up.incompleteData }).toEqual({ evidencedMax: 25, percent: 92, coverage: 100, incompleteData: false });
     const down = score({ ticker: "DN", bars: bars(260, -0.3), fundamentals: allKnown, macro: macroOn });
     expect({ total: down.total, state: down.state, rejections: down.rejectionReasons }).toEqual(GOLDEN_DOWN);
   });

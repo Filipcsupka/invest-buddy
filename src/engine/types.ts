@@ -29,6 +29,14 @@ export interface ScoreResult {
   inputs: ScoreInputs;
   ruleHits: RuleHit[];
   rejectionReasons: string[];
+  /** Relative scoring (EN45). Absent on audits stored before rules version 2026-10-11.1. Points with evidence, out of 25. */
+  evidencedMax?: number;
+  /** total / evidencedMax in percent, one decimal. */
+  percent?: number;
+  /** evidencedMax / 25 in percent, one decimal. */
+  coverage?: number;
+  /** evidencedMax is under 20, so the best state is Watch. */
+  incompleteData?: boolean;
   scanRunId?: string;
   scanRunIds?: Record<string, string>;
   agreement?: Record<string, string>;
