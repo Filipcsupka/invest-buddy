@@ -7,3 +7,6 @@ export function errorReference(digest?: string): string | undefined {
   } catch { /* Timing API missing: fall back to the digest. */ }
   return digest || undefined;
 }
+
+/** For useSyncExternalStore: browser values never change after load, so there is nothing to subscribe to. */
+export const subscribeNothing = () => () => {};

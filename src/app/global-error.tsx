@@ -1,6 +1,6 @@
 "use client";
-import { useEffect, useState } from "react";
-import { errorReference } from "@/app/error-reference";
+import { useSyncExternalStore } from "react";
+import { errorReference, subscribeNothing } from "@/app/error-reference";
 import { defaultLocale, getMessages, isLocale, localeCookie, type Locale } from "@/i18n";
 
 function cookieLocale(): Locale {
@@ -14,9 +14,8 @@ function cookieLocale(): Locale {
 
 /** Last resort when the root layout itself fails. Own html and body, inline styles. */
 export default function GlobalError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
-  const [locale, setLocale] = useState<Locale>(defaultLocale);
-  const [reference, setReference] = useState<string | undefined>(error.digest);
-  useEffect(() => { setLocale(cookieLocale()); setReference(errorReference(error.digest)); }, [error.digest]);
+  const locale = useSyncExternalStore(subscribeNothing, cookieLocale, () => defaultLocale);
+  const reference = useSyncExternalStore(subscribeNothing, () => errorReference(error.digest), () => error.digest);
   const m = getMessages(locale);
   return (
     <html lang={locale}>

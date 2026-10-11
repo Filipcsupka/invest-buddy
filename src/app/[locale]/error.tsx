@@ -1,8 +1,8 @@
 "use client";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
-import { errorReference } from "@/app/error-reference";
+import { useSyncExternalStore } from "react";
+import { errorReference, subscribeNothing } from "@/app/error-reference";
 import { IconArrowRight, IconReset } from "@/components/icons";
 import { defaultLocale, getMessages, isLocale } from "@/i18n";
 
@@ -10,8 +10,7 @@ export default function ErrorPage({ error, reset }: { error: Error & { digest?: 
   const params = useParams<{ locale?: string }>();
   const locale = params.locale && isLocale(params.locale) ? params.locale : defaultLocale;
   const m = getMessages(locale);
-  const [reference, setReference] = useState<string | undefined>(error.digest);
-  useEffect(() => setReference(errorReference(error.digest)), [error.digest]);
+  const reference = useSyncExternalStore(subscribeNothing, () => errorReference(error.digest), () => error.digest);
   return (
     <div className="frame page state-page" role="alert">
       <h1 className="title">{m.errors.errorTitle}</h1>
