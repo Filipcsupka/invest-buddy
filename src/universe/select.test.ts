@@ -41,7 +41,7 @@ describe("universe selection", () => {
     expect(s.selected.length + s.excluded.length).toBe(fixture().length);
   });
   it("ranks growth above 15 percent first, then the rest by growth", () => {
-    const s = selectUniverse([base("AAA", { yoyGrowthPct: 10 }), base("BBB", { yoyGrowthPct: 16 }), base("CCC", { yoyGrowthPct: 40 }), base("DDD", { yoyGrowthPct: 5 })], { target: 3 });
+    const s = selectUniverse([base("AAA", { yoyGrowthPct: 10 }), base("BBB", { yoyGrowthPct: 16 }), base("CCC", { yoyGrowthPct: 40 }), base("DDD", { yoyGrowthPct: 5 })], { target: 3, sectorCapPct: 100 });
     expect(s.selected.map((r) => r.ticker)).toEqual(["CCC", "BBB", "AAA"]);
     expect(s.excluded).toEqual([{ ticker: "DDD", name: "DDD Corp", sector: "Tech", reason: "below_cut" }]);
   });
