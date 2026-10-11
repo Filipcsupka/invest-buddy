@@ -54,7 +54,7 @@ describe("rule sources by agreement type", () => {
     const en = renderToStaticMarkup(<SourceList locale="en" items={[]} emptyNote />);
     expect(en).toContain("No source yet");
     expect(en).toContain("last 90 days");
-    expect(en).toContain("up to 6 stocks a night");
+    expect(en).toContain("items 1.01, 2.02, 7.01 and 8.01");
     const sk = renderToStaticMarkup(<SourceList locale="sk" items={[]} emptyNote />);
     expect(sk).toContain("Zatiaľ bez zdroja");
     expect(sk).toContain("posledných 90 dní");
