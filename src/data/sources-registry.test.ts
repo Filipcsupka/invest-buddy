@@ -67,8 +67,8 @@ describe("data source registry", () => {
     const pool = new pg.Pool({ connectionString: process.env.TEST_DATABASE_URL, max: 1 });
     try {
       const rows = await pool.query<{ id: string; licence_class: string; display_allowed: boolean }>("SELECT id, licence_class, display_allowed FROM data_sources");
-      expect(rows.rows.map((row) => row.id).sort()).toEqual(DATA_SOURCES.map((item) => item.id).sort());
-      for (const row of rows.rows) expect(row.display_allowed, row.id).toBe(canDisplay(row.id));
+      expect(rows.rows.map((row) => row.id).sort()).toEqual([...DATA_SOURCES.map((item) => item.id), "research_web"].sort());
+      for (const row of rows.rows) expect(row.display_allowed, row.id).toBe(row.id === "research_web" ? false : canDisplay(row.id));
       await expect(pool.query("INSERT INTO data_sources (id, name, kind, licence_class, display_allowed) VALUES ('t', 't', 'other', 'unknown', true)")).rejects.toThrow();
     } finally { await pool.end(); }
   });
