@@ -28,6 +28,27 @@ Notes:
 - Docs-only PRs cost nothing.
 - Trade-off: a vulnerable base image or dependency can reach `main` and be deployed up to a day before the scan reports it. `npm audit --audit-level=high` still runs in `quality` on every PR.
 
+## Local security scan (SEC1)
+
+`scripts/security-scan.sh` runs Trivy on your machine, so nothing depends on GitHub minutes. Needs `trivy` and, for the image scans, `kubectl` with `~/.kube/khtz`. No Docker needed.
+
+```sh
+scripts/security-scan.sh                      # repo + deployed images
+scripts/security-scan.sh --local-image TAG    # also scan a local build (Docker must be running)
+scripts/security-scan.sh --skip-images        # repo only (no cluster access)
+```
+
+What it does:
+1. `trivy fs`: dependency vulnerabilities (HIGH, CRITICAL, unfixed ignored), secrets, Dockerfile misconfig.
+2. `trivy image --image-src remote` on the web image of `deploy/invest-buddy-web` and the scanner image of CronJob `invest-buddy-extract` in namespace `invest` (read-only `kubectl get`), same severity, `ignore-unfixed` and `skip-dirs` as `security.yml`.
+3. Optional `--local-image`: scan a locally built tag from the Docker daemon.
+
+Exit code is 1 on any finding or scan error, 0 when clean; a summary lists each scan.
+
+When to run:
+- Before opening a PR that touches `package.json`, `package-lock.json`, `Dockerfile` or `scanner/Dockerfile`. The local run replaces the CI scan on PRs.
+- Before launch, as part of the launch gate below.
+
 ## Run the full security scan manually
 
 1. Actions, Security, Run workflow. Leave `image_tag` as `latest` or enter `sha-<7>`.
@@ -37,7 +58,7 @@ Notes:
 ## Launch gate checklist
 
 - [ ] `main` is the commit that will be launched and its Build run is green.
-- [ ] Security workflow run manually on that image: no open HIGH or CRITICAL findings, or each has a signed accepted-risk line.
+- [ ] `scripts/security-scan.sh` clean, or Security workflow run manually on that image: no open HIGH or CRITICAL findings, or each has a signed accepted-risk line.
 - [ ] CodeQL run manually: findings reviewed.
 - [ ] `dependency-review` or `npm audit` reviewed for the last dependency changes.
 - [ ] Findings and fixes recorded in the security review (PL37, `docs/roadmap/lane-platform.md`).
