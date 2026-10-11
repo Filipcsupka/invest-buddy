@@ -6,6 +6,8 @@ import { PostgresScoreRepository } from "../db/postgres";
 import { isIsoDate } from "../db/iso-date";
 import { PostgresDeliveryLog, type DeliveryLog } from "../db/notifications";
 import { telegramFromEnv, type Notifier } from "../notify/telegram";
+import { bandOf, escapeHtml, formatEventAlert, type ConfirmationKey, type Coverage } from "../notify/format";
+import { flags } from "../config/flags";
 import { getMessages } from "../i18n";
 import { stateKey } from "../i18n/score-text";
 
@@ -47,30 +49,48 @@ export function buildDigest(to: string, asOf: string, alerts: AlertChange[], loc
 
 const siteUrl = process.env.SITE_URL ?? "https://invest.filipcsupka.online";
 
-/** Telegram post: the digest text plus a link to the dashboard in the same language. */
+/** Telegram HTML for an empty day: the digest text, escaped, plus a link to the dashboard in the same language. */
 export function telegramDigest(asOf: string, alerts: AlertChange[], locale: DigestLocale, site = siteUrl): string {
   const message = buildDigest("", asOf, alerts, locale);
-  return [message.subject, message.text, `${site}/${locale}/dashboard`].join("\n\n");
+  return [message.subject, message.text, `${site}/${locale}/dashboard`].map(escapeHtml).join("\n\n");
 }
 
-export type TelegramOutcome = "sent" | "duplicate" | "empty";
+export interface TelegramResult { sent: number; duplicates: number; empty: boolean }
+
+/** Alerts whose band changed, first ratings included, sorted by ticker. */
+export function bandChanges(alerts: AlertChange[]): AlertChange[] {
+  return alerts.filter((alert) => alert.previousState === null || bandOf(alert.previousState) !== bandOf(alert.currentState)).sort((a, b) => a.ticker.localeCompare(b.ticker));
+}
 
 /**
- * Posts one digest per day to the configured chat. A day with no state changes is skipped unless postEmpty is set.
- * The delivery is claimed before sending and released when the send fails, so a rerun never posts the same day twice
- * and a failed day is retried by the next run.
+ * Posts one HTML message per ticker that changed band. Each ticker is claimed per day and language before sending and
+ * released when the send fails, so a rerun never posts the same ticker twice and a failed ticker is retried by the next run.
+ * One failed ticker does not stop the others; the first error is thrown after all were tried.
+ * A day with no band change posts the plain list only when postEmpty is set.
  */
-export async function deliverTelegram(input: { asOf: string; alerts: AlertChange[]; locale: DigestLocale; notifier: Notifier; log: DeliveryLog; target: string; postEmpty?: boolean }): Promise<TelegramOutcome> {
-  if (!input.alerts.length && !input.postEmpty) return "empty";
-  const key = { channel: "telegram" as const, target: input.target, asOf: input.asOf, kind: `digest:${input.locale}` };
-  if (!(await input.log.claim(key, input.alerts.length))) return "duplicate";
-  try {
-    await input.notifier.send(telegramDigest(input.asOf, input.alerts, input.locale));
-  } catch (error) {
-    await input.log.release(key);
-    throw error;
+export async function deliverTelegram(input: { asOf: string; alerts: AlertChange[]; locale: DigestLocale; notifier: Notifier; log: DeliveryLog; target: string; postEmpty?: boolean; adviceOutput?: boolean; site?: string; extras?: Record<string, { confirmations?: ConfirmationKey[]; coverage?: Coverage }> }): Promise<TelegramResult> {
+  const changes = bandChanges(input.alerts);
+  const site = input.site ?? siteUrl;
+  const adviceOutput = input.adviceOutput ?? flags().ADVICE_OUTPUT;
+  const result: TelegramResult = { sent: 0, duplicates: 0, empty: false };
+  let failure: unknown;
+  const post = async (kind: string, count: number, text: string) => {
+    const key = { channel: "telegram" as const, target: input.target, asOf: input.asOf, kind };
+    if (!(await input.log.claim(key, count))) { result.duplicates++; return; }
+    try { await input.notifier.send(text); result.sent++; } catch (error) { await input.log.release(key); failure ??= error; }
+  };
+  if (!changes.length) {
+    if (!input.postEmpty) return { ...result, empty: true };
+    await post(`digest:${input.locale}`, 0, telegramDigest(input.asOf, [], input.locale, site));
   }
-  return "sent";
+  for (const alert of changes) {
+    const extra = input.extras?.[alert.ticker];
+    const text = formatEventAlert({ ticker: alert.ticker, locale: input.locale, adviceOutput, site, confirmations: extra?.confirmations, coverage: extra?.coverage,
+      previous: alert.previousState === null ? null : { state: alert.previousState, points: alert.previousScore }, current: { state: alert.currentState, points: alert.currentScore } });
+    await post(`alert:${input.locale}:${alert.ticker}`, 1, text);
+  }
+  if (failure) throw failure;
+  return result;
 }
 
 async function main() {
@@ -94,7 +114,7 @@ async function main() {
     const alerts = await repo.alerts(asOf);
     if (telegram && pool) {
       const telegramResult = await deliverTelegram({ asOf, alerts, locale, notifier: telegram, log: new PostgresDeliveryLog(pool), target: process.env.TELEGRAM_CHAT_ID!.trim(), postEmpty: process.env.TELEGRAM_POST_EMPTY === "on" });
-      return { alerts: alerts.length, telegram: telegramResult, failures: 0 };
+      return { alerts: alerts.length, telegram: telegramResult.empty ? "empty" : telegramResult.sent ? "sent" : "duplicate", sent: telegramResult.sent, duplicates: telegramResult.duplicates, failures: 0 };
     }
     await new ConsoleMailer().send(buildDigest(to, asOf, alerts, locale));
     return { alerts: alerts.length, failures: 0 };
