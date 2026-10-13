@@ -175,6 +175,8 @@ Risk: token refresh in a read-only container is the open problem from `scanner/R
 
 ## RS8 Evaluation against the old automation
 
+Status: offline harness done (steps 1 and 4: fixture, `scripts/research-eval.ts`, report template in `docs/research-eval.md`). The live run (steps 2 and 3) is still waiting for owner approval. RS8 is not done.
+
 Why: show that the new engine finds at least what the old one found, with better evidence, before anything runs on a schedule.
 
 Steps:
