@@ -48,6 +48,10 @@ Updated 2026-10-11 night. One table per state. A PR that finishes a task moves i
 | RS4 | Judge integration and fact feed | #165 | migration 053 |
 | RS5 | Research CronJobs, caps and kill switch | #167 | jobs suspended, owner unsuspends after RS8 |
 | RS6 | Private research cards, materiality and owner page | #166 | not run live |
+| RS8 (offline) | Old-sample fixture (6 cards), `research:eval` script, `docs/research-eval.md` template | #170 | live run not done |
+| RS7 (code) | Codex adapter, strict schema, Codex caps | #172 | auth path not set |
+| Test fix | Research runner test used a fixed date | #171 | |
+| RS5 (infra) | 7 research CronJobs synced to the cluster, all suspended, `RESEARCH_ENABLED=off` | infra #42 | Argo synced |
 | Telegram | Channel, sealed secret, digest unsuspended | infra #37 to #41, #126 | first alert sent 2026-10-10 |
 
 ## Open (added 2026-10-13)
@@ -68,7 +72,7 @@ Detail: `lane-engine.md` (EN47, EN48) and `lane-positions.md` (PM1 to PM4).
 | ID | What | State |
 | --- | --- | --- |
 | RS7 | Codex adapter and secret | adapter code done (`scanner/research-adapters.mjs`, strict schema, quota and call caps, fake-binary tests); auth path and PVC/secret still waiting for the owner, not done |
-| RS8 | Evaluation on the six old cards | offline harness done (fixture, `scripts/research-eval.ts`, `docs/research-eval.md`); live run waits for owner approval, not done |
+| RS8 | Evaluation on the six old cards | offline harness done (fixture, `scripts/research-eval.ts`, `docs/research-eval.md`); live run tried 2026-10-13 and blocked: weekly discovery `skipped_window` (window 00:00 to 07:00 respected), deep dive INTT `skipped_quota` (403 from the Anthropic usage endpoint, cause unverified). Not bypassed. Manual Jobs `rs8-weekly-20261004` and `rs8-dd-intt` still in the cluster. |
 
 ## Queued, in order
 
@@ -80,6 +84,13 @@ Detail: `lane-engine.md` (EN47, EN48) and `lane-positions.md` (PM1 to PM4).
 6. Last: membership, billing, client work (W27 to W45) stay deferred by owner decision.
 
 ## Waiting on the owner
+
+- RS8 live run: pick one. (1) A token that can read usage. (2) Claude quota-unknown override with a hard call cap (recommended; does not exist in code yet). (3) Wait for OpenAI keys and use Codex.
+- EN47 sign-off: Setup from 18 points (78.3%) or stay at 72%.
+- EN48 design and PM3 decision (averaging down EN7 DEEP_ADD: keep, cap or remove; take-profit rule).
+- Secret `invest-buddy-telegram-owner` (key `TELEGRAM_OWNER_CHAT_ID`) before the notify job can run. `invest-buddy-backup-secrets` is also missing (not checked whether it was missing before).
+- RS7: Codex auth path (login on PVC or sealed `OPENAI_API_KEY`), `rate_limits` not checked on the real CLI, `used_usd` stays 0 for Codex so `RESEARCH_MONTHLY_USD` is weakly enforced.
+- Delete the two finished manual RS8 Jobs (cluster change, needs approval).
 
 - `TELEGRAM_CARD_MODE=owner` for the private channel (action word and EUR band).
 - A private research page password (`OWNER_RESEARCH_PASSWORD`) alongside `OWNER_VIEW=on`; the page challenges the owner before showing facts.
