@@ -54,11 +54,12 @@ Updated 2026-10-11 night. One table per state. A PR that finishes a task moves i
 
 | ID | What | State |
 | --- | --- | --- |
+| RS7 | Codex adapter and secret | adapter code done (`scanner/research-adapters.mjs`, strict schema, quota and call caps, fake-binary tests); auth path and PVC/secret still waiting for the owner, not done |
 | RS8 | Evaluation on the six old cards | offline harness done (fixture, `scripts/research-eval.ts`, `docs/research-eval.md`); live run waits for owner approval, not done |
 
 ## Queued, in order
 
-1. RS8 live run on the six old cards (offline harness is in; RS0 to RS6 are merged). RS7 Codex adapter and secret later.
+1. RS8 live run on the six old cards (offline harness is in; RS0 to RS6 are merged). RS7 adapter code is in; its auth path and secret wait for the owner.
 2. Web: W5 page cache, W3 performance baseline, W21 OG images, W23 native Slovak review, W32 tier map, W35 CSV export.
 3. Engine: EN4, EN5, EN28.
 4. Data: D36 roll out 150 names (after D35 criteria), D26 FX, D28 EPS history, D13 corporate actions.

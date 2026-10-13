@@ -1,3 +1,6 @@
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { runCli } from "./run-scan.mjs";
 import { usageFromEnvelope } from "./extraction-log.mjs";
 import { attachClaudeUsage, attachCliUsage, cutoffError } from "./anthropic-cutoff.mjs";
@@ -20,6 +23,7 @@ const countTools = (envelope) => {
 
 export const claudeResearchAdapter = {
   name: "claude",
+  authSource(env = process.env) { return env.ANTHROPIC_API_KEY ? "api" : "subscription"; },
   available(env = process.env) {
     return env.CLAUDE_CODE_OAUTH_TOKEN || env.ANTHROPIC_API_KEY || env.CLAUDE_CONFIG_DIR
       ? { ok: true, reason: null } : { ok: false, reason: "Claude auth is unavailable" };
@@ -48,8 +52,117 @@ export const claudeResearchAdapter = {
   },
 };
 
+// ---------- Codex ----------
+// Keywords strict structured output does not accept. The validator in research-validate.mjs still enforces them on the reply.
+const STRICT_DROP = new Set(["$schema", "$id", "$defs", "minLength", "maxLength", "pattern", "format", "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "multipleOf", "minItems", "maxItems", "uniqueItems", "default", "examples"]);
+
+/** Strict output schema for `$defs.modelOutput`: refs inlined, unsupported keywords removed, every object closed with all properties required. */
+export function deriveStrictSchema(schema, name = "modelOutput") {
+  const defs = schema?.$defs ?? {};
+  if (!defs[name]) throw new Error(`schema has no $defs.${name}`);
+  const walk = (node, stack) => {
+    if (Array.isArray(node)) return node.map((item) => walk(item, stack));
+    if (!node || typeof node !== "object") return node;
+    if (typeof node.$ref === "string") {
+      const match = /^#\/\$defs\/([\w-]+)$/.exec(node.$ref);
+      if (!match || !defs[match[1]]) throw new Error(`unresolvable $ref ${node.$ref}`);
+      if (stack.includes(match[1])) throw new Error(`recursive $ref ${node.$ref}`);
+      const rest = Object.fromEntries(Object.entries(node).filter(([key]) => key !== "$ref"));
+      return walk({ ...defs[match[1]], ...rest }, [...stack, match[1]]);
+    }
+    const out = {};
+    for (const [key, value] of Object.entries(node)) {
+      if (STRICT_DROP.has(key)) continue;
+      if (key === "const") { out.enum = [value]; continue; }
+      if (key === "properties") out.properties = Object.fromEntries(Object.entries(value).map(([k, v]) => [k, walk(v, stack)]));
+      else out[key] = walk(value, stack);
+    }
+    if (out.properties || out.type === "object" || (Array.isArray(out.type) && out.type.includes("object"))) {
+      if (!out.properties) throw new Error("object schema without properties cannot be strict");
+      out.required = Object.keys(out.properties);
+      out.additionalProperties = false;
+    }
+    return out;
+  };
+  return walk(defs[name], [name]);
+}
+
+export const codexAuthJson = (env = process.env) => join(env.CODEX_HOME || join(env.HOME || "~", ".codex"), "auth.json");
+
+// Rate-limit percentages are read from any `rate_limits` object in the event stream; the CLI may not report them.
+const rateLimitPcts = (value, inRate = false, found = []) => {
+  if (Array.isArray(value)) { value.forEach((item) => rateLimitPcts(item, inRate, found)); return found; }
+  if (!value || typeof value !== "object") return found;
+  for (const [key, item] of Object.entries(value)) {
+    const rate = inRate || /^rate_?limits?$/i.test(key);
+    if (rate && /^used_?percent$/i.test(key) && Number.isFinite(item)) found.push(item);
+    else rateLimitPcts(item, rate, found);
+  }
+  return found;
+};
+
+export function parseCodexEvents(stdout) {
+  const events = [];
+  for (const line of String(stdout ?? "").split("\n")) { try { const event = JSON.parse(line); if (event && typeof event === "object") events.push(event); } catch { /* not an event line */ } }
+  let input = null, output = null, cached = null, searches = 0, failure = null;
+  for (const event of events) {
+    const u = event.type === "turn.completed" ? event.usage : null;
+    if (u && Number.isInteger(u.input_tokens) && Number.isInteger(u.output_tokens)) {
+      // input_tokens includes the cached part; keep the two apart so a sum does not count it twice.
+      const hit = Number.isInteger(u.cached_input_tokens) ? u.cached_input_tokens : 0;
+      input = (input ?? 0) + u.input_tokens - hit; output = (output ?? 0) + u.output_tokens; cached = (cached ?? 0) + hit;
+    }
+    if (event.type === "item.completed" && event.item?.type === "web_search") searches += 1;
+    if (event.type === "turn.failed" || event.type === "error") failure = String(event.error?.message ?? event.message ?? "unknown");
+  }
+  const pcts = rateLimitPcts(events);
+  return { usage: { inputTokens: input, outputTokens: output, cacheReadTokens: cached, cacheCreationTokens: null, turns: null }, webSearches: searches || null, rateLimitPct: pcts.length ? Math.max(...pcts) : null, failure };
+}
+
+let lastCodexRateLimit = null; // seen in this process; no non-model probe exists, so the first call of a run cannot know it
+
+export const codexResearchAdapter = {
+  name: "codex",
+  failAtStart: true,
+  authSource(env = process.env) { return env.OPENAI_API_KEY ? "api" : "codex"; },
+  defaultModel(env = process.env) { return env.RESEARCH_CODEX_MODEL || "default"; },
+  available(env = process.env) {
+    if (env.OPENAI_API_KEY || existsSync(codexAuthJson(env))) return { ok: true, reason: null };
+    return { ok: false, reason: `Codex auth is unavailable: set OPENAI_API_KEY or provide ${codexAuthJson(env)} (a ChatGPT login in CODEX_HOME)` };
+  },
+  async quota() { return lastCodexRateLimit === null ? null : { window: "codex", pct: lastCodexRateLimit, resetAt: null }; },
+  async run({ prompt, schemaPath, timeoutMs, workDir, monitor, env = process.env }) {
+    const ioDir = mkdtempSync(join(tmpdir(), "invest-codex-io-"));
+    try {
+      const schemaFile = join(ioDir, "output-schema.json"), replyFile = join(ioDir, "reply.json");
+      writeFileSync(schemaFile, JSON.stringify(deriveStrictSchema(JSON.parse(readFileSync(schemaPath, "utf8")))));
+      const args = ["--search", "-a", "never", "exec", "--sandbox", "read-only", "--skip-git-repo-check", "--ephemeral", "--ignore-user-config", "--ignore-rules", "--output-schema", schemaFile, "-C", workDir, "-o", replyFile, "--json"];
+      if (env.RESEARCH_CODEX_MODEL) args.push("-m", env.RESEARCH_CODEX_MODEL);
+      args.push("-");
+      let stdout;
+      try { ({ out: stdout } = await runCli("codex", args, prompt, { timeoutMs, cwd: workDir, monitor })); }
+      catch (error) {
+        const parsed = parseCodexEvents(error.stdout);
+        if (parsed.rateLimitPct !== null) lastCodexRateLimit = parsed.rateLimitPct;
+        if (parsed.usage.inputTokens !== null) error.usage = parsed.usage;
+        throw error;
+      }
+      const parsed = parseCodexEvents(stdout);
+      if (parsed.rateLimitPct !== null) lastCodexRateLimit = parsed.rateLimitPct;
+      const attach = (error) => Object.assign(error, parsed.usage.inputTokens === null ? {} : { usage: parsed.usage });
+      if (parsed.failure) throw attach(new Error(`codex error: ${parsed.failure.slice(0, 200)}`));
+      let text;
+      try { text = readFileSync(replyFile, "utf8"); } catch { throw attach(new Error("codex wrote no reply file")); }
+      if (!text.trim()) throw attach(new Error("codex reply file is empty"));
+      return { text, usage: parsed.usage, webSearches: parsed.webSearches, webFetches: null, costUsd: null, cutoff: null, model: env.RESEARCH_CODEX_MODEL || "default", rateLimitPct: parsed.rateLimitPct };
+    } finally { rmSync(ioDir, { recursive: true, force: true }); }
+  },
+};
+
+export const resetCodexRateLimit = () => { lastCodexRateLimit = null; };
+
 export function researchAdapter(name = "claude") {
   if (name === "claude") return claudeResearchAdapter;
-  if (name === "codex") throw new Error("Research Codex adapter is not available until RS7");
+  if (name === "codex") return codexResearchAdapter;
   throw new Error(`Unknown research adapter: ${name}`);
 }

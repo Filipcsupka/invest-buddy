@@ -156,6 +156,8 @@ Risk: `src/notify/format.ts` and `src/i18n/messages.ts` are shared; rebase and m
 
 ## RS7 Codex adapter and secret
 
+Status: adapter code done (steps 3 and 4 in code, tests with a fake `codex` binary). The auth path and the PVC or secret (steps 1 and 2, the `deploy/README.md` note and the refresh proof) are still waiting for the owner. RS7 is not done.
+
 Why: a second adapter for when the Claude quota is short, and a later second voice (ADR-005).
 
 Steps:

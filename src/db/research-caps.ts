@@ -4,7 +4,7 @@ import type pg from "pg";
 export async function researchCapUsage(db: Pick<pg.Pool, "query">) {
   const result = await db.query<{
     day: string; month: string; monthly_tokens: string; monthly_usd: string;
-    daily_calls: string; daily_tokens: string; shared_daily_tokens: string;
+    daily_calls: string; codex_daily_calls: string; daily_tokens: string; shared_daily_tokens: string;
   }>(`WITH clock AS (
       SELECT (now() AT TIME ZONE 'Europe/Bratislava')::date AS day
     ), calls AS (
@@ -20,6 +20,7 @@ export async function researchCapUsage(db: Pick<pg.Pool, "query">) {
       COALESCE(sum(COALESCE(calls.used_usd, calls.reserved_usd)) FILTER
         (WHERE calls.kind='research' AND calls.local_day >= date_trunc('month', clock.day::timestamp)::date), 0)::text AS monthly_usd,
       count(*) FILTER (WHERE calls.kind='research' AND calls.local_day=clock.day)::text AS daily_calls,
+      count(*) FILTER (WHERE calls.kind='research' AND calls.agent='codex' AND calls.local_day=clock.day)::text AS codex_daily_calls,
       COALESCE(sum(COALESCE(calls.used_tokens, calls.reserved_tokens)) FILTER
         (WHERE calls.kind='research' AND calls.local_day=clock.day), 0)::text AS daily_tokens,
       COALESCE(sum(COALESCE(calls.used_tokens, calls.reserved_tokens)) FILTER
@@ -28,5 +29,5 @@ export async function researchCapUsage(db: Pick<pg.Pool, "query">) {
     FROM clock LEFT JOIN calls ON true GROUP BY clock.day`, []);
   const row = result.rows[0];
   if (!row) throw new Error("research cap usage unavailable");
-  return { day: row.day, month: row.month, monthlyTokens: Number(row.monthly_tokens), monthlyUsd: Number(row.monthly_usd), dailyCalls: Number(row.daily_calls), dailyTokens: Number(row.daily_tokens), sharedDailyTokens: Number(row.shared_daily_tokens) };
+  return { day: row.day, month: row.month, monthlyTokens: Number(row.monthly_tokens), monthlyUsd: Number(row.monthly_usd), dailyCalls: Number(row.daily_calls), codexDailyCalls: Number(row.codex_daily_calls ?? 0), dailyTokens: Number(row.daily_tokens), sharedDailyTokens: Number(row.shared_daily_tokens) };
 }

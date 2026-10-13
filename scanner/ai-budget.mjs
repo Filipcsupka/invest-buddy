@@ -7,9 +7,9 @@ async function call(baseUrl, token, body) {
   return res.json();
 }
 /** Create a ledger row before each call. Accounting does not gate model use. */
-export async function reserveBudget(baseUrl, token, kind, model = "default", agent = "claude", caps = undefined) {
+export async function reserveBudget(baseUrl, token, kind, model = "default", agent = "claude", caps = undefined, authSourceOverride = undefined) {
   const id = randomUUID();
-  const authSource = agent === "codex" ? "codex" : process.env.ANTHROPIC_API_KEY ? "api" : "subscription";
+  const authSource = authSourceOverride ?? (agent === "codex" ? "codex" : process.env.ANTHROPIC_API_KEY ? "api" : "subscription");
   try { const result = await call(baseUrl, token, { action: "reserve", id, kind, agent, authSource, model, ...(caps ? { caps } : {}) }); return result.recorded === false ? null : id; }
   catch { return null; }
 }
