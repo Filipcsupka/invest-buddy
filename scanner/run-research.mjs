@@ -83,6 +83,10 @@ const modelOutput = (value) => value?.output && !value?.findings ? value.output 
 const statusFrom = (result) => result.cutoff ? "cutoff" : "ok";
 export async function execute(opts, { adapter = researchAdapter(process.env.RESEARCH_ADAPTER || "claude"), log = console.log,
   env = process.env, now = () => new Date(), usage = capUsage, liveUsage } = {}) {
+  // Fail before any network or model call when the adapter has no usable auth.
+  if (adapter.failAtStart) { const auth = adapter.available(env); if (!auth.ok) throw new Error(`RESEARCH_ADAPTER=${adapter.name}: ${auth.reason}`); }
+  const authSource = adapter.authSource?.(env) ?? (env.ANTHROPIC_API_KEY ? "api" : "subscription");
+  const modelName = adapter.defaultModel?.(env) ?? opts.model;
   const token = getToken();
   if (!token) throw new Error("INGEST_TOKEN is required to check research caps");
   const earlyKill = env.RESEARCH_ENABLED !== "on";
@@ -103,7 +107,7 @@ export async function execute(opts, { adapter = researchAdapter(process.env.RESE
     let gate;
     try {
       gate = await checkResearchCaps({ env, now: now(), type: opts.type, manual: opts.manual,
-        usage: await usage(opts.baseUrl, token), liveUsage: live });
+        authSource, adapter: adapter.name, codexQuota: () => adapter.quota(), usage: await usage(opts.baseUrl, token), liveUsage: live });
     } catch (error) { gate = { ok: false, status: "skipped_cap", reason: `research cap check unavailable: ${error.message}` }; }
     if (!gate.ok) {
       await postSkip(opts, token, adapter.name, gate.status, gate.reason, runId);
@@ -111,7 +115,7 @@ export async function execute(opts, { adapter = researchAdapter(process.env.RESE
       results.push({ skipped: gate.status, posted: !opts.dryRun, errors: [] });
       continue;
     }
-    const budgetId = opts.dryRun ? null : await reserveBudget(opts.baseUrl, token, "research", opts.model, adapter.name, researchLimits(env, opts.type, now()));
+    const budgetId = opts.dryRun ? null : await reserveBudget(opts.baseUrl, token, "research", modelName, adapter.name, researchLimits(env, opts.type, now()), authSource);
     if (!opts.dryRun && !budgetId) {
       await postSkip(opts, token, adapter.name, "skipped_cap", "research budget reservation unavailable", runId);
       results.push({ skipped: "skipped_cap", posted: true, errors: [] });
@@ -122,8 +126,8 @@ export async function execute(opts, { adapter = researchAdapter(process.env.RESE
     let result, output, error = null, adapterFailed = false;
     try {
       const prompt = buildPrompt(opts, input, group, themesConfig);
-      try { result = await adapter.run({ prompt, schemaPath: join(here, "schema", "research-output.schema.json"), model: opts.model, maxTurns: defaults.maxTurns, timeoutMs: opts.timeoutS * 1000, workDir,
-        monitor: env.ANTHROPIC_API_KEY ? undefined : () => checkLiveResearchQuota({ env, liveUsage: live }) }); }
+      try { result = await adapter.run({ prompt, schemaPath: join(here, "schema", "research-output.schema.json"), model: opts.model, maxTurns: defaults.maxTurns, timeoutMs: opts.timeoutS * 1000, workDir, env,
+        monitor: adapter.name !== "claude" || env.ANTHROPIC_API_KEY ? undefined : () => checkLiveResearchQuota({ env, liveUsage: live }) }); }
       catch (caught) { error = caught; adapterFailed = true; }
       if (!adapterFailed) output = result.cutoff ? emptyOutput() : modelOutput(extractJson(result.text));
     } catch (caught) {
@@ -139,7 +143,7 @@ export async function execute(opts, { adapter = researchAdapter(process.env.RESE
     if (adapterFailed) output = emptyOutput();
     const run = {
       runId, runType: typeNames[opts.type], asOf: opts.asOf, generatedAt: new Date().toISOString(), promptVersion: `research-${opts.type}@2026-10-11.1`,
-      adapter: { name: adapter.name, model: result?.model || opts.model, authSource: process.env.ANTHROPIC_API_KEY ? "api" : "subscription" },
+      adapter: { name: adapter.name, model: result?.model || modelName, authSource },
       scope: { themes: group.themes, symbols: group.symbols, deepDiveSymbol: opts.type === "deepdive" ? opts.symbol : null },
       limits: { ...defaults, timeoutS: opts.timeoutS },
       usage: { ...emptyUsage(), inputTokens: result?.usage?.inputTokens ?? error?.usage?.inputTokens ?? null, outputTokens: result?.usage?.outputTokens ?? error?.usage?.outputTokens ?? null, cacheReadTokens: result?.usage?.cacheReadTokens ?? error?.usage?.cacheReadTokens ?? null, cacheCreationTokens: result?.usage?.cacheCreationTokens ?? error?.usage?.cacheCreationTokens ?? null, webSearches: result?.webSearches ?? null, webFetches: result?.webFetches ?? null, costUsd: result?.costUsd ?? error?.costUsd ?? null, durationS: Math.round((performance.now() - started) / 100) / 10 },
