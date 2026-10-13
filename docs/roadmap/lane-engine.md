@@ -1,4 +1,4 @@
-# Lane ENGINE, AI and PORTFOLIO (IDs EN1 to EN44)
+# Lane ENGINE, AI and PORTFOLIO (IDs EN1 to EN48)
 
 Synthesis 2026-10-09: this copy is the working version for the window. The master plan is `docs/roadmap/README.md`. Lines starting with "Synthesis note" and the section "Changes by the synthesis" at the end are the only additions to the lane draft in ops-brain. Migration numbers written below (022, 023 and so on) are placeholders: several lanes claim the same numbers, so each PR takes the next free number when it opens (PL7 rule, PL15 lint). IDs from `docs/tasks-open.md` (A1 to I1, for example E1, C2, D1b, D2) are written with the prefix "tasks-open" where they could be read as a data lane ID.
 
@@ -673,6 +673,45 @@ Status: done 2026-10-10, PR #86, merged and live.
 - Who: owner supplies cards, agent runs
 - Approval needed: cluster write (insert into `instruments`, one-off Jobs) and subscription usage
 - Risk or open question: EFXT and WULF may fail SEC or Twelve Data lookups (WULF is in `discovery-themes.json`, EFXT is not); the old cards may not exist anywhere.
+
+### EN47. Setup threshold and reachable maximum
+- Why: on 2026-10-12 `macro-data` (3 points) was false for all 36 tickers and `rotation` (2) was true for all. Only the 10-year yield change fails: +0.27 pp against a limit of +0.25 pp. VIX is 15.21 (below 25), CPI and PPI pass. FOMC is not implemented (`docs/data.md`). `score_results` has 7 dates and `macro-data` was met on none. A proxy over 140 weekdays shows the tailwind true on 14% of days at a yield limit of 0.25, 26% at 0.50 and 4% at 0. These are upper bounds: VIX history is missing and a 45-day CPI and PPI lag is assumed. So the reachable maximum is 20 of 23 core points now. The top score today is 18 (NOW, AMD). 17 (NVDA, DDOG, SNOW, PANW) shows 73.9% and so Setup, although the Guide needs 18 for BUY: relative scoring divides by evidenced points, and 72% of 23 is 16.6.
+- Owner direction: the displayed maximum must be reachable, or at least about 85% is fine. The display must not show a strong buy-like state at weak scores. The denominator stays fixed at the 23 core points; it is not shrunk to raise the percent. Two entry tiers:
+
+| Tier | State | From points | Percent of 23 |
+| --- | --- | ---: | ---: |
+| Strong | Setup | 18 | 78.3% |
+| Partial | Watch, wait for a better entry | 15 | 65.2% |
+| Wait | Wait | 12 | 52.2% |
+| Below 12 | Ignore | | |
+
+- Steps:
+  1. Replay script over stored `score_results` and macro rows. Output: band counts per setting, today at 72% against 78.3%. Table goes into the PR and `docs/adr-score-display.md`.
+  2. Owner sign-off, written in this task before any code. The owner has leaned yes to Setup at 18 but has not signed. This is a methodology and public text change (ADR-001, ADR-004). Public output shows state and explanation only, never actions or amounts; actions and amounts stay in owner mode (EN48).
+  3. Implement the thresholds in `src/engine/relative.ts` and `src/engine/display-score.ts`, and the method text in EN and SK.
+  4. Update `docs/adr-score-display.md`. Update the D1b threshold text in `docs/tasks-open.md`: D1b says yield change at or below 0 pp, the live config is 0.25.
+  5. Keep EN40 completion (FOMC, CPI and PPI from stored facts) as its own task. This task does not change the macro rules.
+- Acceptance: the replay table is in the PR; the owner's sign-off line with date is in this task; 17 points no longer shows Setup and 18 points does; the 15 point case shows Partial; golden tests are updated on purpose and the diff is explained; stored audits and `score_results` rows are unchanged (the display is computed at render, as in `docs/adr-score-display.md`); the EN and SK method text matches; docs and D1b text are consistent with the live config.
+- Size: M
+- Depends on: EN40, EN46, D1b
+- Who: agent builds the replay and the change; owner decides
+- Approval needed: owner written sign-off on the thresholds and the public wording, before code. No cluster write.
+- Risk or open question: the 14%, 26% and 4% figures are proxy upper bounds, not measured history. A fixed denominator of 23 caps the reachable maximum at 20 while the FOMC rule is missing; the owner has accepted "at least about 85%" as enough. Lawyer view on public state labels is tasks-open G5 and is not this task.
+
+### EN48. Position tiers and owner-mode actions
+- Why: the owner wants two entry tiers: Strong (full start size per `docs/sizing-guide.md`) and Partial (a smaller starter, or none). Add rules after a dip stay as in Guide sections 5 and 7. Public users join at random times, so public output never shows START or ADD wording or amounts. Owner mode uses `allocate()` and `portfolio_baseline`. It is not yet written down which of these tiers already exist in the code, so this task starts by checking.
+- Steps:
+  1. Read `src/engine/signals.ts`, `src/engine/sizing.ts` and `src/engine/allocation.ts`. Write down which tiers, start sizes and add rules already exist, with file and line. Do not assume.
+  2. Map the two EN47 tiers to owner actions and sizes: Strong gives the full start size, Partial gives a smaller starter or none. The owner picks the Partial size.
+  3. Keep add rules after a dip as in Guide sections 5 and 7 (EN6, EN7, EN9 own the code for them).
+  4. Owner mode only: show the tier, action and amount through `allocate()` and `portfolio_baseline`. Public pages, public Telegram cards and the public API show the state and the explanation only.
+  5. Test that public output never contains START, ADD or an amount, with `ADVICE_OUTPUT` off and on.
+- Acceptance: the written inventory from step 1 is in the PR; Strong and Partial give the signed sizes in owner mode; public output tests pass for both flag states; no change to stored audits; `docs/sizing-guide.md` matches.
+- Size: M
+- Depends on: EN47
+- Who: agent; owner decides the Partial size
+- Approval needed: owner approval of the tier-to-size mapping before code
+- Risk or open question: the inventory may show that some tiers already exist, which would shrink the task. The sizing numbers in `docs/sizing-guide.md` and `src/engine/allocation-config.ts` are unsigned placeholders (EN10).
 
 ## Changes by the synthesis
 

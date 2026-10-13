@@ -50,6 +50,19 @@ Updated 2026-10-11 night. One table per state. A PR that finishes a task moves i
 | RS6 | Private research cards, materiality and owner page | #166 | not run live |
 | Telegram | Channel, sealed secret, digest unsuspended | infra #37 to #41, #126 | first alert sent 2026-10-10 |
 
+## Open (added 2026-10-13)
+
+| ID | What | Depends on | Gate |
+| --- | --- | --- | --- |
+| EN47 | Setup threshold at 18 points (78.3%) and a Partial tier at 15; reachable maximum | EN40, EN46, D1b | owner written sign-off before code |
+| EN48 | Position tiers and owner-mode actions; public output stays state only | EN47 | owner approval |
+| PM1 | Verify primary sources for position rules | none | |
+| PM2 | Position review checklist, owner view only | EN9 | |
+| PM3 | Owner decision on averaging down and taking profit | PM1 | owner decision signed before code |
+| PM4 | Legal check of exit and take-profit wording, SK and CZ | none | lawyer before any paid launch |
+
+Detail: `lane-engine.md` (EN47, EN48) and `lane-positions.md` (PM1 to PM4).
+
 ## In progress
 
 | ID | What | State |

@@ -1,6 +1,6 @@
 # Q4 2026 roadmap
 
-Master plan for 2026-10-12 to 2026-12-31. Written 2026-10-09 from the four lane files in this folder (`lane-data.md`, `lane-web.md`, `lane-engine.md`, `lane-platform.md`), `docs/tasks-open.md`, and the vault notes `research/market-homework/130-positioning-and-business-model.md` and `99-lessons.md`. Task text lives in the lane files; this file decides order, owners and gates. Each lane file ends with a list of what the synthesis changed in it.
+Master plan for 2026-10-12 to 2026-12-31. Written 2026-10-09 from the four lane files in this folder (`lane-data.md`, `lane-web.md`, `lane-engine.md`, `lane-platform.md`; `lane-positions.md` was added on 2026-10-13), `docs/tasks-open.md`, and the vault notes `research/market-homework/130-positioning-and-business-model.md` and `99-lessons.md`. Task text lives in the lane files; this file decides order, owners and gates. Each lane file ends with a list of what the synthesis changed in it.
 
 ## Status
 
