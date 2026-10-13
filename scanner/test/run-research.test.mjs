@@ -75,7 +75,7 @@ async function runFake({ response = clone().output, dryRun = false, cutoff = fal
   const posts = [], budgets = [];
   const server = createServer((req, res) => {
     if (req.method === "POST") { let body = ""; req.on("data", (d) => { body += d; }); req.on("end", () => { (req.url === "/api/ingest/research" ? posts : budgets).push(JSON.parse(body)); res.writeHead(200, { "Content-Type": "application/json" }); res.end("{}"); }); }
-    else if (req.url === "/api/ingest/ai-budget?report=research-caps") { res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ day: "2026-10-11", month: "2026-10", monthlyTokens: 0, monthlyUsd: 0, dailyCalls, dailyTokens: 0, sharedDailyTokens: 0 })); }
+    else if (req.url === "/api/ingest/ai-budget?report=research-caps") { res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ day: new Date().toISOString().slice(0, 10), month: new Date().toISOString().slice(0, 7), monthlyTokens: 0, monthlyUsd: 0, dailyCalls, dailyTokens: 0, sharedDailyTokens: 0 })); }
     else { res.writeHead(500); res.end(); }
   });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
