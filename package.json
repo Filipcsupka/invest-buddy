@@ -14,6 +14,7 @@
     "migrate": "tsx scripts/migrate.ts",
     "ai-usage": "tsx scripts/ai-usage-report.ts",
     "data:inventory": "tsx scripts/data-inventory.ts",
+    "research:eval": "tsx scripts/research-eval.ts",
     "daily": "tsx src/jobs/daily.ts",
     "prices": "tsx src/jobs/prices.ts",
     "reconcile": "tsx src/jobs/reconcile.ts",
