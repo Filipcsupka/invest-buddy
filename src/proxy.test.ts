@@ -104,3 +104,24 @@ it.each([["en", "Too many requests"], ["sk", "Príliš veľa"]])("renders the %s
   delete process.env.RATE_LIMIT_PAGES_PER_MIN;
   resetRateLimits();
 });
+
+it.each(["/en", "/sk/methodology", "/en/company/ZZZZ", "/api/health", "/unknown-path"])("sets the CSP per request from ANALYTICS_* at run time on %s", async (path) => {
+  universe.mockResolvedValue([]);
+  const keys = ["ANALYTICS", "ANALYTICS_URL", "ANALYTICS_DOMAIN"] as const;
+  const saved = keys.map((key) => process.env[key]);
+  try {
+    for (const key of keys) delete process.env[key];
+    const off = await proxy(new NextRequest(`https://example.com${path}`));
+    expect(off.headers.get("content-security-policy")).toContain("connect-src 'self';");
+    expect(off.headers.get("content-security-policy")).not.toContain("stats.example.org");
+    // Same module instance, env changed after import: the next request picks it up.
+    process.env.ANALYTICS = "on";
+    process.env.ANALYTICS_URL = "https://stats.example.org/js/script.js";
+    process.env.ANALYTICS_DOMAIN = "invest.example.org";
+    const on = await proxy(new NextRequest(`https://example.com${path}`));
+    expect(on.headers.get("content-security-policy")).toContain("script-src 'self' 'unsafe-inline'");
+    expect(on.headers.get("content-security-policy")).toContain("connect-src 'self' https://stats.example.org;");
+  } finally {
+    keys.forEach((key, i) => { if (saved[i] === undefined) delete process.env[key]; else process.env[key] = saved[i]; });
+  }
+});

@@ -138,6 +138,7 @@ const en = {
     legal: "Legal and method",
     privacy: "Privacy",
     terms: "Terms",
+    disclaimer: "Disclaimer",
     methodology: "Methodology",
   },
   states: {
@@ -497,12 +498,6 @@ const en = {
     dataBody: "The site currently runs on synthetic price series and illustrative structured flags. The sample universe holds the 28 tickers named in the investing guide and seven labelled extensions scored by the same rules. Each company page lists its rule hits and inputs. No live quotes, licensed data feed or alert history are connected. The guide's personal capital and position rules are left out of this public screen.",
     dataBodyLive: "The screen combines collected SEC filings, daily prices and public macro data (10-year yield and VIX) with market calculations. Verified AI research supplies checked facts from filings and releases; AI findings do not award points on their own. Unknown fields stay unknown. Each company page shows rule results and sources. Some thresholds await review. Personal capital and position rules from the guide are excluded.",
   },
-  legal: {
-    draft: "Draft",
-    privacyBody: "This preview has no accounts, analytics or subscription forms. It keeps two preferences in your browser: the language you choose, in a cookie, and the colour theme, in local storage. A full privacy notice will be published before launch.",
-    termsBody: "This is a preview running on sample data. Full terms need legal review before public launch.",
-    termsBodyLive: "This is a preview of an informational screening tool, not investment advice. Full terms need legal review before public launch.",
-  },
   errors: {
     notFoundTitle: "Page not found",
     notFoundBody: "The address may be mistyped, or the ticker is not in the sample universe.",
@@ -830,6 +825,7 @@ const sk: Messages = {
     legal: "Právne informácie a metodika",
     privacy: "Ochrana súkromia",
     terms: "Podmienky používania",
+    disclaimer: "Upozornenie",
     methodology: "Metodika",
   },
   states: {
@@ -1188,12 +1184,6 @@ const sk: Messages = {
     dataTitle: "Údaje a overiteľnosť",
     dataBody: "Stránka zatiaľ beží na syntetických cenových radoch a ilustračných štruktúrovaných príznakoch. Ukážkový zoznam obsahuje 28 tickerov z investičnej príručky a sedem označených rozšírení, ktoré sa hodnotia rovnakými pravidlami. Na stránke každej spoločnosti sú jej splnené pravidlá aj vstupy. Nie sú pripojené živé kurzy, licencovaný zdroj údajov ani história upozornení. Osobné pravidlá príručky o kapitáli a veľkosti pozícií sú z tohto verejného prehľadu vynechané.",
     dataBodyLive: "Prehľad spája zbierané podania SEC, denné ceny a verejné makro údaje (výnos 10-ročných dlhopisov a VIX) s výpočtami z trhu. Overený výskum AI dodáva kontrolované fakty z podaní a správ; samotné zistenia AI neprideľujú body. Neznáme polia zostávajú neznáme. Stránka spoločnosti ukazuje výsledky pravidiel a zdroje. Niektoré prahy čakajú na kontrolu. Osobné pravidlá kapitálu a pozícií z príručky sú vynechané.",
-  },
-  legal: {
-    draft: "Návrh",
-    privacyBody: "Táto ukážka nemá účty, analytiku ani formuláre na odber. V prehliadači si pamätá dve nastavenia: zvolený jazyk v cookie a farebný motív v lokálnom úložisku. Úplné informácie o ochrane súkromia zverejníme pred spustením.",
-    termsBody: "Toto je ukážka na ukážkových údajoch. Úplné podmienky používania musia pred verejným spustením prejsť právnou kontrolou.",
-    termsBodyLive: "Toto je ukážka informačného nástroja na vyhľadávanie, nie investičné poradenstvo. Úplné podmienky používania musia prejsť právnou kontrolou pred verejným spustením.",
   },
   errors: {
     notFoundTitle: "Stránka sa nenašla",

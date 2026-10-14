@@ -344,7 +344,12 @@ td,
 }
 .footer-links {
   display: flex;
-  gap: var(--s5);
+  flex-wrap: wrap;
+  gap: 0 var(--s5);
+}
+.footer-disclaimer {
+  flex-basis: 100%;
+  max-width: 62ch;
 }
 .footer-links a {
   display: inline-flex;

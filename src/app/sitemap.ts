@@ -6,7 +6,7 @@ import { instrumentUniverse, latestScores } from "@/data/store";
 
 export const dynamic = "force-dynamic";
 
-const routes = ["", "/dashboard", "/track-record", "/portfolio", "/methodology", "/legal/privacy", "/legal/terms"];
+const routes = ["", "/dashboard", "/track-record", "/portfolio", "/methodology", "/legal/privacy", "/legal/terms", "/legal/disclaimer"];
 
 /** One entry per path and locale, each with hreflang alternates. `lastModified` is the data date, not the request time. */
 function entries(paths: { path: string; lastModified?: string }[]): MetadataRoute.Sitemap {

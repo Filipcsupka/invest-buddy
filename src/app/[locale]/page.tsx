@@ -8,7 +8,6 @@ import { latestScores } from "@/data/store";
 import { DataStatus } from "@/components/data-status";
 import { LaunchSection } from "@/components/launch-section";
 import { recordStartDate } from "@/data/launch-facts";
-import { resolveVariant } from "@/config/plans";
 import { resolveSource } from "@/waitlist/source";
 import { getLaunchMessages } from "@/i18n/launch-messages";
 export const dynamic = "force-dynamic";
@@ -61,7 +60,7 @@ async function Home({ params, searchParams }: HomeProps) {
         {top ? <><Datasheet locale={locale} instrument={top.instrument} result={top.result} sample={data.sample} /><DataStatus locale={locale} lastUpdated={data.lastUpdated} stale={data.stale} /></> : <DataStatus locale={locale} lastUpdated={data.lastUpdated} stale={data.stale} />}
       </section>
 
-      {facts ? <LaunchSection locale={locale} facts={facts} variant={resolveVariant(query?.v)} source={resolveSource(query, "landing")} /> : null}
+      {facts ? <LaunchSection locale={locale} facts={facts} source={resolveSource(query, "landing")} /> : null}
 
       <section className="frame ledger" aria-labelledby="build">
         <div className="ledger-head">

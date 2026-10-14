@@ -57,14 +57,12 @@ it("shows no facts on sample data", async () => {
   expect(html).not.toMatch(/tickers scored|Record starts/);
 });
 
-it("passes the resolved price variant and a validated source to the form", async () => {
+it("passes a validated source to the form", async () => {
   process.env.WAITLIST = "on";
   scores.mockResolvedValue({ rows: [], sample: false, lastUpdated: null, stale: false });
   const sent = async (query: Record<string, string>) => renderToStaticMarkup(await Home(props("en", query)));
   // The form posts these on submit; the markup carries them through the form's props only, so check the page code path via the resolvers.
-  const { resolveVariant } = await import("@/config/plans");
   const { resolveSource } = await import("@/waitlist/source");
-  expect(resolveVariant("b")).toBe("b");
   expect(resolveSource({ utm_source: "News", ref: "x y" }, "landing")).toBe("news");
   expect(await sent({ v: "b", utm_source: "news" })).toContain('id="waitlist"');
 });

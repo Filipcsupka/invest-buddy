@@ -1,7 +1,5 @@
 import { expect, it } from "vitest";
-import { formatNumber } from "./index";
 import { getLaunchMessages } from "./launch-messages";
-import { PRICE_VARIANTS } from "@/config/plans";
 
 const leaves = (value: unknown, path = ""): [string, string][] =>
   typeof value === "string" ? [[path, value]] : Object.entries(value as object).flatMap(([key, child]) => leaves(child, path ? `${path}.${key}` : key));
@@ -31,12 +29,10 @@ it("avoids banned promise and recommendation wording", () => {
   }
 });
 
-it("writes the planned price with a decimal comma in Slovak and a point in English", () => {
-  expect(formatNumber("sk", PRICE_VARIANTS.a.monthlyEur, 2)).toBe("9,90");
-  expect(formatNumber("en", PRICE_VARIANTS.a.monthlyEur, 2)).toBe("9.90");
-});
-
-it("uses Áno and Nie in the Slovak plan table", () => {
-  const { included, notIncluded } = getLaunchMessages("sk").pricing;
-  expect([included, notIncluded]).toEqual(["Áno", "Nie"]);
+it("names no price, amount or currency in either language", () => {
+  for (const locale of ["en", "sk"] as const) {
+    for (const [key, value] of leaves(getLaunchMessages(locale))) {
+      expect(value, `${locale}.${key}`).not.toMatch(/\d|EUR|€|\$|euro|eur\b/i);
+    }
+  }
 });
