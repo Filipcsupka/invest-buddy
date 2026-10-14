@@ -15,7 +15,8 @@ describe("page metadata", () => {
       expect(meta.alternates?.canonical).toBe(`/${locale}${path}`);
       expect(meta.alternates?.languages).toEqual({ "en-GB": `/en${path}`, "sk-SK": `/sk${path}`, "x-default": `/en${path}` });
       expect(meta.openGraph).toMatchObject({ url: `/${locale}${path}`, siteName: "InvestBuddy" });
-      expect(meta.twitter).toMatchObject({ card: "summary_large_image" });
+      expect(meta.twitter).toMatchObject({ card: "summary_large_image", images: [`/${locale}/opengraph-image`] });
+      expect(meta.openGraph).toMatchObject({ images: [{ url: `/${locale}/opengraph-image`, width: 1200, height: 630 }] });
     }
   });
   it("keeps titles and descriptions unique and within search snippet length", () => {

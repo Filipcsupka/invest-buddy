@@ -32,7 +32,11 @@ export interface HolderEvent { accession: string; ticker: string; filerName: str
  * `apiRequests`: requests sent to a metered API, recorded in collector_runs.api_requests. `failures`: per-ticker failures of a source
  * that keeps going after one ticker fails. `skipped`: why the source sent nothing (no key, cap reached).
  */
-export interface SourceOutput { documents: CollectedDocument[]; facts: PendingFact[]; holderEvents?: HolderEvent[]; apiRequests?: number; failures?: { ticker: string; reason: string }[]; skipped?: string }
+/** One quarter from the Alpha Vantage EARNINGS answer (D28). */
+export interface EpsQuarter { fiscalDateEnding: string; reportedDate: string | null; reportedEps: number | null; estimatedEps: number | null; surprisePct: number | null }
+/** All quarters of one symbol's answer plus the raw body, for eps_history and the raw store. */
+export interface EpsHistoryBatch { symbol: string; ticker: string; quarters: EpsQuarter[]; rawBody: string; fetchedAt: string }
+export interface SourceOutput { documents: CollectedDocument[]; facts: PendingFact[]; holderEvents?: HolderEvent[]; epsHistory?: EpsHistoryBatch[]; apiRequests?: number; failures?: { ticker: string; reason: string }[]; skipped?: string }
 export interface PingResult { source: string; ok: boolean; ms: number; detail: string; skipped?: boolean }
 export interface SourceModule {
   name: string;

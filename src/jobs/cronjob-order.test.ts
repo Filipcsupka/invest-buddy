@@ -250,3 +250,12 @@ describe("RS5 research schedule", () => {
     expect(doc).not.toContain("name: TELEGRAM_CHAT_ID");
   });
 });
+
+describe("corporate actions job", () => {
+  it("is suspended and reads stored data only", () => {
+    const doc = job("dq-corporate-actions");
+    expect(doc).toContain("suspend: true");
+    expect(doc).toContain('command: ["node", "dist/jobs/dq-corporate-actions.js"]');
+    expect(minutes("dq-corporate-actions").at).toBeGreaterThan(minutes("daily").at);
+  });
+});

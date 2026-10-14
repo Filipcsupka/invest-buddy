@@ -3,7 +3,7 @@ import { CapReached } from "../../data/usage";
 import { freshnessDays } from "../../data/evidence";
 import type { CollectedDocument } from "../types";
 import { defaultHttp, type SourceHttp } from "./client";
-import { isDate, isoDate, LICENSES, marketTicker, parseJson, PING_REQUEST, runPing, sourceDocument, type PendingFact, type PingResult, type SourceContext, type SourceOutput } from "./common";
+import { isDate, isoDate, LICENSES, marketTicker, parseJson, PING_REQUEST, runPing, sourceDocument, type EpsHistoryBatch, type EpsQuarter, type PendingFact, type PingResult, type SourceContext, type SourceOutput } from "./common";
 
 export const SOURCE = "alphavantage";
 export const AV_QUERY = "https://www.alphavantage.co/query";
@@ -30,13 +30,17 @@ const num = (value: unknown): number | null => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
-/** Newest quarter with a reported EPS, reported on or before `today`. undefined when the answer has none. */
-export function parseEarnings(text: string, today: string): EpsSurpriseFact | undefined {
+function parseAnswer(text: string): QuarterRow[] {
   const answer = parseJson<{ quarterlyEarnings?: QuarterRow[]; Information?: string; Note?: string; "Error Message"?: string }>(text, "Alpha Vantage");
   if (answer.Information || answer.Note) throw new AlphaVantageLimit(`Alpha Vantage: ${answer.Information ?? answer.Note}`);
   if (answer["Error Message"]) throw new Error(`Alpha Vantage: ${answer["Error Message"]}`);
   if (!Array.isArray(answer.quarterlyEarnings)) throw new Error("Alpha Vantage: no quarterlyEarnings array");
-  const rows = answer.quarterlyEarnings
+  return answer.quarterlyEarnings;
+}
+
+/** Newest quarter with a reported EPS, reported on or before `today`. undefined when the answer has none. */
+export function parseEarnings(text: string, today: string): EpsSurpriseFact | undefined {
+  const rows = parseAnswer(text)
     .filter((row) => isDate(row.reportedDate) && row.reportedDate <= today && num(row.reportedEPS) !== null)
     .sort((a, b) => b.reportedDate!.localeCompare(a.reportedDate!));
   const row = rows[0];
@@ -45,7 +49,23 @@ export function parseEarnings(text: string, today: string): EpsSurpriseFact | un
     reportedEps: num(row.reportedEPS), estimatedEps: num(row.estimatedEPS), surprisePercent: num(row.surprisePercentage) };
 }
 
-/** Missing first, then the oldest stored report date, then symbol. */
+/** Every quarter in the answer that has a fiscal period end (D28). Missing numbers stay null. One row per fiscal date; the first wins. */
+export function parseEarningsHistory(text: string): EpsQuarter[] {
+  const seen = new Set<string>();
+  const out: EpsQuarter[] = [];
+  for (const row of parseAnswer(text)) {
+    if (!isDate(row.fiscalDateEnding) || seen.has(row.fiscalDateEnding)) continue;
+    seen.add(row.fiscalDateEnding);
+    out.push({ fiscalDateEnding: row.fiscalDateEnding, reportedDate: isDate(row.reportedDate) ? row.reportedDate : null, reportedEps: num(row.reportedEPS), estimatedEps: num(row.estimatedEPS), surprisePct: num(row.surprisePercentage) });
+  }
+  return out.sort((a, b) => a.fiscalDateEnding.localeCompare(b.fiscalDateEnding));
+}
+
+/**
+ * Never fetched first, then the oldest newest-eps_history observed_at, then symbol. Keyed on observation time, not report date, so a
+ * symbol with no reported quarter (no EPS fact) still moves back in line. eps_history only gets a row when a value changes, so this is
+ * a proxy for the last fetch; a symbol whose answer is empty never gets a row and stays first.
+ */
 export function pickSymbols(symbols: string[], latest: Map<string, string>, budget: number): string[] {
   return [...symbols].sort((a, b) => (latest.get(a) ?? "").localeCompare(latest.get(b) ?? "") || a.localeCompare(b)).slice(0, Math.max(0, budget));
 }
@@ -62,17 +82,19 @@ export async function collectAlphaVantage(ctx: SourceContext): Promise<SourceOut
   const used = await ctx.state.apiRequestsSince(SOURCE, startOfUtcDay(ctx.now));
   const budget = Math.min(MAX_REQUESTS_PER_RUN, MAX_REQUESTS_PER_DAY - used);
   if (budget <= 0) return { documents: [], facts: [], apiRequests: 0, skipped: `daily cap of ${MAX_REQUESTS_PER_DAY} requests reached (${used} used today)` };
-  const picked = pickSymbols(ctx.symbols, await ctx.state.latestFactDates(EPS_FACT_KEY), budget);
+  const picked = pickSymbols(ctx.symbols, await ctx.state.latestEpsObserved(), budget);
   const today = isoDate(ctx.now);
-  const documents: CollectedDocument[] = [], facts: PendingFact[] = [], failures: { ticker: string; reason: string }[] = [];
+  const documents: CollectedDocument[] = [], facts: PendingFact[] = [], epsHistory: EpsHistoryBatch[] = [], failures: { ticker: string; reason: string }[] = [];
   let requests = 0;
   for (const [index, symbol] of picked.entries()) {
     const ticker = marketTicker(symbol);
     let quarter: EpsSurpriseFact | undefined;
+    let body = "";
     try {
       await ctx.usage?.reserve(SOURCE, 1, { job: "collect", credits: 1 });
       requests++;
-      quarter = parseEarnings(await ctx.http.get(requestUrl(ticker, key), { timeoutMs: 15_000, maxAttempts: 1 }), today);
+      body = await ctx.http.get(requestUrl(ticker, key), { timeoutMs: 15_000, maxAttempts: 1 });
+      quarter = parseEarnings(body, today);
     } catch (error) {
       const reason = redact(error instanceof Error ? error.message : String(error), key);
       failures.push({ ticker: symbol, reason });
@@ -82,6 +104,9 @@ export async function collectAlphaVantage(ctx: SourceContext): Promise<SourceOut
       }
       continue;
     }
+    // The full history is kept even when no quarter is reported yet; parseEarnings already proved the answer is well formed.
+    const quarters = parseEarningsHistory(body);
+    if (quarters.length) epsHistory.push({ symbol, ticker, quarters, rawBody: body, fetchedAt: ctx.now.toISOString() });
     if (!quarter) { failures.push({ ticker: symbol, reason: "Alpha Vantage: no reported quarter" }); continue; }
     const url = documentUrl(ticker, quarter.reportedDate);
     const pct = quarter.surprisePercent === null ? "not given" : `${quarter.surprisePercent}%`;
@@ -92,7 +117,7 @@ export async function collectAlphaVantage(ctx: SourceContext): Promise<SourceOut
     facts.push({ symbol, key: EPS_FACT_KEY, asOf: quarter.reportedDate, documentUrls: [url], expiresAt: addDays(quarter.reportedDate, freshnessDays.epsBeat),
       value: { ...quarter, source: SOURCE, displayAllowed: false } });
   }
-  return { documents, facts, apiRequests: requests, failures };
+  return { documents, facts, epsHistory, apiRequests: requests, failures };
 }
 
 /** Uses the documented `demo` key (IBM only), so a ping never spends the daily quota of the real key. */
