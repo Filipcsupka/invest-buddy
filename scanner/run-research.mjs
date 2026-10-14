@@ -101,13 +101,14 @@ export async function execute(opts, { adapter = researchAdapter(process.env.RESE
   mkdirSync(outDir, { recursive: true });
   const groups = callGroups(opts, input, themesConfig);
   const results = [];
+  let modelCalls = 0;
   const live = liveUsage ?? (() => fetchLiveUsage(env.CLAUDE_CODE_OAUTH_TOKEN));
   for (const group of groups) {
     const runId = randomUUID();
     let gate;
     try {
       gate = await checkResearchCaps({ env, now: now(), type: opts.type, manual: opts.manual,
-        authSource, adapter: adapter.name, codexQuota: () => adapter.quota(), usage: await usage(opts.baseUrl, token), liveUsage: live });
+        authSource, adapter: adapter.name, codexQuota: () => adapter.quota(), usage: await usage(opts.baseUrl, token), runCalls: modelCalls, liveUsage: live });
     } catch (error) { gate = { ok: false, status: "skipped_cap", reason: `research cap check unavailable: ${error.message}` }; }
     if (!gate.ok) {
       await postSkip(opts, token, adapter.name, gate.status, gate.reason, runId);
@@ -121,13 +122,14 @@ export async function execute(opts, { adapter = researchAdapter(process.env.RESE
       results.push({ skipped: "skipped_cap", posted: true, errors: [] });
       continue;
     }
+    modelCalls += 1;
     const workDir = mkdtempSync(join(tmpdir(), "invest-research-"));
     const started = performance.now();
     let result, output, error = null, adapterFailed = false;
     try {
       const prompt = buildPrompt(opts, input, group, themesConfig);
       try { result = await adapter.run({ prompt, schemaPath: join(here, "schema", "research-output.schema.json"), model: opts.model, maxTurns: defaults.maxTurns, timeoutMs: opts.timeoutS * 1000, workDir, env,
-        monitor: adapter.name !== "claude" || env.ANTHROPIC_API_KEY ? undefined : () => checkLiveResearchQuota({ env, liveUsage: live }) }); }
+        monitor: adapter.name !== "claude" || env.ANTHROPIC_API_KEY ? undefined : () => checkLiveResearchQuota({ env, liveUsage: live, monitor: true }) }); }
       catch (caught) { error = caught; adapterFailed = true; }
       if (!adapterFailed) output = result.cutoff ? emptyOutput() : modelOutput(extractJson(result.text));
     } catch (caught) {

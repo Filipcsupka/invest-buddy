@@ -27,6 +27,31 @@ export function bratislavaClock(now = new Date()) {
   return { day: `${parts.year}-${parts.month}-${parts.day}`, minute: Number(parts.hour) * 60 + Number(parts.minute) };
 }
 
+export const OVERRIDE_DEFAULTS = { runCalls: 3, dailyCalls: 2, monthlyCalls: 20 };
+
+/** Opt-in only: RESEARCH_QUOTA_UNKNOWN_OVERRIDE=on. Anything else, including unset, is off. */
+export const overrideOn = (env) => env.RESEARCH_QUOTA_UNKNOWN_OVERRIDE === "on";
+
+export function overrideLimits(env) {
+  return {
+    runCalls: number(env, "RESEARCH_OVERRIDE_RUN_CALLS", OVERRIDE_DEFAULTS.runCalls),
+    dailyCalls: number(env, "RESEARCH_OVERRIDE_DAILY_CALLS", OVERRIDE_DEFAULTS.dailyCalls),
+    monthlyCalls: number(env, "RESEARCH_OVERRIDE_MONTHLY_CALLS", OVERRIDE_DEFAULTS.monthlyCalls),
+  };
+}
+
+/** Hard call caps for a run that goes ahead without a quota reading. Counts come from our own tables; unreadable counts stop the run. */
+export function checkOverrideCaps(env, usage, runCalls) {
+  let limits;
+  try { limits = overrideLimits(env); } catch (error) { return skipped("skipped_quota", `quota override caps invalid: ${error.message}`); }
+  if (![usage?.dailyCalls, usage?.monthlyCalls, runCalls].every((n) => Number.isFinite(n) && n >= 0))
+    return skipped("skipped_quota", "quota override call counts are unreadable");
+  if (runCalls >= limits.runCalls) return skipped("skipped_quota", "quota override per-run call cap reached");
+  if (usage.dailyCalls >= limits.dailyCalls) return skipped("skipped_quota", "quota override daily call cap reached");
+  if (usage.monthlyCalls >= limits.monthlyCalls) return skipped("skipped_quota", "quota override monthly call cap reached");
+  return null;
+}
+
 export const CODEX_DAILY_CALLS = 2;
 export const CODEX_QUOTA_STOP_PCT = 50;
 
@@ -42,7 +67,7 @@ const withinWindow = (minute, window) => {
 
 /** Usage values are totals from completed and reserved calls for the local calendar day/month. */
 export async function checkResearchCaps({ env = process.env, now = new Date(), type, manual = false,
-  authSource = env.ANTHROPIC_API_KEY ? "api" : "subscription", adapter = "claude", codexQuota, usage, liveUsage = () => fetchLiveUsage(env.CLAUDE_CODE_OAUTH_TOKEN) }) {
+  authSource = env.ANTHROPIC_API_KEY ? "api" : "subscription", adapter = "claude", codexQuota, usage, runCalls = 0, liveUsage = () => fetchLiveUsage(env.CLAUDE_CODE_OAUTH_TOKEN) }) {
   if (env.RESEARCH_ENABLED !== "on") return skipped("killed", "RESEARCH_ENABLED is not on");
   const clock = bratislavaClock(now);
   // Codex never gets the manual deep-dive exemption: its account is shared with the owner's own agents.
@@ -67,14 +92,20 @@ export async function checkResearchCaps({ env = process.env, now = new Date(), t
     // With an API key the USD cap above governs spend and there is no plan rate limit to read.
     return authSource === "api" ? { ok: true, status: "ok", reason: null } : checkCodexQuota({ env, codexQuota });
   }
-  if (authSource === "subscription") return checkLiveResearchQuota({ env, liveUsage });
+  if (authSource === "subscription") return checkLiveResearchQuota({ env, liveUsage, usage, runCalls });
   return { ok: true, status: "ok", reason: null };
 }
 
-export async function checkLiveResearchQuota({ env = process.env, liveUsage = () => fetchLiveUsage(env.CLAUDE_CODE_OAUTH_TOKEN) }) {
+/** `usage` and `runCalls` are only read when the reading is unknown and the override is on. Without them the override stops (the in-flight monitor passes none and so keeps the gate's decision). */
+export async function checkLiveResearchQuota({ env = process.env, liveUsage = () => fetchLiveUsage(env.CLAUDE_CODE_OAUTH_TOKEN), usage, runCalls, monitor = false }) {
   const result = await liveUsage();
-  if (!result?.usage || ![result.usage.fiveHour?.pct, result.usage.sevenDay?.pct].every((pct) => Number.isFinite(pct) && pct >= 0 && pct <= 100))
-    return skipped("skipped_quota", `live Claude quota unavailable: ${result?.unavailable ?? "invalid response"}`);
+  if (!result?.usage || ![result.usage.fiveHour?.pct, result.usage.sevenDay?.pct].every((pct) => Number.isFinite(pct) && pct >= 0 && pct <= 100)) {
+    const reason = `live Claude quota unavailable: ${result?.unavailable ?? "invalid response"}`;
+    if (!overrideOn(env)) return skipped("skipped_quota", reason);
+    if (monitor) return { ok: true, status: "ok", reason: null, override: true };
+    const capped = checkOverrideCaps(env, usage, runCalls);
+    return capped ?? { ok: true, status: "ok", reason: `${reason}; running under RESEARCH_QUOTA_UNKNOWN_OVERRIDE caps`, override: true };
+  }
   const fiveHour = number(env, "RESEARCH_QUOTA_STOP_5H_PCT", 70);
   const sevenDay = number(env, "RESEARCH_QUOTA_STOP_7D_PCT", 80);
   if (result.usage.fiveHour.pct >= fiveHour) return skipped("skipped_quota", `five-hour quota at ${result.usage.fiveHour.pct}%`);

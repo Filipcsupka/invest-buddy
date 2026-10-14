@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { checkResearchCaps } from "../research-caps.mjs";
+import { checkResearchCaps, checkLiveResearchQuota } from "../research-caps.mjs";
 import { runCli } from "../run-scan.mjs";
 
 const now = new Date("2026-10-11T01:00:00Z");
@@ -46,4 +46,55 @@ test("an in-flight quota stop terminates the model process", async () => {
     cwd: process.cwd(), timeoutMs: 2000, monitorIntervalMs: 20,
     monitor: async () => ({ ok: false, reason: "five-hour quota at 70%" }),
   }), (error) => error.cutoff?.window === "5h");
+});
+
+// RS8 follow-up: opt-in override when the usage endpoint gives no reading.
+import { fetchLiveUsage } from "../claude-usage.mjs";
+const fake403 = (status) => (token) => fetchLiveUsage(token, { fetcher: async () => ({ ok: false, status }) });
+const fake200 = (pct) => (token) => fetchLiveUsage(token, { fetcher: async () => ({ ok: true, json: async () => ({ five_hour: { utilization: pct }, seven_day: { utilization: pct } }) }) });
+const ovUsage = { ...usage, dailyCalls: 0, monthlyCalls: 0 };
+const ov = (env, override = {}) => check({ RESEARCH_QUOTA_UNKNOWN_OVERRIDE: "on", ...env }, { usage: ovUsage, liveUsage: () => fake403(403)("tok"), ...override });
+
+test("403 from the usage endpoint stops when the override is off or not exactly on", async () => {
+  for (const value of [undefined, "off", "true", "1", ""]) {
+    const r = await check({ RESEARCH_QUOTA_UNKNOWN_OVERRIDE: value }, { usage: ovUsage, liveUsage: () => fake403(403)("tok") });
+    assert.equal(r.status, "skipped_quota");
+  }
+});
+test("403 with the override on runs under hard caps", async () => {
+  const r = await ov({});
+  assert.equal(r.ok, true);
+  assert.equal(r.override, true);
+  assert.equal((await ov({}, { liveUsage: async () => ({ unavailable: "request failed" }) })).ok, true);
+});
+test("override stops at the per-run, daily and monthly caps", async () => {
+  assert.equal((await ov({}, { runCalls: 3 })).status, "skipped_quota");
+  assert.equal((await ov({ RESEARCH_OVERRIDE_RUN_CALLS: "1" }, { runCalls: 1 })).status, "skipped_quota");
+  assert.equal((await ov({ RESEARCH_DAILY_CALLS: "9" }, { usage: { ...ovUsage, dailyCalls: 2 } })).status, "skipped_quota");
+  assert.equal((await ov({}, { usage: { ...ovUsage, monthlyCalls: 20 } })).status, "skipped_quota");
+  assert.equal((await ov({ RESEARCH_OVERRIDE_MONTHLY_CALLS: "30" }, { usage: { ...ovUsage, monthlyCalls: 29 } })).ok, true);
+  assert.equal((await ov({ RESEARCH_OVERRIDE_DAILY_CALLS: "0" })).status, "skipped_quota");
+});
+test("override fails closed when call counts or caps are unreadable", async () => {
+  assert.equal((await ov({}, { usage: { ...ovUsage, monthlyCalls: undefined } })).status, "skipped_quota");
+  assert.equal((await ov({}, { usage: { ...ovUsage, monthlyCalls: null } })).status, "skipped_quota");
+  assert.equal((await ov({ RESEARCH_OVERRIDE_RUN_CALLS: "abc" })).status, "skipped_quota");
+  assert.equal((await ov({ RESEARCH_OVERRIDE_DAILY_CALLS: "-1" })).status, "skipped_quota");
+  assert.equal((await ov({}, { usage: null })).status, "skipped_cap");
+});
+test("a known reading is never bypassed by the override", async () => {
+  assert.equal((await ov({}, { liveUsage: () => fake200(95)("tok") })).status, "skipped_quota");
+  assert.equal((await ov({}, { liveUsage: () => fake200(10)("tok"), usage: { ...ovUsage, monthlyCalls: 999 } })).ok, true);
+});
+test("override does not relax the other caps, the window or the kill switch", async () => {
+  assert.equal((await ov({ RESEARCH_DAILY_TOKENS: "10" })).status, "skipped_cap");
+  assert.equal((await ov({ RESEARCH_DAILY_CALLS: "0" })).status, "skipped_cap");
+  assert.equal((await ov({ RESEARCH_WINDOW: "04:00-07:00" })).status, "skipped_window");
+  assert.equal((await ov({ RESEARCH_ENABLED: "off" })).status, "killed");
+});
+test("in-flight monitor lets an unknown reading continue only with the override on", async () => {
+  const unknown = async () => ({ unavailable: "403" });
+  assert.equal((await checkLiveResearchQuota({ env: {}, liveUsage: unknown, monitor: true })).ok, false);
+  assert.equal((await checkLiveResearchQuota({ env: { RESEARCH_QUOTA_UNKNOWN_OVERRIDE: "on" }, liveUsage: unknown, monitor: true })).ok, true);
+  assert.equal((await checkLiveResearchQuota({ env: { RESEARCH_QUOTA_UNKNOWN_OVERRIDE: "on" }, liveUsage: fake200(90).bind(null, "t") , monitor: true })).ok, false);
 });

@@ -47,3 +47,19 @@ Cost: not run
 Signed: 
 
 Date: 
+
+## Claude quota-unknown override
+
+The Anthropic usage endpoint can answer 403 (or fail), so the runner has no quota reading and records `skipped_quota`. To let Claude subscription runs go ahead anyway, set `RESEARCH_QUOTA_UNKNOWN_OVERRIDE=on`. Any other value, or unset, keeps the skip. It is off by default and the owner sets it.
+
+It only applies when there is no reading. A reading above the stop levels still stops the run, and the kill switch, window, token caps and daily call cap are unchanged. Codex and API-key runs are not affected.
+
+With the override on, a run also needs all of these to pass, counted from `ai_budget_calls`:
+
+| Env | Default | Meaning |
+| --- | --- | --- |
+| `RESEARCH_OVERRIDE_RUN_CALLS` | 3 | model calls in one runner invocation (a weekly run uses 3) |
+| `RESEARCH_OVERRIDE_DAILY_CALLS` | 2 | research calls today (Europe/Bratislava day) |
+| `RESEARCH_OVERRIDE_MONTHLY_CALLS` | 20 | research calls this month |
+
+The counts include every research call in the table, not only override runs, so the caps are conservative. If a count or cap value cannot be read, the run is skipped as `skipped_quota`. The `research-caps` report now returns `monthlyCalls`. The eval harness (`npm run research:eval`) reads stored rows only and is not affected.
