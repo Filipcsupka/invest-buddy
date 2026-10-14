@@ -1,6 +1,7 @@
 import { withPageLog } from "@/app/page-log";
 import type { Metadata } from "next";
 import { Disclaimer } from "@/components/disclaimer";
+import { TrackView } from "@/components/track-view";
 import { WaitlistForm } from "@/components/waitlist-form";
 import { FREE_LIMITS, PRICE_VARIANTS, resolveVariant, yearlyTotalEur } from "@/config/plans";
 import { flags } from "@/config/flags";
@@ -42,6 +43,7 @@ async function Pricing({ params, searchParams }: PricingProps) {
   const cell = (value: string | boolean) => (typeof value === "string" ? value : value ? p.included : p.notIncluded);
   return (
     <article className="frame page">
+      <TrackView events={["pricing_view", "variant"]} props={{ variant, locale }} />
       <header className="page-head">
         <h1 className="title">{p.title}</h1>
         <p className="lede">{p.lede}</p>

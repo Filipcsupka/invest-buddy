@@ -1,5 +1,6 @@
 "use client";
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
+import { track } from "@/analytics/events";
 import type { PriceVariantId } from "@/config/plans";
 import type { Locale } from "@/i18n";
 import type { LaunchMessages } from "@/i18n/launch-messages";
@@ -17,6 +18,10 @@ export function WaitlistForm({ copy, locale, variant }: { copy: LaunchMessages["
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<Status>("idle");
 
+  useEffect(() => {
+    track("waitlist_view", { variant, locale });
+  }, [variant, locale]);
+
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (status === "sending") return;
@@ -25,7 +30,10 @@ export function WaitlistForm({ copy, locale, variant }: { copy: LaunchMessages["
     setError(null);
     setStatus("sending");
     const outcome = await submitWaitlist(buildPayload({ email, consent, website }, locale, variant));
-    if (outcome === "ok") return setStatus("done");
+    if (outcome === "ok") {
+      track("waitlist_submit", { variant, locale });
+      return setStatus("done");
+    }
     setStatus("idle");
     setError(outcome === "invalid" ? copy.errorInvalid : outcome === "rate_limited" ? copy.errorRate : copy.errorFailed);
   }
