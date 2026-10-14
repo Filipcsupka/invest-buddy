@@ -57,6 +57,18 @@ PM1 and PM4 have no dependency and can start now. PM3 waits for PM1. PM2 waits f
 - Who: agent
 - Approval needed: none
 - Risk or open question: some papers may sit behind a paywall; the Cembalest PDF and the Bessembinder paper may not be reachable.
+- Result (2026-10-14): details, quotes and URLs are in `docs/research-sources.md`. Strength labels after the check:
+  - Bessembinder: the 55.2% and 57.4% figures are from Bessembinder, Chen, Choi and Wei, FAJ 2023, not the JFE 2018 paper. Checked on the journal page. Strong direction; paper PDF not opened.
+  - Cembalest: verified, pp. 1 and 4. The 40% needs the definition (a 70% fall with little recovery). Strong direction.
+  - Odean: direction verified in the abstract. The 14.8% and 9.8% figures are still UNVERIFIED. Shefrin and Statman: UNVERIFIED (not opened).
+  - Moskowitz et al.: verified, futures only. Mixed.
+  - AQR century paper: only the landing page was read. UNVERIFIED beyond the one-line summary.
+  - Kaminski and Lo: abstracts verified, body not read. The random-walk result is from the 2008 working paper. Mixed.
+  - Faber: verified in the 2013 update, index level. Mixed.
+  - Vanguard: verified, asset allocation only. Mixed.
+  - O'Neil 7 to 8 percent, "sell half after +100 percent", Fisher: UNVERIFIED, no primary text seen. Folklore.
+  - Averaging down: still no supporting source found. Unsupported.
+  - The evidence table above is unchanged; fold these labels into it when PM3 starts.
 
 ### PM2. Position review checklist (owner view only)
 - Why: pre-written rules need a fixed list of review questions. This is a checklist that shows facts. It adds no new action and no new signal.
