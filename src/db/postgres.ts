@@ -3,6 +3,7 @@ import type { ScoreResult } from "../engine";
 import type { AlertChange, SaveOutcome, ScoreRepository, ScoredInstrument } from "./types";
 import { stateChange } from "./types";
 import { SCORE_RULES_VERSION } from "../engine/score";
+import { RULESET_VERSION } from "../config/rules";
 import { snapshotFor } from "./score-snapshots";
 import { scoreSignal } from "../track-record/measure";
 
@@ -55,9 +56,9 @@ export class PostgresScoreRepository implements ScoreRepository {
           const close = result.inputs.bars.findLast((bar) => bar.date === asOf)?.close ?? null;
           const sameDayRecorded = await client.query<{ state: ScoreResult["state"] }>(
             "SELECT state FROM record_snapshots WHERE ticker=$1 AND as_of=$2", [result.ticker, asOf]);
-          await client.query(`INSERT INTO record_snapshots (ticker,as_of,score,state,rule_hits,rules_version,reference_close)
-            VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7) ON CONFLICT (ticker,as_of) DO NOTHING`,
-          [result.ticker, asOf, result.total, result.state, JSON.stringify(result.ruleHits.filter((hit) => hit.matched).map((hit) => ({ id: hit.id, points: hit.points }))), SCORE_RULES_VERSION, close]);
+          await client.query(`INSERT INTO record_snapshots (ticker,as_of,score,state,rule_hits,rules_version,reference_close,ruleset_version)
+            VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8) ON CONFLICT (ticker,as_of) DO NOTHING`,
+          [result.ticker, asOf, result.total, result.state, JSON.stringify(result.ruleHits.filter((hit) => hit.matched).map((hit) => ({ id: hit.id, points: hit.points }))), SCORE_RULES_VERSION, close, RULESET_VERSION]);
           const previousReal = await client.query<{ state: ScoreResult["state"] }>(
             "SELECT state FROM record_snapshots WHERE ticker=$1 AND as_of < $2 ORDER BY as_of DESC LIMIT 1", [result.ticker, asOf]);
           const tier = scoreSignal(sameDayRecorded.rows.length ? existing.rows[0]?.state ?? sameDayRecorded.rows[0].state : previousReal.rows[0]?.state ?? null, result.state);

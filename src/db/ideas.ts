@@ -3,6 +3,7 @@ import { z } from "zod";
 import { isoDate } from "./iso-date";
 import { SIZE_TIERS, tierFits, type SizeTier } from "../engine/signals";
 import { judgeSignal } from "../track-record/measure";
+import { RULESET_VERSION } from "../config/rules";
 
 export const ACTIONS = ["WATCH", "START_POSITION", "ADD", "HIGH_CONVICTION_ADD", "HOLD", "REDUCE", "THESIS_BROKEN", "CSPX_ALLOCATION"] as const;
 export type IdeaAction = (typeof ACTIONS)[number];
@@ -130,11 +131,11 @@ export async function recordJudge(pool: pg.Pool, body: IdeasPost): Promise<{ sto
 }
 
 async function insertIdea(client: Client, i: IdeasPost["ideas"][number], run: JudgeRun): Promise<number> {
-  const r = await client.query(`INSERT INTO trade_ideas (as_of,symbol,action,amount_min_eur,amount_max_eur,verdict,what_happened,why_it_matters,setup,numbers,plan,evidence_urls,unconfirmed,carried_from,signature,input_hash,agent,model,rule_config_version,conflict_note,downgraded_from,size_tier,judge_run_id,translations)
-    VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9::jsonb,$10::jsonb,$11::jsonb,$12::jsonb,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24::jsonb)
+  const r = await client.query(`INSERT INTO trade_ideas (as_of,symbol,action,amount_min_eur,amount_max_eur,verdict,what_happened,why_it_matters,setup,numbers,plan,evidence_urls,unconfirmed,carried_from,signature,input_hash,agent,model,rule_config_version,conflict_note,downgraded_from,size_tier,judge_run_id,translations,ruleset_version)
+    VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9::jsonb,$10::jsonb,$11::jsonb,$12::jsonb,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24::jsonb,$25)
     ON CONFLICT (as_of,symbol,input_hash) DO NOTHING`,
   [run.asOf, i.symbol, i.action, i.amountMinEur, i.amountMaxEur, i.verdict, JSON.stringify(i.whatHappened), JSON.stringify(i.whyItMatters), JSON.stringify(i.setup), JSON.stringify(i.numbers), JSON.stringify(i.plan), JSON.stringify(i.evidence),
-    i.unconfirmed, i.carriedFrom ?? null, i.signature, run.inputHash, run.agent, run.model, i.ruleConfigVersion, i.conflictNote ?? null, i.downgradedFrom ?? null, i.sizeTier, run.runId, i.translations ? JSON.stringify(i.translations) : null]);
+    i.unconfirmed, i.carriedFrom ?? null, i.signature, run.inputHash, run.agent, run.model, i.ruleConfigVersion, i.conflictNote ?? null, i.downgradedFrom ?? null, i.sizeTier, run.runId, i.translations ? JSON.stringify(i.translations) : null, RULESET_VERSION]);
   if (judgeSignal(i.action)) {
     await client.query(`INSERT INTO record_signals (ticker,as_of,source,event_key,tier,state,score,rules_version,reference_close,spy_reference_close)
       SELECT $1,$2,'judge',$3,$4,$5,(SELECT score FROM record_snapshots WHERE ticker=$1 AND as_of=$2),$6,

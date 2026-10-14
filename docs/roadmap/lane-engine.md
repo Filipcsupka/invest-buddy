@@ -201,7 +201,7 @@ Status: thresholds and boundary tests merged in PR #80; PR #90 introduced the go
 - Risk or open question: `instruments.tier` content not read in this pass; check the seed in migration 003 matches Guide section 9. IBKR fee and minimum order are unknown (draft EUR 0.35).
 
 ### EN11. Rule versioning, changelog and the F6 placeholders in one config
-Status: partly open. `RULESET_VERSION` is not yet stored on `record_snapshots` or `trade_ideas`; deferred because it would change fingerprints.
+Status: done. `RULESET_VERSION` is stored in the new nullable `ruleset_version` column on `record_snapshots` and `trade_ideas` (migration 085), written at insert, not shown publicly and not part of the daily fingerprint or `ideaSignature`. Older rows stay NULL. The existing `record_snapshots.rules_version` keeps the score version, so the new column has a different name.
 - Synthesis note: the config hash test here is the single rules-version guard; PL10's version check uses it.
 - Why: F6 asks for the drawdown band (20), valuation band (PE 25), insider cluster (3 in 30 days), turnover target (30 percent) in one file with sources (`src/jobs/gate-config.ts` has only the first four). `SCORE_RULES_VERSION` and `SIGNAL_RULES.version` are separate strings. EPS threshold `EPS_BEAT_MIN_SURPRISE_PCT` is 0.
 - Steps:
