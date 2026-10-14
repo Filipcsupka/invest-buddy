@@ -19,10 +19,10 @@ The C5 review compared `src/engine/signals.ts` with `InvestingGuide.md` and list
 
 - 2026-10-14, EN47: the Setup threshold stays at 72% of the 23 core points. The 78.3% proposal is not adopted.
 - 2026-10-14, PM3: no DEEP_ADD action and no take-profit rule. Guide rule 3 stays unimplemented on purpose.
-- Public output never shows START or ADD wording or amounts; owner mode only (EN48 design, open).
 
 ## Still open
 
+- Public output never shows START or ADD wording or amounts; owner mode only (EN48 design). No recorded owner decision found, so it stays open.
 - Owner sign-off on D1 to D4. The code already follows the defaults above, so a "no" means a rule change and a golden refresh.
 - D5, the sizing values, plus the IBKR fee and minimum order (draft EUR 0.35, unverified).
 - D6 retest: whether it triggers an owner-mode ADD, and the lookback and tolerance values.

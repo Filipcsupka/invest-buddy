@@ -122,6 +122,7 @@ Groups: A first live run, B web, C pipeline quality, D data and accounts, E oper
 - Owner task. Check the point tables and band percentages in `SIGNAL_RULES` (`src/engine/signals.ts`) against `InvestingGuide.md`.
 - Also review the single-extractor policy (2026-10-06, `docs/data.md`): one extractor's true/false claim counts as `verified_single` when a cited quote is found in a stored, display-allowed document. Decide whether that is enough, and whether `signals.ts` should count `verified_single` and `data_rule` (it counts only `agree` and `xbrl_override` today). Also check the `EPS_BEAT_MIN_SURPRISE_PCT` placeholder (0).
 - DoD: owner signs off or lists changes; golden tests updated.
+- Decisions D1 to D6 are drafted in `docs/adr-signal-alignment.md` (repo only). No owner answers are recorded yet.
 
 ### C6. Cost and quota guard for extract
 - App change: per-symbol token and cost columns already exist in `extraction_runs` (migration 016), and Claude usage already logs the five-hour and seven-day percentages. The report now lists recent extraction rows. `AI_DAILY_TOKEN_CEILING` defaults to 0 (off); when set, extract checks completed subscription tokens for the UTC day before each model call and exits 5 at the ceiling, leaving the gate pending. Live proof 2026-10-09: a one-off Job with `AI_DAILY_TOKEN_CEILING=1` (`--only NVDA --force --concurrency 1`) read 806,713 tokens used that day, logged `DAILY TOKEN CEILING: 806713/1 tokens after 0 tickers; remaining work pending`, made no model call and exited 5. Done.
