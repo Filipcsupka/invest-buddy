@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { afterEach, expect, it, vi } from "vitest";
+import { messages } from "@/i18n/messages";
 import { scoredUniverse } from "@/data/scored";
 
 const scores = vi.fn();
@@ -60,4 +61,28 @@ it("renders the same company image with ADVICE_OUTPUT on and off, and never read
     const source = readFileSync(file, "utf8");
     expect(source, file).not.toMatch(/flags\(|process\.env\.ADVICE|\.action|\.tier|sizing/);
   }
+});
+
+it("labels sample and stale company images instead of presenting them as live", async () => {
+  const ticker = await load();
+  const rows = (await scoredUniverse());
+  const render = async (sample: boolean, stale: boolean) => {
+    scores.mockResolvedValue({ rows, sample, lastUpdated: rows[0].result.asOf, stale });
+    return Buffer.from(await bytes((await CompanyImage({ params: Promise.resolve({ locale: "en", ticker }) })) as Response));
+  };
+  const live = await render(false, false);
+  const sample = await render(true, false);
+  const stale = await render(false, true);
+  expect(sample.equals(live)).toBe(false);
+  expect(stale.equals(live)).toBe(false);
+  expect(stale.equals(sample)).toBe(false);
+});
+
+it("uses a dedicated short disclaimer key in both locales", () => {
+  for (const m of [messages.en, messages.sk]) {
+    expect(m.common.ogDisclaimer.length).toBeGreaterThan(20);
+    expect(m.common.ogDisclaimer.length).toBeLessThan(m.common.disclaimer.length);
+    expect(m.common.ogStale).toBeTruthy();
+  }
+  expect(readFileSync("src/og/card.tsx", "utf8")).not.toContain('split(". ")');
 });

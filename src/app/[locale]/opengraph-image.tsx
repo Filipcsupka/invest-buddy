@@ -2,7 +2,6 @@ import { notFound } from "next/navigation";
 import { getMessages, isLocale } from "@/i18n";
 import { homeImage, OG_CONTENT_TYPE, OG_SIZE } from "@/og/card";
 
-export const dynamic = "force-dynamic";
 export const size = OG_SIZE;
 export const contentType = OG_CONTENT_TYPE;
 export const alt = "InvestBuddy";

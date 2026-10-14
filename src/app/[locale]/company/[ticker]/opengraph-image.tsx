@@ -17,7 +17,8 @@ export default async function Image({ params }: { params: Promise<{ locale: stri
   const symbol = ticker.toUpperCase();
   const instrument = (await instrumentUniverse()).find((item) => item.ticker === symbol);
   if (!instrument) notFound();
-  const result = (await latestScores()).rows.find((row) => row.instrument.ticker === symbol)?.result;
+  const data = await latestScores();
+  const result = data.rows.find((row) => row.instrument.ticker === symbol)?.result;
   const m = getMessages(locale);
   const display = result ? displayScore(stateKey(result.state), result.ruleHits) : null;
   return companyImage({
@@ -27,6 +28,7 @@ export default async function Image({ params }: { params: Promise<{ locale: stri
     score: display?.percent == null ? m.common.noScore : formatScorePercent(locale, display.percent),
     state: display ? m.states[display.state] : m.states.insufficient,
     date: result?.asOf ? formatDate(locale, result.asOf) : "",
-    disclaimer: m.common.disclaimer,
+    disclaimer: m.common.ogDisclaimer,
+    badge: data.sample ? m.common.sample : data.stale ? m.common.ogStale : undefined,
   });
 }
