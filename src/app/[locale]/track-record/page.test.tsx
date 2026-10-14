@@ -17,7 +17,7 @@ afterEach(() => { process.env.DATA_MODE = originalMode; history.mockReset(); ben
 it("shows an honest empty live record without fixture data", async () => {
   process.env.DATA_MODE = "db";
   benchmark.mockResolvedValue([]);
-  history.mockResolvedValue({ snapshotCount: 0, firstDate: null, lastDate: null, signals: [], buySignalCount: 0, hit20: { hits: 0, n: 0, rate: null } });
+  history.mockResolvedValue({ snapshotCount: 0, firstDate: null, lastDate: null, signals: [], buySignalCount: 0, worst: [], hit20: { hits: 0, n: 0, rate: null } });
   const html = renderToStaticMarkup(await TrackRecord(props));
   expect(html).toContain("No real snapshots or signals");
   expect(html).toContain("0 snapshots");
@@ -30,7 +30,7 @@ it("shows an honest empty live record without fixture data", async () => {
 it("shows measured returns and pending windows from stored signals", async () => {
   process.env.DATA_MODE = "db";
   benchmark.mockResolvedValue([]);
-  history.mockResolvedValue({ snapshotCount: 1, firstDate: "2026-01-02", lastDate: "2026-01-02", buySignalCount: 1, hit20: { hits: 1, n: 1, rate: 1 },
+  history.mockResolvedValue({ snapshotCount: 1, firstDate: "2026-01-02", lastDate: "2026-01-02", buySignalCount: 1, worst: [{ id: 2, ticker: "AMD", asOf: "2026-01-02", window: 1, stock: -0.1, excess: -0.15 }], hit20: { hits: 1, n: 1, rate: 1 },
     signals: [{ id: 1, ticker: "NVDA", asOf: "2026-01-02", tier: "SETUP", state: "Setup met (>=18)", score: 20,
       windows: { 1: { date: "2026-01-05", stock: 0.1, spy: 0.05, excess: 0.05 }, 5: null, 20: null, 60: null } },
     { id: 2, ticker: "AMD", asOf: "2026-01-02", tier: "SETUP", state: "Setup met (>=18)", score: 19,
@@ -49,7 +49,7 @@ it("shows measured returns and pending windows from stored signals", async () =>
 
 it("renders stored SPY history without reaching the fixture benchmark in db mode", async () => {
   process.env.DATA_MODE = "db";
-  history.mockResolvedValue({ snapshotCount: 2, firstDate: "2026-01-02", lastDate: "2026-01-05", signals: [], buySignalCount: 0, hit20: { hits: 0, n: 0, rate: null } });
+  history.mockResolvedValue({ snapshotCount: 2, firstDate: "2026-01-02", lastDate: "2026-01-05", signals: [], buySignalCount: 0, worst: [], hit20: { hits: 0, n: 0, rate: null } });
   benchmark.mockResolvedValue([
     { date: "2026-01-02", open: 100, high: 100, low: 100, close: 100, volume: 0 },
     { date: "2026-01-05", open: 102, high: 102, low: 102, close: 102, volume: 0 },
@@ -59,4 +59,19 @@ it("renders stored SPY history without reaching the fixture benchmark in db mode
   expect(html).toContain("SPY");
   expect(html).toContain("line-close");
   expect(html).not.toContain("Synthetic benchmark");
+});
+
+it("shows the excluded-period line, n and the weakest outcomes", async () => {
+  process.env.DATA_MODE = "db";
+  benchmark.mockResolvedValue([]);
+  history.mockResolvedValue({ snapshotCount: 1, firstDate: "2026-10-06", lastDate: "2026-10-06", buySignalCount: 2, hit20: { hits: 1, n: 2, rate: 0.5 },
+    worst: [{ id: 2, ticker: "AMD", asOf: "2026-10-06", window: 1, stock: -0.1, excess: -0.15 }],
+    signals: [] });
+  const html = renderToStaticMarkup(await TrackRecord(props));
+  expect(html).toContain("not included");
+  expect(html).toContain("6 October 2026");
+  expect(html).toContain("across 2 measured");
+  expect(html).toContain("Weakest outcomes");
+  expect(html).toContain("AMD");
+  expect(html).toContain("vs SPY -15.0%");
 });

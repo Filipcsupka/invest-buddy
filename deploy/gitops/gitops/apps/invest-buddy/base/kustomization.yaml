@@ -15,6 +15,7 @@ resources:
   - holder-events-cronjob.yaml
   - thirteenf-cronjob.yaml
   - master-refresh-cronjob.yaml
+  - outcomes-cronjob.yaml
   - weekly-cronjob.yaml
   - backup-cronjob.yaml
   - research-cronjobs.yaml
