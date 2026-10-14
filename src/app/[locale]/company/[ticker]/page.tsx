@@ -47,7 +47,7 @@ async function load(params: Params["params"]) {
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { locale, instrument, data } = await load(params);
   const m = getMessages(locale);
-  return pageMetadata(locale, `/company/${instrument.ticker}`, instrument.name === instrument.ticker ? instrument.ticker : fill(m.meta.companyTitle, { ticker: instrument.ticker, name: instrument.name }), fill(data.sample ? m.meta.companyDescription : m.meta.companyDescriptionLive, { ticker: instrument.ticker }));
+  return pageMetadata(locale, `/company/${instrument.ticker}`, instrument.name === instrument.ticker ? instrument.ticker : fill(m.meta.companyTitle, { ticker: instrument.ticker, name: instrument.name }), fill(data.sample ? m.meta.companyDescription : m.meta.companyDescriptionLive, { ticker: instrument.ticker }), `/${locale}/company/${instrument.ticker}/opengraph-image`);
 }
 
 async function Company({ params }: Params) {
