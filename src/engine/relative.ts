@@ -69,4 +69,6 @@ export function relativeScore(total: number, evidencedMax: number, rules: { setu
 }
 
 /** The band the old absolute rule gave: 18, 15 and 12 of 25 whatever the data. Kept for the replay comparison. */
-export const absoluteBand = (total: number): RelativeBand => (total >= 18 ? "setup" : total >= 15 ? "watch" : total >= 12 ? "wait" : "ignore");
+/** Guide section 6 thresholds on a fully evidenced ticker (25 points). */
+export const ABSOLUTE_THRESHOLDS = { setup: 18, watch: 15, wait: 12 } as const;
+export const absoluteBand = (total: number): RelativeBand => (total >= ABSOLUTE_THRESHOLDS.setup ? "setup" : total >= ABSOLUTE_THRESHOLDS.watch ? "watch" : total >= ABSOLUTE_THRESHOLDS.wait ? "wait" : "ignore");

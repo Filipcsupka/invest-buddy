@@ -9,6 +9,23 @@ import type { AlertState, Fundamentals, Macro, OHLCV, RuleHit, ScoreInputs, Scor
  */
 export const SCORE_RULES_VERSION = "2026-10-11.2";
 
+/** Points per rule (Guide section 6, 25 in total). Listed so the rules config hash covers them. */
+export const SCORE_WEIGHTS = {
+  "revenue-acceleration": 4,
+  "earnings": 3,
+  "catalyst": 2,
+  "accumulation": 1,
+  "above-ma": 3,
+  "uptrend": 3,
+  "green-volume": 2,
+  "dip": 2,
+  "rotation": 2,
+  "macro-data": 3,
+} as const;
+
+/** Drawdown from the 20-day high, as a fraction, that counts as a dip in an uptrend. */
+export const DIP_DRAWDOWN = { min: 0.05, max: 0.1 } as const;
+
 /**
  * Three-valued OR: true when any input is true, unknown (null) when none is true and one has no data, else false.
  * A rule with partial data is never counted as a failed check.
@@ -84,22 +101,22 @@ export function score(input: ScoreInputs, options: ScoreOptions = {}): ScoreResu
   const m = normalized.macro;
   const hits: RuleHit[] = [];
   const add = (id: string, label: string, points: number, matched: boolean | null, detail: string, unknown = false) => hits.push({ id, label, points, matched: matched === true, detail, unknown });
-  add("revenue-acceleration", "Revenue growth accelerated", 4, (f.revenueAccelerating ?? (f.revenueGrowthCurrent !== null && f.revenueGrowthPrior !== null && f.revenueGrowthCurrent > f.revenueGrowthPrior)) && f.revenueDeclining === false, f.revenueAccelerating === null ? "unknown" : `${f.revenueGrowthPrior ?? "unknown"}% → ${f.revenueGrowthCurrent ?? "unknown"}%`, f.revenueAccelerating === null || (f.revenueAccelerating === undefined && (f.revenueGrowthCurrent === null || f.revenueGrowthPrior === null)));
+  add("revenue-acceleration", "Revenue growth accelerated", SCORE_WEIGHTS["revenue-acceleration"], (f.revenueAccelerating ?? (f.revenueGrowthCurrent !== null && f.revenueGrowthPrior !== null && f.revenueGrowthCurrent > f.revenueGrowthPrior)) && f.revenueDeclining === false, f.revenueAccelerating === null ? "unknown" : `${f.revenueGrowthPrior ?? "unknown"}% → ${f.revenueGrowthCurrent ?? "unknown"}%`, f.revenueAccelerating === null || (f.revenueAccelerating === undefined && (f.revenueGrowthCurrent === null || f.revenueGrowthPrior === null)));
   const earnings = anyOf(f.epsBeat, f.guidanceRaised);
-  add("earnings", "EPS beat or guidance raised", 3, earnings, `EPS beat: ${f.epsBeat ?? "unknown"}; guidance raised: ${f.guidanceRaised ?? "unknown"}`, earnings === null);
-  add("catalyst", "Curated product catalyst", 2, f.productCatalyst, String(f.productCatalyst ?? "unknown"), f.productCatalyst === null);
+  add("earnings", "EPS beat or guidance raised", SCORE_WEIGHTS["earnings"], earnings, `EPS beat: ${f.epsBeat ?? "unknown"}; guidance raised: ${f.guidanceRaised ?? "unknown"}`, earnings === null);
+  add("catalyst", "Curated product catalyst", SCORE_WEIGHTS["catalyst"], f.productCatalyst, String(f.productCatalyst ?? "unknown"), f.productCatalyst === null);
   const accumulationMatched = accumulationRule(accumulation.matched, f.insiderOrInstitutionalAccumulation);
-  add("accumulation", "Institutional or insider accumulation", 1,
+  add("accumulation", "Institutional or insider accumulation", SCORE_WEIGHTS["accumulation"],
     accumulationMatched,
     `up/down volume ${accumulation.ratio === null ? "unknown" : Number.isFinite(accumulation.ratio) ? accumulation.ratio.toFixed(2) : "∞"}; insider buying: ${f.insiderOrInstitutionalAccumulation ?? "unknown"}`,
     accumulationMatched === null);
-  add("above-ma", "Close above MA50 and MA200", 3, indicator.aboveBoth, `Close ${indicator.close}; MA50 ${indicator.ma50}; MA200 ${indicator.ma200}`);
-  add("uptrend", "Uptrend intact", 3, indicator.uptrend, `MA50 ten days ago ${indicator.ma50TenDaysAgo}`);
-  add("green-volume", "Higher volume on green days", 2, indicator.volumeOnGreen, `Green ${indicator.greenVolume}; red ${indicator.redVolume}`);
-  const pullbackInUptrend = indicator.uptrend && indicator.drawdown20 !== null && indicator.drawdown20 >= 0.05 && indicator.drawdown20 <= 0.1;
-  add("dip", "5–10% drawdown from 20-day high in uptrend", 2, pullbackInUptrend, `Drawdown ${indicator.drawdown20 === null ? "unknown" : (indicator.drawdown20 * 100).toFixed(1) + "%"}`);
-  add("rotation", "Growth sector rotation", 2, m.growthSectorRotation, String(m.growthSectorRotation ?? "unknown"), m.growthSectorRotation === null);
-  add("macro-data", "Macro data tailwind", 3, m.dataTailwind, String(m.dataTailwind ?? "unknown"), m.dataTailwind === null);
+  add("above-ma", "Close above MA50 and MA200", SCORE_WEIGHTS["above-ma"], indicator.aboveBoth, `Close ${indicator.close}; MA50 ${indicator.ma50}; MA200 ${indicator.ma200}`);
+  add("uptrend", "Uptrend intact", SCORE_WEIGHTS["uptrend"], indicator.uptrend, `MA50 ten days ago ${indicator.ma50TenDaysAgo}`);
+  add("green-volume", "Higher volume on green days", SCORE_WEIGHTS["green-volume"], indicator.volumeOnGreen, `Green ${indicator.greenVolume}; red ${indicator.redVolume}`);
+  const pullbackInUptrend = indicator.uptrend && indicator.drawdown20 !== null && indicator.drawdown20 >= DIP_DRAWDOWN.min && indicator.drawdown20 <= DIP_DRAWDOWN.max;
+  add("dip", "5–10% drawdown from 20-day high in uptrend", SCORE_WEIGHTS["dip"], pullbackInUptrend, `Drawdown ${indicator.drawdown20 === null ? "unknown" : (indicator.drawdown20 * 100).toFixed(1) + "%"}`);
+  add("rotation", "Growth sector rotation", SCORE_WEIGHTS["rotation"], m.growthSectorRotation, String(m.growthSectorRotation ?? "unknown"), m.growthSectorRotation === null);
+  add("macro-data", "Macro data tailwind", SCORE_WEIGHTS["macro-data"], m.dataTailwind, String(m.dataTailwind ?? "unknown"), m.dataTailwind === null);
   const sum = (ids: string[]) => hits.filter((hit) => ids.includes(hit.id) && hit.matched).reduce((total, hit) => total + hit.points, 0);
   const fundamentals = sum(["revenue-acceleration", "earnings", "catalyst", "accumulation"]);
   const technical = sum(["above-ma", "uptrend", "green-volume", "dip"]);

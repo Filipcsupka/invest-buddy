@@ -6,10 +6,16 @@ import { RULES_SNAPSHOT, RULESET_VERSION } from "./rules";
 
 /** Hash of RULES_SNAPSHOT per ruleset version. Change a rule value: bump the version, add the new pair here and a changelog entry. */
 const KNOWN_HASHES: Record<string, string> = {
-  "2026-10-11.2+2026-10-14.3": "8367de5800418f616fe4ed8e5ee3069864f684d82853c48f0d115881e032aea3",
+  "2026-10-11.2+2026-10-14.3": "1e7a969e2afa65307469507dd37a5073e14759dd686a40181235830c877b02f3",
 };
 
-const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
+/** JSON with object keys sorted, so a reordered key does not change the hash. */
+const stableStringify = (value: unknown): string =>
+  Array.isArray(value) ? `[${value.map(stableStringify).join(",")}]`
+  : value && typeof value === "object" ? `{${Object.keys(value).sort().map((k) => `${JSON.stringify(k)}:${stableStringify((value as Record<string, unknown>)[k])}`).join(",")}}`
+  : JSON.stringify(value) ?? "null";
+
+const hash = (value: unknown) => createHash("sha256").update(stableStringify(value)).digest("hex");
 
 describe("rules config", () => {
   it("has a hash for the current version, so a changed value needs a version bump", () => {

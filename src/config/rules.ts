@@ -1,6 +1,7 @@
 import { DEFAULT_EPS_BEAT_MIN_SURPRISE_PCT } from "../data/eps";
 import { DEFAULT_INSIDER_MIN_NET_BUY_USD } from "../data/insider";
-import { SCORE_RULES_VERSION } from "../engine/score";
+import { ABSOLUTE_THRESHOLDS, RELATIVE_RULES } from "../engine/relative";
+import { DIP_DRAWDOWN, SCORE_RULES_VERSION, SCORE_WEIGHTS } from "../engine/score";
 import { SIGNAL_RULES } from "../engine/signals";
 import { GATE } from "../jobs/gate-config";
 
@@ -28,9 +29,13 @@ export const TURNOVER_TARGET_PCT = 30;
 /** Score rules version and signal rules version as one string. Stored versions elsewhere stay as they are (see docs/rules-changelog.md). */
 export const RULESET_VERSION = `${SCORE_RULES_VERSION}+${SIGNAL_RULES.version}`;
 
-/** Everything the hash test covers. Functions are dropped by JSON, so only values count. */
+/** Everything the hash test covers: score weights, thresholds and relative-score percents (Setup 72) as well as signal and placeholder values. Functions are dropped by the stringify, so only values count. */
 export const RULES_SNAPSHOT = {
   scoreRulesVersion: SCORE_RULES_VERSION,
+  scoreWeights: SCORE_WEIGHTS,
+  scoreThresholds: ABSOLUTE_THRESHOLDS,
+  dipDrawdown: DIP_DRAWDOWN,
+  relativeRules: RELATIVE_RULES,
   signalRules: SIGNAL_RULES,
   gate: GATE,
   epsBeatMinSurprisePct: EPS_BEAT_MIN_SURPRISE_PCT,
