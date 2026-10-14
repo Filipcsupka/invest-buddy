@@ -152,7 +152,7 @@ describe("unsubscribe", () => {
     expect(unsubscribeView(deps(), "nope", undefined)).toBe("invalid");
   });
 
-  it("works for a person who never confirmed, and a later sign-up starts a fresh pending row state", async () => {
+  it("works for a person who never confirmed, and a later sign-up neither mails nor reopens the row", async () => {
     await signUp();
     const token = decodeURIComponent(lastToken("unsubscribe"));
     const response = await createUnsubscribeHandler(deps)(formPost(`/api/waitlist/unsubscribe?token=${encodeURIComponent(token)}`, {}));
@@ -160,7 +160,8 @@ describe("unsubscribe", () => {
     expect(repo.rows[0].status).toBe("unsubscribed");
     now += 25 * hour;
     await signUp();
-    expect(repo.rows[0].status).toBe("pending");
+    expect(repo.rows[0].status).toBe("unsubscribed");
+    expect(mailer.sent).toHaveLength(1);
   });
 });
 

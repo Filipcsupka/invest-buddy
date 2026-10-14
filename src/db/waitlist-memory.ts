@@ -5,6 +5,7 @@ interface Row extends SignupInput {
   status: WaitlistStatus;
   tokenExpiresAt: number | null;
   sentAt: number;
+  consentAt: number;
 }
 
 /** In-memory twin of the Postgres repository, for tests of routes and templates. Same rules, no persistence. */
@@ -16,11 +17,16 @@ export class MemoryWaitlistRepository implements WaitlistRepository {
     const email = normalizeEmail(input.email);
     const now = this.clock();
     const old = this.rows.find((row) => row.email === email);
-    const fresh = { ...input, email, tokenExpiresAt: now + CONFIRM_TOKEN_DAYS * 86_400_000, sentAt: now, status: "pending" as const };
+    const fresh = { ...input, email, tokenExpiresAt: now + CONFIRM_TOKEN_DAYS * 86_400_000, sentAt: now, consentAt: now, status: "pending" as const };
     if (!old) { const id = this.rows.length + 1; this.rows.push({ ...fresh, id }); return { id }; }
-    if (old.status === "confirmed" || old.sentAt > now - RESEND_AFTER_HOURS * 3_600_000) return {};
+    if (old.status !== "pending" || old.sentAt > now - RESEND_AFTER_HOURS * 3_600_000) return {};
     Object.assign(old, fresh);
     return { id: old.id };
+  }
+
+  async confirmationsSince(hours: number): Promise<number> {
+    const from = this.clock() - hours * 3_600_000;
+    return this.rows.filter((row) => row.sentAt > from).length;
   }
 
   async releaseConfirmation(id: number): Promise<void> {

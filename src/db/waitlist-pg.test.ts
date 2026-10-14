@@ -47,6 +47,24 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("waitlist_signups (Postgres)", (
     expect(row.unsubscribed_at).toBeInstanceOf(Date);
   }));
 
+  it("sets consent_at on insert and again on a repeat sign-up", () => inRollback(async (client, repo) => {
+    await repo.create(signup());
+    await client.query("UPDATE waitlist_signups SET consent_at = now() - interval '3 days', confirmation_sent_at = now() - interval '25 hours'");
+    await repo.create(signup({ tokenHash: "hash-2" }));
+    const row = (await client.query("SELECT now() - consent_at < interval '1 minute' AS fresh FROM waitlist_signups")).rows[0];
+    expect(row.fresh).toBe(true);
+  }));
+
+  it("keeps an unsubscribed row suppressed on a repeat sign-up and counts mails in a window", () => inRollback(async (client, repo) => {
+    const first = await repo.create(signup());
+    expect(await repo.confirmationsSince(24)).toBeGreaterThanOrEqual(1);
+    await repo.confirm("hash-1");
+    await repo.unsubscribe(first.id!);
+    await client.query("UPDATE waitlist_signups SET confirmation_sent_at = now() - interval '2 days'");
+    expect(await repo.create(signup({ tokenHash: "hash-2" }))).toEqual({});
+    expect((await client.query("SELECT status FROM waitlist_signups")).rows[0].status).toBe("unsubscribed");
+  }));
+
   it("lets a sign-up send again after a failed send", () => inRollback(async (_client, repo) => {
     const first = await repo.create(signup());
     expect(await repo.create(signup({ tokenHash: "hash-2" }))).toEqual({});
@@ -63,11 +81,11 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("waitlist_signups (Postgres)", (
 
   it("counts by status, locale, source and variant", () => inRollback(async (client, repo) => {
     const before = (await repo.counts()).reduce((n, row) => n + row.count, 0);
-    await repo.create(signup({ email: "a@example.test", tokenHash: "a", locale: "sk", source: "landing", priceVariant: "9.90" }));
+    await repo.create(signup({ email: "a@example.test", tokenHash: "a", locale: "sk", source: "landing", priceVariant: "a" }));
     await repo.create(signup({ email: "b@example.test", tokenHash: "b", source: "pricing" }));
     const rows = await repo.counts();
     expect(rows.reduce((n, row) => n + row.count, 0)).toBe(before + 2);
-    expect(rows).toContainEqual(expect.objectContaining({ status: "pending", locale: "sk", source: "landing", priceVariant: "9.90" }));
+    expect(rows).toContainEqual(expect.objectContaining({ status: "pending", locale: "sk", source: "landing", priceVariant: "a" }));
     void client;
   }));
 });

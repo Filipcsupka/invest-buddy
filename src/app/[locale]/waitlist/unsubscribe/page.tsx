@@ -24,7 +24,8 @@ async function Unsubscribe({ params, searchParams }: Props) {
   if (!flags().WAITLIST) notFound();
   const query = await searchParams;
   const token = one(query?.token) ?? "";
-  const deps = waitlistDeps();
+  let deps: ReturnType<typeof waitlistDeps> = null;
+  try { deps = waitlistDeps(); } catch { deps = null; }
   if (!deps) notFound();
   const view = unsubscribeView(deps, token, one(query?.result));
   return <UnsubscribePanel locale={locale} labels={getMessages(locale).waitlist} view={view} token={token} />;

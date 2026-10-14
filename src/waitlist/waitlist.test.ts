@@ -3,8 +3,8 @@ import { MemoryWaitlistRepository } from "@/db/waitlist-memory";
 import { MemoryMailer } from "@/mail/mailer";
 import { createLimiter } from "@/security/rate-limit";
 import { createSignupHandler } from "./handlers";
-import { signUp, type WaitlistDeps } from "./service";
-import { hashToken, unsubscribeToken, verifyUnsubscribeToken } from "./tokens";
+import { confirmSignup, dailyMailCap, signUp, type WaitlistDeps } from "./service";
+import { hashToken, tokenSecret, unsubscribeToken, verifyUnsubscribeToken } from "./tokens";
 import { submitSignup } from "./submit";
 
 const secret = "test-secret-0123456789";
@@ -40,11 +40,11 @@ describe("tokens", () => {
 
 describe("POST /api/waitlist", () => {
   it("stores a pending row and sends one confirmation mail", async () => {
-    const response = await handler()(post(body({ source: "landing", priceVariant: "9.90" })));
+    const response = await handler()(post(body({ source: "landing", priceVariant: "a" })));
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ ok: true });
     expect(repo.rows).toHaveLength(1);
-    expect(repo.rows[0]).toMatchObject({ email: "person@example.test", status: "pending", source: "landing", priceVariant: "9.90", consentLaunch: true, consentWeekly: false });
+    expect(repo.rows[0]).toMatchObject({ email: "person@example.test", status: "pending", source: "landing", priceVariant: "a", consentLaunch: true, consentWeekly: false });
     expect(repo.rows[0].tokenHash).toMatch(/^[0-9a-f]{64}$/);
     expect(mailer.sent).toHaveLength(1);
     expect(mailer.sent[0].to).toBe("person@example.test");
@@ -138,6 +138,10 @@ describe("POST /api/waitlist", () => {
     expect((await handler()(post("{nope"))).status).toBe(400);
     expect((await handler()(post(JSON.stringify(body({ email: `${"a".repeat(5000)}@example.test` }))))).status).toBe(413);
     expect((await handler()(post(body({ source: "x y!" })))).status).toBe(400);
+    for (const bad of [{ source: "Landing" }, { source: "a.b" }, { priceVariant: "9.90" }, { priceVariant: "A" }, { priceVariant: "x".repeat(33) }, { source: "" }]) {
+      expect((await handler()(post(body(bad)))).status).toBe(400);
+    }
+    expect((await handler()(post(body({ source: "pricing_page-2", priceVariant: "b" })))).status).toBe(200);
   });
 
   it("keeps the address out of the log lines the route writes", async () => {
@@ -162,6 +166,83 @@ describe("signUp", () => {
     expect(mailer.sent[0].subject).toMatch(/Potvrďte/);
     expect(mailer.sent[0].text).toContain("https://invest.example.test/sk/waitlist/confirm?token=");
     expect(mailer.sent[0].text).toContain("https://invest.example.test/sk/waitlist/unsubscribe?token=");
+  });
+});
+
+describe("daily mail cap", () => {
+  const input = (n: number) => ({ email: `p${n}@example.test`, locale: "en" as const, consentLaunch: true, consentWeekly: false, consentTextVersion: "v0" });
+
+  it("stores the sign-up, sends no mail and warns once the cap is hit, then lets a later sign-up send", async () => {
+    const err = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+    const capped = { ...deps(), dailyCap: 2 };
+    expect(await signUp(capped, input(1))).toBe("sent");
+    expect(await signUp(capped, input(2))).toBe("sent");
+    expect(await signUp(capped, input(3))).toBe("capped");
+    expect(mailer.sent).toHaveLength(2);
+    expect(repo.rows).toHaveLength(3);
+    const logged = err.mock.calls.map((call) => String(call[0])).join("");
+    expect(logged).toContain("waitlist_daily_cap_reached");
+    expect(logged).not.toContain("example.test");
+    // The held-back address may send once the window has moved on.
+    now += 25 * 3_600_000;
+    expect(await signUp(capped, input(3))).toBe("sent");
+  });
+
+  it("gives the neutral answer over HTTP when capped", async () => {
+    vi.spyOn(process.stderr, "write").mockReturnValue(true);
+    const run = createSignupHandler(() => ({ ...deps(), dailyCap: 0 }), createLimiter({ perMinute: 100 }));
+    const response = await run(post(body()));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ok: true });
+    expect(mailer.sent).toHaveLength(0);
+  });
+
+  it("reads WAITLIST_DAILY_MAIL_CAP, default 80", () => {
+    expect(dailyMailCap({})).toBe(80);
+    expect(dailyMailCap({ WAITLIST_DAILY_MAIL_CAP: "5" })).toBe(5);
+    expect(dailyMailCap({ WAITLIST_DAILY_MAIL_CAP: "0" })).toBe(0);
+    expect(dailyMailCap({ WAITLIST_DAILY_MAIL_CAP: "x" })).toBe(80);
+    expect(dailyMailCap({ WAITLIST_DAILY_MAIL_CAP: "" })).toBe(80);
+  });
+});
+
+describe("failed mail logging", () => {
+  it("logs mail_failed without the address for the confirm mail and the welcome mail", async () => {
+    const err = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+    mailer.failWith = new Error("to p@example.test failed");
+    expect((await handler()(post(body({ email: "p@example.test" })))).status).toBe(200);
+    mailer.failWith = null;
+    await handler()(post(body({ email: "p@example.test" })));
+    const token = /confirm\?token=([\w-]+)/.exec(mailer.sent[0].text)![1];
+    mailer.failWith = new Error("to p@example.test failed");
+    expect((await confirmSignup(deps(), token)).status).toBe("confirmed");
+    const logged = err.mock.calls.map((call) => String(call[0])).join("");
+    expect(logged).toContain('"event":"mail_failed","kind":"confirm"');
+    expect(logged).toContain('"event":"mail_failed","kind":"welcome"');
+    expect(logged).not.toContain("example.test");
+  });
+});
+
+describe("unsubscribed addresses", () => {
+  it("get no mail and stay unsubscribed on a repeat sign-up", async () => {
+    const run = handler();
+    await run(post(body()));
+    const row = repo.rows[0];
+    await repo.unsubscribe(row.id);
+    now += 48 * 3_600_000;
+    const again = await run(post(body()));
+    expect(again.status).toBe(200);
+    expect(await again.json()).toEqual({ ok: true });
+    expect(mailer.sent).toHaveLength(1);
+    expect(repo.rows[0].status).toBe("unsubscribed");
+  });
+});
+
+describe("tokenSecret", () => {
+  it("needs 32 characters", () => {
+    expect(() => tokenSecret({ WAITLIST_TOKEN_SECRET: "a".repeat(31) })).toThrow(/32/);
+    expect(tokenSecret({ WAITLIST_TOKEN_SECRET: "a".repeat(32) })).toHaveLength(32);
+    expect(() => tokenSecret({})).toThrow();
   });
 });
 

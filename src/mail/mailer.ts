@@ -22,9 +22,16 @@ export class MemoryMailer implements Mailer {
   }
 }
 
-/** `MAIL_PROVIDER` unset or `console` gives the console mailer. Any other value is refused until a provider is chosen and built (W12). */
+/**
+ * `MAIL_PROVIDER` unset gives the console mailer outside production. In production the console mailer needs `MAIL_PROVIDER=console` set on purpose,
+ * because it writes recipients and links to the log. Any other value is refused until a provider is chosen and built (W12).
+ */
 export function mailerFromEnv(env: Record<string, string | undefined> = process.env): Mailer {
-  const provider = env.MAIL_PROVIDER?.trim() || "console";
-  if (provider === "console") return new ConsoleMailer();
+  const explicit = env.MAIL_PROVIDER?.trim();
+  const provider = explicit || "console";
+  if (provider === "console") {
+    if (env.NODE_ENV === "production" && !explicit) throw new Error("MAIL_PROVIDER must be set in production; set MAIL_PROVIDER=console to use the console mailer on purpose");
+    return new ConsoleMailer();
+  }
   throw new Error(`MAIL_PROVIDER ${provider} is not supported yet`);
 }

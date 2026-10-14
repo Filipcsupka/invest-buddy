@@ -11,7 +11,7 @@ export function hashToken(token: string): string {
 
 export function tokenSecret(env: Record<string, string | undefined> = process.env): string {
   const secret = env.WAITLIST_TOKEN_SECRET ?? "";
-  if (secret.length < 16) throw new Error("WAITLIST_TOKEN_SECRET must be set to at least 16 characters");
+  if (secret.length < 32) throw new Error("WAITLIST_TOKEN_SECRET must be set to at least 32 characters");
   return secret;
 }
 

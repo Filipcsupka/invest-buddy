@@ -24,4 +24,11 @@ describe("mailers", () => {
     expect(mailerFromEnv({ MAIL_PROVIDER: "console" })).toBeInstanceOf(ConsoleMailer);
     expect(() => mailerFromEnv({ MAIL_PROVIDER: "resend" })).toThrow(/not supported yet/);
   });
+
+  it("refuses the implicit console mailer in production, allows it when set on purpose", () => {
+    expect(() => mailerFromEnv({ NODE_ENV: "production" })).toThrow(/MAIL_PROVIDER must be set/);
+    expect(() => mailerFromEnv({ NODE_ENV: "production", MAIL_PROVIDER: " " })).toThrow(/MAIL_PROVIDER must be set/);
+    expect(mailerFromEnv({ NODE_ENV: "production", MAIL_PROVIDER: "console" })).toBeInstanceOf(ConsoleMailer);
+    expect(mailerFromEnv({ NODE_ENV: "development" })).toBeInstanceOf(ConsoleMailer);
+  });
 });

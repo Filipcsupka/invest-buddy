@@ -24,6 +24,30 @@ describe("MemoryWaitlistRepository", () => {
     expect((await repo.unsubscribe(9)).status).toBe("invalid");
   });
 
+  it("keeps an unsubscribed address suppressed on a repeat sign-up", async () => {
+    let now = Date.UTC(2026, 9, 14);
+    const repo = new MemoryWaitlistRepository(() => now);
+    const first = await repo.create(signup());
+    await repo.confirm("h1");
+    await repo.unsubscribe(first.id!);
+    now += 48 * hour;
+    expect(await repo.create(signup({ tokenHash: "h2" }))).toEqual({});
+    expect(repo.rows[0].status).toBe("unsubscribed");
+    expect(await repo.peekConfirm("h2")).toBe("invalid");
+  });
+
+  it("counts confirmation mails in a window and stops counting released ones", async () => {
+    let now = Date.UTC(2026, 9, 14);
+    const repo = new MemoryWaitlistRepository(() => now);
+    const a = await repo.create(signup({ email: "a@example.test" }));
+    await repo.create(signup({ email: "b@example.test", tokenHash: "h2" }));
+    expect(await repo.confirmationsSince(24)).toBe(2);
+    await repo.releaseConfirmation(a.id!);
+    expect(await repo.confirmationsSince(24)).toBe(1);
+    now += 25 * hour;
+    expect(await repo.confirmationsSince(24)).toBe(0);
+  });
+
   it("expires a token after 7 days", async () => {
     let now = Date.UTC(2026, 9, 14);
     const repo = new MemoryWaitlistRepository(() => now);

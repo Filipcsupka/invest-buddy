@@ -5,7 +5,7 @@ import { WaitlistForm } from "./waitlist-form";
 
 describe.each(locales)("WaitlistForm (%s)", (locale) => {
   const m = getMessages(locale).waitlist;
-  const html = renderToStaticMarkup(<WaitlistForm locale={locale} labels={m} source="landing" priceVariant="9.90" />);
+  const html = renderToStaticMarkup(<WaitlistForm locale={locale} labels={m} source="landing" priceVariant="a" />);
   const tag = (name: string) => new RegExp(`<input[^>]*name="${name}"[^>]*>`).exec(html)?.[0] ?? "";
 
   it("renders the labelled email field, two separate consent boxes and a submit button", () => {

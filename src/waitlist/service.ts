@@ -10,7 +10,22 @@ export interface WaitlistDeps {
   mailer: Mailer;
   secret: string;
   baseUrl?: string;
+  /** Most confirmation mails per 24 hours across all addresses. Defaults to `WAITLIST_DAILY_MAIL_CAP`, else 80. */
+  dailyCap?: number;
 }
+
+export const DEFAULT_DAILY_MAIL_CAP = 80;
+
+export function dailyMailCap(env: Record<string, string | undefined> = process.env): number {
+  const value = Number(env.WAITLIST_DAILY_MAIL_CAP);
+  return Number.isFinite(value) && value >= 0 && env.WAITLIST_DAILY_MAIL_CAP?.trim() ? Math.floor(value) : DEFAULT_DAILY_MAIL_CAP;
+}
+
+/** One JSON line on stderr. Never carries an address; `reason` is the error class name only. */
+export function logWaitlistEvent(event: string, fields: Record<string, unknown> = {}): void {
+  process.stderr.write(`${JSON.stringify({ event, ...fields })}\n`);
+}
+const errorName = (error: unknown) => (error instanceof Error ? error.name : "unknown");
 
 const base = (deps: WaitlistDeps) => deps.baseUrl ?? siteUrl;
 const links = (deps: WaitlistDeps, locale: WaitlistLocale, id: number) => {
@@ -19,10 +34,17 @@ const links = (deps: WaitlistDeps, locale: WaitlistLocale, id: number) => {
 };
 
 /** Stores a pending row and mails the confirmation link. Returns whether a mail was sent; a repeat inside 24 hours and an already confirmed address send nothing. */
-export async function signUp(deps: WaitlistDeps, input: Omit<SignupInput, "tokenHash">): Promise<"sent" | "skipped" | "mail_failed"> {
+export async function signUp(deps: WaitlistDeps, input: Omit<SignupInput, "tokenHash">): Promise<"sent" | "skipped" | "mail_failed" | "capped"> {
   const token = newConfirmToken();
   const { id } = await deps.repo.create({ ...input, tokenHash: hashToken(token) });
   if (id === undefined) return "skipped";
+  // The row counts itself, so a count above the cap means this mail would be one too many. The sign-up stays stored and the next one may send.
+  const cap = deps.dailyCap ?? dailyMailCap();
+  if ((await deps.repo.confirmationsSince(24)) > cap) {
+    await deps.repo.releaseConfirmation(id);
+    logWaitlistEvent("waitlist_daily_cap_reached", { level: "warn", cap });
+    return "capped";
+  }
   try {
     await deps.mailer.send(confirmMail({
       to: input.email.trim().toLowerCase(),
@@ -31,7 +53,8 @@ export async function signUp(deps: WaitlistDeps, input: Omit<SignupInput, "token
       unsubscribeUrl: links(deps, input.locale, id).page,
     }));
     return "sent";
-  } catch {
+  } catch (error) {
+    logWaitlistEvent("mail_failed", { kind: "confirm", reason: errorName(error) });
     // The row stays; the next sign-up may send again instead of waiting 24 hours.
     await deps.repo.releaseConfirmation(id);
     return "mail_failed";
@@ -41,7 +64,7 @@ export async function signUp(deps: WaitlistDeps, input: Omit<SignupInput, "token
 /** Confirms the token. The welcome mail goes out on the first confirmation only; a failed send does not undo the confirmation. */
 export async function confirmSignup(deps: WaitlistDeps, token: string): Promise<ConfirmResult> {
   const result = await deps.repo.confirm(hashToken(token));
-  if (result.status === "confirmed") await sendWelcome(deps, result.person).catch(() => undefined);
+  if (result.status === "confirmed") await sendWelcome(deps, result.person).catch((error) => logWaitlistEvent("mail_failed", { kind: "welcome", reason: errorName(error) }));
   return result;
 }
 

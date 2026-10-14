@@ -5,7 +5,8 @@ import { createLimiter, clientKey, type Limiter } from "@/security/rate-limit";
 import { CONSENT_TEXT_VERSION } from "./consent";
 import { signUp, type WaitlistDeps } from "./service";
 
-const label = z.string().regex(/^[A-Za-z0-9._-]{1,32}$/);
+/** Lower-case letters, digits, underscore and hyphen. The pages send priceVariant `a` or `b`. */
+const label = z.string().regex(/^[a-z0-9_-]{1,32}$/);
 
 export const signupSchema = z.object({
   email: z.string().trim().max(254).pipe(z.email()),
