@@ -1,0 +1,2 @@
+ALTER TABLE t
+  ALTER COLUMN c TYPE bigint;

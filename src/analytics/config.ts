@@ -9,7 +9,8 @@ export interface AnalyticsConfig {
   domain: string;
 }
 
-const HOST = /^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$/i;
+/** A host name needs at least one dot, so a bare word like "localhost" or "x" is refused. */
+const HOST = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/i;
 
 export function analyticsConfig(env: Record<string, string | undefined> = process.env): AnalyticsConfig | null {
   if (env.ANALYTICS?.trim().toLowerCase() !== "on") return null;

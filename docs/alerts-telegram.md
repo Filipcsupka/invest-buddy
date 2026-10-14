@@ -43,6 +43,17 @@ The discovery job (`src/jobs/discovery.ts`, Saturday 09:30) posts one "New candi
 - The message is built from the stored rows of the week, so a rerun after a crash between saving and sending still posts them. Messages over 4096 characters are split at line breaks by the notifier.
 - The owner copies the Telegram env entries from the `deploy/gitops` mirror (`invest-buddy-discovery`) into the infra repo.
 
+## Owner alerts (watchdog, PL27)
+
+The watchdog (`src/jobs/watchdog.ts`, CronJobs `invest-buddy-watchdog` and `invest-buddy-watchdog-noon`) and the one-off `src/jobs/alert-test.ts` send to the owner's private chat, never to the digest chat.
+
+- Bot token: `TELEGRAM_BOT_TOKEN` from secret `invest-buddy-telegram`. Chat: `TELEGRAM_OWNER_CHAT_ID` from secret `invest-buddy-telegram-owner`. `TELEGRAM_CHAT_ID` is not read.
+- The secret `invest-buddy-telegram-owner` must exist in namespace `invest` before the watchdog CronJobs are un-suspended. The env entries are not `optional`, so a Pod without it does not start.
+- Fails closed: without the token or the owner chat id nothing is sent, a JSON line `alert_notifier_unconfigured` is logged, and the job exits non-zero.
+- Rules: a missed job, stale health dates, a full database volume, an expiring certificate. A job with no `job_runs` row at all is skipped until it has run once, so the first enable does not flood the chat.
+- One alert per problem per 23 hours (`alert_state`). The window is 23 hours, not 24, so a daily run a few minutes later than the day before is not skipped.
+- No AI ceiling rule: `scanner/run-extract.mjs` and `scanner/run-judge.mjs` do not write `job_runs`, so an exit 5 stop is not visible to the watchdog.
+
 ## Wording
 
 Messages use rule states and points only, never buy or sell wording (ADR-001). `src/jobs/digest.test.ts` checks the banned words in both languages. A public channel is still a public signal feed, so it falls under the same open lawyer question as the paid feed (tasks-open G5).

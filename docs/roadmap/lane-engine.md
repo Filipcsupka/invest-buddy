@@ -54,7 +54,7 @@ Tasks are ordered by dependency. EN1 first: it freezes today's behaviour so ever
 ---
 
 ### EN1. Golden fixtures for score and signals
-Status: done 2026-10-10, PR #90, merged and live.
+Status: done 2026-10-10, PR #90, merged and live. `src/engine/fixtures/golden-2026-10-08.json` is absent: no commit in git history adds it. The tests use `golden-edges.json` and `golden-relative.json` (plus `replay-audits.json`) in `src/engine/fixtures`; `scripts/export-golden.ts` exists.
 - Synthesis note: this task owns `src/engine/golden.test.ts`. PL10 step 2 points here instead of writing a second golden test. The fixture freezes current main before PR #80 or any rule change; EN3 refreshes it after the owner decides.
 - Why: C5 found no ticker at 18 and several rule gaps; any change needs a before and after. `signals.test.ts` exists (152 lines) but uses small hand-made cases. Source: `src/engine/signals.test.ts`, C5 report.
 - Steps:
@@ -70,6 +70,7 @@ Status: done 2026-10-10, PR #90, merged and live.
 - Risk or open question: if the live copy is used, 2026-10-08 data is a single day; add more dates later.
 
 ### EN2. Record the C5 owner decisions as an ADR
+Status: partly done. The ADR is in the repo only (`docs/adr-signal-alignment.md`); it is not mirrored to the vault, which needs owner approval. No owner answers are recorded. `docs/tasks-open.md` C5 points to the ADR.
 - Synthesis note: "D1 to D6" here are the C5 report decisions, not lane DATA tasks.
 - Why: C5 lists D1 to D6 and nothing is signed. `docs/tasks-open.md` C5 and F6 stay open. 130-positioning-and-business-model.md section 10 question 7 asks whether PR #80 merges before marketing.
 - Steps:
@@ -200,6 +201,7 @@ Status: thresholds and boundary tests merged in PR #80; PR #90 introduced the go
 - Risk or open question: `instruments.tier` content not read in this pass; check the seed in migration 003 matches Guide section 9. IBKR fee and minimum order are unknown (draft EUR 0.35).
 
 ### EN11. Rule versioning, changelog and the F6 placeholders in one config
+Status: partly open. `RULESET_VERSION` is not yet stored on `record_snapshots` or `trade_ideas`; deferred because it would change fingerprints.
 - Synthesis note: the config hash test here is the single rules-version guard; PL10's version check uses it.
 - Why: F6 asks for the drawdown band (20), valuation band (PE 25), insider cluster (3 in 30 days), turnover target (30 percent) in one file with sources (`src/jobs/gate-config.ts` has only the first four). `SCORE_RULES_VERSION` and `SIGNAL_RULES.version` are separate strings. EPS threshold `EPS_BEAT_MIN_SURPRISE_PCT` is 0.
 - Steps:

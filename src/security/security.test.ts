@@ -64,3 +64,13 @@ it("returns 429 with Retry-After for pages and JSON for api, and honours off", a
   process.env.RATE_LIMIT = "off";
   expect(rateLimit(req("/en/dashboard", h), 0)).toBeUndefined();
 });
+
+it("adds the analytics origin to script-src and connect-src only when analytics is configured", () => {
+  const off = contentSecurityPolicy(false, null);
+  expect(off).toContain("connect-src 'self';");
+  expect(off).not.toContain("stats.example.org");
+  const on = contentSecurityPolicy(false, { scriptSrc: "https://stats.example.org/js/script.js" });
+  expect(on).toContain("script-src 'self' 'unsafe-inline' https://stats.example.org;");
+  expect(on).toContain("connect-src 'self' https://stats.example.org;");
+  expect(on).not.toContain("stats.example.org/js");
+});

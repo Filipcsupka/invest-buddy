@@ -8,6 +8,7 @@ import { flags } from "@/config/flags";
 import { fill, formatNumber, getMessages } from "@/i18n";
 import { getLaunchMessages } from "@/i18n/launch-messages";
 import { pageMetadata } from "@/i18n/metadata";
+import { resolveSource } from "@/waitlist/source";
 import { notFound } from "next/navigation";
 import { resolveLocale, type LocaleParams } from "../locale";
 import styles from "@/components/launch.module.css";
@@ -27,7 +28,9 @@ async function Pricing({ params, searchParams }: PricingProps) {
   const m = getMessages(locale);
   const t = getLaunchMessages(locale);
   const p = t.pricing;
-  const variant = resolveVariant((await searchParams)?.v);
+  const query = await searchParams;
+  const variant = resolveVariant(query?.v);
+  const source = resolveSource(query, "pricing");
   const money = (value: number) => formatNumber(locale, value, 2);
   const rows: { key: keyof typeof p.rows; free: string | boolean; paid: string | boolean }[] = [
     { key: "score", free: true, paid: true },
@@ -97,7 +100,7 @@ async function Pricing({ params, searchParams }: PricingProps) {
       <section aria-labelledby="join">
         <h2 id="join">{p.waitlistTitle}</h2>
         {/* While BILLING is off the paid button is the waitlist form. No checkout. */}
-        <WaitlistForm copy={t.form} locale={locale} variant={variant} />
+        <WaitlistForm locale={locale} labels={m.waitlist} source={source} priceVariant={variant} hideTitle />
       </section>
     </article>
   );

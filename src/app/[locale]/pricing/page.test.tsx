@@ -22,13 +22,13 @@ it("is unavailable while WAITLIST is off", async () => {
   await expect(render("en")).rejects.toThrow("NEXT_NOT_FOUND");
 });
 
-it.each([["en", "Join the waitlist", "Planned price"], ["sk", "Pridať sa do poradovníka", "Plánovaná cena"]])("shows planned price, table and waitlist form in %s", async (locale, button, planned) => {
+it.each([["en", "Join the waitlist", "Planned price"], ["sk", "Pridať sa na listinu", "Plánovaná cena"]])("shows planned price, table and waitlist form in %s", async (locale, button, planned) => {
   process.env.WAITLIST = "on";
   const html = await render(locale);
   expect(html).toContain(button);
   expect(html).toContain(planned);
   expect(html).toContain('name="email"');
-  expect(html).toContain('name="consent"');
+  expect(html).toContain('name="consentLaunch"');
   expect(html).toContain("<table");
   expect(html).toContain(String(FREE_LIMITS.scoreHistoryDays));
   expect(html).toContain(String(FREE_LIMITS.scannerRows));

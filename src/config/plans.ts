@@ -5,12 +5,10 @@
 
 export type PriceVariantId = "a" | "b";
 
-export interface PlannedPrice {
+interface PlannedPrice {
   /** Price per month, VAT included, billed yearly. Placeholder. */
   monthlyEur: number;
 }
-
-export const PLANNED = true;
 
 /** Two prices for the waitlist test (130 section 9, step 4). Placeholders. */
 export const PRICE_VARIANTS: Record<PriceVariantId, PlannedPrice> = {
@@ -20,15 +18,13 @@ export const PRICE_VARIANTS: Record<PriceVariantId, PlannedPrice> = {
 
 export const DEFAULT_PRICE_VARIANT: PriceVariantId = "a";
 
-export const VAT_INCLUDED = true;
-
 /** Free-tier limits. The N values are placeholders until the owner sets them. */
 export const FREE_LIMITS = {
   scoreHistoryDays: 30,
   scannerRows: 10,
 } as const;
 
-export function isPriceVariant(value: unknown): value is PriceVariantId {
+function isPriceVariant(value: unknown): value is PriceVariantId {
   return value === "a" || value === "b";
 }
 

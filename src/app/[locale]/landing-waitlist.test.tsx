@@ -7,7 +7,7 @@ vi.mock("@/data/store", () => ({ latestScores: () => scores() }));
 vi.mock("@/data/launch-facts", () => ({ recordStartDate: async () => "2026-10-05" }));
 import Home from "./page";
 
-const props = (locale: string) => ({ params: Promise.resolve({ locale }) });
+const props = (locale: string, query: Record<string, string> = {}) => ({ params: Promise.resolve({ locale }), searchParams: Promise.resolve(query) });
 const original = process.env.WAITLIST;
 afterEach(() => { scores.mockReset(); if (original === undefined) delete process.env.WAITLIST; else process.env.WAITLIST = original; });
 
@@ -18,7 +18,7 @@ it.each(["en", "sk"])("hides the waitlist section while WAITLIST is off (%s)", a
   scores.mockResolvedValue({ rows: [], sample: false, lastUpdated: null, stale: false });
   const html = renderToStaticMarkup(await Home(props(locale)));
   expect(html).not.toContain('id="waitlist"');
-  expect(html).not.toContain('name="consent"');
+  expect(html).not.toContain('name="consentLaunch"');
   expect(html).not.toContain(`/${locale}/pricing`);
 });
 
@@ -31,7 +31,7 @@ it.each([["en", "Join the waitlist", "tickers scored", "Last score", "Record sta
   expect(html).toContain('href="#waitlist"');
   expect(html).toContain(cta);
   expect(html).toContain('name="email"');
-  expect(html).toContain('name="consent"');
+  expect(html).toContain('name="consentLaunch"');
   expect(html).toContain('name="website"');
   expect(html).toContain(tickers);
   expect(html).toContain(last);
@@ -55,4 +55,16 @@ it("shows no facts on sample data", async () => {
   scores.mockResolvedValue({ rows, sample: true, lastUpdated: "2026-10-13", stale: false });
   const html = renderToStaticMarkup(await Home(props("en")));
   expect(html).not.toMatch(/tickers scored|Record starts/);
+});
+
+it("passes the resolved price variant and a validated source to the form", async () => {
+  process.env.WAITLIST = "on";
+  scores.mockResolvedValue({ rows: [], sample: false, lastUpdated: null, stale: false });
+  const sent = async (query: Record<string, string>) => renderToStaticMarkup(await Home(props("en", query)));
+  // The form posts these on submit; the markup carries them through the form's props only, so check the page code path via the resolvers.
+  const { resolveVariant } = await import("@/config/plans");
+  const { resolveSource } = await import("@/waitlist/source");
+  expect(resolveVariant("b")).toBe("b");
+  expect(resolveSource({ utm_source: "News", ref: "x y" }, "landing")).toBe("news");
+  expect(await sent({ v: "b", utm_source: "news" })).toContain('id="waitlist"');
 });

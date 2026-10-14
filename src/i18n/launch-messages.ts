@@ -1,28 +1,10 @@
 import type { Locale } from "./index";
 
 /**
- * Copy for the waitlist launch pages: landing section, pricing page and the
- * signup form. Kept apart from messages.ts so the two do not collide while
+ * Copy for the waitlist launch pages: landing section and pricing page. The signup form uses `waitlist` in messages.ts. Kept apart from messages.ts so the two do not collide while
  * several branches edit copy. Slovak text needs the native review in W23.
  */
 const en = {
-  form: {
-    title: "Join the waitlist",
-    lede: "One email when InvestBuddy opens. We send a confirmation message first.",
-    emailLabel: "Email",
-    consentVersion: "draft-1",
-    consentLabel: "I agree that InvestBuddy emails me a confirmation and then one notice when it opens. I can unsubscribe at any time.",
-    submit: "Join the waitlist",
-    sending: "Sending…",
-    doneTitle: "Check your inbox",
-    doneBody: "If the address can receive mail, a confirmation message is on its way. The signup counts once you open the link in it.",
-    errorEmail: "Enter a valid email address.",
-    errorConsent: "Tick the box to join the waitlist.",
-    errorInvalid: "The form was not accepted. Check the address and try again.",
-    errorRate: "Too many tries. Wait a minute and try again.",
-    errorFailed: "Something went wrong on our side. Try again later.",
-    hidden: "Leave this field empty",
-  },
   landing: {
     ctaWaitlist: "Join the waitlist",
     waitlistTitle: "Get one email when it opens",
@@ -46,7 +28,6 @@ const en = {
   pricing: {
     title: "Pricing",
     lede: "Reading the score, its rules and the public record is free. A paid tier is planned. Nothing can be bought yet.",
-    plannedBadge: "Planned",
     plannedNote: "Prices and limits are planned and can change before launch. They are not an offer.",
     freeName: "Free",
     paidName: "Paid",
@@ -56,8 +37,6 @@ const en = {
     paidTag: "Planned price",
     featureCol: "What you get",
     tableCaption: "Free and paid plans compared",
-    buttonWaitlist: "Join the waitlist",
-    noWaitlist: "The waitlist is not open yet.",
     included: "Included",
     notIncluded: "Not included",
     rows: {
@@ -84,32 +63,15 @@ const en = {
 export type LaunchMessages = typeof en;
 
 const sk: LaunchMessages = {
-  form: {
-    title: "Pridajte sa do poradovníka",
-    lede: "Jeden e-mail, keď sa InvestBuddy otvorí. Najprv pošleme potvrdzujúcu správu.",
-    emailLabel: "E-mail",
-    consentVersion: "draft-1",
-    consentLabel: "Súhlasím, že mi InvestBuddy pošle potvrdenie a potom jedno oznámenie o otvorení. Odhlásiť sa môžem kedykoľvek.",
-    submit: "Pridať sa do poradovníka",
-    sending: "Odosielam…",
-    doneTitle: "Pozrite si schránku",
-    doneBody: "Ak adresa vie prijať poštu, potvrdzujúca správa je na ceste. Prihlásenie platí, keď otvoríte odkaz v nej.",
-    errorEmail: "Zadajte platnú e-mailovú adresu.",
-    errorConsent: "Na prihlásenie zaškrtnite políčko.",
-    errorInvalid: "Formulár sa neprijal. Skontrolujte adresu a skúste to znova.",
-    errorRate: "Priveľa pokusov. Počkajte minútu a skúste to znova.",
-    errorFailed: "Na našej strane sa niečo pokazilo. Skúste to neskôr.",
-    hidden: "Toto pole nechajte prázdne",
-  },
   landing: {
     ctaWaitlist: "Pridať sa do poradovníka",
     waitlistTitle: "Jeden e-mail, keď sa otvorí",
     waitlistBody: "Prehľad je dnes zadarmo na čítanie. Plánuje sa platená úroveň. Pridajte sa do zoznamu a dáme vám vedieť, keď sa otvorí, bez inej pošty.",
     proofTitle: "Čo si môžete overiť už dnes",
     proofMethodTitle: "Metodika je zverejnená",
-    proofMethodBody: "Deväť hlavných pravidiel, vypísaných, s údajmi, ktoré každé číta.",
+    proofMethodBody: "Deväť hlavných pravidiel, každé s údajmi, z ktorých vychádza.",
     proofMethodLink: "Prečítať metodiku",
-    proofRecordTitle: "Záznam je datovaný a drží aj chyby",
+    proofRecordTitle: "Záznam je datovaný a zachováva aj chyby",
     proofRecordBody: "Každý signál sa ukladá s dátumom. Namerané výsledky pribudnú po uzavretí okna signálu, aj tie zlé.",
     proofRecordLink: "Pozrieť záznam",
     proofSlovakTitle: "Slovenské stránky",
@@ -123,8 +85,7 @@ const sk: LaunchMessages = {
   },
   pricing: {
     title: "Cenník",
-    lede: "Čítanie skóre, jeho pravidiel a verejného záznamu je zadarmo. Plánuje sa platená úroveň. Zatiaľ sa nedá nič kúpiť.",
-    plannedBadge: "Plánované",
+    lede: "Čítanie skóre, jeho pravidiel a verejného záznamu je zadarmo. Plánuje sa platená úroveň. Zatiaľ nie je nič v predaji.",
     plannedNote: "Ceny a limity sú plánované a môžu sa pred spustením zmeniť. Nie sú ponukou.",
     freeName: "Zadarmo",
     paidName: "Platené",
@@ -134,10 +95,8 @@ const sk: LaunchMessages = {
     paidTag: "Plánovaná cena",
     featureCol: "Čo dostanete",
     tableCaption: "Porovnanie bezplatnej a platenej úrovne",
-    buttonWaitlist: "Pridať sa do poradovníka",
-    noWaitlist: "Poradovník zatiaľ nie je otvorený.",
-    included: "Súčasť",
-    notIncluded: "Nie je súčasťou",
+    included: "Áno",
+    notIncluded: "Nie",
     rows: {
       score: "Skóre firmy a rozpis pravidiel so vstupmi a zdrojmi",
       method: "Metodika a verejný záznam",

@@ -1,5 +1,7 @@
 import { expect, it } from "vitest";
-import { getLaunchMessages, type LaunchMessages } from "./launch-messages";
+import { formatNumber } from "./index";
+import { getLaunchMessages } from "./launch-messages";
+import { PRICE_VARIANTS } from "@/config/plans";
 
 const leaves = (value: unknown, path = ""): [string, string][] =>
   typeof value === "string" ? [[path, value]] : Object.entries(value as object).flatMap(([key, child]) => leaves(child, path ? `${path}.${key}` : key));
@@ -22,7 +24,19 @@ it("uses no em dashes or urgency wording", () => {
   expect(text).not.toMatch(/limited time|act now|lifetime|doživotn/i);
 });
 
-it("keeps the consent version in both locales", () => {
-  const read = (m: LaunchMessages) => m.form.consentVersion;
-  expect(read(getLaunchMessages("en"))).toBe(read(getLaunchMessages("sk")));
+it("avoids banned promise and recommendation wording", () => {
+  const banned = /beat the market|guarantee|\breturns?\b|\bbuy\b|\bbest\b|poraz\w* trh|zaručen|\bvýnos\w*|\bkúp\w*|\bnajlepš\w*/i;
+  for (const locale of ["en", "sk"] as const) {
+    for (const [key, value] of leaves(getLaunchMessages(locale))) expect(value, `${locale}.${key}`).not.toMatch(banned);
+  }
+});
+
+it("writes the planned price with a decimal comma in Slovak and a point in English", () => {
+  expect(formatNumber("sk", PRICE_VARIANTS.a.monthlyEur, 2)).toBe("9,90");
+  expect(formatNumber("en", PRICE_VARIANTS.a.monthlyEur, 2)).toBe("9.90");
+});
+
+it("uses Áno and Nie in the Slovak plan table", () => {
+  const { included, notIncluded } = getLaunchMessages("sk").pricing;
+  expect([included, notIncluded]).toEqual(["Áno", "Nie"]);
 });

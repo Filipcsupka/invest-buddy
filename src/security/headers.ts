@@ -1,13 +1,17 @@
-/** Security headers for every response. Set from next.config.ts `headers()`. */
-export function contentSecurityPolicy(dev = false): string {
+import { analyticsConfig } from "../analytics/config";
+
+/** Security headers for every response. Set from next.config.ts `headers()`, which Next evaluates at build time, so ANALYTICS_* must be set for the build. */
+export function contentSecurityPolicy(dev = false, analytics: { scriptSrc: string } | null = analyticsConfig()): string {
+  // The analytics tool loads its script and posts events to its own origin, and nothing else is allowed.
+  const origin = analytics ? new URL(analytics.scriptSrc).origin : "";
   return [
     "default-src 'self'",
     // Next streams inline hydration scripts and the layout has an inline theme script; a nonce or hash policy is a follow-up.
-    `script-src 'self' 'unsafe-inline'${dev ? " 'unsafe-eval'" : ""}`,
+    `script-src 'self' 'unsafe-inline'${dev ? " 'unsafe-eval'" : ""}${origin ? ` ${origin}` : ""}`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self' data:",
-    "connect-src 'self'",
+    `connect-src 'self'${origin ? ` ${origin}` : ""}`,
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",

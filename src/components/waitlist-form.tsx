@@ -1,78 +1,74 @@
 "use client";
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useState, type FormEvent } from "react";
 import { track } from "@/analytics/events";
-import type { PriceVariantId } from "@/config/plans";
-import type { Locale } from "@/i18n";
-import type { LaunchMessages } from "@/i18n/launch-messages";
-import { buildPayload, submitWaitlist, validEmail } from "./waitlist-client";
-import styles from "./launch.module.css";
+import { submitSignup, type SubmitResult } from "@/waitlist/submit";
+import type { Messages } from "@/i18n";
+import styles from "./waitlist-form.module.css";
 
-type Status = "idle" | "sending" | "done";
+export type WaitlistLabels = Messages["waitlist"];
 
-/** Waitlist signup. The page renders it only while the WAITLIST flag is on. Posts to /api/waitlist (W14). */
-export function WaitlistForm({ copy, locale, variant }: { copy: LaunchMessages["form"]; locale: Locale; variant: PriceVariantId }) {
+const errorKey = { email: "errorEmail", consent: "errorConsent", rate: "errorRate", error: "errorGeneric" } as const;
+
+interface Props {
+  locale: "en" | "sk";
+  labels: WaitlistLabels;
+  source?: string;
+  priceVariant?: string;
+  /** Hide the form's own heading when the page already has one above it. The form keeps an accessible name. */
+  hideTitle?: boolean;
+}
+
+/** Double opt-in sign-up. Shows the same success text whether or not the address was already known. */
+export function WaitlistForm({ locale, labels, source, priceVariant, hideTitle = false }: Props) {
   const id = useId();
-  const [email, setEmail] = useState("");
-  const [consent, setConsent] = useState(false);
-  const [website, setWebsite] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [status, setStatus] = useState<Status>("idle");
+  const [state, setState] = useState<"idle" | "sending" | SubmitResult>("idle");
+  const eventProps = { locale, ...(source ? { source } : {}), ...(priceVariant ? { variant: priceVariant } : {}) };
 
   useEffect(() => {
-    track("waitlist_view", { variant, locale });
-  }, [variant, locale]);
+    track("waitlist_view", eventProps);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (status === "sending") return;
-    if (!validEmail(email)) return setError(copy.errorEmail);
-    if (!consent) return setError(copy.errorConsent);
-    setError(null);
-    setStatus("sending");
-    const outcome = await submitWaitlist(buildPayload({ email, consent, website }, locale, variant));
-    if (outcome === "ok") {
-      track("waitlist_submit", { variant, locale });
-      return setStatus("done");
-    }
-    setStatus("idle");
-    setError(outcome === "invalid" ? copy.errorInvalid : outcome === "rate_limited" ? copy.errorRate : copy.errorFailed);
+    const data = new FormData(event.currentTarget);
+    setState("sending");
+    const result = await submitSignup({
+      email: String(data.get("email") ?? ""),
+      locale,
+      consentLaunch: data.get("consentLaunch") === "on",
+      consentWeekly: data.get("consentWeekly") === "on",
+      website: String(data.get("website") ?? ""),
+      ...(source ? { source } : {}),
+      ...(priceVariant ? { priceVariant } : {}),
+    });
+    if (result === "ok") track("waitlist_submit", eventProps);
+    setState(result);
   }
 
-  if (status === "done") {
-    return (
-      <div className={styles.done} role="status">
-        <strong>{copy.doneTitle}</strong>
-        <p>{copy.doneBody}</p>
-      </div>
-    );
-  }
-
+  if (state === "ok") return <p className={styles.ok} role="status">{labels.success}</p>;
+  const failed = state !== "idle" && state !== "sending" ? state : null;
+  const errorId = `${id}-error`;
   return (
-    <form className={styles.form} onSubmit={onSubmit} noValidate data-consent-version={copy.consentVersion}>
+    <form className={styles.form} onSubmit={onSubmit} noValidate {...(hideTitle ? { "aria-label": labels.formTitle } : { "aria-labelledby": `${id}-title` })}>
+      {hideTitle ? null : <h2 id={`${id}-title`}>{labels.formTitle}</h2>}
       <div className={styles.field}>
-        <label className={styles.label} htmlFor={`${id}-email`}>
-          {copy.emailLabel}
-        </label>
-        <input className={styles.input} id={`${id}-email`} name="email" type="email" autoComplete="email" inputMode="email" required value={email} onChange={(e) => setEmail(e.target.value)} aria-invalid={error === copy.errorEmail} aria-describedby={error ? `${id}-error` : undefined} />
+        <label className={styles.label} htmlFor={`${id}-email`}>{labels.email}</label>
+        <input className={styles.input} id={`${id}-email`} name="email" type="email" autoComplete="email" required aria-invalid={failed === "email"} aria-describedby={failed === "email" ? errorId : undefined} />
       </div>
-      <div className={styles.trap} aria-hidden="true">
-        <label htmlFor={`${id}-website`}>{copy.hidden}</label>
-        <input id={`${id}-website`} name="website" type="text" tabIndex={-1} autoComplete="off" value={website} onChange={(e) => setWebsite(e.target.value)} />
-      </div>
-      <label className={styles.consent}>
-        <input type="checkbox" name="consent" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
-        <span>{copy.consentLabel}</span>
+      <label className={styles.check}>
+        <input type="checkbox" name="consentLaunch" required aria-invalid={failed === "consent"} aria-describedby={failed === "consent" ? errorId : undefined} />
+        <span>{labels.consentLaunch}</span>
       </label>
-      {error ? (
-        <p className={styles.error} id={`${id}-error`} role="alert">
-          {error}
-        </p>
-      ) : null}
-      <div>
-        <button className="button" type="submit" disabled={status === "sending"}>
-          {status === "sending" ? copy.sending : copy.submit}
-        </button>
+      <label className={styles.check}>
+        <input type="checkbox" name="consentWeekly" />
+        <span>{labels.consentWeekly}</span>
+      </label>
+      <div className={styles.trap} aria-hidden="true">
+        <input type="text" name="website" tabIndex={-1} autoComplete="off" />
       </div>
+      {failed ? <p className={styles.error} id={errorId} role="alert">{labels[errorKey[failed]]}</p> : null}
+      <button className="button" type="submit" disabled={state === "sending"}>{state === "sending" ? labels.sending : labels.submit}</button>
     </form>
   );
 }
