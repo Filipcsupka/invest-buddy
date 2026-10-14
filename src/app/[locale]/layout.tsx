@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { Footer, Nav } from "@/components/nav";
 import { themeScript } from "@/components/theme-toggle";
 import { getMessages, isLocale, locales } from "@/i18n";
+import { Analytics } from "@/components/analytics";
 import { JsonLd } from "@/components/json-ld";
 import { siteJsonLd, siteNoindex, siteUrl } from "@/i18n/metadata";
 import "../globals.css";
@@ -56,6 +57,7 @@ export default async function LocaleLayout({ children, params }: { children: Rea
           {children}
         </main>
         <Footer locale={locale} />
+        <Analytics />
       </body>
     </html>
   );

@@ -1,4 +1,5 @@
 import type { Locale, Messages } from "@/i18n";
+import { TrackView } from "./track-view";
 import type { ConfirmView, UnsubscribeView } from "@/waitlist/states";
 
 type Labels = Messages["waitlist"];
@@ -27,7 +28,7 @@ function Panel({ title, body, locale, labels, form }: { title: string; body: str
 export function ConfirmPanel({ locale, labels, view, token }: { locale: Locale; labels: Labels; view: ConfirmView; token: string }) {
   switch (view) {
     case "button": return <Panel locale={locale} labels={labels} title={labels.confirmTitle} body={labels.confirmBody} form={{ action: "/api/waitlist/confirm", token, button: labels.confirmButton }} />;
-    case "confirmed": return <Panel locale={locale} labels={labels} title={labels.confirmedTitle} body={labels.confirmedBody} />;
+    case "confirmed": return <><Panel locale={locale} labels={labels} title={labels.confirmedTitle} body={labels.confirmedBody} /><TrackView events={["waitlist_confirm"]} props={{ locale }} /></>;
     case "already": return <Panel locale={locale} labels={labels} title={labels.confirmedTitle} body={labels.alreadyBody} />;
     case "expired": return <Panel locale={locale} labels={labels} title={labels.expiredTitle} body={labels.expiredBody} />;
     default: return <Panel locale={locale} labels={labels} title={labels.invalidTitle} body={labels.invalidBody} />;

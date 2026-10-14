@@ -7,4 +7,4 @@
 .check input { margin-top: 0.3rem; inline-size: 1.1rem; block-size: 1.1rem; }
 .error { color: var(--loss); font-size: var(--t-sm); }
 .ok { padding: var(--s4); border: 1px solid var(--rule-strong); background: var(--sheet); }
-.trap { position: absolute; inset-inline-start: -10000px; block-size: 1px; inline-size: 1px; overflow: hidden; }
+.trap { display: none; }

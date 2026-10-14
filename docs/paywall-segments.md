@@ -5,6 +5,7 @@ Decision on 2026-10-08: the markers identify sections that could become subscrib
 | Segment id | Page | What it shows | Status | Legal gate | Why |
 | --- | --- | --- | --- | --- | --- |
 | None | Landing `/` | Product introduction, sample company sheet, method and record links | Free | None | Shows what the screen does before signup. |
+| None | Pricing `/pricing` | Planned free and paid tiers, planned prices from `src/config/plans.ts`, waitlist form | Free | `WAITLIST` | Shown only while the waitlist flag is on. No checkout while `BILLING` is off. |
 | None | Methodology, legal pages | Published rules, limitations, privacy and terms | Free | None | Readers need the rules and legal text to interpret any score. |
 | None | Dashboard `/dashboard` and scanner redirect | Ticker list, score, state, search and filters | Free | None | The basic screen is the entry point. `/scanner` redirects here. |
 | None | Company `/company/[ticker]` | Name, sector, current score and state | Free | None | A reader can inspect the basic screening result. |

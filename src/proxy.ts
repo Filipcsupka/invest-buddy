@@ -27,6 +27,7 @@ export async function proxy(request: NextRequest) {
   }
   const unavailable = (section === "scanner" && !featureFlags.PAYWALL)
     || (section === "sizing" && !featureFlags.ADVICE_OUTPUT)
+    || (section === "pricing" && !featureFlags.WAITLIST)
     || (section === "ideas" && (!ideasEnabled() || !featureFlags.ADVICE_OUTPUT))
     || (section === "owner-allocation" && !ownerViewEnabled())
     || (section === "owner" && ticker === "research" && !featureFlags.OWNER_VIEW)

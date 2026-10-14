@@ -6,6 +6,11 @@ import { IconArrowRight } from "@/components/icons";
 import { RuleBook, StatusSteps } from "@/components/method";
 import { latestScores } from "@/data/store";
 import { DataStatus } from "@/components/data-status";
+import { LaunchSection } from "@/components/launch-section";
+import { recordStartDate } from "@/data/launch-facts";
+import { resolveVariant } from "@/config/plans";
+import { resolveSource } from "@/waitlist/source";
+import { getLaunchMessages } from "@/i18n/launch-messages";
 export const dynamic = "force-dynamic";
 import { statusLabel } from "@/components/status-slider";
 import { flags } from "@/config/flags";
@@ -18,13 +23,19 @@ export async function generateMetadata({ params }: LocaleParams): Promise<Metada
   return pageMetadata(locale, "", null, getMessages(locale).meta.homeDescription);
 }
 
-async function Home({ params }: LocaleParams) {
+type HomeProps = LocaleParams & { searchParams?: Promise<Record<string, string | string[] | undefined>> };
+
+async function Home({ params, searchParams }: HomeProps) {
   const locale = await resolveLocale(params);
   const m = getMessages(locale);
   const data = await latestScores();
   const rows = data.rows;
   const ranked = [...rows].sort((a, b) => Number(b.result.state === "Setup met (>=18)") - Number(a.result.state === "Setup met (>=18)") || b.result.total - a.result.total || a.instrument.ticker.localeCompare(b.instrument.ticker));
   const top = ranked[0];
+  const waitlist = flags().WAITLIST;
+  const query = waitlist ? await searchParams : undefined;
+  const launch = waitlist ? getLaunchMessages(locale) : null;
+  const facts = waitlist ? { tickers: data.sample || rows.length === 0 ? null : rows.length, lastScore: data.sample ? null : data.lastUpdated, recordStart: data.sample || rows.length === 0 ? null : await recordStartDate() } : null;
 
   return (
     <>
@@ -40,10 +51,17 @@ async function Home({ params }: LocaleParams) {
             <Link className="button secondary" href={`/${locale}/methodology`}>
               {m.home.secondary}
             </Link>
+            {launch ? (
+              <Link className="button secondary" href="#waitlist">
+                {launch.landing.ctaWaitlist}
+              </Link>
+            ) : null}
           </div>
         </div>
         {top ? <><Datasheet locale={locale} instrument={top.instrument} result={top.result} sample={data.sample} /><DataStatus locale={locale} lastUpdated={data.lastUpdated} stale={data.stale} /></> : <DataStatus locale={locale} lastUpdated={data.lastUpdated} stale={data.stale} />}
       </section>
+
+      {facts ? <LaunchSection locale={locale} facts={facts} variant={resolveVariant(query?.v)} source={resolveSource(query, "landing")} /> : null}
 
       <section className="frame ledger" aria-labelledby="build">
         <div className="ledger-head">

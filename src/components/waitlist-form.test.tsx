@@ -29,3 +29,12 @@ describe.each(locales)("WaitlistForm (%s)", (locale) => {
     expect(html).toContain(`for="${inputId}"`);
   });
 });
+
+describe("WaitlistForm hideTitle", () => {
+  const m = getMessages("en").waitlist;
+  it("drops the heading and keeps an accessible name", () => {
+    const html = renderToStaticMarkup(<WaitlistForm locale="en" labels={m} hideTitle />);
+    expect(html).not.toContain("<h2");
+    expect(html).toContain(`aria-label="${m.formTitle}"`);
+  });
+});
