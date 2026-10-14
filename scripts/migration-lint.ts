@@ -12,7 +12,7 @@ const RULES: Array<{ rule: string; pattern: RegExp; message: string; allowable: 
   { rule: "drop-table", pattern: /\bDROP\s+TABLE\b/i, message: "DROP TABLE is not allowed", allowable: true },
   { rule: "drop-column", pattern: /\bDROP\s+COLUMN\b/i, message: "DROP COLUMN is not allowed", allowable: true },
   { rule: "truncate", pattern: /^\s*TRUNCATE\b/i, message: "TRUNCATE is not allowed", allowable: true },
-  { rule: "alter-column-type", pattern: /\bALTER\s+COLUMN\b[^;]*?\bTYPE\b/is, message: "ALTER COLUMN ... TYPE rewrites the table and is not allowed", allowable: true },
+  { rule: "alter-column-type", pattern: /\bALTER\s+COLUMN\b[^;]*?\bTYPE\b/i, message: "ALTER COLUMN ... TYPE rewrites the table and is not allowed", allowable: true },
   { rule: "index-concurrently", pattern: /\bCREATE\s+(?:UNIQUE\s+)?INDEX\s+CONCURRENTLY\b/i, message: "CREATE INDEX CONCURRENTLY cannot run in the migration transaction", allowable: false },
   { rule: "index-if-not-exists", pattern: /\bCREATE\s+(?:UNIQUE\s+)?INDEX\s+(?!CONCURRENTLY\b)(?!IF\s+NOT\s+EXISTS\b)/i, message: "CREATE INDEX needs IF NOT EXISTS", allowable: true },
 ];
