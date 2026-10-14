@@ -67,7 +67,7 @@ export const DATA_SOURCES: readonly DataSource[] = [
     notes: "Alpha Vantage EARNINGS. Display rights not verified; internal only. The page may show only the derived EPS beat yes/no with the source name, never the estimate." }),
   source({ id: "twelvedata", name: "Twelve Data", kind: "prices", licenceClass: "internal_only", termsUrl: "https://twelvedata.com/pricing", termsCheckedOn: CHECKED,
     rateLimitNote: "Basic free plan: 8 credits per minute, 800 per day, internal non-display usage.", dailyCap: 800, monthlyCostCapEur: 0,
-    notes: "Free plan is internal non-display; Grow adds internal display. Redistribution not addressed." }),
+    notes: "Free plan is internal non-display; Grow adds internal display. Redistribution not addressed. Splits endpoint: plan availability and credit cost not verified (docs page did not state it when read on 2026-10-14); no vendor adapter built. Splits are detected from stored bars." }),
   source({ id: "tiingo", name: "Tiingo", kind: "prices", licenceClass: "internal_only", termsUrl: "https://www.tiingo.com/about/pricing", termsCheckedOn: CHECKED,
     rateLimitNote: "Starter free: 50 requests per hour, 1,000 per day, 500 symbols per month.", dailyCap: 1000, monthlyCostCapEur: 0, notes: "Starter plan is internal use only; may not display or share." }),
   source({ id: "finnhub", name: "Finnhub", kind: "fundamentals", licenceClass: "internal_only", termsUrl: "https://finnhub.io/terms-of-service", termsCheckedOn: CHECKED,
