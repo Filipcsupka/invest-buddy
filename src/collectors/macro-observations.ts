@@ -1,6 +1,6 @@
 import { TREASURY_COLUMNS } from "../data/macro-series";
 
-export interface MacroObservation { seriesId: string; obsDate: string; value: number; realtimeStart: string; sourceId: "fred" | "treasury"; sourceUrl: string }
+export interface MacroObservation { seriesId: string; obsDate: string; value: number; realtimeStart: string; sourceId: "fred" | "treasury" | "ecb"; sourceUrl: string }
 
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 export const fredSeriesPage = (series: string) => `https://fred.stlouisfed.org/series/${series}`;

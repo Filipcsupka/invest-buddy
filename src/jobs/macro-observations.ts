@@ -3,6 +3,7 @@ import { defaultHttp, type SourceHttp } from "../collectors/sources/client";
 import { fredObservationsUrl, parseFredMacro, parseTreasuryCurve, treasuryCurveUrl, type MacroObservation } from "../collectors/macro-observations";
 import type { CollectorRepository } from "../db/collectors";
 import { MACRO_HISTORY_START, storableFredSeries } from "../data/macro-series";
+import { ECB_DAILY_URL, ECB_HIST_URL, parseEcbFx } from "../collectors/ecb-fx";
 import type { BackfillJob } from "./backfill";
 
 type Store = Pick<CollectorRepository, "upsertMacroObservations">;
@@ -53,4 +54,22 @@ export async function storeDailyMacroObservations(repository: Store, deps: { key
     written += await put(rows);
   } catch (error) { failures.push(`treasury curve: ${error instanceof Error ? error.message : String(error)}`); }
   return { written, failures };
+}
+
+/** Backfill of the ECB reference rates (USD, CZK, GBP): one request for the whole history file. Source `ecb` is the ledger source. */
+export function createMacroEcbBackfillJob(repo: Store, http: Pick<SourceHttp, "get"> = defaultHttp()): BackfillJob {
+  return { name: "macro-ecb", source: "ecb",
+    async subjects() { return ["euro-reference-rates"]; },
+    async step() {
+      await repo.upsertMacroObservations!(parseEcbFx(await http.get(ECB_HIST_URL, { timeoutMs: 30_000 })).filter((row) => row.obsDate >= MACRO_HISTORY_START));
+      return { cursor: { done: true }, done: true };
+    } };
+}
+
+/** Daily refresh of the ECB reference rates: the latest published day. Rerunning the same day adds nothing. */
+export async function storeDailyEcbFx(repository: Store, http: Pick<SourceHttp, "get">): Promise<{ written: number; failures: string[] }> {
+  const put = repository.upsertMacroObservations?.bind(repository);
+  if (!put) return { written: 0, failures: [] };
+  try { return { written: await put(parseEcbFx(await http.get(ECB_DAILY_URL))), failures: [] }; }
+  catch (error) { return { written: 0, failures: [`ecb fx: ${error instanceof Error ? error.message : String(error)}`] }; }
 }

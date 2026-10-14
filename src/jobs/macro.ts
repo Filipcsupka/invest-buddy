@@ -11,7 +11,7 @@ import { lastCompletedSession } from "../data/trading-calendar";
 import { isIsoDate } from "../db/iso-date";
 import { loadUniverse } from "../db/universe";
 import { storedMacroSeries } from "../db/macro-observations";
-import { storeDailyMacroObservations } from "./macro-observations";
+import { storeDailyEcbFx, storeDailyMacroObservations } from "./macro-observations";
 import { evaluateDataTailwind, evaluateSectorRotation, macroConfig, MACRO_RULES_VERSION, type Bar, type MacroConfig, type MacroResult, type VixPoint, type YieldPoint } from "../data/macro-rules";
 
 export const BENCHMARK = "SPY";
@@ -83,6 +83,7 @@ export async function fetchMacroInputs(repository: CollectorRepository, deps: Fe
   }
   const stored = await storeDailyMacroObservations(repository, { key, http: deps.http ?? defaultHttp(), get: deps.get, now });
   failures.push(...stored.failures);
+  failures.push(...(await storeDailyEcbFx(repository, deps.http ?? defaultHttp())).failures);
   try {
     const output = await collectVix({ http: deps.http ?? defaultHttp(), companies: [] as Company[], symbols: [], since: now.toISOString().slice(0, 10), now, env });
     for (const document of output.documents) await repository.upsertDocument(document);
