@@ -11,6 +11,7 @@ export const PAYWALL_SEGMENTS = {
   "portfolio-weights": "Current portfolio position weights",
   "track-record-signals": "Dated signal outcomes and forward return windows",
   "track-record-history": "Historical score snapshots and their ticker details",
+  "track-record-worst": "The five weakest stored outcomes, one per ticker and date",
   "track-record-benchmark": "Sample benchmark chart in fixture mode",
   "sizing-matrix": "Account size and signal tier percentage matrix",
   "sizing-cash": "Cash band rules for applying size tiers",

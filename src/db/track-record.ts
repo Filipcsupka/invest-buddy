@@ -13,22 +13,56 @@ export interface RecordSignal {
   windows: Record<WindowDays, ReturnType<typeof forwardReturn>>;
 }
 
+export interface WorstOutcome { id: number; ticker: string; asOf: string; window: WindowDays; stock: number; excess: number }
+
+const WORST_COUNT = 5;
+
+/** Worst window per signal, one row per ticker and date (judge and score signals can share both), then the weakest few. */
+export function worstOutcomes(signals: RecordSignal[]): WorstOutcome[] {
+  const perSignal: WorstOutcome[] = [];
+  for (const signal of signals) {
+    let worst: WorstOutcome | null = null;
+    for (const window of WINDOWS) {
+      const result = signal.windows[window];
+      if (!result || result.excess >= 0) continue;
+      if (!worst || result.excess < worst.excess) worst = { id: signal.id, ticker: signal.ticker, asOf: signal.asOf, window, stock: result.stock, excess: result.excess };
+    }
+    if (worst) perSignal.push(worst);
+  }
+  perSignal.sort((a, b) => a.excess - b.excess || a.id - b.id);
+  const seen = new Set<string>();
+  return perSignal.filter((item) => {
+    const key = `${item.ticker}:${item.asOf}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, WORST_COUNT);
+}
+
 export interface RecordHistory {
   snapshotCount: number;
   firstDate: string | null;
   lastDate: string | null;
   signals: RecordSignal[];
   buySignalCount: number;
+  worst: WorstOutcome[];
   hit20: ReturnType<typeof hitRate>;
 }
 
 type SignalRow = { id: string; ticker: string; as_of: string; source: "score" | "judge"; tier: string; state: string; score: number | null; reference_close: string | null; spy_reference_close: string | null };
 
-export async function readRecord(pool: Pick<pg.Pool, "query">, today: string): Promise<RecordHistory> {
+/** `stored` (default) reads windows from record_outcomes and computes only the ones not stored yet. The outcomes job passes false to compute all. */
+export async function readRecord(pool: Pick<pg.Pool, "query">, today: string, options: { stored?: boolean } = {}): Promise<RecordHistory> {
   const summary = await pool.query<{ count: string; first_date: string | null; last_date: string | null }>(
     "SELECT count(*)::text AS count,min(as_of)::text AS first_date,max(as_of)::text AS last_date FROM record_snapshots");
   const rows = await pool.query<SignalRow>(`SELECT id::text,ticker,as_of::text,source,tier,state,score,reference_close::text,spy_reference_close::text
     FROM record_signals WHERE as_of <= $1 ORDER BY as_of DESC,id DESC`, [today]);
+  const stored = new Map<string, NonNullable<ReturnType<typeof forwardReturn>>>();
+  if (options.stored !== false) {
+    const outcomes = await pool.query<{ signal_id: string; window_days: number; exit_date: string; stock_return: string; spy_return: string; excess_return: string }>(
+      "SELECT signal_id::text,window_days,exit_date::text,stock_return::text,spy_return::text,excess_return::text FROM record_outcomes WHERE exit_date <= $1", [today]);
+    for (const row of outcomes.rows) stored.set(`${row.signal_id}:${row.window_days}`, { date: row.exit_date, stock: Number(row.stock_return), spy: Number(row.spy_return), excess: Number(row.excess_return) });
+  }
   const tickers = [...new Set(rows.rows.map((row) => row.ticker))];
   const first = rows.rows.at(-1)?.as_of;
   const bars = first ? await pool.query<{ ticker: string; date: string; close: string }>(
@@ -48,7 +82,7 @@ export async function readRecord(pool: Pick<pg.Pool, "query">, today: string): P
     const laterStoredTickerClose = series.find((bar) => bar.date === row.as_of)?.close ?? null;
     const base = { asOf: row.as_of, tickerClose: row.reference_close === null ? laterStoredTickerClose : Number(row.reference_close), spyClose: row.spy_reference_close === null ? laterStoredSpyClose : Number(row.spy_reference_close) };
     return { id: Number(row.id), ticker: row.ticker, asOf: row.as_of, source: row.source, tier: row.tier, state: row.state, score: row.score,
-      windows: Object.fromEntries(WINDOWS.map((days) => [days, forwardReturn(base, series, spy, days, today)])) as RecordSignal["windows"] };
+      windows: Object.fromEntries(WINDOWS.map((days) => [days, stored.get(`${row.id}:${days}`) ?? forwardReturn(base, series, spy, days, today)])) as RecordSignal["windows"] };
   });
   const uniqueBuys = new Map<string, RecordSignal>();
   for (const signal of signals) {
@@ -56,13 +90,14 @@ export async function readRecord(pool: Pick<pg.Pool, "query">, today: string): P
     const key = `${signal.ticker}:${signal.asOf}`;
     if (!uniqueBuys.has(key)) uniqueBuys.set(key, signal);
   }
+  const worst = worstOutcomes(signals);
   return { snapshotCount: Number(summary.rows[0]?.count ?? 0), firstDate: summary.rows[0]?.first_date ?? null,
-    lastDate: summary.rows[0]?.last_date ?? null, signals, buySignalCount: uniqueBuys.size,
+    lastDate: summary.rows[0]?.last_date ?? null, signals, buySignalCount: uniqueBuys.size, worst,
     hit20: hitRate([...uniqueBuys.values()].map((signal) => signal.windows[20]?.excess ?? null)) };
 }
 
 export async function recordHistory(): Promise<RecordHistory> {
-  const empty: RecordHistory = { snapshotCount: 0, firstDate: null, lastDate: null, signals: [], buySignalCount: 0, hit20: { hits: 0, n: 0, rate: null } };
+  const empty: RecordHistory = { snapshotCount: 0, firstDate: null, lastDate: null, signals: [], buySignalCount: 0, worst: [], hit20: { hits: 0, n: 0, rate: null } };
   const pool = getPool();
   if (!pool) return empty;
   return readRecord(pool, new Date().toISOString().slice(0, 10));

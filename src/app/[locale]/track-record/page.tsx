@@ -43,6 +43,8 @@ async function TrackRecord({ params }: LocaleParams) {
         <h2 id="record-summary">{m.trackRecord.summaryTitle}</h2>
         <p>{fill(record.snapshotCount === 1 ? m.trackRecord.summaryOne : m.trackRecord.summary, { count: formatNumber(locale, record.snapshotCount), date: record.firstDate ? formatDate(locale, record.firstDate) : m.trackRecord.none })}</p>
         {record.hit20.n > 0 && <p>{fill(m.trackRecord.hitRate, { rate: formatPercent(locale, record.hit20.rate ?? 0), n: formatNumber(locale, record.hit20.n) })}</p>}
+        {record.worst.length > 0 && <p className="muted small">{m.trackRecord.worstNote}</p>}
+        <p className="muted small">{m.trackRecord.excluded}</p>
         {record.buySignalCount < 30 && <p className="muted small">{fill(m.trackRecord.smallSample, { n: formatNumber(locale, record.buySignalCount) })}</p>}
       </section>
       <PaywallSegment id="track-record-benchmark"><section className="sheet-section" aria-labelledby="benchmark">
@@ -56,6 +58,16 @@ async function TrackRecord({ params }: LocaleParams) {
           labels={{ name: "SPY", aria: m.chart.label, close: "SPY", ma50: m.chart.ma50, ma200: m.chart.ma200, dip: m.chart.dip, last: m.chart.last }}
         /> : <p className="notice">{m.common.noDataYet}</p>}
       </section></PaywallSegment>
+      {record.worst.length > 0 && <PaywallSegment id="track-record-worst"><section className="sheet-section" aria-labelledby="worst">
+        <h2 id="worst">{m.trackRecord.worstTitle}</h2>
+        <div className="table-scroll" role="region" tabIndex={0} aria-label={m.trackRecord.worstTitle}><table className="screen">
+          <thead><tr><th scope="col">{m.trackRecord.date}</th><th scope="col">{m.trackRecord.ticker}</th><th scope="col">{m.trackRecord.window}</th><th scope="col">{m.trackRecord.worstTitle}</th></tr></thead>
+          <tbody>{record.worst.map((item) => <tr key={`${item.id}:${item.window}`}>
+            <td>{formatDate(locale, item.asOf)}</td><td>{item.ticker}</td><td>{m.trackRecord[`return${item.window}`]}</td>
+            <td>{fill(m.trackRecord.worstCell, { stock: formatPercent(locale, item.stock), excess: formatPercent(locale, item.excess) })}</td>
+          </tr>)}</tbody>
+        </table></div>
+      </section></PaywallSegment>}
       <PaywallSegment id="track-record-signals"><section className="sheet-section" aria-labelledby="signals">
         <h2 id="signals">{m.trackRecord.signalsTitle}</h2>
         {record.signals.length === 0 ? <p className="muted">{record.snapshotCount === 0 ? m.trackRecord.empty : m.trackRecord.noSignals}</p> : <div className="table-scroll" role="region" tabIndex={0} aria-label={m.trackRecord.signalsTitle}><table className="screen">
