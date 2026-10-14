@@ -1,5 +1,5 @@
 import type { Technicals } from "../data/technicals";
-import { computeSignals, SIGNAL_RULES, type Signal, type SignalField, type SignalSymbolInput } from "./signals";
+import { computeSignals, SIGNAL_RULES, type Signal, type SignalField, type SignalRuleHit, type SignalSymbolInput } from "./signals";
 import { SCORE_RULES_VERSION } from "./score";
 
 /**
@@ -20,6 +20,7 @@ export interface GoldenSymbol {
   symbol: string;
   score: { total: number; technical: number; fundamentals: number; macro: number; state: string; evidencedMax?: number };
   matchedRules: string[];
+  ruleHits: SignalRuleHit[];
   fields: Record<string, SignalField>;
   expiredFields: string[];
   technicals: Technicals | null;
@@ -38,13 +39,14 @@ export interface GoldenSource {
   symbol: string;
   score: { total: number; technical: number; fundamentals: number; macro: number; state: string; evidencedMax?: number };
   matchedRules: string[];
+  ruleHits: SignalRuleHit[];
   fields: Record<string, { value: boolean | null; agreement: string; verified: boolean; carriedFrom: string | null }>;
   expiredFields: string[];
   technicals: Technicals | null;
 }
 
 /** evidencedMax (EN45) is passed only when the fixture has it; without it all 25 points count. */
-export const goldenInput = (s: GoldenSymbol): SignalSymbolInput => ({ symbol: s.symbol, held: null, score: { total: s.score.total, state: s.score.state, ...(typeof s.score.evidencedMax === "number" ? { evidencedMax: s.score.evidencedMax } : {}) }, fields: s.fields, expiredFields: s.expiredFields, technicals: s.technicals });
+export const goldenInput = (s: GoldenSymbol): SignalSymbolInput => ({ symbol: s.symbol, held: null, score: { total: s.score.total, state: s.score.state, ...(typeof s.score.evidencedMax === "number" ? { evidencedMax: s.score.evidencedMax } : {}) }, ruleHits: s.ruleHits, fields: s.fields, expiredFields: s.expiredFields, technicals: s.technicals });
 
 export const expectedFrom = (s: Signal): GoldenExpected => ({
   action: s.action, sizeTier: s.sizeTier, ratings: s.ratings, points: s.points, unconfirmed: s.unconfirmed,
@@ -57,6 +59,7 @@ export function buildGolden(sources: GoldenSource[], asOf: string, description: 
     symbol: s.symbol,
     score: { total: s.score.total, technical: s.score.technical, fundamentals: s.score.fundamentals, macro: s.score.macro, state: s.score.state, ...(typeof s.score.evidencedMax === "number" ? { evidencedMax: s.score.evidencedMax } : {}) },
     matchedRules: [...s.matchedRules],
+    ruleHits: s.ruleHits.map((h) => ({ id: h.id, points: h.points, matched: h.matched, ...(h.unknown ? { unknown: true } : {}) })),
     fields: Object.fromEntries(Object.entries(s.fields).sort(([a], [b]) => a.localeCompare(b)).map(([k, f]) => [k, { value: f.value, agreement: f.agreement, verified: f.verified, carriedFrom: f.carriedFrom }])),
     expiredFields: [...s.expiredFields].sort(),
     technicals: s.technicals,

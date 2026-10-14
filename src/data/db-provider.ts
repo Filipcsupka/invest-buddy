@@ -1,12 +1,12 @@
 import type pg from "pg";
 import type { Fundamentals, Macro, OHLCV } from "../engine";
+import { CONFIRMED_FUNDAMENTAL_AGREEMENTS } from "../engine/agreements";
 import type { UniverseProvider, Instrument } from "./providers";
 import { fieldSourcesFor, type SourceItem } from "./sources";
 import { carryForwardEnabled, carryState, type ConsensusRow } from "./carry-forward";
 
 type CarryRow = ConsensusRow & { field: string };
-/** Fundamentals agreements that count for scoring when verified: two agents agreed, SEC data decided, one extractor with a stored verbatim quote, or a data rule (epsBeat from Alpha Vantage). */
-export const CONFIRMED_FUNDAMENTAL_AGREEMENTS: readonly string[] = ["agree", "xbrl_override", "verified_single", "data_rule"];
+export { CONFIRMED_FUNDAMENTAL_AGREEMENTS };
 const confirmedFundamental = (row: { verified: boolean; agreement: string }) => row.verified && CONFIRMED_FUNDAMENTAL_AGREEMENTS.includes(row.agreement);
 const SEC_REVENUE_URL = /^https:\/\/data\.sec\.gov\/api\/xbrl\/companyfacts\/CIK\d{10}\.json$/;
 const SEC_GROWTH_QUOTE = /^Revenue growth (-?\d+(?:\.\d+)?)% versus (-?\d+(?:\.\d+)?)%$/;
