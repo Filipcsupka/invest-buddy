@@ -71,6 +71,9 @@ export async function loadInputs(pool: pg.Pool, asOf: string, tickers: string[] 
     universe: Object.fromEntries(tickers.map((ticker) => [ticker, byTicker[ticker] ?? []])), spy: byTicker[BENCHMARK] ?? null };
 }
 
+/** The ECB fetch runs only when ECB_FX_ENABLED is exactly "on". Off by default, so the macro CronJob does not start it on deploy. */
+export const ecbFxEnabled = (env: Env) => env.ECB_FX_ENABLED === "on";
+
 export interface FetchDeps { http?: SourceHttp; env?: Env; now?: Date; get?: (url: string) => Promise<string> }
 /** Refreshes the stored macro inputs. A failing source is reported and skipped. */
 export async function fetchMacroInputs(repository: CollectorRepository, deps: FetchDeps = {}): Promise<string[]> {
@@ -83,7 +86,7 @@ export async function fetchMacroInputs(repository: CollectorRepository, deps: Fe
   }
   const stored = await storeDailyMacroObservations(repository, { key, http: deps.http ?? defaultHttp(), get: deps.get, now });
   failures.push(...stored.failures);
-  failures.push(...(await storeDailyEcbFx(repository, deps.http ?? defaultHttp())).failures);
+  if (ecbFxEnabled(env)) failures.push(...(await storeDailyEcbFx(repository, deps.http ?? defaultHttp())).failures);
   try {
     const output = await collectVix({ http: deps.http ?? defaultHttp(), companies: [] as Company[], symbols: [], since: now.toISOString().slice(0, 10), now, env });
     for (const document of output.documents) await repository.upsertDocument(document);

@@ -7,13 +7,30 @@ import { runLoggedJob } from "./job-log";
 /** Revisions younger than this many days are read. */
 export const REVISION_WINDOW_DAYS = 14;
 
+/** Candidates of one ticker with the same ratio within this many days are one event: the bar path and the revision path date it a day or two apart. */
+export const MERGE_WINDOW_DAYS = 3;
+const dayNumber = (date: string) => Date.parse(`${date}T00:00:00Z`) / 86_400_000;
+
+/** Keeps the earliest candidate of each same-ticker, same-ratio group within MERGE_WINDOW_DAYS and lists the rules that agreed. */
+export function mergeNearby(actions: CorporateAction[]): CorporateAction[] {
+  const sorted = [...actions].sort((a, b) => a.ticker.localeCompare(b.ticker) || a.actionDate.localeCompare(b.actionDate));
+  const out: CorporateAction[] = [];
+  for (const action of sorted) {
+    const kept = out.find((k) => k.ticker === action.ticker && k.ratio === action.ratio && k.kind === action.kind && Math.abs(dayNumber(action.actionDate) - dayNumber(k.actionDate)) <= MERGE_WINDOW_DAYS);
+    if (!kept) { out.push(action); continue; }
+    const rules = new Set([kept.detail.rule, ...((kept.detail.mergedRules as unknown[] | undefined) ?? []), action.detail.rule].filter(Boolean));
+    kept.detail = { ...kept.detail, mergedRules: [...rules] };
+  }
+  return out;
+}
+
 /** Pure: split candidates for every ticker from its bars and its recent revisions. */
 export function detectAll(inputs: DqInput[], revised: Map<string, { barDate: string; oldClose: number; newClose: number }[]>): CorporateAction[] {
-  return inputs.flatMap(({ ticker, bars }) => {
+  return mergeNearby(inputs.flatMap(({ ticker, bars }) => {
     const dates = bars.map((bar) => bar.date).sort();
     const next = (after: string) => dates.find((date) => date > after) ?? null;
     return [...detectFromBars(ticker, bars), ...detectFromRevisions(ticker, revised.get(ticker) ?? [], next)];
-  });
+  }));
 }
 
 export async function runCorporateActionDetection(db: Pick<pg.Pool, "query">, today: string) {

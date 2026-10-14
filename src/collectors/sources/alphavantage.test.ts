@@ -34,7 +34,7 @@ describe("parseEarnings", () => {
 });
 
 describe("pickSymbols", () => {
-  it("puts symbols without a fact first, then the oldest report date", () => {
+  it("puts symbols never fetched first, then the oldest observation", () => {
     const latest = new Map([["A", "2026-08-01"], ["B", "2026-05-01"], ["D", "2026-09-01"]]);
     expect(pickSymbols(["A", "B", "C", "D"], latest, 3)).toEqual(["C", "B", "A"]);
     expect(pickSymbols(["A"], latest, 0)).toEqual([]);
@@ -60,9 +60,9 @@ describe("collectAlphaVantage", () => {
     expect(output.apiRequests).toBe(2);
   });
 
-  it("caps one run at 20 requests and picks missing, then oldest facts", async () => {
+  it("caps one run at 20 requests and picks never fetched, then oldest observations", async () => {
     const repo = new MemoryCollectorRepository();
-    for (const [i, symbol] of symbols.slice(0, 15).entries()) await repo.upsertFact({ symbol, key: EPS_FACT_KEY, asOf: `2026-0${(i % 9) + 1}-15`, value: {}, documentIds: [] });
+    for (const [i, symbol] of symbols.slice(0, 15).entries()) repo.epsHistory.push({ ticker: symbol, fiscalDateEnding: "2026-07-31", reportedDate: null, reportedEps: null, estimatedEps: null, surprisePct: null, observedAt: `2026-0${(i % 9) + 1}-15T00:00:00.000Z` });
     const http = stubHttp(answerAll);
     const output = await collectAlphaVantage(context(http, { companies, symbols, env: { ALPHA_VANTAGE_API_KEY: KEY }, state: repo }));
     expect(MAX_REQUESTS_PER_RUN).toBe(20);
@@ -175,5 +175,26 @@ describe("EPS history (D28)", () => {
     const repo = new MemoryCollectorRepository();
     await run(repo, eight());
     expect([...repo.facts.values()][0]).toMatchObject({ key: EPS_FACT_KEY, asOf: "2026-08-26" });
+  });
+});
+
+describe("symbol rotation and history failures", () => {
+  const rows = [quarter("2026-08-27", "5.0")];
+  const noQuarter = [quarter("2027-08-27", "5.0")];
+  it("a symbol with only unreported quarters has history and is not picked ahead of older ones", async () => {
+    const repo = new MemoryCollectorRepository();
+    repo.epsHistory.push({ ticker: "A", fiscalDateEnding: "2026-07-31", reportedDate: "2027-08-27", reportedEps: null, estimatedEps: 1, surprisePct: null, observedAt: "2026-10-01T00:00:00.000Z" });
+    repo.epsHistory.push({ ticker: "B", fiscalDateEnding: "2026-07-31", reportedDate: "2026-08-27", reportedEps: 1, estimatedEps: 1, surprisePct: 0, observedAt: "2026-09-01T00:00:00.000Z" });
+    const http = stubHttp((call) => earnings(new URL(call.url).searchParams.get("symbol") ?? "", noQuarter));
+    await collectAlphaVantage(context(http, { symbols: ["A", "B", "C"], env: { ALPHA_VANTAGE_API_KEY: KEY }, state: repo }));
+    expect(http.calls.map((call) => new URL(call.url).searchParams.get("symbol"))).toEqual(["C", "B", "A"]);
+  });
+  it("a failing eps history write is recorded and the facts are still stored", async () => {
+    const repo = new MemoryCollectorRepository();
+    repo.upsertEpsHistory = async () => { throw new Error("db down"); };
+    const result = await runExtraSources(repo, ["alphavantage"], { since: "2026-09-05", now: new Date("2026-10-05T12:00:00Z"), http: stubHttp((call) => earnings(new URL(call.url).searchParams.get("symbol") ?? "", rows)), companies: [{ symbol: "NVDA", name: "NVIDIA" }], symbols: ["NVDA"], env: { ALPHA_VANTAGE_API_KEY: KEY } });
+    expect(result.factsWritten).toBe(1);
+    expect(result.failures).toEqual([{ ticker: "NVDA", reason: "eps history not stored: db down" }]);
+    expect(result.exitCode).toBe(1);
   });
 });

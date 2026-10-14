@@ -4,7 +4,7 @@ import type { Form4Transaction, FilingFile } from "../collectors/edgar";
 import { archiveFiling } from "../data/filing-archive";
 import type { EpsHistoryBatch, HolderEvent } from "../collectors/sources/common";
 import type { MacroObservation } from "../collectors/macro-observations";
-import { insertEpsHistory, insertMemoryEpsHistory, type EpsHistoryRow } from "./eps-history";
+import { insertEpsHistory, insertMemoryEpsHistory, latestEpsObserved, latestMemoryEpsObserved, type EpsHistoryRow } from "./eps-history";
 import { insertMacroObservations, insertMemoryMacroObservations } from "./macro-observations";
 import { freshnessDays } from "../data/evidence";
 import { insiderFromFact, netBuyFromTransactions, INSIDER_WINDOW_DAYS, type InsiderNetBuy, type InsiderTxRow, DEFAULT_INSIDER_MIN_NET_BUY_USD, INSIDER_FACT_DAYS, INSIDER_FACT_LEAD_DAYS, type InsiderDocument, type InsiderResult } from "../data/insider";
@@ -26,6 +26,8 @@ export interface CollectorRun { startedAt: string; sources: string[]; requested:
 export interface SourceState {
   /** Newest as_of per symbol for one fact key. */
   latestFactDates(key: string): Promise<Map<string, string>>;
+  /** Newest eps_history observed_at per symbol (ISO UTC). Symbols without a row are absent. */
+  latestEpsObserved(): Promise<Map<string, string>>;
   /** Metered requests recorded for a source in runs started at or after `since` (ISO timestamp). */
   apiRequestsSince(source: string, since: string): Promise<number>;
 }
@@ -89,6 +91,7 @@ export class MemoryCollectorRepository implements CollectorRepository {
   }
   async bars(): Promise<{ date: string; close: number; volume: number }[]> { return []; }
   async recordRun(run: CollectorRun) { this.runs.push(structuredClone(run)); }
+  async latestEpsObserved() { return latestMemoryEpsObserved(this.epsHistory); }
   async latestFactDates(key: string) {
     const out = new Map<string, string>();
     for (const fact of this.facts.values()) if (fact.key === key && fact.asOf > (out.get(fact.symbol) ?? "")) out.set(fact.symbol, fact.asOf);
@@ -179,6 +182,7 @@ export class PostgresCollectorRepository implements CollectorRepository {
     await this.pool.query(`INSERT INTO collector_runs (started_at,sources,requested_count,succeeded_count,failed_count,documents_written,facts_written,failures,stopped_reason,api_requests)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10::jsonb)`, [run.startedAt, run.sources, run.requested, run.succeeded, run.failures.length, run.documentsWritten, run.factsWritten, JSON.stringify(run.failures), run.stoppedReason, JSON.stringify(run.apiRequests ?? {})]);
   }
+  async latestEpsObserved() { return latestEpsObserved(this.pool); }
   async latestFactDates(key: string) {
     const result = await this.pool.query<{ symbol: string; as_of: string }>("SELECT symbol,max(as_of)::text AS as_of FROM collected_facts WHERE fact_key=$1 GROUP BY symbol", [key]);
     return new Map(result.rows.map((row) => [row.symbol, row.as_of]));

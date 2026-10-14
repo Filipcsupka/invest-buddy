@@ -75,7 +75,12 @@ export async function runExtraSources(repository: CollectorRepository, names: So
           if (stored.written) run.documentsWritten++;
         }
         for (const event of output.holderEvents ?? []) await repository.upsertHolderEvent?.(event);
-        for (const batch of output.epsHistory ?? []) if (universe.has(batch.symbol)) await repository.upsertEpsHistory?.(batch);
+        // A failing history write is recorded for that symbol; it does not abort the source or the facts below.
+        for (const batch of output.epsHistory ?? []) {
+          if (!universe.has(batch.symbol)) continue;
+          try { await repository.upsertEpsHistory?.(batch); }
+          catch (error) { run.failures.push({ ticker: batch.symbol, reason: `eps history not stored: ${error instanceof Error ? error.message : String(error)}` }); }
+        }
         for (const fact of facts) {
           const documentIds = fact.documentUrls.map((url) => ids.get(url)).filter((id): id is number => id !== undefined);
           if (await repository.upsertFact({ symbol: fact.symbol, key: fact.key, asOf: fact.asOf, value: fact.value, documentIds, ...(fact.expiresAt ? { expiresAt: fact.expiresAt } : {}) })) run.factsWritten++;

@@ -5,7 +5,7 @@ import { storeDailyEcbFx, createMacroEcbBackfillJob } from "../jobs/macro-observ
 import { MemoryBackfillStore, runBackfill } from "../jobs/backfill";
 import { MemoryUsageLedger } from "../data/usage";
 import { getSource } from "../data/sources-registry";
-import { ECB_DAILY_URL, ECB_HIST_URL, ECB_SERIES_IDS, parseEcbFx } from "./ecb-fx";
+import { ECB_HIST_90D_URL, ECB_HIST_URL, ECB_SERIES_IDS, parseEcbFx } from "./ecb-fx";
 
 const XML = fx("ecb_eurofxref_hist.xml");
 
@@ -24,8 +24,16 @@ describe("ECB reference rates", () => {
     const http = stubHttp(() => XML);
     expect((await storeDailyEcbFx(repo, http)).written).toBe(6);
     expect((await storeDailyEcbFx(repo, http)).written).toBe(0);
-    expect(http.calls[0].url).toBe(ECB_DAILY_URL);
+    expect(http.calls.map((c) => c.url)).toEqual([ECB_HIST_90D_URL, ECB_HIST_90D_URL]);
     expect(repo.macroObservations.some((r) => ["2026-10-10", "2026-10-11"].includes(r.obsDate))).toBe(false);
+  });
+  it("a run after missed days fills the gap from the 90 day file", async () => {
+    const repo = new MemoryCollectorRepository();
+    const rows = parseEcbFx(XML);
+    const lastDay = rows.map((r) => r.obsDate).sort().at(-1)!;
+    expect(await repo.upsertMacroObservations(rows.filter((r) => r.obsDate === lastDay))).toBe(3);
+    expect((await storeDailyEcbFx(repo, stubHttp(() => XML))).written).toBe(3);
+    expect(repo.macroObservations).toHaveLength(6);
   });
   it("reports a failing fetch without throwing", async () => {
     const result = await storeDailyEcbFx(new MemoryCollectorRepository(), stubHttp(() => { throw new Error("down"); }));

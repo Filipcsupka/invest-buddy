@@ -61,7 +61,11 @@ export function parseEarningsHistory(text: string): EpsQuarter[] {
   return out.sort((a, b) => a.fiscalDateEnding.localeCompare(b.fiscalDateEnding));
 }
 
-/** Missing first, then the oldest stored report date, then symbol. */
+/**
+ * Never fetched first, then the oldest newest-eps_history observed_at, then symbol. Keyed on observation time, not report date, so a
+ * symbol with no reported quarter (no EPS fact) still moves back in line. eps_history only gets a row when a value changes, so this is
+ * a proxy for the last fetch; a symbol whose answer is empty never gets a row and stays first.
+ */
 export function pickSymbols(symbols: string[], latest: Map<string, string>, budget: number): string[] {
   return [...symbols].sort((a, b) => (latest.get(a) ?? "").localeCompare(latest.get(b) ?? "") || a.localeCompare(b)).slice(0, Math.max(0, budget));
 }
@@ -78,7 +82,7 @@ export async function collectAlphaVantage(ctx: SourceContext): Promise<SourceOut
   const used = await ctx.state.apiRequestsSince(SOURCE, startOfUtcDay(ctx.now));
   const budget = Math.min(MAX_REQUESTS_PER_RUN, MAX_REQUESTS_PER_DAY - used);
   if (budget <= 0) return { documents: [], facts: [], apiRequests: 0, skipped: `daily cap of ${MAX_REQUESTS_PER_DAY} requests reached (${used} used today)` };
-  const picked = pickSymbols(ctx.symbols, await ctx.state.latestFactDates(EPS_FACT_KEY), budget);
+  const picked = pickSymbols(ctx.symbols, await ctx.state.latestEpsObserved(), budget);
   const today = isoDate(ctx.now);
   const documents: CollectedDocument[] = [], facts: PendingFact[] = [], epsHistory: EpsHistoryBatch[] = [], failures: { ticker: string; reason: string }[] = [];
   let requests = 0;

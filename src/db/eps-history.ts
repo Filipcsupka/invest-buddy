@@ -12,7 +12,19 @@ const same = (a: EpsQuarter, b: EpsQuarter) => a.reportedDate === b.reportedDate
  * Stores the whole answer in the raw store, then one eps_history row per quarter whose values differ from the newest stored row
  * for that quarter. A revised estimate adds a row; the old row stays. Returns the rows written.
  */
-export async function insertEpsHistory(db: Pick<pg.Pool, "query">, batch: EpsHistoryBatch): Promise<number> {
+export async function insertEpsHistory(db: Pick<pg.Pool, "query"> | pg.Pool, batch: EpsHistoryBatch): Promise<number> {
+  if (!("connect" in db) || typeof db.connect !== "function") return insertEpsHistoryOn(db, batch);
+  const client = await db.connect();
+  try {
+    await client.query("BEGIN");
+    const written = await insertEpsHistoryOn(client, batch);
+    await client.query("COMMIT");
+    return written;
+  } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
+}
+
+/** The raw snapshot and the history rows, on one connection. insertEpsHistory wraps this in a transaction, so a failed insert leaves no snapshot behind. */
+async function insertEpsHistoryOn(db: Pick<pg.Pool, "query">, batch: EpsHistoryBatch): Promise<number> {
   const raw = await putSnapshot(db, { sourceId: EPS_HISTORY_SOURCE, key: epsRawKey(batch.ticker), body: batch.rawBody, contentType: "application/json", fetchedAt: new Date(batch.fetchedAt), meta: { quarters: batch.quarters.length } });
   const q = batch.quarters;
   const result = await db.query(`INSERT INTO eps_history (ticker,fiscal_date_ending,reported_date,reported_eps,estimated_eps,surprise_pct,observed_at,source_id,raw_snapshot_id)
@@ -23,6 +35,18 @@ export async function insertEpsHistory(db: Pick<pg.Pool, "query">, batch: EpsHis
     ON CONFLICT (ticker,fiscal_date_ending,observed_at) DO NOTHING`,
     [batch.symbol, batch.fetchedAt, EPS_HISTORY_SOURCE, raw.id, q.map((x) => x.fiscalDateEnding), q.map((x) => x.reportedDate), q.map((x) => x.reportedEps), q.map((x) => x.estimatedEps), q.map((x) => x.surprisePct)]);
   return result.rowCount ?? 0;
+}
+
+/** Newest observed_at per symbol, as ISO UTC text. A symbol with no row is absent. Rows are only added when a value changes, so this is a proxy for the last fetch. */
+export async function latestEpsObserved(db: Pick<pg.Pool, "query">): Promise<Map<string, string>> {
+  const result = await db.query<{ ticker: string; observed: string }>(`SELECT ticker, to_char(max(observed_at) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS observed FROM eps_history GROUP BY ticker`);
+  return new Map(result.rows.map((row) => [row.ticker, row.observed]));
+}
+
+export function latestMemoryEpsObserved(store: EpsHistoryRow[]): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const row of store) if (row.observedAt > (out.get(row.ticker) ?? "")) out.set(row.ticker, row.observedAt);
+  return out;
 }
 
 /** In-memory twin for tests. Rows carry our symbol (SQ), not the vendor ticker (XYZ). */

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { OHLCV } from "../engine";
 import { detectFromBars, detectFromRevisions, snapRatio, type CorporateAction } from "../data/corporate-actions";
 import { insertCorporateActions, insertMemoryCorporateActions } from "../db/corporate-actions";
-import { detectAll } from "./dq-corporate-actions";
+import { detectAll, mergeNearby } from "./dq-corporate-actions";
 
 const day = (i: number) => new Date(Date.UTC(2026, 0, 1 + i)).toISOString().slice(0, 10);
 const bar = (i: number, close: number, volume = 1000): OHLCV => ({ date: day(i), open: close, high: close, low: close, close, volume });
@@ -37,6 +37,12 @@ describe("split detection from bars", () => {
     const found = detectFromBars("X", series(60, (i) => i < 40 ? 5 : 50, (i) => i === 40 ? 5000 : 1000));
     expect(found[0]).toMatchObject({ kind: "reverse_split", ratio: 0.1 });
   });
+  it("3:2 and 5:4 cannot move a close by 40%, so the bar path ignores them but still finds 2:3", () => {
+    expect(detectFromBars("X", series(60, (i) => i < 40 ? 150 : 100, (i) => i === 40 ? 5000 : 1000))).toEqual([]);
+    expect(detectFromBars("X", series(60, (i) => i < 40 ? 125 : 100, (i) => i === 40 ? 5000 : 1000))).toEqual([]);
+    expect(snapRatio(1.5)).toBe(1.5);
+    expect(detectFromBars("X", series(60, (i) => i < 40 ? 100 : 150, (i) => i === 40 ? 5000 : 1000))[0]).toMatchObject({ kind: "reverse_split", ratio: Math.round(1e6 / 1.5) / 1e6 });
+  });
   it("re-run is idempotent", () => {
     const store: CorporateAction[] = [];
     const rows = detectAll([{ ticker: "NVDA", bars: split }], new Map());
@@ -56,6 +62,26 @@ describe("split detection from revisions (D12)", () => {
     const few = revised.map((r, i) => i < 3 ? r : { ...r, oldClose: 100 });
     expect(detectFromRevisions("NVDA", few, next)).toEqual([]);
     expect(detectFromRevisions("NVDA", revised.slice(0, 5), next)).toEqual([]);
+  });
+});
+
+describe("merge of nearby candidates", () => {
+  const base = { ticker: "NVDA", kind: "split" as const, ratio: 4, amount: null, sourceId: "twelvedata", detectedBy: "heuristic" as const };
+  it("one split seen by both paths a day apart is one row, the earliest", () => {
+    const merged = mergeNearby([{ ...base, actionDate: "2026-02-11", detail: { rule: "history_rescaled" } }, { ...base, actionDate: "2026-02-10", detail: { rule: "close_move_volume_spike" } }]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0]).toMatchObject({ actionDate: "2026-02-10", detail: { mergedRules: ["close_move_volume_spike", "history_rescaled"] } });
+  });
+  it("keeps different ratios, tickers, kinds and dates more than 3 days apart", () => {
+    const rows = [{ ...base, actionDate: "2026-02-10", detail: {} }, { ...base, ratio: 2, actionDate: "2026-02-10", detail: {} }, { ...base, ticker: "AMD", actionDate: "2026-02-10", detail: {} }, { ...base, actionDate: "2026-02-14", detail: {} }];
+    expect(mergeNearby(rows)).toHaveLength(4);
+  });
+  it("detectAll merges a bar-path and a revision-path hit on the same split", () => {
+    const bars = series(60, (i) => i < 40 ? 400 : 100, (i) => i === 40 ? 5000 : 1000);
+    const revised = Array.from({ length: 30 }, (_, i) => ({ barDate: day(i + 10), oldClose: 400, newClose: 100 }));
+    const found = detectAll([{ ticker: "NVDA", bars }], new Map([["NVDA", revised]]));
+    expect(found).toHaveLength(1);
+    expect(found[0].actionDate).toBe(day(40));
   });
 });
 

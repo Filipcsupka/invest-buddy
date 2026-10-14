@@ -37,19 +37,25 @@ const FORWARD = [...Array.from({ length: 19 }, (_, i) => i + 2), 1.5, 1.25];
 const CANDIDATES = [...FORWARD, ...FORWARD.map((r) => 1 / r)];
 
 /** Nearest allowed split ratio to `value` within the tolerance, or null. */
-export function snapRatio(value: number, tolerance = SPLIT_THRESHOLDS.ratioTolerance): number | null {
+export function snapRatio(value: number, tolerance = SPLIT_THRESHOLDS.ratioTolerance, candidates: readonly number[] = CANDIDATES): number | null {
   if (!Number.isFinite(value) || value <= 0) return null;
   let best: number | null = null;
-  for (const candidate of CANDIDATES) if (Math.abs(value / candidate - 1) <= tolerance && (best === null || Math.abs(value / candidate - 1) < Math.abs(value / best - 1))) best = candidate;
+  for (const candidate of candidates) if (Math.abs(value / candidate - 1) <= tolerance && (best === null || Math.abs(value / candidate - 1) < Math.abs(value / best - 1))) best = candidate;
   return best === null ? null : Math.round(best * 1e6) / 1e6;
 }
+
+/**
+ * Ratios the bar path can see: the close moves by 1/ratio - 1, which must exceed minMove. 3:2 moves 33% and 5:4 moves 20%, so they
+ * (and 4:5, +25%) are found only by the revision path. 2:3 (+50%) and every n:1 from 2 are within reach.
+ */
+export const BAR_RATIOS: readonly number[] = CANDIDATES.filter((ratio) => Math.abs(1 / ratio - 1) > SPLIT_THRESHOLDS.minMove);
 
 const median = (values: number[]) => { const s = [...values].sort((a, b) => a - b); return s.length ? (s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2) : 0; };
 const kindOf = (ratio: number): CorporateActionKind => ratio > 1 ? "split" : "reverse_split";
 
 /**
  * Heuristic on one ticker's stored bars: a close that moves beyond minMove against the previous close, by a factor close to
- * a split ratio, on a volume spike. Price falls by the ratio on a split (previous / close = ratio). A real crash is only flagged
+ * a split ratio, on a volume spike. Only ratios whose move exceeds minMove can be flagged (BAR_RATIOS); 3:2 and 5:4 come from detectFromRevisions. Price falls by the ratio on a split (previous / close = ratio). A real crash is only flagged
  * when its factor happens to sit on a split ratio and volume spikes, which is why the row says `heuristic`.
  */
 export function detectFromBars(ticker: string, bars: OHLCV[], sourceId = "twelvedata"): CorporateAction[] {
@@ -62,7 +68,7 @@ export function detectFromBars(ticker: string, bars: OHLCV[], sourceId = "twelve
     const prior = sorted.slice(Math.max(0, i - 20), i).map((bar) => bar.volume);
     const base = median(prior);
     if (!(base > 0) || sorted[i].volume < t.volumeSpike * base) continue;
-    const ratio = snapRatio(sorted[i - 1].close / sorted[i].close);
+    const ratio = snapRatio(sorted[i - 1].close / sorted[i].close, SPLIT_THRESHOLDS.ratioTolerance, BAR_RATIOS);
     if (ratio === null) continue;
     out.push({ ticker, actionDate: sorted[i].date, kind: kindOf(ratio), ratio, amount: null, sourceId, detectedBy: "heuristic",
       detail: { rule: "close_move_volume_spike", move: Math.round(move * 10000) / 10000, volumeRatio: Math.round((sorted[i].volume / base) * 100) / 100 } });

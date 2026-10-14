@@ -76,12 +76,21 @@ describe("macro inputs", () => {
   it("fetches four documents, and reports a missing key or a failing source without throwing", async () => {
     const repository = new MemoryCollectorRepository();
     const http = stubHttp((call) => call.url.includes("treasury.gov") ? tsyCsv() : call.url.includes("ecb.europa.eu") ? fx("ecb_eurofxref_hist.xml") : vixCsv(18.5));
-    expect(await fetchMacroInputs(repository, { http, env: { FRED_API_KEY: "k" }, get: async () => fredJson(0.01), now: new Date(`${ASOF}T10:00:00Z`) })).toEqual([]);
+    expect(await fetchMacroInputs(repository, { http, env: { FRED_API_KEY: "k", ECB_FX_ENABLED: "on" }, get: async () => fredJson(0.01), now: new Date(`${ASOF}T10:00:00Z`) })).toEqual([]);
     expect([...repository.documents.keys()].sort()).toEqual(["https://fred.stlouisfed.org/series/DGS10", "https://fred.stlouisfed.org/series/CPIAUCSL", "https://fred.stlouisfed.org/series/PPIACO", VIX_DOC_URL].sort());
     expect(repository.documents.get(VIX_DOC_URL)?.meta.display_allowed).toBe(false);
     expect(new Set(repository.macroObservations.map((row) => row.seriesId))).toEqual(new Set(["DGS2", "DGS10", "DGS3MO", "T10Y2Y", "FEDFUNDS", "CPIAUCSL", "PPIACO", "TSY_3M", "TSY_2Y", "TSY_10Y", "ECB_EURUSD", "ECB_EURCZK", "ECB_EURGBP"]));
-    const missing = await fetchMacroInputs(new MemoryCollectorRepository(), { http: stubHttp(() => { throw new Error("down"); }), env: {}, now: new Date(`${ASOF}T10:00:00Z`) });
+    const missing = await fetchMacroInputs(new MemoryCollectorRepository(), { http: stubHttp(() => { throw new Error("down"); }), env: { ECB_FX_ENABLED: "on" }, now: new Date(`${ASOF}T10:00:00Z`) });
     expect(missing).toEqual(["fred: FRED_API_KEY absent", "treasury curve: down", "ecb fx: down", "vix: down"]);
+  });
+  it("does not touch the ECB unless ECB_FX_ENABLED is exactly on", async () => {
+    for (const flag of [undefined, "", "1", "true", "ON"]) {
+      const http = stubHttp((call) => call.url.includes("treasury.gov") ? tsyCsv() : vixCsv(18.5));
+      const repository = new MemoryCollectorRepository();
+      await fetchMacroInputs(repository, { http, env: { FRED_API_KEY: "k", ...(flag === undefined ? {} : { ECB_FX_ENABLED: flag }) }, get: async () => fredJson(0.01), now: new Date(`${ASOF}T10:00:00Z`) });
+      expect(http.calls.some((call) => call.url.includes("ecb.europa.eu"))).toBe(false);
+      expect(repository.macroObservations.some((row) => row.seriesId.startsWith("ECB_"))).toBe(false);
+    }
   });
 });
 
