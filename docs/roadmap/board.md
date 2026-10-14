@@ -60,6 +60,11 @@ Updated 2026-10-14. One table per state. A PR that finishes a task moves it to D
 | W21 | Open Graph images | #181 | route check done on fixture data only |
 | EN28 | Outcomes stored once per signal window, weakest outcomes shown | #180 | migration 070; outcomes CronJob suspended |
 | Decisions | EN47 closed (Setup stays 72%), EN7 DEEP_ADD removed, no take-profit rule | #179 | PM3 decided |
+| W11, W13, W14, W15 | Waitlist table, mailer adapter (console and memory only), double opt-in signup API, confirm and unsubscribe | #185 | migration 075; `WAITLIST` flag off; no mail provider |
+| W16, W17, W19 | Waitlist landing section, pricing page with planned prices, cookie-free analytics | #187 | `ANALYTICS` off; analytics env must be set at build time for the CSP |
+| PL15, PL26, PL27 | Migration lint in CI, `job_runs`, alert notifier, watchdog | #184 | migrations 080, 081; watchdog CronJobs suspended; alerts need secret `invest-buddy-telegram-owner` |
+| EN2 (partial), EN11 (partial) | ADR-006 in repo, one rules config with hash test and changelog | #183 | ADR not in the vault; `RULESET_VERSION` not stored on snapshots or ideas |
+| CI | gitleaks allowlist for fake secrets in test files | #186 | #185 was merged with secret-scan red by mistake; fixed here |
 | Telegram | Channel, sealed secret, digest unsuspended | infra #37 to #41, #126 | first alert sent 2026-10-10 |
 
 ## Open
@@ -84,6 +89,7 @@ Detail: `lane-engine.md` (EN48) and `lane-positions.md` (PM2, PM4).
 1. RS8 live run on the six old cards (offline harness is in; RS0 to RS6 are merged). RS7 adapter code is in; its auth path and secret wait for the owner.
 2. Web: W23 native Slovak review, W32 tier map, W35 CSV export (paid tier, deferred).
 3. Data: D36 roll out 150 names (after D35 criteria).
+3a. Waitlist launch: W12 mailer provider (owner), W18 privacy, terms, operator text (owner and lawyer), W26 launch checklist, W8 and W9 (Playwright, staging), W4 second replica, W23 native SK review. PL22 to PL24 backup target, script, restore test. PL2 to PL5 CI and deploy tooling. EN6, EN8 to EN10 (EN9 needs a rethink after DEEP_ADD removal), EN12 to EN20, EN33, EN34.
 4. Infra sync: copy the new suspended CronJobs from the app mirror to infra (D19, D22, D35, DS1, EN28 outcomes, dq-corporate-actions) and the daily job env for the cache purge (`WEB_BASE_URL`, `INGEST_TOKEN`) and un-suspend one by one after a test run, with owner approval.
 5. Last: membership, billing, client work (W27 to W45) stay deferred by owner decision.
 
