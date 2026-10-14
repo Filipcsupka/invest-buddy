@@ -85,6 +85,7 @@ PM1 and PM4 have no dependency and can start now. PM3 waits for PM1. PM2 waits f
 - Risk or open question: "trend break" needs one explicit definition (EN9 risk, owner picks). Some items have no stored data field yet and will show "no data".
 
 ### PM3. Owner decision: averaging down and taking profit
+- Status: DECIDED 2026-10-14 by the owner. (1) Averaging down: remove the EN7 DEEP_ADD action, because no source supports it. (2) Taking profit: no rule and no action word; the owner view shows facts only (gain, thesis status). (3) EN47: Setup stays at 72%, closed. EN48 stays open as design only. PM2 is not started. The options doc below was not needed.
 - Why: EN7 adds on a 15 to 20 percent dip. No source found supports averaging down, and the Guide says to stop adding in some cases. There is no take-profit rule at all. The owner decides both before any code.
 - Steps:
   1. Write a one-page options doc `docs/position-options.md`. Averaging down (EN7): keep, cap per name, or remove. Taking profit: none, a pre-written trim rule, or a trend-only exit. For each option: evidence and its strength label from PM1, what it costs, what the engine would need.

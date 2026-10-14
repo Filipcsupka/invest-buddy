@@ -143,6 +143,7 @@ Status: thresholds and boundary tests merged in PR #80; PR #90 introduced the go
 - Risk or open question: owner confirmation that the overlay (not the public signal) is the right place; legal view on public ADD labels is G5 and is not this task.
 
 ### EN7. Deep add rule (15 to 20 percent dip)
+- Status: REMOVED 2026-10-14 (PM3). The owner decided to drop the DEEP_ADD action because no source supports averaging down. DEEP_ADD was never in code, so nothing is implemented. Do not build the steps below. Guide rule 3 stays unimplemented on purpose.
 - Why: Guide rule 3 and section 7 (EUR 50 if 15 to 20 percent dip, no earnings or guidance damage, score above 18). No code path today; `deepPullback` only adds one entry point. C5 mismatch 3.
 - Steps:
   1. In `src/data/technicals.ts` add `belowRecentHigh` over a window the owner picks (20 day is the repo's definition for the 5 to 10 percent rule; a 60 day high is an alternative) and a `deepAddZone` boolean (15 to 20 percent under, still above MA200).
@@ -186,11 +187,11 @@ Status: thresholds and boundary tests merged in PR #80; PR #90 introduced the go
 ### EN10. EUR sizing aligned to the Guide, with tier priority
 - Why: Guide section 7 gives fixed EUR bands and section 9 gives tier priority. `allocation-config.ts` holds different draft numbers and `allocate()` does not rank by Guide tier (C5 mismatch 8). G6 is implemented with open owner values.
 - Steps:
-  1. Owner chooses: Guide bands (initial 20 to 40, add 20 to 50, deep add 50, from EUR 200 a month) or the draft config. Record in ADR-006.
+  1. Owner chooses: Guide bands (initial 20 to 40, add 20 to 50, from EUR 200 a month; the deep add band is dropped with EN7) or the draft config. Record in ADR-006.
   2. Update `src/engine/allocation-config.ts` comments to cite the Guide section for each value; remove or mark values with no source.
-  3. In `src/engine/allocation.ts` rank competing signals by Guide tier from `instruments.tier` (column exists, migration 003) before score; add `DEEP_ADD` amount.
+  3. In `src/engine/allocation.ts` rank competing signals by Guide tier from `instruments.tier` (column exists, migration 003) before score; (no DEEP_ADD amount; EN7 removed).
   4. Fee check using the config fee and minimum.
-  5. Tests in `allocation.test.ts`: EUR 200 month with two competing signals, cap, carry-over, deep add, fee above max percent.
+  5. Tests in `allocation.test.ts`: EUR 200 month with two competing signals, cap, carry-over, fee above max percent.
 - Acceptance: allocation outputs match the signed bands; ranking test shows a tier 1 name beats a tier 3 name at equal score; no value in the config lacks a source note.
 - Size: M
 - Depends on: EN2, EN7
@@ -676,6 +677,7 @@ Status: done 2026-10-10, PR #86, merged and live.
 - Risk or open question: EFXT and WULF may fail SEC or Twelve Data lookups (WULF is in `discovery-themes.json`, EFXT is not); the old cards may not exist anywhere.
 
 ### EN47. Setup threshold and reachable maximum
+- Status: CLOSED 2026-10-14. Owner decision: the Setup threshold stays at 72%. No code change. The 78.3% (18 of 23) proposal below is not adopted.
 - Why: on 2026-10-12 `macro-data` (3 points) was false for all 36 tickers and `rotation` (2) was true for all. Only the 10-year yield change fails: +0.27 pp against a limit of +0.25 pp. VIX is 15.21 (below 25), CPI and PPI pass. FOMC is not implemented (`docs/data.md`). `score_results` has 7 dates and `macro-data` was met on none. A proxy over 140 weekdays shows the tailwind true on 14% of days at a yield limit of 0.25, 26% at 0.50 and 4% at 0. These are upper bounds: VIX history is missing and a 45-day CPI and PPI lag is assumed. So the reachable maximum is 20 of 23 core points now. The top score today is 18 (NOW, AMD). 17 (NVDA, DDOG, SNOW, PANW) shows 73.9% and so Setup, although the Guide needs 18 for BUY: relative scoring divides by evidenced points, and 72% of 23 is 16.6.
 - Owner direction: the displayed maximum must be reachable, or at least about 85% is fine. The display must not show a strong buy-like state at weak scores. The denominator stays fixed at the 23 core points; it is not shrunk to raise the percent. Two entry tiers:
 
@@ -700,6 +702,7 @@ Status: done 2026-10-10, PR #86, merged and live.
 - Risk or open question: the 14%, 26% and 4% figures are proxy upper bounds, not measured history. A fixed denominator of 23 caps the reachable maximum at 20 while the FOMC rule is missing; the owner has accepted "at least about 85%" as enough. Lawyer view on public state labels is tasks-open G5 and is not this task.
 
 ### EN48. Position tiers and owner-mode actions
+- Status: OPEN, design only (2026-10-14). EN47 closed with Setup staying at 72%, so the tier table in EN47 is not adopted; the tiers here need to be re-based on the 72% Setup. Add rules after a dip no longer include a deep add (EN7 removed). Not implemented.
 - Why: the owner wants two entry tiers: Strong (full start size per `docs/sizing-guide.md`) and Partial (a smaller starter, or none). Add rules after a dip stay as in Guide sections 5 and 7. Public users join at random times, so public output never shows START or ADD wording or amounts. Owner mode uses `allocate()` and `portfolio_baseline`. It is not yet written down which of these tiers already exist in the code, so this task starts by checking.
 - Steps:
   1. Read `src/engine/signals.ts`, `src/engine/sizing.ts` and `src/engine/allocation.ts`. Write down which tiers, start sizes and add rules already exist, with file and line. Do not assume.
