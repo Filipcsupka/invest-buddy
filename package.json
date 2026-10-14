@@ -13,6 +13,7 @@
     "check:contrast": "tsx scripts/check-contrast.ts",
     "migrate": "tsx scripts/migrate.ts",
     "ai-usage": "tsx scripts/ai-usage-report.ts",
+    "waitlist:report": "tsx scripts/waitlist-report.ts",
     "data:inventory": "tsx scripts/data-inventory.ts",
     "research:eval": "tsx scripts/research-eval.ts",
     "daily": "tsx src/jobs/daily.ts",
