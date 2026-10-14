@@ -118,7 +118,8 @@ describe("runPrices", () => {
   });
   it.skipIf(!process.env.TEST_DATABASE_URL)("logs first sight and revisions, blocks UPDATE and DELETE, and counts bars_revised (Postgres)", async () => {
     const pool = new pg.Pool({ connectionString: process.env.TEST_DATABASE_URL, max: 1 });
-    const t = "ZZRV";
+    // revisions are append-only, so a fresh ticker per run keeps the test repeatable
+    const t = `ZZ${Date.now().toString(36).toUpperCase()}`;
     const revisions = async (kind: string) => (await pool.query<{ bar_date: string; close: string }>("SELECT to_char(bar_date,'YYYY-MM-DD') AS bar_date, close::text FROM daily_bar_revisions WHERE ticker=$1 AND kind=$2 ORDER BY bar_date", [t, kind])).rows;
     try {
       await pool.query("INSERT INTO instruments (ticker,name,sector,tier,source) VALUES ($1,'Revision test','Test',NULL,'sample extension') ON CONFLICT (ticker) DO NOTHING", [t]);
