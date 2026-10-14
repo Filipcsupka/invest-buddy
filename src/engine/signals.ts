@@ -11,6 +11,8 @@ import { meetsGuidePoints, POINTS_MAX } from "./relative";
  * a buy action or a size tier, so the same symbol gives the same buy signal with or without a baseline. "Held" is optional context
  * and may only relabel a non-buy outcome (HOLD, REDUCE or THESIS_BROKEN instead of WATCH).
  *
+ * The three ratings are derived from the rule hits of the Guide score (see SIGNAL_RULES.companyThresholds); there is no second point table.
+ *
  * Rules, in order, for each symbol (thresholds live in SIGNAL_RULES):
  *  1. Rejection (revenue declining, guidance cut, or the rule engine's "Criteria broken"): THESIS_BROKEN for a held name, WATCH otherwise.
  *  2. Held, company rating Weak and a downtrend: REDUCE. A name that is not held goes on and ends as WATCH.
@@ -29,7 +31,7 @@ import { meetsGuidePoints, POINTS_MAX } from "./relative";
  * The value stays in ACTIONS so older stored ideas still parse.
  */
 export const SIGNAL_RULES = {
-  version: "2026-10-14.1",
+  version: "2026-10-14.2",
   actionsOrder: ["HIGH_CONVICTION_ADD", "ADD", "START_POSITION"],
   /** InvestingGuide s6 and s8: START_POSITION needs 18; a score of 15 to 17 can qualify for ADD. */
   minScoreForBuy: 18,
@@ -40,16 +42,19 @@ export const SIGNAL_RULES = {
   minEvidencedPoints: 20,
   minConfirmedKeyFields: 2,
   keyFields: ["revenueAccelerating", "revenueDeclining", "epsBeat", "guidanceRaised", "guidanceCut", "productCatalyst"],
-  companyPoints: {
-    revenueAccelerating: { true: 2 }, revenueDeclining: { true: -4, false: 1 }, epsBeat: { true: 1 }, guidanceRaised: { true: 1 },
-    guidanceCut: { true: -4 }, narrativeChanged: { true: -2 }, insiderOrInstitutionalBuying: { true: 1 },
-  } as Record<string, { true?: number; false?: number }>,
-  /** A rating from points: the first threshold met, else Weak. */
-  companyThresholds: { "Very strong": 5, Strong: 3, Good: 2, Neutral: 0 },
-  catalystPoints: { productCatalyst: 3, productCatalystCarried: 1, epsBeat: 1, guidanceRaised: 1, insiderOrInstitutionalBuying: 1, narrativeChangedTrue: -2 },
-  catalystThresholds: { "Very strong": 4, Strong: 3, Good: 2, Neutral: 0 },
-  entryPoints: { pullback: 3, breakout: 3, uptrend: 2, deepPullback: 1, range: 0, downtrend: -3, rsiHealthyMin: 40, rsiHealthyMax: 60, rsiHealthy: 1, rsiExtended: 75, rsiExtendedPenalty: -2, rsiOversold: 30, rsiOversoldPenalty: -1, extendedAboveMa50Percent: 15, extendedPenalty: -2, relativeStrength20: 1, relativeStrength60: 1, breakoutBelowHighPercent: 1, breakoutVolumeRatio: 1.2 },
-  entryThresholds: { "Very strong": 5, Strong: 3, Good: 1, Neutral: 0 },
+  /**
+   * Ratings come from the Guide score (EN5): the rule hits of `score()`, with no point table of their own. Company is the fundamentals group
+   * (revenue acceleration 4, earnings 3, catalyst 2, accumulation 1: 0 to 10). Catalyst is the event rules (catalyst 2, earnings 3, accumulation 1: 0 to 6),
+   * and a rule that rests on carried data adds nothing to it. Entry is the Guide technical group (above both MAs 3, uptrend 3, green volume 2, dip 2: 0 to 10)
+   * plus the named filters in ENTRY_FILTERS. A rating is the first band met, else Weak. Insider buying alone never reaches Strong.
+   */
+  companyThresholds: { "Very strong": 8, Strong: 6, Good: 4, Neutral: 0 },
+  catalystThresholds: { "Very strong": 5, Strong: 4, Good: 2, Neutral: 0 },
+  entryThresholds: { "Very strong": 9, Strong: 7, Good: 5, Neutral: 3 },
+  /** Not Guide rules: kept from the earlier point table and owner-signed only as placeholders (EN2). They adjust the Entry points. */
+  entryFilters: { rsiHealthyMin: 40, rsiHealthyMax: 60, rsiHealthy: 1, rsiExtended: 75, rsiExtendedPenalty: -2, rsiOversold: 30, rsiOversoldPenalty: -1, extendedAboveMa50Percent: 15, extendedPenalty: -2, relativeStrength20: 1, relativeStrength60: 1 },
+  /** Not a Guide rule: a confirmed change of the company's story lowers the Company rating by one step (Guide s7 stop-adding list, EN9). */
+  narrativeChangedLowersCompany: true,
   /**
    * START_POSITION tier by strength (placeholders, see docs/sizing-guide.md). FULL: score, company and catalyst at these levels with a fresh
    * confirmed EPS beat or guidance raise, whatever the entry. STANDARD: score and company at these levels. Anything else is STARTER.
@@ -83,6 +88,7 @@ export const tierFits = (action: SignalAction, tier: SizeTier) => TIERS_FOR_ACTI
 const ORDER: SignalRating[] = ["Weak", "Neutral", "Good", "Strong", "Very strong"];
 const atLeast = (r: SignalRating, min: SignalRating) => ORDER.indexOf(r) >= ORDER.indexOf(min);
 
+export interface SignalRuleHit { id: string; points: number; matched: boolean; unknown?: boolean }
 export interface SignalField { value: boolean | null; agreement: string; verified: boolean; carriedFrom: string | null }
 export interface SignalSymbolInput {
   symbol: string;
@@ -90,6 +96,8 @@ export interface SignalSymbolInput {
   held: { valueEur: number } | null;
   /** evidencedMax: points with data out of 25 (ScoreResult.evidencedMax). Absent: all 25 count. */
   score: { total: number; state: string; evidencedMax?: number };
+  /** Rule hits of the Guide score for this symbol (`ScoreResult.ruleHits`): the ratings are derived from them. */
+  ruleHits: SignalRuleHit[];
   fields: Record<string, SignalField>;
   expiredFields: string[];
   technicals: Technicals | null;
@@ -127,35 +135,40 @@ export function confirmed(input: SignalSymbolInput, name: string): boolean | nul
   return f.value;
 }
 
+/** The consensus fields behind each Guide fundamentals rule, to tell whether a hit rests on carried data. */
+const RULE_FIELDS: Record<string, readonly string[]> = {
+  "revenue-acceleration": ["revenueAccelerating"], earnings: ["epsBeat", "guidanceRaised"], catalyst: ["productCatalyst"], accumulation: ["insiderOrInstitutionalBuying"],
+};
+const COMPANY_RULES = ["revenue-acceleration", "earnings", "catalyst", "accumulation"] as const;
+const CATALYST_RULES = ["catalyst", "earnings", "accumulation"] as const;
+const ENTRY_RULES = ["above-ma", "uptrend", "green-volume", "dip"] as const;
+
 export function ratings(input: SignalSymbolInput, rules: SignalRules = SIGNAL_RULES) {
-  const carried = (name: string) => Boolean(input.fields[name]?.carriedFrom);
-  let company = 0, catalyst = 0, carriedPositive = false;
-  for (const [name, table] of Object.entries(rules.companyPoints)) {
-    const v = confirmed(input, name);
-    if (v === null) continue;
-    const p = table[v ? "true" : "false"] ?? 0;
-    company += p;
-    if (p > 0 && carried(name)) carriedPositive = true;
-  }
-  const cp = rules.catalystPoints;
-  if (confirmed(input, "productCatalyst") === true) catalyst += carried("productCatalyst") ? cp.productCatalystCarried : cp.productCatalyst;
-  for (const name of ["epsBeat", "guidanceRaised", "insiderOrInstitutionalBuying"] as const) if (confirmed(input, name) === true && !carried(name)) catalyst += cp[name];
-  if (confirmed(input, "narrativeChanged") === true) catalyst += cp.narrativeChangedTrue;
+  const hit = (id: string) => input.ruleHits.find((h) => h.id === id && h.matched);
+  const sum = (ids: readonly string[], keep: (id: string) => boolean = () => true) => ids.reduce((n, id) => n + (keep(id) ? hit(id)?.points ?? 0 : 0), 0);
+  const carried = (id: string) => (RULE_FIELDS[id] ?? []).some((name) => input.fields[name]?.value === true && Boolean(input.fields[name]?.carriedFrom));
+  const growth = (ids: readonly string[]) => ids.some((id) => id !== "accumulation" && hit(id));
+
+  const company = sum(COMPANY_RULES);
+  const catalyst = sum(CATALYST_RULES, (id) => !carried(id));
   let companyRating = rate(company, rules.companyThresholds);
-  if (carriedPositive) companyRating = cap(companyRating, "Good");
+  let catalystRating = rate(catalyst, rules.catalystThresholds);
+  if (!growth(COMPANY_RULES)) companyRating = cap(companyRating, "Good");
+  if (!growth(CATALYST_RULES)) catalystRating = cap(catalystRating, "Good");
+  if (COMPANY_RULES.some((id) => hit(id) && carried(id))) companyRating = cap(companyRating, "Good");
+  if (rules.narrativeChangedLowersCompany && confirmed(input, "narrativeChanged") === true) companyRating = ORDER[Math.max(0, ORDER.indexOf(companyRating) - 1)];
 
   let entry = 0;
-  const t = input.technicals, e = rules.entryPoints;
+  const t = input.technicals, e = rules.entryFilters;
   if (t) {
-    const breakout = t.regime === "uptrend" && t.belowHigh20Percent !== null && t.belowHigh20Percent <= e.breakoutBelowHighPercent && (t.volumeRatio ?? 0) >= e.breakoutVolumeRatio;
-    entry += t.regime === "pullback" ? e.pullback : breakout ? e.breakout : t.regime === "uptrend" ? e.uptrend : t.regime === "deep_pullback" ? e.deepPullback : t.regime === "downtrend" ? e.downtrend : e.range;
+    entry += sum(ENTRY_RULES);
     if (t.rsi14 !== null) entry += t.rsi14 > e.rsiExtended ? e.rsiExtendedPenalty : t.rsi14 < e.rsiOversold ? e.rsiOversoldPenalty : t.rsi14 >= e.rsiHealthyMin && t.rsi14 <= e.rsiHealthyMax ? e.rsiHealthy : 0;
     if (t.vsMa50Percent !== null && t.vsMa50Percent > e.extendedAboveMa50Percent) entry += e.extendedPenalty;
     if (t.relativeStrength20 !== null && t.relativeStrength20 > 0) entry += e.relativeStrength20;
     if (t.relativeStrength60 !== null && t.relativeStrength60 > 0) entry += e.relativeStrength60;
   }
   return {
-    ratings: { company: companyRating, entry: t ? rate(entry, rules.entryThresholds) : ("Neutral" as SignalRating), catalyst: rate(catalyst, rules.catalystThresholds) },
+    ratings: { company: companyRating, entry: t ? rate(entry, rules.entryThresholds) : ("Neutral" as SignalRating), catalyst: catalystRating },
     points: { company, entry, catalyst },
   };
 }

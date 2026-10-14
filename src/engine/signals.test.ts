@@ -1,16 +1,30 @@
 import { describe, expect, it } from "vitest";
-import { computeSignals, confirmed, ratings, SIGNAL_RULES, SIZE_TIERS, TIERS_FOR_ACTION, tierFits, type SignalField, type SignalPortfolio, type SignalSymbolInput } from "./signals";
+import { computeSignals, confirmed, ratings, SIGNAL_RULES, SIZE_TIERS, TIERS_FOR_ACTION, tierFits, type SignalField, type SignalPortfolio, type SignalRuleHit, type SignalSymbolInput } from "./signals";
 import type { Technicals } from "../data/technicals";
 import { CONFIRMED_FUNDAMENTAL_AGREEMENTS } from "./agreements";
 import { CONFIRMED_FUNDAMENTAL_AGREEMENTS as PROVIDER_AGREEMENTS } from "../data/db-provider";
 
 const tech = (over: Partial<Technicals> = {}): Technicals => ({ date: "2026-10-05", close: 100, return1dPercent: 0.5, return5dPercent: -3, return20dPercent: 2, return60dPercent: 8, vsMa20Percent: -2, vsMa50Percent: 4, vsMa200Percent: 15, belowHigh20Percent: 7, belowHigh52wPercent: 8, aboveLow52wPercent: 60, rangePosition52w: 85, rsi14: 48, avgVolume20: 1e6, volumeRatio: 1, atrPercent14: 2.5, relativeStrength20: 1.5, relativeStrength60: 3, regime: "pullback", ...over });
 const f = (value: boolean | null, over: Partial<SignalField> = {}): SignalField => ({ value, agreement: "agree", verified: true, carriedFrom: null, ...over });
-const sym = (symbol: string, over: Partial<SignalSymbolInput> = {}): SignalSymbolInput => ({
-  symbol, held: null, score: { total: 19, state: "Setup met (>=18)" },
-  fields: { revenueAccelerating: f(true), revenueDeclining: f(false), epsBeat: f(true), guidanceRaised: f(true), guidanceCut: f(false), productCatalyst: f(true) },
-  expiredFields: [], technicals: tech(), ...over,
-});
+const WEIGHTS: [string, number][] = [["revenue-acceleration", 4], ["earnings", 3], ["catalyst", 2], ["accumulation", 1], ["above-ma", 3], ["uptrend", 3], ["green-volume", 2], ["dip", 2], ["rotation", 2], ["macro-data", 3]];
+/** Rule hits of the Guide score, derived the way score() would from the fields and the regime: a fixture helper, not production code. */
+const hitsFor = (fields: Record<string, SignalField>, t: Technicals | null): SignalRuleHit[] => {
+  const v = (n: string) => fields[n]?.value === true;
+  const regime = t?.regime;
+  const matched = new Set<string>([
+    ...(v("revenueAccelerating") ? ["revenue-acceleration"] : []), ...(v("epsBeat") || v("guidanceRaised") ? ["earnings"] : []), ...(v("productCatalyst") ? ["catalyst"] : []), ...(v("insiderOrInstitutionalBuying") ? ["accumulation"] : []),
+    ...(regime === "pullback" || regime === "uptrend" ? ["above-ma", "uptrend", "green-volume"] : regime === "range" ? ["above-ma", "green-volume"] : []), ...(regime === "pullback" ? ["dip"] : []),
+  ]);
+  return WEIGHTS.map(([id, points]) => ({ id, points, matched: matched.has(id) }));
+};
+const sym = (symbol: string, over: Partial<SignalSymbolInput> = {}): SignalSymbolInput => {
+  const base = {
+    symbol, held: null, score: { total: 19, state: "Setup met (>=18)" },
+    fields: { revenueAccelerating: f(true), revenueDeclining: f(false), epsBeat: f(true), guidanceRaised: f(true), guidanceCut: f(false), productCatalyst: f(true) },
+    expiredFields: [], technicals: tech(), ...over,
+  };
+  return { ...base, ruleHits: over.ruleHits ?? hitsFor(base.fields, base.technicals) };
+};
 const portfolio = (over: Partial<SignalPortfolio> = {}): SignalPortfolio => ({ cashEur: 1000, investedEur: 3000, positions: [{ symbol: "CSPX", valueEur: 2100 }], monthlyContributionEur: 200, ...over });
 const one = (s: SignalSymbolInput, p: SignalPortfolio | null = null) => computeSignals([s], p).find((x) => x.symbol === s.symbol)!;
 /** Range regime, healthy RSI, no relative strength: entry Good, not Strong, no pullback. */
@@ -21,36 +35,55 @@ const noExec = { ...sym("X").fields, epsBeat: f(null), guidanceRaised: f(null) }
 const starterFields = { ...sym("X").fields, revenueAccelerating: f(true, { carriedFrom: "2026-09-20" }) };
 const decision = (s: { action: string; sizeTier: string; ratings: unknown; unconfirmed: boolean; reasons: string[] }) => ({ action: s.action, sizeTier: s.sizeTier, ratings: s.ratings, unconfirmed: s.unconfirmed, reasons: s.reasons });
 
-describe("ratings", () => {
-  it("company comes from confirmed fundamentals only", () => {
+describe("ratings (EN5: derived from the Guide score rule hits)", () => {
+  it("company comes from the fundamentals rule hits", () => {
     expect(ratings(sym("A")).ratings.company).toBe("Very strong");
+    expect(ratings(sym("A")).points.company).toBe(9);
     expect(ratings(sym("A", { fields: { revenueAccelerating: f(true) } })).ratings.company).toBe("Good");
-    expect(ratings(sym("A", { fields: { revenueAccelerating: f(true, { agreement: "disputed" }) } })).ratings.company).toBe("Neutral");
-    expect(ratings(sym("A", { fields: { revenueAccelerating: f(true, { verified: false }) } })).points.company).toBe(0);
-    expect(ratings(sym("A", { fields: { guidanceCut: f(true) } })).ratings.company).toBe("Weak");
+    expect(ratings(sym("A", { fields: { epsBeat: f(true), revenueAccelerating: f(true) } })).ratings.company).toBe("Strong");
+    expect(ratings(sym("A", { fields: { epsBeat: f(false) } })).ratings.company).toBe("Neutral");
+    expect(ratings(sym("A", { fields: { narrativeChanged: f(true) } })).ratings.company).toBe("Weak");
+    expect(ratings(sym("A", { fields: { narrativeChanged: f(true, { verified: false }) } })).ratings.company).toBe("Neutral");
+  });
+  it("same rule hits give the same rating as the score", () => {
+    const hits = (ids: string[]) => WEIGHTS.map(([id, points]) => ({ id, points, matched: ids.includes(id) }));
+    expect(ratings(sym("A", { ruleHits: hits(["revenue-acceleration", "earnings", "catalyst", "accumulation"]) })).ratings.company).toBe("Very strong");
+    expect(ratings(sym("A", { ruleHits: hits(["revenue-acceleration", "earnings"]) })).ratings.company).toBe("Strong");
+    expect(ratings(sym("A", { ruleHits: hits(["catalyst", "earnings"]) })).ratings.catalyst).toBe("Very strong");
+    expect(ratings(sym("A", { ruleHits: hits(["above-ma", "uptrend", "green-volume", "dip"]) })).points.entry).toBe(10 + 3);
+  });
+  it("insider buying alone never makes a rating Strong", () => {
+    const only = WEIGHTS.map(([id, points]) => ({ id, points, matched: id === "accumulation" }));
+    const r = ratings(sym("A", { ruleHits: only }));
+    expect(r.ratings.company).toBe("Neutral");
+    expect(r.ratings.catalyst).toBe("Neutral");
+  });
+  it("a verified_single or data_rule field counts; a single row does not (EN4)", () => {
+    const fields = (agreement: string) => ({ productCatalyst: f(true, { agreement }), epsBeat: f(true, { agreement }) });
+    for (const agreement of ["verified_single", "data_rule"]) expect(confirmed(sym("A", { fields: fields(agreement) }), "epsBeat"), agreement).toBe(true);
+    expect(confirmed(sym("A", { fields: fields("single") }), "epsBeat")).toBeNull();
   });
   it("counts the same agreements as the score inputs (EN4)", () => {
     expect([...PROVIDER_AGREEMENTS]).toEqual([...CONFIRMED_FUNDAMENTAL_AGREEMENTS]);
     for (const agreement of CONFIRMED_FUNDAMENTAL_AGREEMENTS) expect(confirmed(sym("A", { fields: { productCatalyst: f(true, { agreement }) } }), "productCatalyst"), agreement).toBe(true);
     for (const agreement of ["single", "disputed", "none"]) expect(confirmed(sym("A", { fields: { productCatalyst: f(true, { agreement }) } }), "productCatalyst"), agreement).toBeNull();
   });
-  it("a verified_single or data_rule field raises the points; a single row does not", () => {
-    const only = (agreement: string) => ratings(sym("A", { fields: { productCatalyst: f(true, { agreement }), epsBeat: f(true, { agreement }) } })).points.catalyst;
-    expect(only("verified_single")).toBe(4);
-    expect(only("data_rule")).toBe(4);
-    expect(only("single")).toBe(0);
-  });
-  it("carried data caps the company rating at Good and weakens the catalyst", () => {
+  it("carried data caps the company rating at Good and adds nothing to the catalyst", () => {
     const carried = sym("A", { fields: { ...sym("A").fields, productCatalyst: f(true, { carriedFrom: "2026-09-20" }), epsBeat: f(true, { carriedFrom: "2026-09-20" }) } });
     expect(ratings(carried).ratings.company).toBe("Good");
-    expect(ratings(carried).points.catalyst).toBe(1 + 1);
+    expect(ratings(carried).points.catalyst).toBe(0);
   });
-  it("entry comes from the technicals", () => {
+  it("entry is the Guide technical points plus the named filters", () => {
     expect(ratings(sym("A")).ratings.entry).toBe("Very strong");
     expect(ratings(sym("A", { technicals: tech({ regime: "downtrend", relativeStrength20: -1, relativeStrength60: -1, rsi14: 35 }) })).ratings.entry).toBe("Weak");
-    expect(ratings(sym("A", { technicals: tech({ regime: "uptrend", rsi14: 80, vsMa50Percent: 20, relativeStrength20: null, relativeStrength60: null }) })).ratings.entry).toBe("Weak");
+    const extended = tech({ regime: "uptrend", rsi14: 80, vsMa50Percent: 20, relativeStrength20: null, relativeStrength60: null });
+    expect(ratings(sym("A", { technicals: extended })).points.entry).toBe(3 + 3 + 2 - 2 - 2);
+    expect(ratings(sym("A", { technicals: extended })).ratings.entry).toBe("Neutral");
     expect(ratings(sym("A", { technicals: null })).ratings.entry).toBe("Neutral");
     expect(ratings(sym("A", { technicals: flatEntry })).ratings.entry).toBe("Good");
+  });
+  it("no private point table is left in SIGNAL_RULES", () => {
+    for (const key of ["companyPoints", "catalystPoints", "entryPoints"]) expect(SIGNAL_RULES).not.toHaveProperty(key);
   });
 });
 

@@ -1,7 +1,7 @@
 {
  "description": "Built by hand (EN45): relative thresholds. Score totals measured against evidencedMax, the points with data, and the 20-point coverage guard.",
  "asOf": "2026-10-08",
- "signalRulesVersion": "2026-10-14.1",
+ "signalRulesVersion": "2026-10-14.2",
  "scoreRulesVersion": "2026-10-11.2",
  "symbols": [
   {
@@ -14,7 +14,15 @@
     "state": "Watch",
     "evidencedMax": 20
    },
-   "matchedRules": [],
+   "matchedRules": [
+    "revenue-acceleration",
+    "earnings",
+    "catalyst",
+    "above-ma",
+    "uptrend",
+    "green-volume",
+    "dip"
+   ],
    "fields": {
     "epsBeat": {
      "value": true,
@@ -85,8 +93,8 @@
      "catalyst": "Very strong"
     },
     "points": {
-     "company": 5,
-     "entry": 6,
+     "company": 9,
+     "entry": 13,
      "catalyst": 5
     },
     "unconfirmed": false,
@@ -102,7 +110,61 @@
     "reasons": [
      "Fundamentals hold and the entry is good."
     ]
-   }
+   },
+   "ruleHits": [
+    {
+     "id": "revenue-acceleration",
+     "points": 4,
+     "matched": true
+    },
+    {
+     "id": "earnings",
+     "points": 3,
+     "matched": true
+    },
+    {
+     "id": "catalyst",
+     "points": 2,
+     "matched": true
+    },
+    {
+     "id": "accumulation",
+     "points": 1,
+     "matched": false
+    },
+    {
+     "id": "above-ma",
+     "points": 3,
+     "matched": true
+    },
+    {
+     "id": "uptrend",
+     "points": 3,
+     "matched": true
+    },
+    {
+     "id": "green-volume",
+     "points": 2,
+     "matched": true
+    },
+    {
+     "id": "dip",
+     "points": 2,
+     "matched": true
+    },
+    {
+     "id": "rotation",
+     "points": 2,
+     "matched": false,
+     "unknown": true
+    },
+    {
+     "id": "macro-data",
+     "points": 3,
+     "matched": false,
+     "unknown": true
+    }
+   ]
   },
   {
    "symbol": "REL13B",
@@ -114,7 +176,15 @@
     "state": "Wait",
     "evidencedMax": 25
    },
-   "matchedRules": [],
+   "matchedRules": [
+    "revenue-acceleration",
+    "earnings",
+    "catalyst",
+    "above-ma",
+    "uptrend",
+    "green-volume",
+    "dip"
+   ],
    "fields": {
     "epsBeat": {
      "value": true,
@@ -185,8 +255,8 @@
      "catalyst": "Very strong"
     },
     "points": {
-     "company": 5,
-     "entry": 6,
+     "company": 9,
+     "entry": 13,
      "catalyst": 5
     },
     "unconfirmed": false,
@@ -202,7 +272,59 @@
     "reasons": [
      "Score 13 is below the add threshold of 15."
     ]
-   }
+   },
+   "ruleHits": [
+    {
+     "id": "revenue-acceleration",
+     "points": 4,
+     "matched": true
+    },
+    {
+     "id": "earnings",
+     "points": 3,
+     "matched": true
+    },
+    {
+     "id": "catalyst",
+     "points": 2,
+     "matched": true
+    },
+    {
+     "id": "accumulation",
+     "points": 1,
+     "matched": false
+    },
+    {
+     "id": "above-ma",
+     "points": 3,
+     "matched": true
+    },
+    {
+     "id": "uptrend",
+     "points": 3,
+     "matched": true
+    },
+    {
+     "id": "green-volume",
+     "points": 2,
+     "matched": true
+    },
+    {
+     "id": "dip",
+     "points": 2,
+     "matched": true
+    },
+    {
+     "id": "rotation",
+     "points": 2,
+     "matched": false
+    },
+    {
+     "id": "macro-data",
+     "points": 3,
+     "matched": false
+    }
+   ]
   },
   {
    "symbol": "REL15A",
@@ -214,7 +336,13 @@
     "state": "Setup met (>=18)",
     "evidencedMax": 20
    },
-   "matchedRules": [],
+   "matchedRules": [
+    "revenue-acceleration",
+    "earnings",
+    "catalyst",
+    "above-ma",
+    "green-volume"
+   ],
    "fields": {
     "epsBeat": {
      "value": true,
@@ -285,8 +413,8 @@
      "catalyst": "Very strong"
     },
     "points": {
-     "company": 5,
-     "entry": 1,
+     "company": 9,
+     "entry": 6,
      "catalyst": 5
     },
     "unconfirmed": false,
@@ -302,7 +430,61 @@
     "reasons": [
      "Buy conditions met with very strong fundamentals and fresh execution."
     ]
-   }
+   },
+   "ruleHits": [
+    {
+     "id": "revenue-acceleration",
+     "points": 4,
+     "matched": true
+    },
+    {
+     "id": "earnings",
+     "points": 3,
+     "matched": true
+    },
+    {
+     "id": "catalyst",
+     "points": 2,
+     "matched": true
+    },
+    {
+     "id": "accumulation",
+     "points": 1,
+     "matched": false
+    },
+    {
+     "id": "above-ma",
+     "points": 3,
+     "matched": true
+    },
+    {
+     "id": "uptrend",
+     "points": 3,
+     "matched": false
+    },
+    {
+     "id": "green-volume",
+     "points": 2,
+     "matched": true
+    },
+    {
+     "id": "dip",
+     "points": 2,
+     "matched": false
+    },
+    {
+     "id": "rotation",
+     "points": 2,
+     "matched": false,
+     "unknown": true
+    },
+    {
+     "id": "macro-data",
+     "points": 3,
+     "matched": false,
+     "unknown": true
+    }
+   ]
   },
   {
    "symbol": "REL15B",
@@ -314,7 +496,13 @@
     "state": "Watch",
     "evidencedMax": 19
    },
-   "matchedRules": [],
+   "matchedRules": [
+    "revenue-acceleration",
+    "earnings",
+    "catalyst",
+    "above-ma",
+    "green-volume"
+   ],
    "fields": {
     "epsBeat": {
      "value": true,
@@ -385,8 +573,8 @@
      "catalyst": "Very strong"
     },
     "points": {
-     "company": 5,
-     "entry": 1,
+     "company": 9,
+     "entry": 6,
      "catalyst": 5
     },
     "unconfirmed": false,
@@ -402,7 +590,62 @@
     "reasons": [
      "Only 19 of 25 points have data, under the 20 needed to start; an add needs a strong entry or pullback."
     ]
-   }
+   },
+   "ruleHits": [
+    {
+     "id": "revenue-acceleration",
+     "points": 4,
+     "matched": true
+    },
+    {
+     "id": "earnings",
+     "points": 3,
+     "matched": true
+    },
+    {
+     "id": "catalyst",
+     "points": 2,
+     "matched": true
+    },
+    {
+     "id": "accumulation",
+     "points": 1,
+     "matched": false,
+     "unknown": true
+    },
+    {
+     "id": "above-ma",
+     "points": 3,
+     "matched": true
+    },
+    {
+     "id": "uptrend",
+     "points": 3,
+     "matched": false
+    },
+    {
+     "id": "green-volume",
+     "points": 2,
+     "matched": true
+    },
+    {
+     "id": "dip",
+     "points": 2,
+     "matched": false
+    },
+    {
+     "id": "rotation",
+     "points": 2,
+     "matched": false,
+     "unknown": true
+    },
+    {
+     "id": "macro-data",
+     "points": 3,
+     "matched": false,
+     "unknown": true
+    }
+   ]
   },
   {
    "symbol": "REL18C",
@@ -414,7 +657,15 @@
     "state": "Watch",
     "evidencedMax": 19
    },
-   "matchedRules": [],
+   "matchedRules": [
+    "revenue-acceleration",
+    "earnings",
+    "catalyst",
+    "above-ma",
+    "uptrend",
+    "green-volume",
+    "dip"
+   ],
    "fields": {
     "epsBeat": {
      "value": true,
@@ -485,8 +736,8 @@
      "catalyst": "Very strong"
     },
     "points": {
-     "company": 5,
-     "entry": 6,
+     "company": 9,
+     "entry": 13,
      "catalyst": 5
     },
     "unconfirmed": false,
@@ -502,7 +753,62 @@
     "reasons": [
      "Fundamentals hold and the entry is good."
     ]
-   }
+   },
+   "ruleHits": [
+    {
+     "id": "revenue-acceleration",
+     "points": 4,
+     "matched": true
+    },
+    {
+     "id": "earnings",
+     "points": 3,
+     "matched": true
+    },
+    {
+     "id": "catalyst",
+     "points": 2,
+     "matched": true
+    },
+    {
+     "id": "accumulation",
+     "points": 1,
+     "matched": false,
+     "unknown": true
+    },
+    {
+     "id": "above-ma",
+     "points": 3,
+     "matched": true
+    },
+    {
+     "id": "uptrend",
+     "points": 3,
+     "matched": true
+    },
+    {
+     "id": "green-volume",
+     "points": 2,
+     "matched": true
+    },
+    {
+     "id": "dip",
+     "points": 2,
+     "matched": true
+    },
+    {
+     "id": "rotation",
+     "points": 2,
+     "matched": false,
+     "unknown": true
+    },
+    {
+     "id": "macro-data",
+     "points": 3,
+     "matched": false,
+     "unknown": true
+    }
+   ]
   }
  ]
 }

@@ -29,6 +29,8 @@ export interface JudgeSymbol {
   /** Derived chart numbers only. The raw price series never leaves the database (Twelve Data free plan terms). */
   technicals: Technicals | null;
   matchedRules: string[];
+  /** Rule hits of the Guide score (id, points, matched, unknown): the signal ratings are derived from them. */
+  ruleHits: { id: string; points: number; matched: boolean; unknown?: boolean }[];
   fields: Record<string, JudgeField>;
   expiredFields: string[];
   carriedFrom: string | null;
@@ -97,6 +99,7 @@ export function shapeSymbol(row: ScoreRow, consensus: ConsensusRow[], baseline: 
     score: { total: a.total, technical: a.technical, fundamentals: a.fundamentals, macro: a.macro, state: a.state, pullbackInUptrend: a.pullbackInUptrend, asOf: a.asOf },
     invalidReasons: a.invalidReasons, technicals,
     matchedRules: a.ruleHits.filter((r) => r.matched).map((r) => r.id),
+    ruleHits: a.ruleHits.map((r) => ({ id: r.id, points: r.points, matched: r.matched, ...(r.unknown ? { unknown: true } : {}) })),
     fields, expiredFields: [...(a.expiredFields ?? [])].sort(), carriedFrom: carried[0] ?? null,
     evidence: [...evidence, ...researchFacts.map((f) => ({ url: f.url, field: "research", label: f.kind, publishedAt: f.date, quote: f.quote.slice(0, 240) }))]
       .filter((e, i, all) => all.findIndex((x) => x.url === e.url) === i).slice(0, MAX_EVIDENCE_PER_SYMBOL), researchFacts,
@@ -106,7 +109,7 @@ export function shapeSymbol(row: ScoreRow, consensus: ConsensusRow[], baseline: 
 /** Deterministic public signals. The owner's baseline is not an action or amount input; the private allocation page handles amounts. */
 export function signalsFor(symbols: JudgeSymbol[], portfolio: JudgeInput["portfolio"]): JudgeSignal[] {
   void portfolio;
-  const inputs: SignalSymbolInput[] = symbols.map((s) => ({ symbol: s.symbol, held: null, score: { total: s.score.total, state: s.score.state }, fields: Object.fromEntries(Object.entries(s.fields).map(([k, f]) => [k, { value: f.value, agreement: f.agreement, verified: f.verified, carriedFrom: f.carriedFrom }])), expiredFields: s.expiredFields, technicals: s.technicals }));
+  const inputs: SignalSymbolInput[] = symbols.map((s) => ({ symbol: s.symbol, held: null, score: { total: s.score.total, state: s.score.state }, ruleHits: s.ruleHits, fields: Object.fromEntries(Object.entries(s.fields).map(([k, f]) => [k, { value: f.value, agreement: f.agreement, verified: f.verified, carriedFrom: f.carriedFrom }])), expiredFields: s.expiredFields, technicals: s.technicals }));
   const sigs = computeSignals(inputs, null);
   return sigs.map((s) => ({ ...s, signature: ideaSignature({ action: s.action, setup: s.ratings, sizeTier: s.sizeTier }) }));
 }
