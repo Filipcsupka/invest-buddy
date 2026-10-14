@@ -97,6 +97,14 @@ describe("job_runs storage", () => {
     expect(process.exitCode).toBe(1);
   });
 
+  it("stores a non-zero exit code in counts without changing the log line", async () => {
+    const { out } = quiet();
+    const { store, calls } = fakeStore();
+    await runLoggedJob("judge", async () => { process.exitCode = 5; return { failures: 0 }; }, { store });
+    expect(calls[1].run).toMatchObject({ status: "failed", counts: { failures: 0, exitCode: 5 } });
+    expect(JSON.parse(out[1]).counts).toEqual({ failures: 0 });
+  });
+
   it("writes nothing when no store is configured", async () => {
     const lines: string[] = [];
     vi.spyOn(process.stdout, "write").mockImplementation((l) => { lines.push(String(l)); return true; });

@@ -29,7 +29,9 @@ export async function runLoggedJob(name: string, run: () => Promise<JobCounts | 
   process.stdout.write(`${JSON.stringify({ event: "job_start", job: name, runId, timestamp: startedAt.toISOString() })}\n`);
   if (runs) await store("start", name, runId, () => runs.start({ runId, job: name, startedAt }));
   const end = async (status: "ok" | "partial" | "failed", counts: NonNullable<JobCounts>, durationMs: number) => {
-    if (runs) await store("finish", name, runId, () => runs.finish({ runId, job: name, startedAt, status, durationMs, counts, maxRssMb: maxRssMb() }));
+    // The exit code is stored (not logged) so the watchdog can see the AI ceiling stop, exit code 5.
+    const stored = process.exitCode ? { ...counts, exitCode: Number(process.exitCode) } : counts;
+    if (runs) await store("finish", name, runId, () => runs.finish({ runId, job: name, startedAt, status, durationMs, counts: stored, maxRssMb: maxRssMb() }));
   };
   try {
     const counts = await run();
