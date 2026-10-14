@@ -12,6 +12,7 @@
     "test": "vitest run src scripts && node --test scanner/test/*.test.mjs",
     "check:contrast": "tsx scripts/check-contrast.ts",
     "migrate": "tsx scripts/migrate.ts",
+    "migration:lint": "tsx scripts/migration-lint.ts",
     "ai-usage": "tsx scripts/ai-usage-report.ts",
     "data:inventory": "tsx scripts/data-inventory.ts",
     "research:eval": "tsx scripts/research-eval.ts",
