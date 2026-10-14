@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryCollectorRepository } from "../../db/collectors";
 import { EPS_FACT_KEY } from "../../data/eps";
-import { collectAlphaVantage, documentUrl, MAX_REQUESTS_PER_DAY, MAX_REQUESTS_PER_RUN, parseEarnings, pickSymbols, redact } from "./alphavantage";
+import { collectAlphaVantage, documentUrl, MAX_REQUESTS_PER_DAY, MAX_REQUESTS_PER_RUN, parseEarnings, parseEarningsHistory, pickSymbols, redact } from "./alphavantage";
 import { runExtraSources } from "./registry";
 import { MemoryUsageLedger } from "../../data/usage";
 import { context, stubHttp, type Call } from "./testing";
@@ -142,5 +142,38 @@ describe("usage ledger", () => {
     expect(output.apiRequests).toBe(3);
     expect(ledger.rows.reduce((n, row) => n + row.requests, 0)).toBe(3);
     expect(output.failures?.[0].reason).toMatch(/daily cap 3/);
+  });
+});
+
+describe("EPS history (D28)", () => {
+  const FISCAL = ["2024-10-31", "2025-01-31", "2025-04-30", "2025-07-31", "2025-10-31", "2026-01-31", "2026-04-30", "2026-07-31"];
+  const REPORTED = ["2024-11-20", "2025-02-26", "2025-05-28", "2025-08-27", "2025-11-19", "2026-02-25", "2026-05-27", "2026-08-26"];
+  const eight = (estimate = (i: number) => String(1 + i / 10)) => FISCAL.map((fiscalDateEnding, i) => quarter(REPORTED[i], "5.0", { fiscalDateEnding, estimatedEPS: estimate(i) }));
+  const run = (repo: MemoryCollectorRepository, rows: Record<string, string>[], now = "2026-10-05T12:00:00Z") => runExtraSources(repo, ["alphavantage"], { since: "2026-09-05", now: new Date(now), http: stubHttp((call) => earnings(new URL(call.url).searchParams.get("symbol") ?? "", rows)), companies: [{ symbol: "NVDA", name: "NVIDIA" }], symbols: ["NVDA"], env: { ALPHA_VANTAGE_API_KEY: KEY } });
+
+  it("parses every quarter, oldest first, and keeps missing numbers as null", () => {
+    const rows = parseEarningsHistory(earnings("NVDA", [...eight(), quarter("2026-11-20", "None", { fiscalDateEnding: "2026-10-31", reportedEPS: "None", estimatedEPS: "None" })]));
+    expect(rows).toHaveLength(9);
+    expect(rows[0]).toEqual({ fiscalDateEnding: "2024-10-31", reportedDate: "2024-11-20", reportedEps: 1.05, estimatedEps: 1, surprisePct: 5 });
+    expect(rows[8]).toMatchObject({ reportedEps: null, estimatedEps: null, surprisePct: null });
+  });
+
+  it("stores 8 quarters, a rerun adds none, a revised estimate adds one row and the old row stays", async () => {
+    const repo = new MemoryCollectorRepository();
+    await run(repo, eight());
+    expect(repo.epsHistory).toHaveLength(8);
+    await run(repo, eight(), "2026-10-12T12:00:00Z");
+    expect(repo.epsHistory).toHaveLength(8);
+    await run(repo, eight((i) => i === 7 ? "1.20" : String(1 + i / 10)), "2026-10-19T12:00:00Z");
+    const last = repo.epsHistory.filter((r) => r.fiscalDateEnding === "2026-07-31");
+    expect(repo.epsHistory).toHaveLength(9);
+    expect(last.map((r) => r.estimatedEps)).toEqual([1.7, 1.2]);
+    expect(JSON.stringify(repo.epsHistory)).not.toContain(KEY);
+  });
+
+  it("still writes the existing fact", async () => {
+    const repo = new MemoryCollectorRepository();
+    await run(repo, eight());
+    expect([...repo.facts.values()][0]).toMatchObject({ key: EPS_FACT_KEY, asOf: "2026-08-26" });
   });
 });

@@ -68,6 +68,18 @@ Reconcile reads the newest fact on or before the scoring date. `surprisePercent`
 
 `npm run collect:ping` (or `node dist/jobs/collect.js --ping [--source name]`) sends one live request per source, checks that the response parses, prints a table and exits 1 if any ping fails. It writes nothing and needs no database. SEC pings and FRED print SKIP when `SEC_USER_AGENT` or `FRED_API_KEY` is unset. GDELT answers slowly (11 to 19 seconds on 2026-10-05) and returns 429 for requests about 8 seconds apart, so its ping can fail the 10 second limit. BLS pings use one of the 25 daily queries.
 
+### Alpha Vantage EPS history (D28)
+
+The same `EARNINGS` request now also keeps every quarter it returns. The raw answer goes to the raw store (key `earnings:<ticker>`). Each quarter goes to `eps_history` (migration 055) with reported date, reported and estimated EPS and surprise percent. A row is written only when a value for that quarter differs from the newest stored row, so a revised estimate adds a row and the old one stays. The table is append-only. The `eps_surprise_latest` fact and the 20 requests per run cap are unchanged. Internal use only. The live CronJob is not suspended; whether it ran on 2026-10-10 is not checked here.
+
+### ECB euro reference rates (D26)
+
+`src/collectors/ecb-fx.ts` parses the ECB `eurofxref` XML for USD, CZK and GBP into `macro_observations` as `ECB_EURUSD`, `ECB_EURCZK` and `ECB_EURGBP` (units of currency per 1 EUR, source `ecb`, attribution "Source: ECB"). The macro job fetches `eurofxref-daily.xml` each run. `backfill --job macro-ecb` reads `eurofxref-hist.xml` once, from 2023-10-01. Dates the ECB did not publish (weekends, TARGET holidays) stay empty. The endpoints come from the ECB euro reference rates page; the cadence (once per working day, about 16:00 CET) is taken from that page and not checked against a live run.
+
+### Corporate actions (D13)
+
+`corporate_actions` (migration 054) records splits and reverse splits with the ratio as new shares per old share (4 for 4:1). `node dist/jobs/dq-corporate-actions.js` reads stored bars and the last 14 days of `daily_bar_revisions`. It flags a split when a close moves more than 40% on at least twice the median volume of the prior 20 days and the factor is within 2% of a split ratio, or when most revised bars show the same old/new scale. Rows are marked `heuristic` and are unique per ticker, date and kind, so a rerun adds nothing. A real crash that lands on a split ratio with high volume would be flagged too. No vendor adapter exists: the Twelve Data splits endpoint plan and credit cost were not stated on its docs page, so this is recorded as unverified in `data_sources.notes`. The 8-K hint is not built. The CronJob `invest-buddy-dq-corporate-actions` (06:15 on weekdays) is suspended.
+
 ### Alpha Vantage earnings calendar (D27)
 
 `node dist/jobs/earnings-calendar.js` (`npm run earnings-calendar`) makes one `EARNINGS_CALENDAR` request with `horizon=12month`. It is reserved in the usage ledger first, so it counts against the 25 a day of the free key. The whole CSV goes to the raw store (key `earnings_calendar:12month`). Rows for universe tickers (SQ is XYZ at Alpha Vantage) go to `earnings_calendar_snapshots` (migration 046): one row per day, ticker and report date, never updated or deleted. A rerun on the same UTC day sends no request unless `--force`; a moved report date shows up as a new row on the next day. `--dry-run` fetches and counts without writing. No key or a reached cap prints `skip` and exits 0. The estimate column may be empty for some names; that is not checked yet. Licence class `internal_only` (the `alphavantage` source row). The CronJob `invest-buddy-earnings-calendar` (06:45 Europe/Bratislava) is suspended.
