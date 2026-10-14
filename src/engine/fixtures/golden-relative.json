@@ -1,7 +1,7 @@
 {
  "description": "Built by hand (EN45): relative thresholds. Score totals measured against evidencedMax, the points with data, and the 20-point coverage guard.",
  "asOf": "2026-10-08",
- "signalRulesVersion": "2026-10-14.2",
+ "signalRulesVersion": "2026-10-14.3",
  "scoreRulesVersion": "2026-10-11.2",
  "symbols": [
   {

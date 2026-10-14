@@ -121,6 +121,7 @@ Status: thresholds and boundary tests merged in PR #80; PR #90 introduced the go
   3. Insider buying alone does not make a rating Strong; require one of revenue acceleration, earnings or catalyst (Guide 4.1 F).
   4. Document green volume as a proxy of "stock reacts positively on volume".
   5. Update `src/components/idea-card.tsx` labels only if rating names change.
+- Notes (after review): a confirmed revenue decline or guidance cut caps the Company rating at Neutral (conservative cap in `ratings()`). The setup threshold stays 72%. Company Weak is reachable only through the `narrativeChanged` step-down from Neutral, because the Neutral band starts at 0 points and `rate()` never returns Weak. The cap sets Neutral, so it gives Weak only together with a confirmed `narrativeChanged`, and a name with a confirmed decline or cut is rejected before the REDUCE rule runs. So REDUCE (held, Company Weak, downtrend; `signals.ts` rule 2) fires only for a non-rejected name with a confirmed `narrativeChanged` and a base Company score under 4 points. The growth guards (insider buying alone never above Good) do not bite with the shipped thresholds; a test lowers the thresholds to cover them.
 - Acceptance: no private point table remains in `signals.ts`; `score.test.ts` and `signals.test.ts` pass; golden diff explained per ticker in the PR; the same input from `score.ts` produces the same rating in tests.
 - Size: M
 - Depends on: EN3, EN4

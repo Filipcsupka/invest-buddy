@@ -1,7 +1,7 @@
 {
  "description": "Built by hand: six names at score 15 to 17 and one at 18 for threshold edges.",
  "asOf": "2026-10-08",
- "signalRulesVersion": "2026-10-14.2",
+ "signalRulesVersion": "2026-10-14.3",
  "scoreRulesVersion": "2026-10-11.2",
  "symbols": [
   {
@@ -560,7 +560,7 @@
     "action": "WATCH",
     "sizeTier": "NONE",
     "ratings": {
-     "company": "Very strong",
+     "company": "Neutral",
      "entry": "Very strong",
      "catalyst": "Very strong"
     },

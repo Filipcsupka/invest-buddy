@@ -58,6 +58,25 @@ describe("ratings (EN5: derived from the Guide score rule hits)", () => {
     expect(r.ratings.company).toBe("Neutral");
     expect(r.ratings.catalyst).toBe("Neutral");
   });
+  it("insider buying alone stays under Strong even with lowered thresholds (guard)", () => {
+    const only = WEIGHTS.map(([id, points]) => ({ id, points, matched: id === "accumulation" }));
+    const low = { ...SIGNAL_RULES, companyThresholds: { "Very strong": 1, Strong: 1, Good: 1, Neutral: 0 }, catalystThresholds: { "Very strong": 1, Strong: 1, Good: 1, Neutral: 0 } } as unknown as typeof SIGNAL_RULES;
+    const r = ratings(sym("A", { ruleHits: only }), low);
+    expect(r.ratings.company).toBe("Good");
+    expect(r.ratings.catalyst).toBe("Good");
+  });
+  it("a confirmed revenue decline or guidance cut caps Company at Neutral; unconfirmed does not", () => {
+    for (const name of ["revenueDeclining", "guidanceCut"]) {
+      const fields = { ...sym("A").fields, [name]: f(true) };
+      expect(ratings(sym("A", { fields })).ratings.company, name).toBe("Neutral");
+      expect(ratings(sym("A", { fields: { ...fields, [name]: f(true, { verified: false }) } })).ratings.company, name).toBe("Very strong");
+    }
+    expect(ratings(sym("A", { fields: { ...sym("A").fields, guidanceCut: f(true), narrativeChanged: f(true) } })).ratings.company).toBe("Weak");
+  });
+  it("missing ruleHits count as no hits", () => {
+    const s = { ...sym("A"), ruleHits: undefined } as unknown as SignalSymbolInput;
+    expect(ratings(s).points).toMatchObject({ company: 0, catalyst: 0 });
+  });
   it("a verified_single or data_rule field counts; a single row does not (EN4)", () => {
     const fields = (agreement: string) => ({ productCatalyst: f(true, { agreement }), epsBeat: f(true, { agreement }) });
     for (const agreement of ["verified_single", "data_rule"]) expect(confirmed(sym("A", { fields: fields(agreement) }), "epsBeat"), agreement).toBe(true);

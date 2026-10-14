@@ -31,7 +31,7 @@ import { meetsGuidePoints, POINTS_MAX } from "./relative";
  * The value stays in ACTIONS so older stored ideas still parse.
  */
 export const SIGNAL_RULES = {
-  version: "2026-10-14.2",
+  version: "2026-10-14.3",
   actionsOrder: ["HIGH_CONVICTION_ADD", "ADD", "START_POSITION"],
   /** InvestingGuide s6 and s8: START_POSITION needs 18; a score of 15 to 17 can qualify for ADD. */
   minScoreForBuy: 18,
@@ -47,6 +47,7 @@ export const SIGNAL_RULES = {
    * (revenue acceleration 4, earnings 3, catalyst 2, accumulation 1: 0 to 10). Catalyst is the event rules (catalyst 2, earnings 3, accumulation 1: 0 to 6),
    * and a rule that rests on carried data adds nothing to it. Entry is the Guide technical group (above both MAs 3, uptrend 3, green volume 2, dip 2: 0 to 10)
    * plus the named filters in ENTRY_FILTERS. A rating is the first band met, else Weak. Insider buying alone never reaches Strong.
+   * A confirmed revenue decline or guidance cut caps the Company rating at Neutral.
    */
   companyThresholds: { "Very strong": 8, Strong: 6, Good: 4, Neutral: 0 },
   catalystThresholds: { "Very strong": 5, Strong: 4, Good: 2, Neutral: 0 },
@@ -144,7 +145,7 @@ const CATALYST_RULES = ["catalyst", "earnings", "accumulation"] as const;
 const ENTRY_RULES = ["above-ma", "uptrend", "green-volume", "dip"] as const;
 
 export function ratings(input: SignalSymbolInput, rules: SignalRules = SIGNAL_RULES) {
-  const hit = (id: string) => input.ruleHits.find((h) => h.id === id && h.matched);
+  const hit = (id: string) => (input.ruleHits ?? []).find((h) => h.id === id && h.matched);
   const sum = (ids: readonly string[], keep: (id: string) => boolean = () => true) => ids.reduce((n, id) => n + (keep(id) ? hit(id)?.points ?? 0 : 0), 0);
   const carried = (id: string) => (RULE_FIELDS[id] ?? []).some((name) => input.fields[name]?.value === true && Boolean(input.fields[name]?.carriedFrom));
   const growth = (ids: readonly string[]) => ids.some((id) => id !== "accumulation" && hit(id));
@@ -153,9 +154,12 @@ export function ratings(input: SignalSymbolInput, rules: SignalRules = SIGNAL_RU
   const catalyst = sum(CATALYST_RULES, (id) => !carried(id));
   let companyRating = rate(company, rules.companyThresholds);
   let catalystRating = rate(catalyst, rules.catalystThresholds);
+  // Guard: insider buying alone never reaches Strong. Dead with the shipped thresholds (1 point rates Neutral) but holds if they are lowered.
   if (!growth(COMPANY_RULES)) companyRating = cap(companyRating, "Good");
   if (!growth(CATALYST_RULES)) catalystRating = cap(catalystRating, "Good");
   if (COMPANY_RULES.some((id) => hit(id) && carried(id))) companyRating = cap(companyRating, "Good");
+  // Conservative cap: a confirmed revenue decline or guidance cut keeps the Company rating at Neutral or below.
+  if (confirmed(input, "revenueDeclining") === true || confirmed(input, "guidanceCut") === true) companyRating = cap(companyRating, "Neutral");
   if (rules.narrativeChangedLowersCompany && confirmed(input, "narrativeChanged") === true) companyRating = ORDER[Math.max(0, ORDER.indexOf(companyRating) - 1)];
 
   let entry = 0;
