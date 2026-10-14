@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { Disclaimer } from "@/components/disclaimer";
 import { WaitlistForm } from "@/components/waitlist-form";
-import type { PriceVariantId } from "@/config/plans";
 import { fill, formatDate, formatNumber, getMessages, type Locale } from "@/i18n";
 import { getLaunchMessages } from "@/i18n/launch-messages";
 import styles from "./launch.module.css";
@@ -13,7 +12,7 @@ export interface LaunchFacts {
 }
 
 /** Waitlist section for the landing page. Facts are shown only when the site can back them. */
-export function LaunchSection({ locale, facts, variant, source }: { locale: Locale; facts: LaunchFacts; variant: PriceVariantId; source: string }) {
+export function LaunchSection({ locale, facts, source }: { locale: Locale; facts: LaunchFacts; source: string }) {
   const t = getLaunchMessages(locale);
   const common = getMessages(locale).common;
   const items = [
@@ -29,7 +28,7 @@ export function LaunchSection({ locale, facts, variant, source }: { locale: Loca
           <p className="prose">{t.landing.waitlistBody}</p>
         </div>
         <div>
-          <WaitlistForm locale={locale} labels={getMessages(locale).waitlist} source={source} priceVariant={variant} hideTitle />
+          <WaitlistForm locale={locale} labels={getMessages(locale).waitlist} source={source} hideTitle />
           <Disclaimer text={common.disclaimer} compact />
         </div>
       </section>
