@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { flags } from "../config/flags";
 import { getPool } from "../db/pool";
+import { CACHE_TAGS, webCached } from "./web-cache";
 import { listIdeas, type StoredIdea } from "../db/ideas";
 import { symbolReviewDates } from "../db/extraction-runs";
 import { sampleIdeas } from "../ideas/fixtures";
@@ -20,7 +21,7 @@ async function latestIdeasUncached(limit = 50): Promise<IdeasData> {
   return { rows: await listIdeas(db, limit), sample: false };
 }
 /** Per-request memo: the idea card and any other caller with the same limit share one query. */
-export const latestIdeas = cache(latestIdeasUncached);
+export const latestIdeas = cache(webCached(latestIdeasUncached, "latest-ideas", [CACHE_TAGS.ideas]));
 
 /** Latest idea for one ticker when it is worth a card on the company page (not HOLD). A read failure hides the card instead of breaking the page. */
 export async function companyIdea(symbol: string): Promise<{ idea: StoredIdea; sample: boolean } | null> {

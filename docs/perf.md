@@ -64,3 +64,11 @@ Re-run after W4 and W5 and update this table.
 ## Web pod 5xx count
 
 Not collected here. It needs `kubectl logs` on the web pod, and this change did not touch the cluster. Run read-only: `kubectl -n invest logs deploy/web --since=24h | grep -c ' 5[0-9][0-9] '` and add the number with the date.
+
+## W5 caching
+
+Pages stay server-rendered per request. The shared reads (`latestScores`, `instrumentUniverse`, `latestPortfolio`, `latestIdeas`) go through `webCached` in `src/data/web-cache.ts`: Next data cache, 300 s, tags `scores`, `ideas`, `portfolio`. A repeat hit does not query Postgres.
+
+- Purge: `POST /api/revalidate` with `Authorization: Bearer $INGEST_TOKEN`, optional body `{"tags":["scores"]}`. The scan and ideas ingest routes purge their tag after a successful write.
+- Only viewer-independent reads are wrapped. Anything that reads a session, cookie or header must not use `webCached`; a test checks the store files for `headers()` and `cookies()`.
+- `src/jobs/daily.ts` writes to Postgres directly and does not purge. Until it calls `/api/revalidate`, a new score date shows within 300 s.

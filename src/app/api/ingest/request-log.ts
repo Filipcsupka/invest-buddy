@@ -3,7 +3,7 @@ import { resolveRequestId } from "../../request-id";
 const failureReasons = new Set([
   "Ingest unavailable", "Unauthorized", "Database unavailable", "Invalid query",
   "Invalid body", "Invalid JSON", "Invalid scan", "Payload too large",
-  "Rate limit exceeded", "Budget unavailable", "Unknown symbol",
+  "Rate limit exceeded", "Revalidate unavailable", "Revalidate failed", "Invalid tags", "Budget unavailable", "Unknown symbol",
   "asOf must be YYYY-MM-DD", "maxSymbols must be 1-40", "days must be 1-365",
 ]);
 const caughtStacks = new WeakMap<Request, string>();
