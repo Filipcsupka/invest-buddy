@@ -1,0 +1,10 @@
+title = "invest-buddy gitleaks config"
+
+[extend]
+useDefault = true
+
+# Test files use fake strings such as "test-secret-0123456789". Real secrets stay checked everywhere else.
+[[allowlists]]
+description = "fake secrets in unit tests"
+targetRules = ["generic-api-key"]
+paths = ['''^src/.*\.test\.tsx?$''', '''^scanner/test/.*''']
