@@ -1,0 +1,151 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`mail templates (en) > confirm matches its snapshot 1`] = `
+{
+  "headers": undefined,
+  "html": "<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Confirm your InvestBuddy waitlist sign-up</title></head><body style="margin:0;background:#eceeeb"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eceeeb"><tr><td align="center" style="padding:24px 12px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:4px"><tr><td style="padding:28px"><h1 style="margin:0 0 20px;font:600 22px/1.3 Arial,Helvetica,sans-serif;color:#17201b">Confirm your InvestBuddy waitlist sign-up</h1><p style="margin:0 0 16px;font:16px/1.6 Arial,Helvetica,sans-serif;color:#17201b">You asked to join the InvestBuddy waitlist. Confirm this address to finish signing up.</p><p style="margin:0 0 16px;font:16px/1.6 Arial,Helvetica,sans-serif;color:#17201b">The link works for 7 days. If you did not sign up, ignore this mail and we will delete your address.</p><p style="margin:0 0 20px"><a href="https://invest.example.test/en/waitlist/confirm?token=abc" style="display:inline-block;padding:12px 20px;background:#17201b;color:#ffffff;text-decoration:none;border-radius:4px;font:600 16px Arial,Helvetica,sans-serif">Confirm my address</a></p><p style="margin:0 0 8px;font:13px/1.5 Arial,Helvetica,sans-serif;color:#4a5550">If the button does not work, open this link: https://invest.example.test/en/waitlist/confirm?token=abc</p><p style="margin:0 0 16px;font:16px/1.6 Arial,Helvetica,sans-serif;color:#17201b">InvestBuddy</p><hr style="border:0;border-top:1px solid #d5dad6;margin:20px 0"><p style="margin:0 0 8px;font:13px/1.5 Arial,Helvetica,sans-serif;color:#4a5550">Informational screening only. Same rules for every visitor. No personal investment advice.</p><p style="margin:0;font:13px/1.5 Arial,Helvetica,sans-serif;color:#4a5550"><a href="https://invest.example.test/en/waitlist/unsubscribe?token=7.sig" style="color:#4a5550">Unsubscribe</a></p></td></tr></table></td></tr></table></body></html>",
+  "subject": "Confirm your InvestBuddy waitlist sign-up",
+  "text": "Confirm your InvestBuddy waitlist sign-up
+
+You asked to join the InvestBuddy waitlist. Confirm this address to finish signing up.
+
+The link works for 7 days. If you did not sign up, ignore this mail and we will delete your address.
+
+Confirm my address: https://invest.example.test/en/waitlist/confirm?token=abc
+
+If the button does not work, open this link: https://invest.example.test/en/waitlist/confirm?token=abc
+
+InvestBuddy
+
+--
+
+Informational screening only. Same rules for every visitor. No personal investment advice.
+
+Unsubscribe: https://invest.example.test/en/waitlist/unsubscribe?token=7.sig",
+}
+`;
+
+exports[`mail templates (en) > welcome matches its snapshot 1`] = `
+{
+  "headers": {
+    "List-Unsubscribe": "<https://invest.example.test/api/waitlist/unsubscribe?token=7.sig>",
+    "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+  },
+  "html": "<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>You are on the InvestBuddy waitlist</title></head><body style="margin:0;background:#eceeeb"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eceeeb"><tr><td align="center" style="padding:24px 12px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:4px"><tr><td style="padding:28px"><h1 style="margin:0 0 20px;font:600 22px/1.3 Arial,Helvetica,sans-serif;color:#17201b">You are on the InvestBuddy waitlist</h1><p style="margin:0 0 16px;font:16px/1.6 Arial,Helvetica,sans-serif;color:#17201b">Your address is confirmed. Thank you for joining.</p><p style="margin:0 0 16px;font:16px/1.6 Arial,Helvetica,sans-serif;color:#17201b">We will send one mail when the site opens to the public.</p><p style="margin:0 0 16px;font:16px/1.6 Arial,Helvetica,sans-serif;color:#17201b">InvestBuddy</p><hr style="border:0;border-top:1px solid #d5dad6;margin:20px 0"><p style="margin:0 0 8px;font:13px/1.5 Arial,Helvetica,sans-serif;color:#4a5550">Informational screening only. Same rules for every visitor. No personal investment advice.</p><p style="margin:0;font:13px/1.5 Arial,Helvetica,sans-serif;color:#4a5550"><a href="https://invest.example.test/en/waitlist/unsubscribe?token=7.sig" style="color:#4a5550">Unsubscribe</a></p></td></tr></table></td></tr></table></body></html>",
+  "subject": "You are on the InvestBuddy waitlist",
+  "text": "You are on the InvestBuddy waitlist
+
+Your address is confirmed. Thank you for joining.
+
+We will send one mail when the site opens to the public.
+
+InvestBuddy
+
+--
+
+Informational screening only. Same rules for every visitor. No personal investment advice.
+
+Unsubscribe: https://invest.example.test/en/waitlist/unsubscribe?token=7.sig",
+}
+`;
+
+exports[`mail templates (en) > welcomeWeekly matches its snapshot 1`] = `
+{
+  "headers": {
+    "List-Unsubscribe": "<https://invest.example.test/api/waitlist/unsubscribe?token=7.sig>",
+    "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+  },
+  "html": "<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>You are on the InvestBuddy waitlist</title></head><body style="margin:0;background:#eceeeb"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eceeeb"><tr><td align="center" style="padding:24px 12px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:4px"><tr><td style="padding:28px"><h1 style="margin:0 0 20px;font:600 22px/1.3 Arial,Helvetica,sans-serif;color:#17201b">You are on the InvestBuddy waitlist</h1><p style="margin:0 0 16px;font:16px/1.6 Arial,Helvetica,sans-serif;color:#17201b">Your address is confirmed. Thank you for joining.</p><p style="margin:0 0 16px;font:16px/1.6 Arial,Helvetica,sans-serif;color:#17201b">We will send one mail when the site opens to the public.</p><p style="margin:0 0 16px;font:16px/1.6 Arial,Helvetica,sans-serif;color:#17201b">You also asked for the free weekly Slovak mail. It will arrive once it is ready.</p><p style="margin:0 0 16px;font:16px/1.6 Arial,Helvetica,sans-serif;color:#17201b">InvestBuddy</p><hr style="border:0;border-top:1px solid #d5dad6;margin:20px 0"><p style="margin:0 0 8px;font:13px/1.5 Arial,Helvetica,sans-serif;color:#4a5550">Informational screening only. Same rules for every visitor. No personal investment advice.</p><p style="margin:0;font:13px/1.5 Arial,Helvetica,sans-serif;color:#4a5550"><a href="https://invest.example.test/en/waitlist/unsubscribe?token=7.sig" style="color:#4a5550">Unsubscribe</a></p></td></tr></table></td></tr></table></body></html>",
+  "subject": "You are on the InvestBuddy waitlist",
+  "text": "You are on the InvestBuddy waitlist
+
+Your address is confirmed. Thank you for joining.
+
+We will send one mail when the site opens to the public.
+
+You also asked for the free weekly Slovak mail. It will arrive once it is ready.
+
+InvestBuddy
+
+--
+
+Informational screening only. Same rules for every visitor. No personal investment advice.
+
+Unsubscribe: https://invest.example.test/en/waitlist/unsubscribe?token=7.sig",
+}
+`;
+
+exports[`mail templates (sk) > confirm matches its snapshot 1`] = `
+{
+  "headers": undefined,
+  "html": "<!doctype html><html lang="sk"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Potvrďte prihlásenie na čakaciu listinu InvestBuddy</title></head><body style="margin:0;background:#eceeeb"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eceeeb"><tr><td align="center" style="padding:24px 12px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:4px"><tr><td style="padding:28px"><h1 style="margin:0 0 20px;font:600 22px/1.3 Arial,Helvetica,sans-serif;color:#17201b">Potvrďte prihlásenie na čakaciu listinu InvestBuddy</h1><p style="margin:0 0 16px;font:16px/1.6 Arial,Helvetica,sans-serif;color:#17201b">Požiadali ste o zaradenie na čakaciu listinu InvestBuddy. Potvrďte túto adresu a prihlásenie bude hotové.</p><p style="margin:0 0 16px;font:16px/1.6 Arial,Helvetica,sans-serif;color:#17201b">Odkaz platí 7 dní. Ak ste sa neprihlásili vy, tento mail ignorujte a vašu adresu zmažeme.</p><p style="margin:0 0 20px"><a href="https://invest.example.test/en/waitlist/confirm?token=abc" style="display:inline-block;padding:12px 20px;background:#17201b;color:#ffffff;text-decoration:none;border-radius:4px;font:600 16px Arial,Helvetica,sans-serif">Potvrdiť adresu</a></p><p style="margin:0 0 8px;font:13px/1.5 Arial,Helvetica,sans-serif;color:#4a5550">Ak tlačidlo nefunguje, otvorte tento odkaz: https://invest.example.test/en/waitlist/confirm?token=abc</p><p style="margin:0 0 16px;font:16px/1.6 Arial,Helvetica,sans-serif;color:#17201b">InvestBuddy</p><hr style="border:0;border-top:1px solid #d5dad6;margin:20px 0"><p style="margin:0 0 8px;font:13px/1.5 Arial,Helvetica,sans-serif;color:#4a5550">Iba informačný prehľad podľa pravidiel. Rovnaké pravidlá pre každého návštevníka. Nejde o osobné investičné poradenstvo.</p><p style="margin:0;font:13px/1.5 Arial,Helvetica,sans-serif;color:#4a5550"><a href="https://invest.example.test/en/waitlist/unsubscribe?token=7.sig" style="color:#4a5550">Odhlásiť sa</a></p></td></tr></table></td></tr></table></body></html>",
+  "subject": "Potvrďte prihlásenie na čakaciu listinu InvestBuddy",
+  "text": "Potvrďte prihlásenie na čakaciu listinu InvestBuddy
+
+Požiadali ste o zaradenie na čakaciu listinu InvestBuddy. Potvrďte túto adresu a prihlásenie bude hotové.
+
+Odkaz platí 7 dní. Ak ste sa neprihlásili vy, tento mail ignorujte a vašu adresu zmažeme.
+
+Potvrdiť adresu: https://invest.example.test/en/waitlist/confirm?token=abc
+
+Ak tlačidlo nefunguje, otvorte tento odkaz: https://invest.example.test/en/waitlist/confirm?token=abc
+
+InvestBuddy
+
+--
+
+Iba informačný prehľad podľa pravidiel. Rovnaké pravidlá pre každého návštevníka. Nejde o osobné investičné poradenstvo.
+
+Odhlásiť sa: https://invest.example.test/en/waitlist/unsubscribe?token=7.sig",
+}
+`;
+
+exports[`mail templates (sk) > welcome matches its snapshot 1`] = `
+{
+  "headers": {
+    "List-Unsubscribe": "<https://invest.example.test/api/waitlist/unsubscribe?token=7.sig>",
+    "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+  },
+  "html": "<!doctype html><html lang="sk"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ste na čakacej listine InvestBuddy</title></head><body style="margin:0;background:#eceeeb"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eceeeb"><tr><td align="center" style="padding:24px 12px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:4px"><tr><td style="padding:28px"><h1 style="margin:0 0 20px;font:600 22px/1.3 Arial,Helvetica,sans-serif;color:#17201b">Ste na čakacej listine InvestBuddy</h1><p style="margin:0 0 16px;font:16px/1.6 Arial,Helvetica,sans-serif;color:#17201b">Vaša adresa je potvrdená. Ďakujeme, že ste sa pridali.</p><p style="margin:0 0 16px;font:16px/1.6 Arial,Helvetica,sans-serif;color:#17201b">Pošleme jeden mail, keď sa stránka otvorí verejnosti.</p><p style="margin:0 0 16px;font:16px/1.6 Arial,Helvetica,sans-serif;color:#17201b">InvestBuddy</p><hr style="border:0;border-top:1px solid #d5dad6;margin:20px 0"><p style="margin:0 0 8px;font:13px/1.5 Arial,Helvetica,sans-serif;color:#4a5550">Iba informačný prehľad podľa pravidiel. Rovnaké pravidlá pre každého návštevníka. Nejde o osobné investičné poradenstvo.</p><p style="margin:0;font:13px/1.5 Arial,Helvetica,sans-serif;color:#4a5550"><a href="https://invest.example.test/en/waitlist/unsubscribe?token=7.sig" style="color:#4a5550">Odhlásiť sa</a></p></td></tr></table></td></tr></table></body></html>",
+  "subject": "Ste na čakacej listine InvestBuddy",
+  "text": "Ste na čakacej listine InvestBuddy
+
+Vaša adresa je potvrdená. Ďakujeme, že ste sa pridali.
+
+Pošleme jeden mail, keď sa stránka otvorí verejnosti.
+
+InvestBuddy
+
+--
+
+Iba informačný prehľad podľa pravidiel. Rovnaké pravidlá pre každého návštevníka. Nejde o osobné investičné poradenstvo.
+
+Odhlásiť sa: https://invest.example.test/en/waitlist/unsubscribe?token=7.sig",
+}
+`;
+
+exports[`mail templates (sk) > welcomeWeekly matches its snapshot 1`] = `
+{
+  "headers": {
+    "List-Unsubscribe": "<https://invest.example.test/api/waitlist/unsubscribe?token=7.sig>",
+    "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+  },
+  "html": "<!doctype html><html lang="sk"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ste na čakacej listine InvestBuddy</title></head><body style="margin:0;background:#eceeeb"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eceeeb"><tr><td align="center" style="padding:24px 12px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:4px"><tr><td style="padding:28px"><h1 style="margin:0 0 20px;font:600 22px/1.3 Arial,Helvetica,sans-serif;color:#17201b">Ste na čakacej listine InvestBuddy</h1><p style="margin:0 0 16px;font:16px/1.6 Arial,Helvetica,sans-serif;color:#17201b">Vaša adresa je potvrdená. Ďakujeme, že ste sa pridali.</p><p style="margin:0 0 16px;font:16px/1.6 Arial,Helvetica,sans-serif;color:#17201b">Pošleme jeden mail, keď sa stránka otvorí verejnosti.</p><p style="margin:0 0 16px;font:16px/1.6 Arial,Helvetica,sans-serif;color:#17201b">Zároveň ste si vyžiadali bezplatný týždenný mail v slovenčine. Príde, keď bude pripravený.</p><p style="margin:0 0 16px;font:16px/1.6 Arial,Helvetica,sans-serif;color:#17201b">InvestBuddy</p><hr style="border:0;border-top:1px solid #d5dad6;margin:20px 0"><p style="margin:0 0 8px;font:13px/1.5 Arial,Helvetica,sans-serif;color:#4a5550">Iba informačný prehľad podľa pravidiel. Rovnaké pravidlá pre každého návštevníka. Nejde o osobné investičné poradenstvo.</p><p style="margin:0;font:13px/1.5 Arial,Helvetica,sans-serif;color:#4a5550"><a href="https://invest.example.test/en/waitlist/unsubscribe?token=7.sig" style="color:#4a5550">Odhlásiť sa</a></p></td></tr></table></td></tr></table></body></html>",
+  "subject": "Ste na čakacej listine InvestBuddy",
+  "text": "Ste na čakacej listine InvestBuddy
+
+Vaša adresa je potvrdená. Ďakujeme, že ste sa pridali.
+
+Pošleme jeden mail, keď sa stránka otvorí verejnosti.
+
+Zároveň ste si vyžiadali bezplatný týždenný mail v slovenčine. Príde, keď bude pripravený.
+
+InvestBuddy
+
+--
+
+Iba informačný prehľad podľa pravidiel. Rovnaké pravidlá pre každého návštevníka. Nejde o osobné investičné poradenstvo.
+
+Odhlásiť sa: https://invest.example.test/en/waitlist/unsubscribe?token=7.sig",
+}
+`;
