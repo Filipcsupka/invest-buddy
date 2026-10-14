@@ -2,6 +2,8 @@ import { expect, it } from "vitest";
 import { score } from "../engine";
 import { fixtureBars, fixtureFundamentals, fixtureMacro, instruments } from "../data/fixtures";
 import { PostgresScoreRepository } from "./postgres";
+import { RULESET_VERSION } from "../config/rules";
+import { SCORE_RULES_VERSION } from "../engine/score";
 
 const instrument = instruments[0];
 const bars = fixtureBars(instrument.ticker);
@@ -40,4 +42,31 @@ it("requires explicit real provenance even when the run ID exists", async () => 
     await repo.saveDaily(result.asOf, "scan", [{ instrument, result }]);
     expect(sql.some((statement) => statement.includes("INSERT INTO record_snapshots"))).toBe(false);
   }
+});
+
+it("writes the combined ruleset version on the snapshot and keeps the score version in rules_version (EN11)", async () => {
+  const calls: { sql: string; params: unknown[] }[] = [];
+  const client = { query: async (statement: string, params?: unknown[]) => {
+    calls.push({ sql: statement, params: params ?? [] });
+    if (statement.includes("FROM scan_runs")) return { rows: [{ found: 1, all_real: true }] };
+    if (statement.includes("count(*)::text AS count")) return { rows: [{ count: "0" }] };
+    return { rows: [], rowCount: 1 };
+  }, release() {} };
+  await new PostgresScoreRepository({ connect: async () => client } as never).saveDaily(result.asOf, "scan", [{ instrument, result }]);
+  const snapshot = calls.find((c) => c.sql.includes("INSERT INTO record_snapshots"))!;
+  expect(snapshot.params.at(-1)).toBe(RULESET_VERSION);
+  expect(snapshot.params).toContain(SCORE_RULES_VERSION);
+  expect(RULESET_VERSION).not.toBe(SCORE_RULES_VERSION);
+});
+
+it("keeps the ruleset version out of the daily fingerprint", async () => {
+  const calls: unknown[][] = [];
+  const client = { query: async (statement: string, params?: unknown[]) => {
+    if (statement.includes("INSERT INTO score_results")) calls.push(params ?? []);
+    if (statement.includes("count(*)::text AS count")) return { rows: [{ count: "0" }] };
+    return { rows: [], rowCount: 1 };
+  }, release() {} };
+  await new PostgresScoreRepository({ connect: async () => client } as never).saveDaily(result.asOf, "fixture", [{ instrument, result, fingerprint: "fp" }]);
+  expect(calls[0]).toContain("fp");
+  expect(calls[0].some((v) => typeof v === "string" && v.includes(RULESET_VERSION))).toBe(false);
 });

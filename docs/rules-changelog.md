@@ -2,7 +2,7 @@
 
 The score rules version (`SCORE_RULES_VERSION` in `src/engine/score.ts`), the signal rules version (`SIGNAL_RULES.version` in `src/engine/signals.ts`) and the combined `RULESET_VERSION` (`src/config/rules.ts`) are listed here. Entries come from the commit history of those two constants. `src/config/rules.test.ts` fails when a rule value changes without a new version and a new entry.
 
-`RULESET_VERSION` is `<score version>+<signal version>`. It is not stored yet. `record_snapshots.rules_version` and `score_input_snapshots.rules_version` still hold the score version, `trade_ideas.rule_config_version` holds the signal version, and the daily fingerprint in `src/jobs/daily.ts` uses the score version. Storing the combined string would change fingerprints, so it needs its own change.
+`RULESET_VERSION` is `<score version>+<signal version>`. New rows in `record_snapshots` and `trade_ideas` carry it in `ruleset_version` (migration 085, nullable, no backfill, not shown publicly). `record_snapshots.rules_version` and `score_input_snapshots.rules_version` still hold the score version, `trade_ideas.rule_config_version` holds the signal version, and the daily fingerprint in `src/jobs/daily.ts` and `ideaSignature` do not use the combined string.
 
 ## Current
 

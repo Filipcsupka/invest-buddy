@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { hasOkJudge, ideaSchema, ideaSignature, ideasPostSchema, listIdeas, recordJudge, mapIdea } from "./ideas";
 import { sampleIdeas } from "../ideas/fixtures";
+import { RULESET_VERSION } from "../config/rules";
 
 const hash = "c".repeat(64);
 const base = { symbol: "NVDA", action: "ADD", sizeTier: "ADD_THIRD", amountMinEur: 60, amountMaxEur: 90, verdict: "v", whatHappened: ["a", "b"], whyItMatters: ["c"], setup: { company: "Strong", entry: "Good", catalyst: "Neutral" }, numbers: [{ label: "a", value: "1" }, { label: "b", value: "2" }, { label: "c", value: "3" }], plan: { amountNow: "EUR 60-90", trigger: "t", invalidation: "i", opportunityCost: "o" }, evidence: [{ url: "https://sec.gov/x", label: "x" }], unconfirmed: false };
@@ -68,9 +69,9 @@ describe("judge storage", () => {
     expect(insert.sql).toContain("ON CONFLICT (as_of,symbol,input_hash) DO NOTHING");
     expect(insert.params).toContain("ADD|Strong|Good|Neutral|ADD_THIRD");
     expect(insert.sql).toContain("size_tier");
-    expect(insert.params.at(-3)).toBe("ADD_THIRD");
-    expect(insert.params.at(-2)).toBe(run.runId);
-    expect(insert.params.at(-1)).toBeNull();
+    expect(insert.params.at(-4)).toBe("ADD_THIRD");
+    expect(insert.params.at(-3)).toBe(run.runId);
+    expect(insert.params.at(-2)).toBeNull();
     expect(insert.params).toContain("2026-09-20");
     expect(p.calls[1].sql).toContain("pg_advisory_xact_lock");
     expect(p.calls[3].sql).toContain("INSERT INTO record_signals");
@@ -103,6 +104,32 @@ describe("judge storage", () => {
     expect(list[0]).toMatchObject({ id: 7, sizeTier: "ADD_THIRD", amountMinEur: 60, amountMaxEur: 90, evidence: base.evidence });
     expect(mapIdea({ ...row, size_tier: null } as never).sizeTier).toBeNull();
     expect(mapIdea(row as never).createdAt).toBe("2026-10-05T18:00:00.000Z");
+  });
+});
+
+describe("ruleset version on stored ideas (EN11)", () => {
+  it("writes RULESET_VERSION at insert and leaves the signature and payload schema alone", async () => {
+    const p = fakePool(1);
+    await recordJudge(p as never, ideasPostSchema.parse({ run, ideas: [stored] }));
+    const insert = p.calls.find((c) => c.sql.includes("INSERT INTO trade_ideas"))!;
+    expect(insert.sql).toContain("ruleset_version");
+    expect(insert.params.at(-1)).toBe(RULESET_VERSION);
+    expect(insert.params).toContain(stored.signature);
+    expect(ideaSignature({ ...base, ruleConfigVersion: "x" } as never)).toBe(ideaSignature(base as never));
+    expect(ideasPostSchema.safeParse({ run, ideas: [{ ...stored, rulesetVersion: "x" }] }).success).toBe(false);
+  });
+  it.skipIf(!process.env.TEST_DATABASE_URL)("stores ruleset_version in Postgres and lists nothing of it", async () => {
+    const pg = (await import("pg")).default;
+    const pool = new pg.Pool({ connectionString: process.env.TEST_DATABASE_URL });
+    const symbol = "RSVTEST";
+    const inputHash = "d".repeat(64);
+    const clean = async () => { await pool.query("DELETE FROM trade_ideas WHERE symbol=$1", [symbol]); await pool.query("DELETE FROM judge_runs WHERE input_hash=$1", [inputHash]); };
+    try {
+      await clean();
+      await recordJudge(pool, ideasPostSchema.parse({ run: { ...run, inputHash }, ideas: [{ ...stored, symbol, evidence: [] }] }));
+      expect((await pool.query("SELECT ruleset_version FROM trade_ideas WHERE symbol=$1", [symbol])).rows[0]).toEqual({ ruleset_version: RULESET_VERSION });
+      expect(Object.keys((await listIdeas(pool, 500)).find((i) => i.symbol === symbol)!)).not.toContain("rulesetVersion");
+    } finally { await clean(); await pool.end(); }
   });
 });
 
