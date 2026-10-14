@@ -5,6 +5,7 @@ import { ThemeToggle } from "./theme-toggle";
 import { latestScores } from "@/data/store";
 import { ideasEnabled } from "@/data/ideas-store";
 import { flags } from "@/config/flags";
+import { getLegalMessages } from "@/i18n/legal-messages";
 import { getLaunchMessages } from "@/i18n/launch-messages";
 
 export function BrandMark() {
@@ -65,7 +66,9 @@ export async function Footer({ locale }: { locale: Locale }) {
           <Link href={`/${locale}/methodology`}>{m.footer.methodology}</Link>
           <Link href={`/${locale}/legal/privacy`}>{m.footer.privacy}</Link>
           <Link href={`/${locale}/legal/terms`}>{m.footer.terms}</Link>
+          <Link href={`/${locale}/legal/disclaimer`}>{m.footer.disclaimer}</Link>
         </nav>
+        <p className="disclaimer footer-disclaimer">{getLegalMessages(locale).short}</p>
       </div>
     </footer>
   );

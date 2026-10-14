@@ -1,0 +1,165 @@
+import type { Locale } from "./index";
+
+/**
+ * Copy for the legal pages: disclaimer, privacy notice and terms of use.
+ * The operator's name, address, contact and company id come from
+ * src/config/operator.ts and are placeholders until the owner fills them in.
+ * Slovak text needs the native review in W23. A lawyer has not seen any of it.
+ */
+const en = {
+  operator: {
+    title: "Who runs this site",
+    name: "Operator",
+    address: "Address",
+    contactEmail: "Contact email",
+    companyId: "Company id",
+    todo: "Owner to fill in before public launch. These details are placeholders.",
+  },
+  common: {
+    draft: "Draft",
+    updated: "Last updated: {date}",
+    contactLead: "Questions, access or deletion requests: write to",
+    disclaimerLink: "Read the full disclaimer",
+  },
+  short: "Informational screening only. Not financial advice, no recommendation, no offer. Past results do not predict future results. You decide and you bear the risk. Data may be incomplete or delayed.",
+  disclaimer: {
+    title: "Disclaimer",
+    lede: "InvestBuddy shows scores from published rules. It is a screening tool, and it is not a financial adviser.",
+    s1Title: "Informational screening only",
+    s1: "Everything on this site is general information. A score, a state or a list shows how a company fits a set of written rules on the day it was computed. It does not look at your situation.",
+    s2Title: "Not financial advice",
+    s2: "Nothing here is financial, investment, tax or legal advice, and nothing is a personal recommendation. We do not know your goals, income, savings or risk tolerance.",
+    s3Title: "No recommendation and no offer",
+    s3: "No page, score, alert or mail is a recommendation to hold, sell or trade any security, and none is an offer or a solicitation of any kind.",
+    s4Title: "Past results do not predict future results",
+    s4: "A company that met the rules before may not meet them tomorrow. The track record page shows earlier signals with their outcomes, and those outcomes say nothing certain about what comes next.",
+    s5Title: "You decide and you bear the risk",
+    s5: "Any decision you make is yours. Investing can lose part or all of the money put in. Talk to a licensed adviser if you need advice for your own situation.",
+    s6Title: "Data may be incomplete or delayed",
+    s6: "Prices, filings and other inputs come from third parties and from our own collection. They can be late, wrong or missing, and a score built on them can be wrong too. Check important figures at the original source.",
+  },
+  privacy: {
+    title: "Privacy notice",
+    lede: "This page says what personal data the site handles, why, for how long, and how to reach us.",
+    s1Title: "Who is responsible",
+    s1: "The operator listed below decides why and how personal data is handled on this site.",
+    s2Title: "Server logs",
+    s2: "When you open a page, the server and the hosting software record the request: time, page address, response code, and technical details your browser sends, which can include your IP address. We use this to run the site, find faults and block abuse. We do not use it to build profiles of visitors.",
+    s3Title: "Cookies and browser storage",
+    s3: "The site sets no tracking or advertising cookies. If you use the language switch, one cookie remembers your language. Your colour theme choice is kept in your browser's local storage. Both stay on your device and hold no personal data.",
+    s4Title: "Analytics",
+    s4: "Analytics are off by default. If we turn them on, we use a tool that sets no cookies and does not follow you across sites, and it respects the Do Not Track and Global Privacy Control signals from your browser. This page will say so when it happens.",
+    s5Title: "Waitlist email",
+    s5: "If the waitlist is open and you join it, we store your email address, your language, the page you signed up from, the time you agreed and which consent wording you saw. We send a confirmation mail first and use the address only for what you ticked: one mail when the site opens and, if you chose it, the weekly mail. An address that is not confirmed is deleted after 14 days. A confirmed address is kept until you unsubscribe.",
+    s6Title: "After you unsubscribe",
+    s6: "When you unsubscribe, we keep the address on a suppression list, marked as unsubscribed. We do this so that nobody can add it again and mail you by mistake. The list is used for nothing else.",
+    s7Title: "Who else sees the data",
+    s7: "Service providers that host the site and send our mail process data for us under our instructions. We do not sell personal data and we do not pass it on for advertising.",
+    s8Title: "Your rights",
+    s8: "You can ask us for a copy of your data, ask us to correct or delete it, ask us to limit its use, or object to it. You can also complain to the data protection authority in your country. To have your waitlist address deleted, including from the suppression list, write to the contact address below.",
+  },
+  terms: {
+    title: "Terms of use",
+    lede: "These are the rules for using the site. By using it, you accept them.",
+    s1Title: "What the site is",
+    s1: "InvestBuddy is an informational screening site. It shows scores, rules, data and a record of earlier signals. Read the disclaimer page too, it is part of these terms.",
+    s2Title: "Use at your own risk",
+    s2: "You use the site and its content at your own risk. We do not promise that it is complete, current or free of errors, or that it is suited to your purpose.",
+    s3Title: "No advice",
+    s3: "Content is not advice and not a recommendation. See the disclaimer.",
+    s4Title: "Beta",
+    s4: "The site is in beta. Features, scores and pages can change or go away without notice. It is free to use while in beta. Paid plans may come later, and any price will be shown before you pay.",
+    s5Title: "Acceptable use",
+    s5: "Do not attack the site, overload it, scrape it at a rate that harms it, or try to get at data that is not public. We can block access if you do.",
+    s6Title: "Content and rights",
+    s6: "The site's design, text and code belong to the operator or its licensors. You may read, quote short parts with a link back, and keep a copy for your own use. Copying the whole site or reselling its content needs our written permission. Third-party data stays under its owners' terms.",
+    s7Title: "Liability",
+    s7: "To the extent the law allows, we are not liable for losses that come from using the site or relying on its content. This does not limit liability that the law does not allow us to limit.",
+    s8Title: "Changes and law",
+    s8: "We may change these terms and the new text applies from the date shown on this page. Slovak law applies, subject to any mandatory consumer rules of your own country. TODO for the owner: confirm the governing law and courts with a lawyer.",
+  },
+};
+
+export type LegalMessages = typeof en;
+
+const sk: LegalMessages = {
+  operator: {
+    title: "Kto web prevádzkuje",
+    name: "Prevádzkovateľ",
+    address: "Adresa",
+    contactEmail: "Kontaktný e-mail",
+    companyId: "IČO",
+    todo: "Majiteľ doplní pred verejným spustením. Tieto údaje sú zástupné.",
+  },
+  common: {
+    draft: "Návrh",
+    updated: "Posledná aktualizácia: {date}",
+    contactLead: "Otázky, žiadosti o prístup alebo vymazanie: píšte na",
+    disclaimerLink: "Prečítať celé upozornenie",
+  },
+  short: "Iba informačný prehľad. Nie je to finančné poradenstvo, odporúčanie ani ponuka. Minulé výsledky nepredpovedajú budúce. Rozhodujete vy a riziko znášate vy. Údaje môžu byť neúplné alebo oneskorené.",
+  disclaimer: {
+    title: "Upozornenie",
+    lede: "InvestBuddy ukazuje skóre podľa zverejnených pravidiel. Je to nástroj na prehľad, nie finančný poradca.",
+    s1Title: "Iba informačný prehľad",
+    s1: "Všetko na tomto webe sú všeobecné informácie. Skóre, stav alebo zoznam ukazuje, ako firma zodpovedá súboru písaných pravidiel v deň, keď sa vypočítalo. Vašu situáciu nezohľadňuje.",
+    s2Title: "Nie je to finančné poradenstvo",
+    s2: "Nič tu nie je finančné, investičné, daňové ani právne poradenstvo a nič nie je osobné odporúčanie. Nepoznáme vaše ciele, príjem, úspory ani toleranciu rizika.",
+    s3Title: "Žiadne odporúčanie ani ponuka",
+    s3: "Žiadna stránka, skóre, upozornenie ani e-mail nie je odporúčaním držať, predať či obchodovať s cenným papierom a nie je ani ponukou či výzvou na uzavretie obchodu.",
+    s4Title: "Minulé výsledky nepredpovedajú budúce",
+    s4: "Firma, ktorá pravidlá splnila v minulosti, ich zajtra splniť nemusí. Stránka so záznamom ukazuje skoršie signály s ich výsledkami a tie nehovoria nič isté o tom, čo príde.",
+    s5Title: "Rozhodujete vy a riziko znášate vy",
+    s5: "Každé rozhodnutie je vaše. Investovanie môže znamenať stratu časti alebo celej vloženej sumy. Ak potrebujete radu pre vlastnú situáciu, obráťte sa na licencovaného poradcu.",
+    s6Title: "Údaje môžu byť neúplné alebo oneskorené",
+    s6: "Ceny, podania a ďalšie vstupy pochádzajú od tretích strán a z nášho vlastného zberu. Môžu meškať, byť chybné alebo chýbať a skóre z nich môže byť tiež chybné. Dôležité čísla si overte v pôvodnom zdroji.",
+  },
+  privacy: {
+    title: "Zásady ochrany súkromia",
+    lede: "Táto stránka hovorí, aké osobné údaje web spracúva, prečo, ako dlho a ako nás zastihnete.",
+    s1Title: "Kto zodpovedá za údaje",
+    s1: "O tom, prečo a ako sa osobné údaje na tomto webe spracúvajú, rozhoduje prevádzkovateľ uvedený nižšie.",
+    s2Title: "Záznamy servera",
+    s2: "Keď otvoríte stránku, server a hostingový softvér zaznamenajú požiadavku: čas, adresu stránky, kód odpovede a technické údaje, ktoré posiela váš prehliadač, medzi ktoré môže patriť aj IP adresa. Používame to na prevádzku webu, hľadanie chýb a zabránenie zneužitiu. Nevytvárame z toho profily návštevníkov.",
+    s3Title: "Cookies a úložisko v prehliadači",
+    s3: "Web nenastavuje sledovacie ani reklamné cookies. Ak použijete prepínač jazyka, jedna cookie si zapamätá váš jazyk. Voľba farebného motívu sa ukladá v lokálnom úložisku prehliadača. Oboje zostáva na vašom zariadení a neobsahuje osobné údaje.",
+    s4Title: "Analytika",
+    s4: "Analytika je predvolene vypnutá. Ak ju zapneme, použijeme nástroj, ktorý nenastavuje cookies, nesleduje vás naprieč webmi a rešpektuje signály Do Not Track a Global Privacy Control z vášho prehliadača. Táto stránka to uvedie, keď sa to stane.",
+    s5Title: "E-mail z čakacej listiny",
+    s5: "Ak je čakacia listina otvorená a pridáte sa, uložíme vašu e-mailovú adresu, jazyk, stránku, z ktorej ste sa prihlásili, čas súhlasu a znenie súhlasu, ktoré ste videli. Najprv pošleme potvrdzovací e-mail a adresu používame len na to, čo ste zaškrtli: jeden e-mail pri otvorení webu a, ak ste si ho vybrali, týždenný e-mail. Nepotvrdená adresa sa po 14 dňoch zmaže. Potvrdená adresa sa uchováva, kým sa neodhlásite.",
+    s6Title: "Po odhlásení",
+    s6: "Keď sa odhlásite, adresu ponecháme v zozname vylúčených, označenú ako odhlásenú. Robíme to preto, aby ju nikto nemohol pridať znova a omylom vám písať. Zoznam sa nepoužíva na nič iné.",
+    s7Title: "Kto ďalší údaje vidí",
+    s7: "Poskytovatelia služieb, ktorí web hostujú a posielajú našu poštu, spracúvajú údaje pre nás podľa našich pokynov. Osobné údaje nepredávame a neposkytujeme ich na reklamu.",
+    s8Title: "Vaše práva",
+    s8: "Môžete nás požiadať o kópiu svojich údajov, o ich opravu alebo vymazanie, o obmedzenie ich používania, alebo proti nim namietať. Sťažnosť môžete podať aj na úrade na ochranu osobných údajov vo svojej krajine. Ak chcete vymazať svoju adresu z čakacej listiny, aj zo zoznamu vylúčených, napíšte na kontakt nižšie.",
+  },
+  terms: {
+    title: "Podmienky používania",
+    lede: "Toto sú pravidlá používania webu. Používaním ich prijímate.",
+    s1Title: "Čo je tento web",
+    s1: "InvestBuddy je informačný web na prehľad firiem. Ukazuje skóre, pravidlá, údaje a záznam skorších signálov. Prečítajte si aj stránku s upozornením, je súčasťou týchto podmienok.",
+    s2Title: "Používanie na vlastné riziko",
+    s2: "Web a jeho obsah používate na vlastné riziko. Nesľubujeme, že je úplný, aktuálny alebo bez chýb, ani že sa hodí na váš účel.",
+    s3Title: "Nie je to poradenstvo",
+    s3: "Obsah nie je poradenstvo ani odporúčanie. Pozrite si upozornenie.",
+    s4Title: "Beta",
+    s4: "Web je v beta prevádzke. Funkcie, skóre a stránky sa môžu zmeniť alebo zaniknúť bez upozornenia. Počas bety je používanie zadarmo. Platené plány môžu prísť neskôr a cenu uvidíte skôr, než zaplatíte.",
+    s5Title: "Prijateľné používanie",
+    s5: "Web nenapádajte, nepreťažujte ho, nesťahujte ho tempom, ktoré mu škodí, ani sa nepokúšajte získať údaje, ktoré nie sú verejné. Ak to urobíte, môžeme vám prístup zablokovať.",
+    s6Title: "Obsah a práva",
+    s6: "Dizajn, texty a kód webu patria prevádzkovateľovi alebo jeho poskytovateľom licencií. Môžete čítať, citovať krátke časti s odkazom späť a uložiť si kópiu pre vlastnú potrebu. Kopírovanie celého webu alebo predaj jeho obsahu vyžaduje náš písomný súhlas. Údaje tretích strán zostávajú pod podmienkami ich vlastníkov.",
+    s7Title: "Zodpovednosť",
+    s7: "V rozsahu, ktorý zákon dovoľuje, nezodpovedáme za straty, ktoré vzniknú používaním webu alebo spoliehaním sa na jeho obsah. Toto neobmedzuje zodpovednosť, ktorú zákon obmedziť nedovoľuje.",
+    s8Title: "Zmeny a právo",
+    s8: "Tieto podmienky môžeme zmeniť a nové znenie platí od dátumu uvedeného na tejto stránke. Uplatňuje sa slovenské právo, s výhradou záväzných spotrebiteľských pravidiel vašej krajiny. TODO pre majiteľa: rozhodné právo a súdy potvrďte s právnikom.",
+  },
+};
+
+const catalog: Record<Locale, LegalMessages> = { en, sk };
+
+export function getLegalMessages(locale: Locale): LegalMessages {
+  return catalog[locale];
+}
+
+export const LEGAL_SECTION_KEYS = ["s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8"] as const;

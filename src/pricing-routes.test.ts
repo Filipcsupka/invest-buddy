@@ -22,3 +22,10 @@ it("lists pricing in the sitemap in both locales only while WAITLIST is on", asy
   const urls = (await sitemap()).map((e) => e.url).filter((u) => u.endsWith("/pricing"));
   expect(urls.sort()).toEqual([expect.stringMatching(/\/en\/pricing$/), expect.stringMatching(/\/sk\/pricing$/)]);
 });
+
+it("lists the privacy, terms and disclaimer pages in both locales regardless of flags", async () => {
+  const urls = (await sitemap()).map((e) => e.url);
+  for (const doc of ["privacy", "terms", "disclaimer"]) {
+    for (const locale of ["en", "sk"]) expect(urls.some((u) => u.endsWith(`/${locale}/legal/${doc}`))).toBe(true);
+  }
+});
