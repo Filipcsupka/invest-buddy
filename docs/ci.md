@@ -17,6 +17,8 @@ GitHub Actions minutes are limited (free allowance used up, capped budget; owner
 Notes:
 - `docs/design` is not skipped because `src/i18n/status-copy.test.ts` reads `docs/design/status-slider.md`.
 - The repository is private on the free plan, so branch protection and required checks are not available (GitHub returns 403). A skipped workflow therefore cannot block a merge. If branch protection is enabled later, a required check from a skipped workflow stays pending; use a path-aware summary job or do not require it.
+- Migration lint (`scripts/migration-lint.ts`) checks only the migration files a PR adds. It fails on a duplicate number, a bad name, DROP TABLE or COLUMN, TRUNCATE, ALTER COLUMN TYPE, `CREATE INDEX CONCURRENTLY` and `CREATE INDEX` without `IF NOT EXISTS`. Gaps and out-of-order numbers are allowed because lanes reserve number ranges.
+- `npm run migration:lint -- --all` reports 47 old `index-if-not-exists` problems by design: those files predate the rule and CI lints only changed files.
 - PR runs cancel earlier runs of the same PR (`cancel-in-progress`).
 - A failed nightly scan is a red run of the Security workflow. It does not block `deploy-gitops`, which lives in Build.
 
