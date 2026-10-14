@@ -18,6 +18,7 @@ resources:
   - master-refresh-cronjob.yaml
   - outcomes-cronjob.yaml
   - weekly-cronjob.yaml
+  - watchdog-cronjob.yaml
   - backup-cronjob.yaml
   - research-cronjobs.yaml
   - research-verify-networkpolicy.yaml

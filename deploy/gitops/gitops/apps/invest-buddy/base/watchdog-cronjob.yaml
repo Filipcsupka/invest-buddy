@@ -1,0 +1,133 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: invest-buddy-watchdog
+  namespace: invest
+spec:
+  # PL27: reads job_runs and sends an alert for a missed job, stale data, a full volume, an expiring certificate or an AI ceiling stop. Weekday run. Enable after owner approval, the Telegram secret and migrations 080 and 081.
+  suspend: true
+  schedule: "45 7 * * 1-5"
+  timeZone: Europe/Bratislava
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 300
+      template:
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          nodeSelector:
+            kubernetes.io/hostname: k8s-worker-01
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: watchdog
+              image: ghcr.io/filipcsupka/invest-buddy:latest
+              command: ["node", "dist/jobs/watchdog.js"]
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-secrets
+                      key: DATABASE_URL
+                - name: PG_PVC_BYTES
+                  value: "5368709120"
+                - name: WATCHDOG_TLS_HOSTS
+                  value: invest.filipcsupka.online:443
+                - name: TELEGRAM_BOT_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-telegram
+                      key: TELEGRAM_BOT_TOKEN
+                - name: TELEGRAM_CHAT_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-telegram
+                      key: TELEGRAM_CHAT_ID
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 128Mi
+                limits:
+                  cpu: 300m
+                  memory: 384Mi
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: invest-buddy-watchdog-noon
+  namespace: invest
+spec:
+  # PL27: second daily run at noon, also covers Saturday jobs. Same job, same duplicate suppression. Enable together with invest-buddy-watchdog.
+  suspend: true
+  schedule: "0 12 * * *"
+  timeZone: Europe/Bratislava
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 300
+      template:
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          nodeSelector:
+            kubernetes.io/hostname: k8s-worker-01
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: watchdog
+              image: ghcr.io/filipcsupka/invest-buddy:latest
+              command: ["node", "dist/jobs/watchdog.js"]
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-secrets
+                      key: DATABASE_URL
+                - name: PG_PVC_BYTES
+                  value: "5368709120"
+                - name: WATCHDOG_TLS_HOSTS
+                  value: invest.filipcsupka.online:443
+                - name: TELEGRAM_BOT_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-telegram
+                      key: TELEGRAM_BOT_TOKEN
+                - name: TELEGRAM_CHAT_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-telegram
+                      key: TELEGRAM_CHAT_ID
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 128Mi
+                limits:
+                  cpu: 300m
+                  memory: 384Mi
