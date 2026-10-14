@@ -1,4 +1,5 @@
 import type { Technicals } from "../data/technicals";
+import { CONFIRMED_FUNDAMENTAL_AGREEMENTS } from "./agreements";
 import { meetsGuidePoints, POINTS_MAX } from "./relative";
 
 /**
@@ -28,7 +29,7 @@ import { meetsGuidePoints, POINTS_MAX } from "./relative";
  * The value stays in ACTIONS so older stored ideas still parse.
  */
 export const SIGNAL_RULES = {
-  version: "2026-10-11.1",
+  version: "2026-10-14.1",
   actionsOrder: ["HIGH_CONVICTION_ADD", "ADD", "START_POSITION"],
   /** InvestingGuide s6 and s8: START_POSITION needs 18; a score of 15 to 17 can qualify for ADD. */
   minScoreForBuy: 18,
@@ -119,10 +120,10 @@ const rate = (points: number, thresholds: Record<string, number>): SignalRating 
 };
 const cap = (r: SignalRating, max: SignalRating): SignalRating => (atLeast(r, max) ? max : r);
 
-/** A field counts only when two agents agreed or SEC data confirmed it, the quote was verified, and it has not expired. Returns its value, or null when it does not count. */
+/** A field counts only when its agreement is in CONFIRMED_FUNDAMENTAL_AGREEMENTS (the same list the score inputs use), the quote was verified, and it has not expired. Returns its value, or null when it does not count. */
 export function confirmed(input: SignalSymbolInput, name: string): boolean | null {
   const f = input.fields[name];
-  if (!f || f.value === null || !f.verified || !(f.agreement === "agree" || f.agreement === "xbrl_override") || input.expiredFields.includes(name)) return null;
+  if (!f || f.value === null || !f.verified || !CONFIRMED_FUNDAMENTAL_AGREEMENTS.includes(f.agreement) || input.expiredFields.includes(name)) return null;
   return f.value;
 }
 

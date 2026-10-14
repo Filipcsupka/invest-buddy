@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { computeSignals, ratings, SIGNAL_RULES, SIZE_TIERS, TIERS_FOR_ACTION, tierFits, type SignalField, type SignalPortfolio, type SignalSymbolInput } from "./signals";
+import { computeSignals, confirmed, ratings, SIGNAL_RULES, SIZE_TIERS, TIERS_FOR_ACTION, tierFits, type SignalField, type SignalPortfolio, type SignalSymbolInput } from "./signals";
 import type { Technicals } from "../data/technicals";
+import { CONFIRMED_FUNDAMENTAL_AGREEMENTS } from "./agreements";
+import { CONFIRMED_FUNDAMENTAL_AGREEMENTS as PROVIDER_AGREEMENTS } from "../data/db-provider";
 
 const tech = (over: Partial<Technicals> = {}): Technicals => ({ date: "2026-10-05", close: 100, return1dPercent: 0.5, return5dPercent: -3, return20dPercent: 2, return60dPercent: 8, vsMa20Percent: -2, vsMa50Percent: 4, vsMa200Percent: 15, belowHigh20Percent: 7, belowHigh52wPercent: 8, aboveLow52wPercent: 60, rangePosition52w: 85, rsi14: 48, avgVolume20: 1e6, volumeRatio: 1, atrPercent14: 2.5, relativeStrength20: 1.5, relativeStrength60: 3, regime: "pullback", ...over });
 const f = (value: boolean | null, over: Partial<SignalField> = {}): SignalField => ({ value, agreement: "agree", verified: true, carriedFrom: null, ...over });
@@ -26,6 +28,17 @@ describe("ratings", () => {
     expect(ratings(sym("A", { fields: { revenueAccelerating: f(true, { agreement: "disputed" }) } })).ratings.company).toBe("Neutral");
     expect(ratings(sym("A", { fields: { revenueAccelerating: f(true, { verified: false }) } })).points.company).toBe(0);
     expect(ratings(sym("A", { fields: { guidanceCut: f(true) } })).ratings.company).toBe("Weak");
+  });
+  it("counts the same agreements as the score inputs (EN4)", () => {
+    expect([...PROVIDER_AGREEMENTS]).toEqual([...CONFIRMED_FUNDAMENTAL_AGREEMENTS]);
+    for (const agreement of CONFIRMED_FUNDAMENTAL_AGREEMENTS) expect(confirmed(sym("A", { fields: { productCatalyst: f(true, { agreement }) } }), "productCatalyst"), agreement).toBe(true);
+    for (const agreement of ["single", "disputed", "none"]) expect(confirmed(sym("A", { fields: { productCatalyst: f(true, { agreement }) } }), "productCatalyst"), agreement).toBeNull();
+  });
+  it("a verified_single or data_rule field raises the points; a single row does not", () => {
+    const only = (agreement: string) => ratings(sym("A", { fields: { productCatalyst: f(true, { agreement }), epsBeat: f(true, { agreement }) } })).points.catalyst;
+    expect(only("verified_single")).toBe(4);
+    expect(only("data_rule")).toBe(4);
+    expect(only("single")).toBe(0);
   });
   it("carried data caps the company rating at Good and weakens the catalyst", () => {
     const carried = sym("A", { fields: { ...sym("A").fields, productCatalyst: f(true, { carriedFrom: "2026-09-20" }), epsBeat: f(true, { carriedFrom: "2026-09-20" }) } });

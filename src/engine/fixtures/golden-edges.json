@@ -1,7 +1,7 @@
 {
  "description": "Built by hand: six names at score 15 to 17 and one at 18 for threshold edges.",
  "asOf": "2026-10-08",
- "signalRulesVersion": "2026-10-11.1",
+ "signalRulesVersion": "2026-10-14.1",
  "scoreRulesVersion": "2026-10-11.2",
  "symbols": [
   {
