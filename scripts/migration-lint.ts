@@ -50,12 +50,10 @@ function statements(sql: string): Statement[] {
 
 /**
  * Checks migration files. `added` are the files to lint; `baseNames` are the migration names already on the base branch.
- * Numbers must be unique and above the highest base number. Gaps are allowed: lanes reserve number ranges.
+ * Numbers must be unique. Gaps and out-of-order numbers are allowed: lanes reserve number ranges.
  */
 export function lintMigrations(added: LintFile[], baseNames: string[] = []): LintIssue[] {
   const issues: LintIssue[] = [];
-  const baseNumbers = baseNames.map((name) => NAME.exec(name)?.[1]).filter((n): n is string => !!n).map(Number);
-  const maxBase = baseNumbers.length ? Math.max(...baseNumbers) : 0;
   const seen = new Map<string, string>(baseNames.flatMap((name) => { const n = NAME.exec(name)?.[1]; return n ? [[n, name] as [string, string]] : []; }));
   for (const file of [...added].sort((a, b) => a.name.localeCompare(b.name))) {
     const match = NAME.exec(file.name);
@@ -65,9 +63,6 @@ export function lintMigrations(added: LintFile[], baseNames: string[] = []): Lin
       const other = seen.get(match[1]);
       if (other && other !== file.name) issues.push({ file: file.name, line: null, rule: "duplicate-number", message: `number ${match[1]} is already used by ${other}` });
       else if (other === file.name && !baseNames.includes(file.name)) issues.push({ file: file.name, line: null, rule: "duplicate-number", message: `number ${match[1]} is used twice` });
-      else if (!baseNames.includes(file.name) && Number(match[1]) <= maxBase && !/^--\s*lint:allow-order\s+\S/m.test(file.content)) {
-        issues.push({ file: file.name, line: null, rule: "number-order", message: `number ${match[1]} is not above the highest number on the base branch (${String(maxBase).padStart(3, "0")}); add "-- lint:allow-order <reason>" if intended` });
-      }
       seen.set(match[1], file.name);
     }
     for (const statement of statements(file.content)) {

@@ -2,31 +2,30 @@ import tls from "node:tls";
 import type pg from "pg";
 import { sendAlert, type AlertNotifier } from "../notify/notifier";
 import type { AlertStateStore } from "./alert-state";
-import { aiCeilingStops, databaseSize, expiringCertificates, missedJobs, staleHealth, type CertResult, type Finding, type LastGoodRuns } from "./watchdog-rules";
+import { databaseSize, expiringCertificates, missedJobs, staleHealth, type CertResult, type Finding, type KnownJobs, type LastGoodRuns } from "./watchdog-rules";
 
 export interface WatchdogInput {
   now: Date;
   lastGood: LastGoodRuns;
+  knownJobs: KnownJobs;
   health: { lastScoreDate: string | null; lastScanAsOf: string | null };
   dbSizeBytes: number;
   volumeBytes: number;
   certs: CertResult[];
-  aiCeiling: { job: string; startedAt: Date }[];
 }
 
 export function evaluate(input: WatchdogInput): Finding[] {
   return [
-    ...missedJobs(input.now, input.lastGood),
+    ...missedJobs(input.now, input.lastGood, input.knownJobs),
     ...staleHealth(input.now, input.health),
     ...databaseSize(input.dbSizeBytes, input.volumeBytes),
     ...expiringCertificates(input.now, input.certs),
-    ...aiCeilingStops(input.aiCeiling),
   ];
 }
 
 export interface WatchdogResult { findings: number; sent: number; suppressed: number; failures: number }
 
-/** Sends each finding once per 24 hours. A failed send releases its claim, so the next run tries again. */
+/** Sends each finding at most once per 23 hours (a daily run must not skip a day because the previous run was a few minutes later). A failed send releases its claim, so the next run tries again. */
 export async function deliver(findings: Finding[], notifier: AlertNotifier, state: AlertStateStore, now: Date, log?: (line: string) => void): Promise<WatchdogResult> {
   const result: WatchdogResult = { findings: findings.length, sent: 0, suppressed: 0, failures: 0 };
   for (const finding of findings) {
@@ -54,15 +53,15 @@ export function readCertificate(hostPort: string, timeoutMs = 10_000): Promise<C
 }
 
 /** Reads what the rules need from Postgres. The health dates use the same queries as /api/health. */
-export async function readDatabase(pool: Pick<pg.Pool, "query">, now: Date) {
+export async function readDatabase(pool: Pick<pg.Pool, "query">) {
   const good = await pool.query<{ job: string; last: Date }>("SELECT job, max(started_at) AS last FROM job_runs WHERE status IN ('ok', 'partial') GROUP BY job");
   const health = await pool.query<{ scan: string | null; score: string | null }>("SELECT (SELECT max(as_of)::text FROM scan_runs) scan, (SELECT max(as_of)::text FROM score_results) score");
   const size = await pool.query<{ bytes: string }>("SELECT pg_database_size(current_database())::text AS bytes");
-  const ceiling = await pool.query<{ job: string; started_at: Date }>("SELECT DISTINCT ON (job) job, started_at FROM job_runs WHERE started_at > $1::timestamptz - interval '24 hours' AND counts->>'exitCode' = '5' ORDER BY job, started_at DESC", [now]);
+  const known = await pool.query<{ job: string }>("SELECT DISTINCT job FROM job_runs");
   return {
     lastGood: new Map(good.rows.map((r) => [r.job, r.last])) as LastGoodRuns,
     health: { lastScoreDate: health.rows[0].score, lastScanAsOf: health.rows[0].scan },
     dbSizeBytes: Number(size.rows[0].bytes),
-    aiCeiling: ceiling.rows.map((r) => ({ job: r.job, startedAt: r.started_at })),
+    knownJobs: new Set(known.rows.map((r) => r.job)) as KnownJobs,
   };
 }

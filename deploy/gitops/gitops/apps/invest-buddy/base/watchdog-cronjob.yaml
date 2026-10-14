@@ -4,7 +4,7 @@ metadata:
   name: invest-buddy-watchdog
   namespace: invest
 spec:
-  # PL27: reads job_runs and sends an alert for a missed job, stale data, a full volume, an expiring certificate or an AI ceiling stop. Weekday run. Enable after owner approval, the Telegram secret and migrations 080 and 081.
+  # PL27: reads job_runs and sends an alert for a missed job, stale data, a full volume, or an expiring certificate. Alerts go to the owner private chat (secret invest-buddy-telegram-owner). Weekday run. Enable after owner approval, both Telegram secrets (invest-buddy-telegram and invest-buddy-telegram-owner) and migrations 080 and 081.
   suspend: true
   schedule: "45 7 * * 1-5"
   timeZone: Europe/Bratislava
@@ -47,11 +47,11 @@ spec:
                     secretKeyRef:
                       name: invest-buddy-telegram
                       key: TELEGRAM_BOT_TOKEN
-                - name: TELEGRAM_CHAT_ID
+                - name: TELEGRAM_OWNER_CHAT_ID
                   valueFrom:
                     secretKeyRef:
-                      name: invest-buddy-telegram
-                      key: TELEGRAM_CHAT_ID
+                      name: invest-buddy-telegram-owner
+                      key: TELEGRAM_OWNER_CHAT_ID
               securityContext:
                 allowPrivilegeEscalation: false
                 readOnlyRootFilesystem: true
@@ -114,11 +114,11 @@ spec:
                     secretKeyRef:
                       name: invest-buddy-telegram
                       key: TELEGRAM_BOT_TOKEN
-                - name: TELEGRAM_CHAT_ID
+                - name: TELEGRAM_OWNER_CHAT_ID
                   valueFrom:
                     secretKeyRef:
-                      name: invest-buddy-telegram
-                      key: TELEGRAM_CHAT_ID
+                      name: invest-buddy-telegram-owner
+                      key: TELEGRAM_OWNER_CHAT_ID
               securityContext:
                 allowPrivilegeEscalation: false
                 readOnlyRootFilesystem: true

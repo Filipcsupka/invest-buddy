@@ -32,9 +32,8 @@ describe("migration lint", () => {
     const twice = lintMigrations([{ name: "080_a.sql", content: "SELECT 1;" }, { name: "080_b.sql", content: "SELECT 1;" }], ["070_x.sql"]);
     expect(twice.map((i) => i.rule)).toEqual(["duplicate-number"]);
   });
-  it("fails a number at or below the base maximum unless allowed, and allows gaps", () => {
-    expect(lintMigrations([{ name: "060_a.sql", content: "SELECT 1;" }], ["070_x.sql"]).map((i) => i.rule)).toEqual(["number-order"]);
-    expect(lintMigrations([{ name: "060_a.sql", content: "-- lint:allow-order range reserved earlier\nSELECT 1;" }], ["070_x.sql"])).toEqual([]);
+  it("allows gaps and numbers below the base maximum (lanes reserve ranges)", () => {
+    expect(lintMigrations([{ name: "060_a.sql", content: "SELECT 1;" }], ["070_x.sql"])).toEqual([]);
     expect(lintMigrations([{ name: "090_a.sql", content: "SELECT 1;" }], ["070_x.sql"])).toEqual([]);
   });
   it("fails a bad name", () => {

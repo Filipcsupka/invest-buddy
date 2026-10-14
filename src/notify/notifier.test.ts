@@ -71,10 +71,32 @@ describe("alert notifier", () => {
     await expect(notifier.send({ ...message, channel: "email" })).rejects.toThrow("no alert sender configured for channel email");
   });
 
-  it("builds from env only when both Telegram values are set", () => {
-    expect(alertNotifierFromEnv({})).toBeNull();
-    expect(alertNotifierFromEnv({ TELEGRAM_BOT_TOKEN: "t" })).toBeNull();
-    expect(alertNotifierFromEnv({ TELEGRAM_BOT_TOKEN: "t", TELEGRAM_CHAT_ID: "1" })).not.toBeNull();
+  it("builds from env only when the token and the owner chat id are set", () => {
+    const lines: string[] = [];
+    const log = (l: string) => lines.push(l);
+    expect(alertNotifierFromEnv({}, log)).toBeNull();
+    expect(alertNotifierFromEnv({ TELEGRAM_BOT_TOKEN: "t" }, log)).toBeNull();
+    expect(alertNotifierFromEnv({ TELEGRAM_BOT_TOKEN: "t", TELEGRAM_OWNER_CHAT_ID: "1" }, log)).not.toBeNull();
+    expect(lines).toHaveLength(2);
+  });
+
+  it("fails closed without the owner chat id and never uses the digest chat", () => {
+    const lines: string[] = [];
+    expect(alertNotifierFromEnv({ TELEGRAM_BOT_TOKEN: "t", TELEGRAM_CHAT_ID: "-100digest" }, (l) => lines.push(l))).toBeNull();
+    expect(lines[0]).toContain("TELEGRAM_OWNER_CHAT_ID is unset");
+    expect(lines[0]).not.toContain("-100digest");
+  });
+
+  it("sends to the owner chat, not the digest chat", async () => {
+    const f = fakeFetch([{ status: 200, body: { ok: true } }]);
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = f.impl as unknown as typeof fetch;
+    try {
+      const notifier = alertNotifierFromEnv({ TELEGRAM_BOT_TOKEN: TOKEN, TELEGRAM_CHAT_ID: "-100digest", TELEGRAM_OWNER_CHAT_ID: "42" });
+      await notifier!.send(message);
+    } finally { globalThis.fetch = realFetch; }
+    expect(f.calls).toHaveLength(1);
+    expect(f.calls[0].body.chat_id).toBe("42");
   });
 
   it("keeps messages in the console notifier", async () => {

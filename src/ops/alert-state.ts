@@ -1,9 +1,9 @@
 import type pg from "pg";
 
-export const SUPPRESS_HOURS = 24;
+export const SUPPRESS_HOURS = 23;
 
 export interface AlertStateStore {
-  /** True when the key may be sent now: never sent, or last sent more than 24 hours ago. Records the send time. */
+  /** True when the key may be sent now: never sent, or last sent at least 23 hours ago. Records the send time. */
   claim(key: string, subject: string, now: Date): Promise<{ claimed: boolean; previous: Date | null }>;
   /** Puts back the state before a claim, after a send failed, so the next run tries again. */
   release(key: string, previous: Date | null): Promise<void>;

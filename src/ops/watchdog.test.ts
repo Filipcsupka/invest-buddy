@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { ConsoleNotifier, type AlertNotifier } from "../notify/notifier";
 import { MemoryAlertState } from "./alert-state";
 import { deliver, evaluate, type WatchdogInput } from "./watchdog";
-import { aiCeilingStops, databaseSize, expiringCertificates, missedJobs, staleHealth } from "./watchdog-rules";
+import { databaseSize, expiringCertificates, missedJobs, staleHealth } from "./watchdog-rules";
 import { EXPECTED_JOBS } from "./schedule";
 
 const GB = 1_073_741_824;
@@ -14,16 +14,18 @@ const NOW = d("2026-10-14T06:00:00Z");
 function allGood(now: Date) {
   return new Map(EXPECTED_JOBS.filter((j) => j.enabled && j.runJob).map((j) => [j.runJob!, new Date(now.getTime() - 60_000)]));
 }
+/** Every tracked job has run once. */
+const allKnown = () => new Set(EXPECTED_JOBS.flatMap((j) => (j.runJob ? [j.runJob] : [])));
 
 describe("missed jobs", () => {
   it("is quiet when every enabled tracked job has a recent good run", () => {
-    expect(missedJobs(NOW, allGood(NOW))).toEqual([]);
+    expect(missedJobs(NOW, allGood(NOW), allKnown())).toEqual([]);
   });
 
   it("reports a job with no good run since its due start", () => {
     const good = allGood(NOW);
     good.set("daily", d("2026-10-13T02:30:00Z")); // yesterday's run; today's 04:25 local start (02:25Z) is due after 70 min grace
-    const findings = missedJobs(NOW, good);
+    const findings = missedJobs(NOW, good, allKnown());
     expect(findings.map((f) => f.key)).toEqual(["job-missed:daily"]);
     expect(findings[0].body).toContain("2026-10-14T02:25Z");
   });
@@ -31,18 +33,18 @@ describe("missed jobs", () => {
   it("reports a job with no run at all", () => {
     const good = allGood(NOW);
     good.delete("prices");
-    expect(missedJobs(NOW, good)[0].body).toContain("none recorded");
+    expect(missedJobs(NOW, good, allKnown())[0].body).toContain("none recorded");
   });
 
   it("does not report a job inside its grace period", () => {
     const good = allGood(NOW);
     good.set("daily", d("2026-10-13T02:30:00Z"));
     // 03:00Z is 35 minutes after the 02:25Z start; grace is 70 minutes.
-    expect(missedJobs(d("2026-10-14T03:00:00Z"), good).map((f) => f.key)).not.toContain("job-missed:daily");
+    expect(missedJobs(d("2026-10-14T03:00:00Z"), good, allKnown()).map((f) => f.key)).not.toContain("job-missed:daily");
   });
 
   it("ignores suspended jobs and jobs not tracked in job_runs", () => {
-    const keys = missedJobs(NOW, new Map()).map((f) => f.key);
+    const keys = missedJobs(NOW, new Map(), allKnown()).map((f) => f.key);
     expect(keys).not.toContain("job-missed:retention"); // suspended
     expect(keys).not.toContain("job-missed:extract"); // not in job_runs
     expect(keys).toContain("job-missed:collect");
@@ -51,7 +53,7 @@ describe("missed jobs", () => {
   it("does not expect Tuesday to Saturday jobs on a Monday morning", () => {
     const monday = d("2026-10-12T06:00:00Z");
     const good = new Map([...allGood(monday)].map(([k]) => [k, d("2026-10-10T10:00:00Z")]));
-    expect(missedJobs(monday, good)).toEqual([]);
+    expect(missedJobs(monday, good, allKnown())).toEqual([]);
   });
 });
 
@@ -80,17 +82,10 @@ describe("certificate expiry", () => {
   });
 });
 
-describe("AI ceiling stop", () => {
-  it("reports each job that exited with code 5", () => {
-    expect(aiCeilingStops([{ job: "judge", startedAt: d("2026-10-14T03:30:00Z") }]).map((f) => f.key)).toEqual(["ai-ceiling:judge"]);
-    expect(aiCeilingStops([])).toEqual([]);
-  });
-});
-
 describe("delivery with duplicate suppression", () => {
-  const input = (now: Date, lastGood = allGood(now)): WatchdogInput => ({ now, lastGood, health: { lastScoreDate: "2026-10-13", lastScanAsOf: "2026-10-13" }, dbSizeBytes: 1 * GB, volumeBytes: 5 * GB, certs: [], aiCeiling: [] });
+  const input = (now: Date, lastGood = allGood(now)): WatchdogInput => ({ now, lastGood, health: { lastScoreDate: "2026-10-13", lastScanAsOf: "2026-10-13" }, dbSizeBytes: 1 * GB, volumeBytes: 5 * GB, certs: [], knownJobs: allKnown() });
 
-  it("sends one alert for a stopped job, none on the next run within 24 hours, one again after", async () => {
+  it("sends one alert for a stopped job, none on the next run within 23 hours, one again after", async () => {
     const good = allGood(NOW);
     good.delete("macro");
     const notifier = new ConsoleNotifier();
@@ -107,6 +102,15 @@ describe("delivery with duplicate suppression", () => {
     expect(third.sent).toBe(1);
     expect(notifier.sent).toHaveLength(2);
     expect(notifier.sent[0]).toMatchObject({ channel: "telegram", subject: "Job macro did not complete" });
+  });
+
+  it("allows the same alert again after 23 hours, so a daily run a few minutes late is not skipped", async () => {
+    const finding = [{ key: "k", subject: "s", body: "b" }];
+    const notifier = new ConsoleNotifier();
+    const state = new MemoryAlertState();
+    await deliver(finding, notifier, state, d("2026-10-14T06:00:00Z"));
+    expect((await deliver(finding, notifier, state, d("2026-10-15T04:59:00Z"))).suppressed).toBe(1);
+    expect((await deliver(finding, notifier, state, d("2026-10-15T05:00:00Z"))).sent).toBe(1);
   });
 
   it("releases the claim when the send fails, so the next run tries again", async () => {

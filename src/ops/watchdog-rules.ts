@@ -9,11 +9,18 @@ const DAY = 86_400_000;
 /** Latest ok or partial run start per job_runs.job. */
 export type LastGoodRuns = ReadonlyMap<string, Date>;
 
-/** A tracked, enabled job has no ok or partial run since the start it should already have completed. */
-export function missedJobs(now: Date, lastGood: LastGoodRuns, jobs: readonly ExpectedJob[] = EXPECTED_JOBS): Finding[] {
+/** job_runs.job values that have at least one row, whatever the status. */
+export type KnownJobs = ReadonlySet<string>;
+
+/**
+ * A tracked, enabled job has no ok or partial run since the start it should already have completed.
+ * A job with no job_runs row at all is skipped until it has run once, so enabling the watchdog does not flood the owner.
+ */
+export function missedJobs(now: Date, lastGood: LastGoodRuns, known: KnownJobs, jobs: readonly ExpectedJob[] = EXPECTED_JOBS): Finding[] {
   const out: Finding[] = [];
   for (const job of jobs) {
     if (!job.enabled || !job.runJob) continue;
+    if (!known.has(job.runJob)) continue;
     const due = dueStart(job, now);
     if (!due) continue;
     const last = lastGood.get(job.runJob);
@@ -58,9 +65,4 @@ export function expiringCertificates(now: Date, certs: readonly CertResult[], da
     if (left <= days) out.push({ key: `tls:${cert.host}`, subject: `Certificate of ${cert.host} expires soon`, body: `Valid until ${fmt(cert.validTo)}, ${Math.floor(left)} days left (limit ${days}).` });
   }
   return out;
-}
-
-/** Jobs that ended with exit code 5, the AI token ceiling stop. */
-export function aiCeilingStops(jobs: readonly { job: string; startedAt: Date }[]): Finding[] {
-  return jobs.map((run) => ({ key: `ai-ceiling:${run.job}`, subject: `Job ${run.job} stopped at the AI token ceiling`, body: `Exit code 5 in the run started ${fmt(run.startedAt)}. Remaining work stays pending.` }));
 }

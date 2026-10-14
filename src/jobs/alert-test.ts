@@ -1,7 +1,7 @@
 import { alertNotifierFromEnv, sendAlert } from "../notify/notifier";
 import { runLoggedJob } from "./job-log";
 
-/** One-off: sends a test alert so the owner can confirm the channel works. Needs TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID. */
+/** One-off: sends a test alert so the owner can confirm the channel works. Needs TELEGRAM_BOT_TOKEN and TELEGRAM_OWNER_CHAT_ID. */
 async function main() {
   await runLoggedJob("alert-test", async () => {
     const notifier = alertNotifierFromEnv();
