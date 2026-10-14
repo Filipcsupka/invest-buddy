@@ -1,5 +1,6 @@
 import { cache } from "react";
 import { getPool } from "../db/pool";
+import { CACHE_TAGS, webCached } from "./web-cache";
 import type { ScoreResult } from "../engine";
 import type { Instrument } from "./providers";
 import { scoredUniverse as fixtureUniverse } from "./scored";
@@ -21,6 +22,8 @@ export const stale = (date: string | null, now = Date.now()) => {
 };
 const fixtureMode = () => process.env.DATA_MODE === "fixture";
 const pool = getPool;
+/** No pool means the loader returns an empty result; do not cache it. */
+const noPool = () => !pool();
 async function latestScoresUncached(): Promise<StoreData<StoreRow[]>> {
   if (fixtureMode()) { const rows = await fixtureUniverse(); return { rows, sample: true, lastUpdated: rows[0]?.result.asOf ?? null, stale: false }; }
   const db = pool(); if (!db) return { rows: [], sample: false, lastUpdated: null, stale: false };
@@ -75,6 +78,6 @@ export async function alertHistory() {
 }
 
 /** Per-request memo (React cache): generateMetadata and the page share one query. */
-export const latestScores = cache(latestScoresUncached);
-export const instrumentUniverse = cache(instrumentUniverseUncached);
-export const latestPortfolio = cache(latestPortfolioUncached);
+export const latestScores = cache(webCached(latestScoresUncached, "latest-scores", [CACHE_TAGS.scores], { bypass: noPool }));
+export const instrumentUniverse = cache(webCached(instrumentUniverseUncached, "instrument-universe", [CACHE_TAGS.scores], { bypass: noPool }));
+export const latestPortfolio = cache(webCached(latestPortfolioUncached, "latest-portfolio", [CACHE_TAGS.portfolio], { bypass: noPool }));

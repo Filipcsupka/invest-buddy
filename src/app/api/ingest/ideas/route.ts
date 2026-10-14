@@ -3,6 +3,8 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import pg from "pg";
 import { hasOkJudge, hasOkJudgeForDay, ideasPostSchema, judgeRunSchema, recordJudge } from "../../../../db/ideas";
 import { readBoundedBody } from "../read-bounded-body";
+import { purgeWebCache } from "../../../../data/purge";
+import { CACHE_TAGS } from "../../../../data/web-cache";
 
 export const runtime = "nodejs";
 const limit = 400_000;
@@ -45,7 +47,7 @@ async function postHandler(request: Request) {
   const parsed = ideasPostSchema.safeParse(raw);
   if (!parsed.success) return Response.json({ error: "Invalid body" }, { status: 400 });
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
-  try { return Response.json({ recorded: true, ...(await recordJudge(pool, parsed.data)) }); }
+  try { const out = await recordJudge(pool, parsed.data); purgeWebCache([CACHE_TAGS.ideas]); return Response.json({ recorded: true, ...out }); }
   catch (error) { recordIngestError(request, error); return Response.json({ error: "Database unavailable" }, { status: 503 }); }
   finally { await pool.end(); }
 }

@@ -35,6 +35,25 @@ export async function runDaily(provider: UniverseProvider, repository: ScoreRepo
   return repository.saveDaily(date, providerName, records);
 }
 
+/**
+ * Best-effort purge of the web pod's cached reads after the score and portfolio writes.
+ * Needs INGEST_BASE_URL (or WEB_BASE_URL) and INGEST_TOKEN. Never throws: the 300 s cache expiry is the fallback.
+ */
+export async function purgeWebCacheRemote(env: Record<string, string | undefined> = process.env, fetchFn: typeof fetch = fetch): Promise<boolean> {
+  const base = env.INGEST_BASE_URL ?? env.WEB_BASE_URL;
+  const token = env.INGEST_TOKEN;
+  if (!base || !token) { process.stdout.write("Cache purge skipped: INGEST_BASE_URL and INGEST_TOKEN not both set\n"); return false; }
+  try {
+    const res = await fetchFn(`${base.replace(/\/+$/, "")}/api/revalidate`, { method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" }, body: JSON.stringify({ tags: ["scores", "portfolio"] }), signal: AbortSignal.timeout(5000) });
+    if (!res.ok) { process.stdout.write(`Cache purge failed: HTTP ${res.status}\n`); return false; }
+    process.stdout.write("Cache purged\n");
+    return true;
+  } catch (error) {
+    process.stdout.write(`Cache purge failed: ${error instanceof Error ? error.name : "error"}\n`);
+    return false;
+  }
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const memory = args.includes("--memory");
@@ -50,6 +69,7 @@ async function main() {
     const scoreDate = date ?? (fixtureMode ? undefined : await new DatabaseUniverseProvider(pool!).latestScanDate());
     const provider = fixtureMode ? fixtureProvider : new DatabaseUniverseProvider(pool!, scoreDate ?? undefined);
     const result = await runDaily(provider, pool ? new PostgresScoreRepository(pool) : new MemoryScoreRepository(), scoreDate ?? undefined, fixtureMode ? "fixture" : "scan");
+    if (pool) await purgeWebCacheRemote();
     process.stdout.write(`${result.inserted ? "Stored" : "Already stored"}: ${result.instrumentCount} instruments, ${result.alerts.length} state changes\n`);
     return { instruments: result.instrumentCount, stateChanges: result.alerts.length, stored: result.inserted, failures: 0 };
   } finally { await pool?.end(); }

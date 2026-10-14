@@ -4,6 +4,8 @@ import pg from "pg";
 import { scanSchema } from "../../../../data/scan";
 import { ingestScan } from "../../../../db/scan";
 import { readBoundedBody } from "../read-bounded-body";
+import { purgeWebCache } from "../../../../data/purge";
+import { CACHE_TAGS } from "../../../../data/web-cache";
 
 export const runtime = "nodejs";
 const limit = 1_000_000;
@@ -31,7 +33,7 @@ async function postHandler(request: Request) {
   if (!parsed.success) return Response.json({ error: "Invalid scan", fields: parsed.error.issues.map((issue) => ({ path: issue.path.join("."), reason: issue.message })) }, { status: 400 });
   if (!process.env.DATABASE_URL) return Response.json({ error: "Database unavailable" }, { status: 503 });
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
-  try { return Response.json(await ingestScan(pool, parsed.data, { skipMacro: new URL(request.url).searchParams.get("macro") === "skip" })); }
+  try { const out = await ingestScan(pool, parsed.data, { skipMacro: new URL(request.url).searchParams.get("macro") === "skip" }); purgeWebCache([CACHE_TAGS.scores]); return Response.json(out); }
   catch (error) { recordIngestError(request, error); return Response.json({ error: "Database unavailable" }, { status: 503 }); }
   finally { await pool.end(); }
 }
