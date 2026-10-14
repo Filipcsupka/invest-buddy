@@ -17,7 +17,8 @@ export async function dailyTokenUsage(db: Pick<pg.Pool, "query">): Promise<numbe
 }
 
 type ResearchCaps = { monthlyTokens: number; monthlyUsd: number; dailyCalls: number; dailyTokens: number; sharedDailyTokens: number };
-export async function reserveCall(db: Pick<pg.Pool, "query" | "connect">, call: { id: string; kind: "extract" | "judge" | "research"; agent: "claude" | "codex"; authSource: "subscription" | "api" | "codex"; model: string; caps?: ResearchCaps }) {
+type OverrideCaps = { dailyCalls: number; monthlyCalls: number };
+export async function reserveCall(db: Pick<pg.Pool, "query" | "connect">, call: { id: string; kind: "extract" | "judge" | "research"; agent: "claude" | "codex"; authSource: "subscription" | "api" | "codex"; model: string; caps?: ResearchCaps; overrideCaps?: OverrideCaps }) {
   if (call.kind === "research") {
     if (!call.caps) throw new Error("research caps are required");
     const client = await db.connect();
@@ -30,7 +31,8 @@ export async function reserveCall(db: Pick<pg.Pool, "query" | "connect">, call: 
         usage.monthlyTokens >= call.caps.monthlyTokens ||
         (call.authSource === "api" && usage.monthlyUsd >= call.caps.monthlyUsd) ||
         usage.dailyCalls >= call.caps.dailyCalls || usage.dailyTokens >= call.caps.dailyTokens ||
-        (call.caps.sharedDailyTokens > 0 && usage.sharedDailyTokens >= call.caps.sharedDailyTokens);
+        (call.caps.sharedDailyTokens > 0 && usage.sharedDailyTokens >= call.caps.sharedDailyTokens) ||
+        (call.overrideCaps !== undefined && (usage.dailyCalls >= call.overrideCaps.dailyCalls || usage.monthlyCalls >= call.overrideCaps.monthlyCalls));
       if (capped) { await client.query("COMMIT"); return { recorded: false }; }
       await client.query("INSERT INTO ai_budget_calls (id,month,kind,agent,auth_source,model,reserved_tokens,reserved_usd) VALUES ($1,$2,$3,$4,$5,$6,0,0)", [call.id, monthStart(), call.kind, call.agent, call.authSource, call.model]);
       await client.query("COMMIT");

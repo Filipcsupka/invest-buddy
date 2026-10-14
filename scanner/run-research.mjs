@@ -116,7 +116,7 @@ export async function execute(opts, { adapter = researchAdapter(process.env.RESE
       results.push({ skipped: gate.status, posted: !opts.dryRun, errors: [] });
       continue;
     }
-    const budgetId = opts.dryRun ? null : await reserveBudget(opts.baseUrl, token, "research", modelName, adapter.name, researchLimits(env, opts.type, now()), authSource);
+    const budgetId = opts.dryRun ? null : await reserveBudget(opts.baseUrl, token, "research", modelName, adapter.name, researchLimits(env, opts.type, now()), authSource, gate.overrideCaps);
     if (!opts.dryRun && !budgetId) {
       await postSkip(opts, token, adapter.name, "skipped_cap", "research budget reservation unavailable", runId);
       results.push({ skipped: "skipped_cap", posted: true, errors: [] });
@@ -129,7 +129,7 @@ export async function execute(opts, { adapter = researchAdapter(process.env.RESE
     try {
       const prompt = buildPrompt(opts, input, group, themesConfig);
       try { result = await adapter.run({ prompt, schemaPath: join(here, "schema", "research-output.schema.json"), model: opts.model, maxTurns: defaults.maxTurns, timeoutMs: opts.timeoutS * 1000, workDir, env,
-        monitor: adapter.name !== "claude" || env.ANTHROPIC_API_KEY ? undefined : () => checkLiveResearchQuota({ env, liveUsage: live, monitor: true }) }); }
+        monitor: adapter.name !== "claude" || env.ANTHROPIC_API_KEY ? undefined : () => checkLiveResearchQuota({ env, liveUsage: live, monitor: true, override: gate.override === true }) }); }
       catch (caught) { error = caught; adapterFailed = true; }
       if (!adapterFailed) output = result.cutoff ? emptyOutput() : modelOutput(extractJson(result.text));
     } catch (caught) {

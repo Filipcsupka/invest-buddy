@@ -27,7 +27,7 @@ export function bratislavaClock(now = new Date()) {
   return { day: `${parts.year}-${parts.month}-${parts.day}`, minute: Number(parts.hour) * 60 + Number(parts.minute) };
 }
 
-export const OVERRIDE_DEFAULTS = { runCalls: 3, dailyCalls: 2, monthlyCalls: 20 };
+export const OVERRIDE_DEFAULTS = { runCalls: 3, dailyCalls: 3, monthlyCalls: 20 };
 
 /** Opt-in only: RESEARCH_QUOTA_UNKNOWN_OVERRIDE=on. Anything else, including unset, is off. */
 export const overrideOn = (env) => env.RESEARCH_QUOTA_UNKNOWN_OVERRIDE === "on";
@@ -96,15 +96,18 @@ export async function checkResearchCaps({ env = process.env, now = new Date(), t
   return { ok: true, status: "ok", reason: null };
 }
 
-/** `usage` and `runCalls` are only read when the reading is unknown and the override is on. Without them the override stops (the in-flight monitor passes none and so keeps the gate's decision). */
-export async function checkLiveResearchQuota({ env = process.env, liveUsage = () => fetchLiveUsage(env.CLAUDE_CODE_OAUTH_TOKEN), usage, runCalls, monitor = false }) {
+/** The override applies only when the usage endpoint answered 403. Other failures (401, 429, 5xx, timeout, no token, malformed) stop the run.
+ * `usage` and `runCalls` are read only for the gate's override decision. The in-flight monitor passes `monitor: true` and `override` (whether the gate was an override run). */
+export async function checkLiveResearchQuota({ env = process.env, liveUsage = () => fetchLiveUsage(env.CLAUDE_CODE_OAUTH_TOKEN), usage, runCalls, monitor = false, override = false }) {
   const result = await liveUsage();
   if (!result?.usage || ![result.usage.fiveHour?.pct, result.usage.sevenDay?.pct].every((pct) => Number.isFinite(pct) && pct >= 0 && pct <= 100)) {
     const reason = `live Claude quota unavailable: ${result?.unavailable ?? "invalid response"}`;
-    if (!overrideOn(env)) return skipped("skipped_quota", reason);
-    if (monitor) return { ok: true, status: "ok", reason: null, override: true };
+    if (!overrideOn(env) || result?.unavailable !== "403") return skipped("skipped_quota", reason);
+    if (monitor) return override ? { ok: true, status: "ok", reason: null, override: true } : skipped("skipped_quota", reason);
     const capped = checkOverrideCaps(env, usage, runCalls);
-    return capped ?? { ok: true, status: "ok", reason: `${reason}; running under RESEARCH_QUOTA_UNKNOWN_OVERRIDE caps`, override: true };
+    if (capped) return capped;
+    const { dailyCalls, monthlyCalls } = overrideLimits(env);
+    return { ok: true, status: "ok", reason: `${reason}; running under RESEARCH_QUOTA_UNKNOWN_OVERRIDE caps`, override: true, overrideCaps: { dailyCalls, monthlyCalls } };
   }
   const fiveHour = number(env, "RESEARCH_QUOTA_STOP_5H_PCT", 70);
   const sevenDay = number(env, "RESEARCH_QUOTA_STOP_7D_PCT", 80);
