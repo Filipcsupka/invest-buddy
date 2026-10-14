@@ -12,15 +12,20 @@ export class MemoryWaitlistRepository implements WaitlistRepository {
   readonly rows: Row[] = [];
   constructor(private readonly clock: () => number = Date.now) {}
 
-  async create(input: SignupInput) {
+  async create(input: SignupInput): Promise<{ id?: number }> {
     const email = normalizeEmail(input.email);
     const now = this.clock();
     const old = this.rows.find((row) => row.email === email);
     const fresh = { ...input, email, tokenExpiresAt: now + CONFIRM_TOKEN_DAYS * 86_400_000, sentAt: now, status: "pending" as const };
-    if (!old) { this.rows.push({ ...fresh, id: this.rows.length + 1 }); return { sendConfirmation: true }; }
-    if (old.status === "confirmed" || old.sentAt > now - RESEND_AFTER_HOURS * 3_600_000) return { sendConfirmation: false };
+    if (!old) { const id = this.rows.length + 1; this.rows.push({ ...fresh, id }); return { id }; }
+    if (old.status === "confirmed" || old.sentAt > now - RESEND_AFTER_HOURS * 3_600_000) return {};
     Object.assign(old, fresh);
-    return { sendConfirmation: true };
+    return { id: old.id };
+  }
+
+  async releaseConfirmation(id: number): Promise<void> {
+    const row = this.rows.find((r) => r.id === id);
+    if (row?.status === "pending") row.sentAt = this.clock() - (RESEND_AFTER_HOURS + 1) * 3_600_000;
   }
 
   async peekConfirm(tokenHash: string) {
@@ -35,7 +40,7 @@ export class MemoryWaitlistRepository implements WaitlistRepository {
     if (state !== "valid") return { status: state };
     const row = this.rows.find((r) => r.tokenHash === tokenHash)!;
     row.status = "confirmed";
-    return { status: "confirmed", person: { id: row.id, email: row.email, locale: row.locale } };
+    return { status: "confirmed", person: { id: row.id, email: row.email, locale: row.locale, consentWeekly: row.consentWeekly } };
   }
 
   async unsubscribe(id: number): Promise<UnsubscribeResult> {
@@ -44,7 +49,7 @@ export class MemoryWaitlistRepository implements WaitlistRepository {
     const already = row.status === "unsubscribed";
     row.status = "unsubscribed";
     row.tokenHash = "";
-    return { status: already ? "already" : "unsubscribed", person: { id: row.id, email: row.email, locale: row.locale } };
+    return { status: already ? "already" : "unsubscribed", person: { id: row.id, email: row.email, locale: row.locale, consentWeekly: row.consentWeekly } };
   }
 
   async counts(): Promise<CountRow[]> {

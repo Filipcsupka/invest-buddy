@@ -65,12 +65,24 @@ The web init container runs `npm run migrate` before each new web pod starts. It
 | `PAYWALL` | off | Paywall segments (see `docs/paywall-segments.md`). |
 | `AUTH` | off | Sign-in. |
 | `BILLING` | off | Payments. |
-| `WAITLIST` | off | Waitlist sign-up. |
+| `WAITLIST` | off | Waitlist sign-up, confirm and unsubscribe pages and `/api/waitlist*`. See "Waitlist" below. |
 | `ADVICE_OUTPUT` | off | Action wording on idea cards and sizing. |
 | `IDEAS_PAGE` | off (on when `DATA_MODE=fixture`) | `/ideas` page and nav link. |
 | `OWNER_VIEW` | off | Private owner allocation view. |
 
 Only `IDEAS_PAGE` and `OWNER_VIEW` are read by code today; the others are declared for the tasks that add them.
+
+## Waitlist
+
+With `WAITLIST=on` the web accepts sign-ups at `POST /api/waitlist` and serves the confirm and unsubscribe pages. Keep it off until a mail provider is chosen and built (W12). With `MAIL_PROVIDER` unset the web uses the console mailer, which writes the recipient and the links to the pod log.
+
+| Variable | Default | Effect |
+| --- | --- | --- |
+| `WAITLIST_TOKEN_SECRET` | none | At least 16 characters. Signs unsubscribe links. Required when `WAITLIST=on`; use a sealed secret. Changing it breaks unsubscribe links already sent. |
+| `MAIL_PROVIDER` | `console` | Only `console` exists today. |
+| `WAITLIST_RATE_PER_MIN` | 5 | Sign-ups per client per minute per replica. |
+
+`npm run waitlist:report` prints counts by status, locale, source and price variant, never addresses. The retention job deletes pending rows older than 14 days.
 
 ## Operator disclosure banner
 

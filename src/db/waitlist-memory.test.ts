@@ -9,16 +9,16 @@ describe("MemoryWaitlistRepository", () => {
   it("applies the same rules as the Postgres repository", async () => {
     let now = Date.UTC(2026, 9, 14);
     const repo = new MemoryWaitlistRepository(() => now);
-    expect(await repo.create(signup())).toEqual({ sendConfirmation: true });
-    expect(await repo.create(signup({ email: "PERSON@example.test", tokenHash: "h2" }))).toEqual({ sendConfirmation: false });
+    expect(await repo.create(signup())).toEqual({ id: expect.any(Number) });
+    expect(await repo.create(signup({ email: "PERSON@example.test", tokenHash: "h2" }))).toEqual({});
     expect(repo.rows).toHaveLength(1);
     now += 25 * hour;
-    expect(await repo.create(signup({ tokenHash: "h3" }))).toEqual({ sendConfirmation: true });
+    expect(await repo.create(signup({ tokenHash: "h3" }))).toEqual({ id: expect.any(Number) });
     expect((await repo.confirm("h1")).status).toBe("invalid");
     expect((await repo.confirm("h3")).status).toBe("confirmed");
     expect((await repo.confirm("h3")).status).toBe("already");
     now += 25 * hour;
-    expect(await repo.create(signup({ tokenHash: "h4" }))).toEqual({ sendConfirmation: false });
+    expect(await repo.create(signup({ tokenHash: "h4" }))).toEqual({});
     expect((await repo.unsubscribe(1)).status).toBe("unsubscribed");
     expect((await repo.unsubscribe(1)).status).toBe("already");
     expect((await repo.unsubscribe(9)).status).toBe("invalid");
@@ -31,5 +31,13 @@ describe("MemoryWaitlistRepository", () => {
     now += 7 * 24 * hour + 1;
     expect(await repo.peekConfirm("h1")).toBe("expired");
     expect((await repo.confirm("h1")).status).toBe("expired");
+  });
+
+  it("lets a sign-up send again after a failed send", async () => {
+    const repo = new MemoryWaitlistRepository(() => Date.UTC(2026, 9, 14));
+    const first = await repo.create(signup());
+    expect(await repo.create(signup({ tokenHash: "h2" }))).toEqual({});
+    await repo.releaseConfirmation(first.id!);
+    expect(await repo.create(signup({ tokenHash: "h3" }))).toEqual({ id: first.id });
   });
 });

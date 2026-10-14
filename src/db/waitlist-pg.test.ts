@@ -13,12 +13,12 @@ const signup = (over: Partial<SignupInput> = {}): SignupInput => ({ email: "Pers
 
 describe.skipIf(!process.env.TEST_DATABASE_URL)("waitlist_signups (Postgres)", () => {
   it("folds case and does not send a second mail inside 24 hours", () => inRollback(async (client, repo) => {
-    expect(await repo.create(signup())).toEqual({ sendConfirmation: true });
-    expect(await repo.create(signup({ email: " person@example.TEST ", tokenHash: "hash-2" }))).toEqual({ sendConfirmation: false });
+    expect(await repo.create(signup())).toEqual({ id: expect.any(Number) });
+    expect(await repo.create(signup({ email: " person@example.TEST ", tokenHash: "hash-2" }))).toEqual({});
     expect(Number((await client.query("SELECT count(*) AS n FROM waitlist_signups WHERE email = 'person@example.test'")).rows[0].n)).toBe(1);
     // After 24 hours a repeat sign-up gets a fresh token.
     await client.query("UPDATE waitlist_signups SET confirmation_sent_at = now() - interval '25 hours'");
-    expect(await repo.create(signup({ tokenHash: "hash-3" }))).toEqual({ sendConfirmation: true });
+    expect(await repo.create(signup({ tokenHash: "hash-3" }))).toEqual({ id: expect.any(Number) });
     expect(await repo.confirm("hash-1")).toEqual({ status: "invalid" });
     expect((await repo.confirm("hash-3")).status).toBe("confirmed");
   }));
@@ -35,7 +35,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("waitlist_signups (Postgres)", (
     expect((await repo.confirm("hash-1")).status).toBe("already");
     // A confirmed address is not mailed again by a repeat sign-up.
     await client.query("UPDATE waitlist_signups SET confirmation_sent_at = now() - interval '2 days'");
-    expect(await repo.create(signup({ tokenHash: "hash-9" }))).toEqual({ sendConfirmation: false });
+    expect(await repo.create(signup({ tokenHash: "hash-9" }))).toEqual({});
     const id = first.status === "confirmed" ? first.person.id : 0;
     expect((await repo.unsubscribe(id)).status).toBe("unsubscribed");
     expect((await repo.unsubscribe(id)).status).toBe("already");
@@ -45,6 +45,13 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("waitlist_signups (Postgres)", (
     expect(row.status).toBe("unsubscribed");
     expect(row.confirmed_at).toBeInstanceOf(Date);
     expect(row.unsubscribed_at).toBeInstanceOf(Date);
+  }));
+
+  it("lets a sign-up send again after a failed send", () => inRollback(async (_client, repo) => {
+    const first = await repo.create(signup());
+    expect(await repo.create(signup({ tokenHash: "hash-2" }))).toEqual({});
+    await repo.releaseConfirmation(first.id!);
+    expect(await repo.create(signup({ tokenHash: "hash-3" }))).toEqual({ id: first.id });
   }));
 
   it("expires a confirm token after 7 days", () => inRollback(async (client, repo) => {
