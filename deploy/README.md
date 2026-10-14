@@ -65,12 +65,27 @@ The web init container runs `npm run migrate` before each new web pod starts. It
 | `PAYWALL` | off | Paywall segments (see `docs/paywall-segments.md`). |
 | `AUTH` | off | Sign-in. |
 | `BILLING` | off | Payments. |
-| `WAITLIST` | off | Waitlist sign-up. |
+| `WAITLIST` | off | Waitlist sign-up, confirm and unsubscribe pages and `/api/waitlist*`. See "Waitlist" below. |
 | `ADVICE_OUTPUT` | off | Action wording on idea cards and sizing. |
 | `IDEAS_PAGE` | off (on when `DATA_MODE=fixture`) | `/ideas` page and nav link. |
 | `OWNER_VIEW` | off | Private owner allocation view. |
 
 Only `IDEAS_PAGE` and `OWNER_VIEW` are read by code today; the others are declared for the tasks that add them.
+
+## Waitlist
+
+With `WAITLIST=on` the web accepts sign-ups at `POST /api/waitlist` and serves the confirm and unsubscribe pages. Keep it off until a mail provider is chosen and built (W12). With `MAIL_PROVIDER` unset the web uses the console mailer outside production, which writes the recipient and the links to the pod log. In production it refuses to start the mailer unless `MAIL_PROVIDER=console` is set on purpose.
+
+| Variable | Default | Effect |
+| --- | --- | --- |
+| `WAITLIST_TOKEN_SECRET` | none | At least 32 characters. Signs unsubscribe links. Required when `WAITLIST=on`; use a sealed secret. Changing it breaks unsubscribe links already sent. |
+| `MAIL_PROVIDER` | `console` | Only `console` exists today. Must be set explicitly when `NODE_ENV=production`. |
+| `WAITLIST_RATE_PER_MIN` | 5 | Sign-ups per client per minute per replica. |
+| `WAITLIST_DAILY_MAIL_CAP` | 80 | Confirmation mails per 24 hours across all addresses. At the cap the sign-up is stored, no mail goes out, the reply stays the same and a `waitlist_daily_cap_reached` warning is logged. |
+
+`npm run waitlist:report` prints counts by status, locale, source and price variant, never addresses. The retention job deletes pending rows 14 days after the later of sign-up and last confirmation mail. Failed sends are logged as `mail_failed` without the address.
+
+Unsubscribed rows keep the address so it is not mailed again, and a repeat sign-up does not reopen them. The W18 privacy text must say that unsubscribed addresses are retained.
 
 ## Operator disclosure banner
 

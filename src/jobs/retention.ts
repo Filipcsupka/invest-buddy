@@ -2,6 +2,7 @@ import { runLoggedJob } from "./job-log";
 import pg from "pg";
 import { freshnessDays } from "../data/evidence";
 import { purgeIdeas } from "./retention-ideas";
+import { purgeUnconfirmedWaitlist } from "./retention-waitlist";
 import { purgeJobRuns } from "./retention-job-runs";
 
 /** SQL CASE giving the evidence window per consensus field, built from `freshnessDays` so it cannot drift from the verifier. */
@@ -61,9 +62,10 @@ async function main() {
     const kept = await retainExpired(client, dryRun);
     const runs = await purgeExtractionRuns(client, dryRun);
     const ideas = await purgeIdeas(client, dryRun);
+    const waitlist = await purgeUnconfirmedWaitlist(client, dryRun);
     const jobRuns = await purgeJobRuns(client, dryRun);
     await client.query(dryRun ? "ROLLBACK" : "COMMIT");
-    process.stdout.write(`${JSON.stringify({ dryRun, facts: kept.archivedFacts + kept.deletedFacts, documents: kept.archivedDocuments + kept.deletedDocuments, ...kept, extractionRuns: runs, ideas, jobRuns })}\n`);
+    process.stdout.write(`${JSON.stringify({ dryRun, facts: kept.archivedFacts + kept.deletedFacts, documents: kept.archivedDocuments + kept.deletedDocuments, ...kept, extractionRuns: runs, ideas, waitlist, jobRuns })}\n`);
     return { facts: kept.archivedFacts + kept.deletedFacts, documents: kept.archivedDocuments + kept.deletedDocuments, archivedDocuments: kept.archivedDocuments, archivedFacts: kept.archivedFacts, extractionRuns: runs, tradeIdeas: ideas.tradeIdeas, judgeRuns: ideas.judgeRuns, jobRuns, failures: 0 };
   } catch (error) { await client.query("ROLLBACK"); throw error; }
   finally { client.release(); await pool.end(); }
