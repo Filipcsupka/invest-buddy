@@ -430,10 +430,11 @@ Status: thresholds and boundary tests merged in PR #80; PR #90 introduced the go
 - Risk or open question: 1 day return is noisy and can look like a claim; show it with sample size, or hide it for fewer than a number the owner sets.
 
 ### EN28. Outcome materialisation job and loser visibility
+- Status: implemented, pending merge (branch Filipcsupka/en28).
 - Synthesis note: "early December" in the risk note holds for 60 calendar days (2026-12-05). With 60 trading days, which EN27 proposes, the first 60-day outcomes come around the end of December 2026. The CronJob slot comes from the D40 table.
 - Why: the page computes outcomes on demand; automation means a job that stores them so the record is dated and stable. Losers must be visible (`99-lessons.md`, differentiation option 2).
 - Steps:
-  1. Migration `024_record_outcomes.sql`: `record_outcomes` (signal id, window, exit date, stock return, SPY return, excess, computed_at), insert-once like `record_signals` (immutable trigger).
+  1. Migration `070_record_outcomes.sql`: `record_outcomes` (signal id, window, exit date, stock return, SPY return, excess, computed_at), insert-once like `record_signals` (immutable trigger). Stored outcomes are final: they are not corrected if daily bars are restated later.
   2. New job `src/jobs/outcomes.ts` writing outcomes the day each window completes; add a CronJob in the infra repo through the usual GitOps flow.
   3. Track record page reads the table, sorts so the worst outcomes are visible, and shows hit rate with n.
   4. Add the "what is excluded" line: signals from before the immutable log started on 2026-10-06 are not included.

@@ -1,4 +1,4 @@
--- One stored outcome per signal and window, written the day the window completes. Inserted once, never changed.
+-- One stored outcome per signal and window, written the day the window completes. Inserted once, never changed. Stored outcomes are final: a later restatement of daily_bars does not correct them.
 CREATE TABLE record_outcomes (
   signal_id bigint NOT NULL REFERENCES record_signals(id),
   window_days smallint NOT NULL CHECK (window_days IN (1, 5, 20, 60)),

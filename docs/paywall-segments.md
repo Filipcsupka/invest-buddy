@@ -13,6 +13,7 @@ Decision on 2026-10-08: the markers identify sections that could become subscrib
 | `portfolio-performance` | Portfolio | Indexed return, benchmark chart and performance figures | Candidate | None | Detailed portfolio performance has value beyond the basic screen. |
 | `portfolio-weights` | Portfolio | Position weights | Candidate | None | Shows portfolio composition. |
 | `track-record-signals` | Track record | Dated signals and 1, 5, 20 and 60 trading day returns | Candidate | None | Detailed outcome history supports deeper evaluation. |
+| `track-record-worst` | Track record | Five weakest stored outcomes, one per ticker and date | Candidate | None | Loser visibility sits with the detailed record. |
 | `track-record-history` | Track record | Historical score snapshots and ticker details | Candidate | None | Gives access to prior screens. |
 | `track-record-benchmark` | Track record, fixture mode | Sample benchmark chart | Candidate | None | Keeps the fixture example with the detailed record section. |
 | `sizing-matrix` | Sizing | Tier percentages by account size | Candidate | `ADVICE_OUTPUT` | Detailed application of the published method. |

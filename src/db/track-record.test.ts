@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { randomBytes, randomUUID } from "node:crypto";
-import { readRecord } from "./track-record";
+import { readRecord, worstOutcomes } from "./track-record";
 import { ideasPostSchema, recordJudge } from "./ideas";
 
 it.skipIf(!process.env.TEST_DATABASE_URL)("reads stored real returns and keeps snapshots immutable", async () => {
@@ -68,4 +68,17 @@ it.skipIf(!process.env.TEST_DATABASE_URL)("retains every same-day judge run as a
     expect((await recordJudge(pool, ideasPostSchema.parse({ run: { asOf, runId: forced, agent: "claude", model: "test", inputHash: hashes[2], status: "ok" }, ideas: [changed] }))).stored).toBe(0);
     expect((await pool.query("SELECT 1 FROM record_signals WHERE ticker=$1 AND source='judge'", [ticker])).rowCount).toBe(4);
   } finally { await pool.end(); }
+});
+
+it("worstOutcomes keeps the worst window per signal and one row per ticker and date", () => {
+  const win = (excess: number) => ({ date: "2026-02-01", stock: excess, spy: 0, excess });
+  const sig = (id: number, ticker: string, asOf: string, windows: Record<number, ReturnType<typeof win> | null>) =>
+    ({ id, ticker, asOf, source: "score" as const, tier: "SETUP", state: "s", score: 20, windows: { 1: null, 5: null, 20: null, 60: null, ...windows } });
+  const out = worstOutcomes([
+    sig(1, "AAA", "2026-01-02", { 1: win(-0.05), 20: win(-0.2) }),
+    sig(2, "AAA", "2026-01-02", { 1: win(-0.1) }),
+    sig(3, "BBB", "2026-01-02", { 5: win(0.1) }),
+    sig(4, "CCC", "2026-01-02", { 1: win(-0.3), 5: win(-0.01) }),
+  ] as never);
+  expect(out.map((o) => [o.id, o.window, o.excess])).toEqual([[4, 1, -0.3], [1, 20, -0.2]]);
 });

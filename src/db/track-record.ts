@@ -17,6 +17,28 @@ export interface WorstOutcome { id: number; ticker: string; asOf: string; window
 
 const WORST_COUNT = 5;
 
+/** Worst window per signal, one row per ticker and date (judge and score signals can share both), then the weakest few. */
+export function worstOutcomes(signals: RecordSignal[]): WorstOutcome[] {
+  const perSignal: WorstOutcome[] = [];
+  for (const signal of signals) {
+    let worst: WorstOutcome | null = null;
+    for (const window of WINDOWS) {
+      const result = signal.windows[window];
+      if (!result || result.excess >= 0) continue;
+      if (!worst || result.excess < worst.excess) worst = { id: signal.id, ticker: signal.ticker, asOf: signal.asOf, window, stock: result.stock, excess: result.excess };
+    }
+    if (worst) perSignal.push(worst);
+  }
+  perSignal.sort((a, b) => a.excess - b.excess || a.id - b.id);
+  const seen = new Set<string>();
+  return perSignal.filter((item) => {
+    const key = `${item.ticker}:${item.asOf}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, WORST_COUNT);
+}
+
 export interface RecordHistory {
   snapshotCount: number;
   firstDate: string | null;
@@ -68,10 +90,7 @@ export async function readRecord(pool: Pick<pg.Pool, "query">, today: string, op
     const key = `${signal.ticker}:${signal.asOf}`;
     if (!uniqueBuys.has(key)) uniqueBuys.set(key, signal);
   }
-  const worst = signals.flatMap((signal) => WINDOWS.flatMap((window) => {
-    const result = signal.windows[window];
-    return result && result.excess < 0 ? [{ id: signal.id, ticker: signal.ticker, asOf: signal.asOf, window, stock: result.stock, excess: result.excess }] : [];
-  })).sort((a, b) => a.excess - b.excess || a.id - b.id).slice(0, WORST_COUNT);
+  const worst = worstOutcomes(signals);
   return { snapshotCount: Number(summary.rows[0]?.count ?? 0), firstDate: summary.rows[0]?.first_date ?? null,
     lastDate: summary.rows[0]?.last_date ?? null, signals, buySignalCount: uniqueBuys.size, worst,
     hit20: hitRate([...uniqueBuys.values()].map((signal) => signal.windows[20]?.excess ?? null)) };
