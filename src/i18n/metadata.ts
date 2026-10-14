@@ -16,8 +16,8 @@ export function snippet(text: string, max = MAX_DESCRIPTION): string {
 /** Staging and preview deployments set SITE_NOINDEX so crawlers skip the whole site. */
 export const siteNoindex = () => ["1", "true", "on"].includes((process.env.SITE_NOINDEX ?? "").toLowerCase());
 
-/** Title, description, canonical and hreflang alternates for one page in one locale. `path` excludes the locale. */
-export function pageMetadata(locale: Locale, path: string, title: string | null, description: string): Metadata {
+/** Title, description, canonical and hreflang alternates for one page in one locale. `path` excludes the locale. `image` is the og:image and twitter:image route, the site card unless a page passes its own. */
+export function pageMetadata(locale: Locale, path: string, title: string | null, description: string, image = `/${locale}/opengraph-image`): Metadata {
   const m = getMessages(locale);
   description = snippet(description);
   const languages = Object.fromEntries(locales.map((l) => [intlTag[l], `/${l}${path}`]));
@@ -25,8 +25,8 @@ export function pageMetadata(locale: Locale, path: string, title: string | null,
     title: title ?? { absolute: m.meta.homeTitle },
     description,
     alternates: { canonical: `/${locale}${path}`, languages: { ...languages, "x-default": `/en${path}` } },
-    openGraph: { title: title ?? m.meta.homeTitle, description, siteName: m.meta.siteName, locale: intlTag[locale].replace("-", "_"), alternateLocale: locales.filter((l) => l !== locale).map((l) => intlTag[l].replace("-", "_")), type: "website", url: `/${locale}${path}`, images: [{ url: "/og", width: 1200, height: 630, alt: m.meta.siteName }] },
-    twitter: { card: "summary_large_image", title: title ?? m.meta.homeTitle, description, images: ["/og"] },
+    openGraph: { title: title ?? m.meta.homeTitle, description, siteName: m.meta.siteName, locale: intlTag[locale].replace("-", "_"), alternateLocale: locales.filter((l) => l !== locale).map((l) => intlTag[l].replace("-", "_")), type: "website", url: `/${locale}${path}`, images: [{ url: image, width: 1200, height: 630, alt: m.meta.siteName }] },
+    twitter: { card: "summary_large_image", title: title ?? m.meta.homeTitle, description, images: [image] },
     ...(siteNoindex() ? { robots: { index: false, follow: false } } : {}),
   };
 }

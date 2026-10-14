@@ -55,7 +55,7 @@ describe("company page", () => {
     }
     const meta = await page.generateMetadata(props(instrument.ticker));
     expect(JSON.stringify(meta)).not.toContain(`${instrument.ticker}, ${instrument.ticker}`);
-    expect(JSON.stringify(meta)).toContain('"url":"/og"');
+    expect(JSON.stringify(meta)).toContain(`"url":"/en/company/${instrument.ticker}/opengraph-image"`);
   });
 
   it("shows a dated stale notice for an old live score in both languages", async () => {
