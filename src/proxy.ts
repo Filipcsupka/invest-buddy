@@ -3,6 +3,7 @@ import { instrumentUniverse } from "@/data/store";
 import { ideasEnabled } from "@/data/ideas-store";
 import { ownerViewEnabled } from "@/data/owner-allocation";
 import { flags } from "@/config/flags";
+import { withContentSecurityPolicy } from "@/security/headers";
 import { rateLimit, rateLimitRetryAfter } from "@/security/rate-limit";
 import { writeHttpLog } from "@/app/api/ingest/request-log";
 import { resolveRequestId } from "@/app/request-id";
@@ -11,6 +12,13 @@ import { ownerResearchAuthorized } from "@/app/[locale]/owner/research/auth";
 
 /** Resolve unavailable pages before a streamed layout can commit a 200 response. */
 export async function proxy(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+  // The CSP depends on ANALYTICS_*, so it is set here per request and not in next.config.ts, which runs at build time.
+  if (pathname !== "/" && !/^\/(en|sk)(\/|$)/.test(pathname) && !pathname.startsWith("/api/")) return withContentSecurityPolicy(NextResponse.next());
+  return withContentSecurityPolicy(await handle(request));
+}
+
+async function handle(request: NextRequest) {
   if (request.nextUrl.pathname.startsWith("/api/")) return (rateLimit(request) as NextResponse | undefined) ?? NextResponse.next();
   const start = performance.now();
   const requestId = resolveRequestId(request.headers);
@@ -44,4 +52,5 @@ export async function proxy(request: NextRequest) {
   return response;
 }
 
-export const config = { matcher: ["/", "/(en|sk)/:path*", "/api/:path*"] };
+// Every path except Next's static assets, so the CSP also reaches unknown paths. `handle` keeps the old scope for everything else.
+export const config = { matcher: ["/((?!_next/static|_next/image|favicon.svg).*)"] };

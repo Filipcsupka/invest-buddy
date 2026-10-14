@@ -7,9 +7,10 @@ afterEach(() => { resetRateLimits(); delete process.env.RATE_LIMIT; delete proce
 
 it("sets frame-ancestors, referrer and permissions policy; HSTS only in production", () => {
   const prod = Object.fromEntries(securityHeaders(true).map((h) => [h.key, h.value]));
-  expect(prod["Content-Security-Policy"]).toContain("frame-ancestors 'none'");
-  expect(prod["Content-Security-Policy"]).toContain("object-src 'none'");
-  expect(prod["Content-Security-Policy"]).not.toContain("unsafe-eval");
+  expect(prod["Content-Security-Policy"]).toBeUndefined();
+  expect(contentSecurityPolicy(false, null)).toContain("frame-ancestors 'none'");
+  expect(contentSecurityPolicy(false, null)).toContain("object-src 'none'");
+  expect(contentSecurityPolicy(false, null)).not.toContain("unsafe-eval");
   expect(prod["Referrer-Policy"]).toBe("strict-origin-when-cross-origin");
   expect(prod["Permissions-Policy"]).toContain("camera=()");
   expect(prod["X-Content-Type-Options"]).toBe("nosniff");
