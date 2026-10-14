@@ -6,7 +6,8 @@ export function purgeWebCache(tags: string[] = [CACHE_TAGS.scores, CACHE_TAGS.id
   try {
     for (const tag of tags) revalidateTag(tag, { expire: 0 });
     return true;
-  } catch {
+  } catch (error) {
+    console.warn(JSON.stringify({ event: "cache_purge_failed", tags, error: error instanceof Error ? error.name : "unknown" }));
     return false;
   }
 }

@@ -2,6 +2,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { purgeWebCache } from "@/data/purge";
 import { CACHE_TAGS } from "@/data/web-cache";
 import { logIngestRequest } from "../ingest/request-log";
+import { readBoundedBody } from "../ingest/read-bounded-body";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,7 +21,8 @@ async function postHandler(request: Request) {
   if (!authorized(request.headers.get("authorization"), token)) return Response.json({ error: "Unauthorized" }, { status: 401 });
   const known = Object.values(CACHE_TAGS) as string[];
   let tags = known;
-  const text = await request.text();
+  const text = await readBoundedBody(request, 1024);
+  if (text === null) return Response.json({ error: "Payload too large" }, { status: 413 });
   if (text.trim()) {
     let raw: unknown;
     try { raw = JSON.parse(text); } catch { return Response.json({ error: "Invalid JSON" }, { status: 400 }); }

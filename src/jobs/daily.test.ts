@@ -1,7 +1,7 @@
-import { expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { fixtureProvider } from "../data/fixtures";
 import { MemoryScoreRepository } from "../db/memory";
-import { runDaily } from "./daily";
+import { purgeWebCacheRemote, runDaily } from "./daily";
 
 it("runs fixture scoring once for a date", async () => {
   const repository = new MemoryScoreRepository();
@@ -66,4 +66,25 @@ it("refreshes the same date when scoring inputs change", async () => {
   tailwind = true;
   expect((await runDaily(provider, repository, "2025-08-08")).inserted).toBe(true);
   expect((await repository.scores("2025-08-08"))[0].macro).toBeGreaterThan(initial.macro);
+});
+
+describe("purgeWebCacheRemote", () => {
+  it("skips when env is unset", async () => {
+    const fetchFn = vi.fn();
+    expect(await purgeWebCacheRemote({}, fetchFn as unknown as typeof fetch)).toBe(false);
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+  it("posts the tags with the bearer token", async () => {
+    const fetchFn = vi.fn(async () => new Response("{}", { status: 200 }));
+    expect(await purgeWebCacheRemote({ INGEST_BASE_URL: "http://web:3000/", INGEST_TOKEN: "t" }, fetchFn as unknown as typeof fetch)).toBe(true);
+    const [url, init] = fetchFn.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("http://web:3000/api/revalidate");
+    expect(init.body).toBe(JSON.stringify({ tags: ["scores", "portfolio"] }));
+    expect((init.headers as Record<string, string>).authorization).toBe("Bearer t");
+  });
+  it("never throws on HTTP or network failure", async () => {
+    const env = { WEB_BASE_URL: "http://web:3000", INGEST_TOKEN: "t" };
+    expect(await purgeWebCacheRemote(env, (async () => new Response("", { status: 500 })) as unknown as typeof fetch)).toBe(false);
+    expect(await purgeWebCacheRemote(env, (async () => { throw new Error("down"); }) as unknown as typeof fetch)).toBe(false);
+  });
 });

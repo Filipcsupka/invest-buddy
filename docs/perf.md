@@ -12,6 +12,7 @@ node scripts/perf-probe.mjs --base http://localhost:3000 --runs 10   # local bui
 - URLs: home, dashboard, company NVDA, company AMD, track-record, methodology, each in `en` and `sk`.
 - TTFB is the time until response headers arrive. Total includes the body.
 - p50 and p95 use nearest rank. Status counts include 5xx; connection failures count as status 0.
+- The first request per URL is reported as `cold`; p50/p95 cover the remaining (warm) runs, so use 2 or more runs. Runs of 1 give an empty warm set.
 - Requests run one after another, so this measures latency, not load.
 - Results depend on the caller's network. To split network from app time, run it once from inside the cluster (needs cluster write approval for a one-off Job; not done).
 
@@ -71,4 +72,9 @@ Pages stay server-rendered per request. The shared reads (`latestScores`, `instr
 
 - Purge: `POST /api/revalidate` with `Authorization: Bearer $INGEST_TOKEN`, optional body `{"tags":["scores"]}`. The scan and ideas ingest routes purge their tag after a successful write.
 - Only viewer-independent reads are wrapped. Anything that reads a session, cookie or header must not use `webCached`; a test checks the store files for `headers()` and `cookies()`.
-- `src/jobs/daily.ts` writes to Postgres directly and does not purge. Until it calls `/api/revalidate`, a new score date shows within 300 s.
+- `src/jobs/daily.ts` writes to Postgres directly, then calls `POST /api/revalidate` with `{"tags":["scores","portfolio"]}`. It is best effort: unset env logs one line and skips, a failed call logs and never fails the job. Without a purge, a new score date shows within 300 s.
+  - Env the daily CronJob needs: `INGEST_TOKEN` (same secret the web pod uses) and `INGEST_BASE_URL` (`WEB_BASE_URL` is accepted too), for example `http://web.invest.svc.cluster.local:3000`. Not added to the manifests yet; that is an infra change.
+- The cache is per pod (Next data cache on the pod's disk/memory). A purge reaches only the pod that receives the request, so this is valid for 1 web replica. With more replicas, the other pods serve stale data for up to 300 s, and the purge needs a shared cache handler or a call per pod.
+- When no database pool exists (`DATABASE_URL` unset), the loaders skip the cache so the empty result is not kept for 300 s.
+- Ingest routes that purge: scan (`scores`), ideas (`ideas`). `universe` and `judge-input` are GET-only reads, `research`, `extraction-runs`, `gate` and `ai-budget` write tables no cached loader reads, and `portfolio-baseline` writes `portfolio_baseline`, which `latestPortfolio` does not read (it reads `portfolio_snapshots`), so none purge.
+- `purgeWebCache` logs `cache_purge_failed` when `revalidateTag` throws; `/api/revalidate` reads at most 1 KB of body.

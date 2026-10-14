@@ -9,12 +9,12 @@ export const REVALIDATE_SECONDS = 300;
  * Cross-request cache for public, viewer-independent reads (Next data cache, shared by all viewers).
  * Never wrap a loader that reads a session, cookie or header: the result would be served to everyone.
  * Pages stay dynamic (so no build-time render and no per-viewer HTML is cached); only the data is reused.
- * Fixture mode and callers outside a Next request (unit tests, jobs) skip the cache.
+ * Fixture mode, a `bypass` hit (for example no database pool, so an empty result is not kept for 300 s) and callers outside a Next request (unit tests, jobs) skip the cache.
  */
-export function webCached<A extends unknown[], R>(fn: (...args: A) => Promise<R>, key: string, tags: string[]): (...args: A) => Promise<R> {
+export function webCached<A extends unknown[], R>(fn: (...args: A) => Promise<R>, key: string, tags: string[], options: { bypass?: () => boolean } = {}): (...args: A) => Promise<R> {
   const cached = unstable_cache(fn, [key], { revalidate: REVALIDATE_SECONDS, tags });
   return async (...args: A) => {
-    if (process.env.DATA_MODE === "fixture") return fn(...args);
+    if (process.env.DATA_MODE === "fixture" || options.bypass?.()) return fn(...args);
     try {
       return await cached(...args);
     } catch (error) {

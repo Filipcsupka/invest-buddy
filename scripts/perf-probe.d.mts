@@ -10,4 +10,4 @@ export function summarize(samples: { status: number; ttfbMs: number; totalMs: nu
   totalP50: number | null;
   totalP95: number | null;
 };
-export function probe(base: string, runs: number): Promise<Record<string, ReturnType<typeof summarize>>>;
+export function probe(base: string, runs: number): Promise<Record<string, { cold: { status: number; ttfbMs: number; totalMs: number } | undefined; warm: ReturnType<typeof summarize> }>>;

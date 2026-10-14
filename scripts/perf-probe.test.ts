@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { percentile, summarize, urlList } from "./perf-probe.mjs";
 
 describe("percentile", () => {
@@ -40,5 +40,18 @@ describe("urlList", () => {
     expect(u).toHaveLength(12);
     expect(u).toContain("https://example.test/en");
     expect(u).toContain("https://example.test/sk/company/AMD");
+  });
+});
+
+describe("probe", () => {
+  it("reports the first request apart from the warm ones", async () => {
+    const { probe } = await import("./perf-probe.mjs");
+    const fetchMock = vi.fn(async () => new Response("ok", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const out = await probe("https://example.test", 3);
+    vi.unstubAllGlobals();
+    const entry = out["/en"];
+    expect(entry.cold?.status).toBe(200);
+    expect(entry.warm.n).toBe(2);
   });
 });

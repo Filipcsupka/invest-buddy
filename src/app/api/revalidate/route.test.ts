@@ -28,4 +28,8 @@ describe("POST /api/revalidate", () => {
     expect(revalidateTag.mock.calls.map((c) => c[0])).toEqual(["scores"]);
     expect((await POST(req("Bearer secret", JSON.stringify({ tags: ["x"] })))).status).toBe(400);
   });
+  it("rejects a body over 1 KB", async () => {
+    expect((await POST(req("Bearer secret", JSON.stringify({ tags: ["scores"], pad: "x".repeat(2000) })))).status).toBe(413);
+    expect(revalidateTag).not.toHaveBeenCalled();
+  });
 });

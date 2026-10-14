@@ -39,6 +39,20 @@ describe("webCached", () => {
     await wrapped(); await wrapped();
     expect(fn).toHaveBeenCalledTimes(2);
   });
+  it("skips the cache when bypass says so", async () => {
+    const fn = vi.fn(async () => 1);
+    const wrapped = webCached(fn, "k3", ["scores"], { bypass: () => true });
+    await wrapped(); await wrapped();
+    expect(fn).toHaveBeenCalledTimes(2);
+  });
+  it("warns when the purge fails", async () => {
+    const { revalidateTag } = await import("next/cache");
+    vi.mocked(revalidateTag).mockImplementationOnce(() => { throw new Error("no store"); });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    expect(purgeWebCache(["scores"])).toBe(false);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("cache_purge_failed"));
+    warn.mockRestore();
+  });
   it("does not swallow the loader's own errors", async () => {
     const wrapped = webCached(async () => { throw new Error("db down"); }, "k2", ["scores"]);
     await expect(wrapped()).rejects.toThrow("db down");

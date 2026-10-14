@@ -21,7 +21,7 @@ async function latestIdeasUncached(limit = 50): Promise<IdeasData> {
   return { rows: await listIdeas(db, limit), sample: false };
 }
 /** Per-request memo: the idea card and any other caller with the same limit share one query. */
-export const latestIdeas = cache(webCached(latestIdeasUncached, "latest-ideas", [CACHE_TAGS.ideas]));
+export const latestIdeas = cache(webCached(latestIdeasUncached, "latest-ideas", [CACHE_TAGS.ideas], { bypass: () => !process.env.DATABASE_URL || !getPool() }));
 
 /** Latest idea for one ticker when it is worth a card on the company page (not HOLD). A read failure hides the card instead of breaking the page. */
 export async function companyIdea(symbol: string): Promise<{ idea: StoredIdea; sample: boolean } | null> {

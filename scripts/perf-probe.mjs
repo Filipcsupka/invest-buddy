@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Repeatable TTFB probe for the public pages. No dependencies, read-only GETs.
 // Usage: node scripts/perf-probe.mjs [--base https://host] [--runs 10] [--out file.json]
-// Defaults: base http://localhost:3000, 10 runs per URL. Prints JSON with p50/p95 TTFB and status counts.
+// Defaults: base http://localhost:3000, 10 runs per URL. Prints JSON per URL: the first (cold) request and p50/p95 TTFB of the rest (warm).
 import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
@@ -55,7 +55,8 @@ export async function probe(base, runs) {
   for (const url of urlList(base)) {
     const samples = [];
     for (let i = 0; i < runs; i++) samples.push(await sample(url));
-    results[new URL(url).pathname] = summarize(samples);
+    // First request per URL is cold (empty cache, cold connection); report it apart from the warm ones.
+    results[new URL(url).pathname] = { cold: samples[0], warm: summarize(samples.slice(1)) };
   }
   return results;
 }
