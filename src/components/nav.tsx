@@ -5,6 +5,7 @@ import { ThemeToggle } from "./theme-toggle";
 import { latestScores } from "@/data/store";
 import { ideasEnabled } from "@/data/ideas-store";
 import { flags } from "@/config/flags";
+import { getLaunchMessages } from "@/i18n/launch-messages";
 
 export function BrandMark() {
   return (
@@ -37,6 +38,7 @@ export function Nav({ locale }: { locale: Locale }) {
             { href: "/portfolio", text: m.nav.portfolio },
             { href: "/methodology", text: m.nav.methodology },
             ...(flags().ADVICE_OUTPUT ? [{ href: "/sizing", text: m.nav.sizing }] : []),
+            ...(flags().WAITLIST ? [{ href: "/pricing", text: getLaunchMessages(locale).pricing.title }] : []),
           ]}
         />
         <div className="header-tools">

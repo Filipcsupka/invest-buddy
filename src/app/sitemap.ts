@@ -21,7 +21,8 @@ function entries(paths: { path: string; lastModified?: string }[]): MetadataRout
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = flags().INSIDERS_PAGE ? [...routes, "/insiders"] : routes;
-  const visible = flags().ADVICE_OUTPUT ? [...base, "/sizing"] : base;
+  const withSizing = flags().ADVICE_OUTPUT ? [...base, "/sizing"] : base;
+  const visible = flags().WAITLIST ? [...withSizing, "/pricing"] : withSizing;
   let universe: Awaited<ReturnType<typeof instrumentUniverse>> = [];
   let scores: Awaited<ReturnType<typeof latestScores>> | null = null;
   try {
