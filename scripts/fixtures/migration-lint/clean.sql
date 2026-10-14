@@ -1,0 +1,4 @@
+-- DROP TABLE in a comment is fine
+CREATE TABLE IF NOT EXISTS t (c int);
+CREATE INDEX IF NOT EXISTS t_c ON t (c);
+ALTER TABLE t ADD COLUMN IF NOT EXISTS d text;
