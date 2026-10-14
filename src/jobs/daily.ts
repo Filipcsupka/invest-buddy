@@ -39,7 +39,7 @@ export async function runDaily(provider: UniverseProvider, repository: ScoreRepo
  * Best-effort purge of the web pod's cached reads after the score and portfolio writes.
  * Needs INGEST_BASE_URL (or WEB_BASE_URL) and INGEST_TOKEN. Never throws: the 300 s cache expiry is the fallback.
  */
-export async function purgeWebCacheRemote(env: NodeJS.ProcessEnv = process.env, fetchFn: typeof fetch = fetch): Promise<boolean> {
+export async function purgeWebCacheRemote(env: Record<string, string | undefined> = process.env, fetchFn: typeof fetch = fetch): Promise<boolean> {
   const base = env.INGEST_BASE_URL ?? env.WEB_BASE_URL;
   const token = env.INGEST_TOKEN;
   if (!base || !token) { process.stdout.write("Cache purge skipped: INGEST_BASE_URL and INGEST_TOKEN not both set\n"); return false; }
