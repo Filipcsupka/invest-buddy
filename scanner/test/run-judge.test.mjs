@@ -646,3 +646,28 @@ test("Slovak text that keeps stored action or rating codes is kept and noted, no
   assert.equal(slovakRawCode(["Vstup je silný, pridať 1/3."]), null);
   assert.equal(slovakRawCode(["Strong-ish a ADDITIONAL"]), null);
 });
+
+test("a fourth whatHappened bullet is cut to three in English and Slovak, other schema errors stay", () => {
+  const idea = words("NVDA");
+  idea.whatHappened = ["a", "b", "c", "d"];
+  idea.sk.whatHappened = ["a", "b", "c", "d"];
+  const out = normalizeOutput({ ideas: [idea] });
+  assert.equal(out.ideas[0].whatHappened.length, 3);
+  assert.equal(out.ideas[0].sk.whatHappened.length, 3);
+  assert.deepEqual(validateJudgeOutput(out), []);
+});
+
+test("relative strength 60 and 20 are rule windows, not invented figures", () => {
+  assert.deepEqual(inventedFigures(["Relative strength 60 vs SPY is positive."], { item: {} }), []);
+  assert.deepEqual(inventedFigures(["Relative strength 61 vs SPY is positive."], { item: {} }), [61]);
+});
+
+test("run-judge goes on to the next pending gate only while one is open", async () => {
+  const { runPendingGates } = await import("../run-judge.mjs");
+  const gates = ["2026-10-13", "2026-10-14"];
+  let calls = 0;
+  const run = async () => { calls++; };
+  // run() consumes nothing here, so the loop stops after one run.
+  await runPendingGates(run, ["--gate-from-db"], async () => ({ asOf: gates[1], consumed: false }));
+  assert.equal(calls, 1);
+});

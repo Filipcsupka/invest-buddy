@@ -8,8 +8,13 @@ import { join } from "node:path";
 import { gateTradingDay } from "../gate-db.mjs";
 
 test("a pending scheduled gate keeps its original market date on a later retry", () => {
-  assert.equal(gateTradingDay("2026-10-06"), "2026-10-05");
+  // Summer time: detect runs at 23:35 UTC, so the gate date is the session day.
+  assert.equal(gateTradingDay("2026-10-06"), "2026-10-06");
   assert.equal(gateTradingDay("2026-10-10"), "2026-10-09");
+  assert.equal(gateTradingDay("2026-10-14"), "2026-10-14");
+  // Winter time: detect runs at 00:35 UTC, so the gate date is the day after the session.
+  assert.equal(gateTradingDay("2026-11-04"), "2026-11-03");
+  assert.equal(gateTradingDay("2026-11-09"), "2026-11-06");
 });
 
 test("an empty database gate exits extract and judge with zero model calls", async () => {
@@ -42,4 +47,6 @@ test("an empty database gate exits extract and judge with zero model calls", asy
 
 test("gateTradingDay skips a market holiday", () => {
   assert.equal(gateTradingDay("2026-11-27"), "2026-11-25");
+  assert.equal(gateTradingDay("2026-07-06"), "2026-07-06");
+  assert.equal(gateTradingDay("2026-07-04"), "2026-07-02");
 });

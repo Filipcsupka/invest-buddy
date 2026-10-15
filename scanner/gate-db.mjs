@@ -1,11 +1,24 @@
 import { CALENDAR_FIRST_DAY, CALENDAR_LAST_DAY, previousSession } from "./trading-calendar.mjs";
 /** Scanner pods use the protected web endpoint so database credentials stay in the web and job pods. */
 /** The scheduled detect/extract/judge chain runs at 06:10-08:35 UTC, before the US close. Keep an older pending gate on its original market date. */
+const iso = (d) => d.toISOString().slice(0, 10);
+const lastSunday = (year, month) => { const d = new Date(Date.UTC(year, month + 1, 0)); d.setUTCDate(d.getUTCDate() - d.getUTCDay()); return iso(d); };
+/** Central European summer time runs from the last Sunday of March to the last Sunday of October. */
+export const isEuropeSummerTime = (date) => { const year = Number(date.slice(0, 4)); return date >= lastSunday(year, 2) && date < lastSunday(year, 9); };
+
+/**
+ * The market session a gate belongs to. Detect runs at 01:35 Bratislava time and the gate is dated by the UTC day of that run. In summer time the run
+ * is 23:35 UTC, so the gate date is still the session day itself; in winter it is 00:35 UTC, so the gate date is the day after. Taking the previous
+ * session in both seasons made the judge read the scores of the session before the last one for the whole summer.
+ */
 export function gateTradingDay(gateDate) {
-  if (gateDate > CALENDAR_FIRST_DAY && gateDate <= CALENDAR_LAST_DAY) return previousSession(gateDate);
-  const day = new Date(`${gateDate}T00:00:00Z`);
+  const local = new Date(`${gateDate}T00:00:00Z`);
+  if (isEuropeSummerTime(gateDate)) local.setUTCDate(local.getUTCDate() + 1);
+  const localDate = iso(local);
+  if (localDate > CALENDAR_FIRST_DAY && localDate <= CALENDAR_LAST_DAY) return previousSession(localDate);
+  const day = new Date(`${localDate}T00:00:00Z`);
   do { day.setUTCDate(day.getUTCDate() - 1); } while (day.getUTCDay() === 0 || day.getUTCDay() === 6);
-  return day.toISOString().slice(0, 10);
+  return iso(day);
 }
 
 export async function readGate(baseUrl, token, stage, date = null) {
