@@ -254,4 +254,13 @@ describe("determinism", () => {
     const withCost = universe.map((s) => (s.held ? { ...s, held: { ...s.held, costEur: 1 } } : s));
     expect(computeSignals(withCost as never, p)).toEqual(computeSignals(universe, p));
   });
+
+  it("adds an event note to a buy action and leaves action, tier and other actions unchanged", () => {
+    const s = sym("A", { score: { total: 19, state: "Watch" } });
+    const plain = computeSignals([s], null)[0];
+    const flagged = computeSignals([s], null, undefined, "Macro event risk: test.")[0];
+    expect(flagged.action).toBe(plain.action);
+    expect(flagged.sizeTier).toBe(plain.sizeTier);
+    expect(flagged.reasons.includes("Macro event risk: test.")).toBe(plain.action !== "WATCH");
+  });
 });
