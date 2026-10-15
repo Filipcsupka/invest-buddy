@@ -4,6 +4,7 @@ import { computeSignals, SIGNAL_RULES, type Signal, type SignalSymbolInput } fro
 import { computeTechnicals, type Bar, type Technicals } from "../data/technicals";
 import { freshnessDays } from "../data/evidence";
 import { CITABLE_AGREEMENTS, SEC_PUBLIC_URL } from "../data/sources";
+import { eventNote, upcomingMacroEvents } from "../data/macro-calendar";
 import { latestBaseline, type Baseline } from "./portfolio-baseline";
 import { latestIdeaPerSymbol, ideaSignature, type IdeaAction, type Idea, type SizeTier } from "./ideas";
 
@@ -107,10 +108,10 @@ export function shapeSymbol(row: ScoreRow, consensus: ConsensusRow[], baseline: 
 }
 
 /** Deterministic public signals. The owner's baseline is not an action or amount input; the private allocation page handles amounts. */
-export function signalsFor(symbols: JudgeSymbol[], portfolio: JudgeInput["portfolio"]): JudgeSignal[] {
+export function signalsFor(symbols: JudgeSymbol[], portfolio: JudgeInput["portfolio"], eventNote: string | null = null): JudgeSignal[] {
   void portfolio;
   const inputs: SignalSymbolInput[] = symbols.map((s) => ({ symbol: s.symbol, held: null, score: { total: s.score.total, state: s.score.state }, ruleHits: s.ruleHits, fields: Object.fromEntries(Object.entries(s.fields).map(([k, f]) => [k, { value: f.value, agreement: f.agreement, verified: f.verified, carriedFrom: f.carriedFrom }])), expiredFields: s.expiredFields, technicals: s.technicals }));
-  const sigs = computeSignals(inputs, null);
+  const sigs = computeSignals(inputs, null, undefined, eventNote);
   return sigs.map((s) => ({ ...s, signature: ideaSignature({ action: s.action, setup: s.ratings, sizeTier: s.sizeTier }) }));
 }
 
@@ -167,7 +168,7 @@ export async function buildJudgeInput(pool: Pick<pg.Pool, "query">, asOf: string
   const symbols = picked.map((r) => shapeSymbol(r, consensus.rows.filter((c) => c.symbol === r.ticker), baseline, invested, computeTechnicals(bars.get(r.ticker) ?? [], bars.get(BENCH_SPY) ?? null), displayUrls, primaryFor(r.ticker), researchFacts.get(r.ticker) ?? []));
   return {
     asOf, generatedAt: now.toISOString(), ruleConfigVersion: SIGNAL_RULES.version, benchmark: BENCHMARK, portfolio, symbols,
-    signals: signalsFor(symbols, portfolio),
+    signals: signalsFor(symbols, portfolio, eventNote(upcomingMacroEvents(asOf))),
     previousIdeas: previous.map((p) => ({ symbol: p.symbol, asOf: p.asOf, action: p.action, setup: p.setup, signature: p.signature, sizeTier: p.sizeTier })),
   };
 }

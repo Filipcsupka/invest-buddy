@@ -72,6 +72,7 @@ export type SignalRules = typeof SIGNAL_RULES;
 
 export const ACTIONS = ["WATCH", "START_POSITION", "ADD", "HIGH_CONVICTION_ADD", "HOLD", "REDUCE", "THESIS_BROKEN", "CSPX_ALLOCATION"] as const;
 export type SignalAction = (typeof ACTIONS)[number];
+const BUY_ACTIONS: readonly SignalAction[] = ["START_POSITION", "ADD", "HIGH_CONVICTION_ADD"];
 export type SignalRating = "Very strong" | "Strong" | "Good" | "Neutral" | "Weak";
 
 /** Size as a share of a full position in the reader's own portfolio, never a currency amount. NONE: no new money. */
@@ -268,9 +269,11 @@ function ownerAmounts(signals: Signal[], inputs: Map<string, SignalSymbolInput>,
 }
 
 /** One signal per symbol, sorted by symbol. The portfolio only fills the private owner amounts; it never changes an action or a tier. */
-export function computeSignals(symbols: SignalSymbolInput[], portfolio: SignalPortfolio | null, rules: SignalRules = SIGNAL_RULES): Signal[] {
+export function computeSignals(symbols: SignalSymbolInput[], portfolio: SignalPortfolio | null, rules: SignalRules = SIGNAL_RULES, eventNote: string | null = null): Signal[] {
   const sorted = [...symbols].sort((a, b) => a.symbol.localeCompare(b.symbol));
   const out = sorted.map((s) => signalFor(s, rules));
+  // Flag only: a macro event near a buy action adds a reason. The action and the tier stay as the data gave them.
+  if (eventNote) for (const sig of out) if (BUY_ACTIONS.includes(sig.action)) sig.reasons.push(eventNote);
   if (portfolio) ownerAmounts(out, new Map(sorted.map((s) => [s.symbol, s])), portfolio, rules);
   else for (const sig of out) if (sig.sizeTier !== "NONE" || sig.action === "REDUCE") sig.ownerNotes.push("No portfolio baseline, so no owner amount.");
   return out;
