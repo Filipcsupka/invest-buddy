@@ -40,7 +40,9 @@
     "scan:sample": "tsx scripts/post-sample-scan.ts",
     "seed:local-bars": "tsx scripts/seed-local-bars.ts",
     "backfill:track-record": "tsx scripts/backfill-track-record.ts",
-    "backfill:idea-translations": "tsx scripts/backfill-idea-translations.ts"
+    "backfill:idea-translations": "tsx scripts/backfill-idea-translations.ts",
+    "e2e": "playwright test",
+    "e2e:install": "playwright install --with-deps chromium"
   },
   "dependencies": {
     "fast-xml-parser": "^5.11.2",
@@ -51,6 +53,7 @@
     "zod": "^4.6.6"
   },
   "devDependencies": {
+    "@playwright/test": "1.64.1",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^22",
     "@types/pg": "^8.23.1",

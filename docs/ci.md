@@ -6,7 +6,7 @@ GitHub Actions minutes are limited (free allowance used up, capped budget; owner
 
 | Trigger | Workflow | Jobs |
 | --- | --- | --- |
-| Pull request (code) | Build | `quality` (lint, typecheck, migrate, tests with the runner PostgreSQL, build, `npm audit`, manifest check), `secret-scan` |
+| Pull request (code) | Build | `quality` (lint, typecheck, migrate, tests with the runner PostgreSQL, build, `npm audit`, manifest check), `e2e` (Playwright smoke tests, fixture mode, own build), `secret-scan` |
 | Pull request touching `Dockerfile`, `scanner/Dockerfile`, `package.json`, `package-lock.json` or `deploy/` | Build | the above plus `docker-build` (both images, buildx with GHA cache, no push, no scan) |
 | Pull request touching only `docs/*`, `docs/roadmap/**`, root `*.md` or `.github/ISSUE_TEMPLATE/**` | none | workflow skipped |
 | Pull request touching `package.json` or `package-lock.json` | Security | `dependency-review` (only when `GHAS_ENABLED=true`) |

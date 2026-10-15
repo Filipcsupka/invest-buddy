@@ -68,6 +68,7 @@ Updated 2026-10-14. One table per state. A PR that finishes a task moves it to D
 | EN11 | RULESET_VERSION stored as `ruleset_version` on record snapshots and trade ideas, outside the fingerprint | #190 | migration 085 (not `rules_version`: that column holds the score version) |
 | W17, W18 | No prices in beta; privacy, terms and disclaimer pages EN and SK at `/legal/*`; analytics CSP set per request | #191 | operator fields are TODO placeholders in `src/config/operator.ts`; not lawyer-checked; SK not natively reviewed |
 | DB check | All 51 migrations applied on fresh Postgres 16, Postgres-backed tests run | #189 | one test fixed |
+| W8 (fixture) | Playwright smoke tests: home en/sk, methodology, dashboard filter and search, company page, 404s, language switch, theme toggle; `e2e` CI job, trace upload on failure | this PR | 10 tests, about 2 s locally; Postgres-backed second project not built; W9 staging is owner-gated |
 | Telegram | Channel, sealed secret, digest unsuspended | infra #37 to #41, #126 | first alert sent 2026-10-10 |
 
 ## Open
