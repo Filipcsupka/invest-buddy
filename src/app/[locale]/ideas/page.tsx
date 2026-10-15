@@ -1,6 +1,7 @@
 import { withPageLog } from "@/app/page-log";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { MacroEvents } from "@/components/macro-events";
 import { Disclaimer } from "@/components/disclaimer";
 import { IdeaCard } from "@/components/idea-card";
 import { SampleStamp } from "@/components/operator-disclosure";
@@ -34,6 +35,7 @@ async function Ideas({ params }: LocaleParams) {
         <p className="muted small">{m.ideas.rulesNote}</p>
         <Disclaimer text={m.common.disclaimer} />
       </header>
+      <MacroEvents locale={locale} />
       {data.rows.length ? (
         <div role="list" aria-label={m.ideas.listLabel} style={{ display: "grid", gap: "var(--s5)" }}>
           {data.rows.map((idea) => <div role="listitem" key={idea.id}><IdeaCard idea={idea} locale={locale} showAmounts={false} /></div>)}

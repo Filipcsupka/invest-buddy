@@ -7,6 +7,7 @@ import { latestPortfolio, latestScores } from "@/data/store";
 import { statusLabel } from "@/components/status-slider";
 import { flags } from "@/config/flags";
 import { stateOrder, type StateKey } from "@/i18n/rules";
+import { MacroEvents } from "@/components/macro-events";
 import { DataStatus } from "@/components/data-status";
 import { fill, formatDate, getMessages, plural } from "@/i18n";
 import { pageMetadata } from "@/i18n/metadata";
@@ -30,6 +31,7 @@ async function Dashboard({ params }: LocaleParams) {
     <header className="page-head">
       <div className="page-title-row"><h1 className="title">{m.dashboard.title}</h1>{data.sample && <SampleStamp text={m.common.sample} />}</div>
       {data.lastUpdated && <p className="lede">{fill(m.dashboard.lede, { date: formatDate(locale, session), count: plural(locale, data.sample ? m.plurals.sampleTickers : m.plurals.tickers, rows.length) })}</p>}
+      <MacroEvents locale={locale} />
       <DataStatus locale={locale} lastUpdated={data.lastUpdated} stale={data.stale} />
       <OperatorDisclosure text={m.common.operatorDisclosure} />
     </header>
