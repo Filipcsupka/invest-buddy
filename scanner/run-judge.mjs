@@ -22,7 +22,12 @@ import { extractJson, fill, getToken, lastUsTradingDay, runCli } from "./run-sca
 import { callAgentNoTools, addUsage } from "./run-extract.mjs";
 import { canonical, usageFromEnvelope } from "./extraction-log.mjs";
 import { reserveBudget, finishBudget } from "./ai-budget.mjs";
-import { readGate, consumeGate, gateTradingDay } from "./gate-db.mjs";
+import { readGate, consumeGate as consumeGateRaw, gateTradingDay } from "./gate-db.mjs";
+
+const dayBefore = (now) => new Date(now.getTime() - 86400000).toISOString().slice(0, 10);
+/** Date of the gate this run consumed, so the entry point can go on to the next pending gate. */
+let consumedGateDate = null;
+const consumeGate = async (...args) => { await consumeGateRaw(...args); consumedGateDate = args[3]; };
 import { attachClaudeUsage, attachCliUsage, cutoffError, cutoffLine, CUTOFF_EXIT_CODE } from "./anthropic-cutoff.mjs";
 import { createUsageMonitor, earlyStopLine } from "./claude-usage.mjs";
 import { figureValuesIn, sameFigureValues, sameProtectedTokens } from "./figure-tokens.mjs";
@@ -98,8 +103,13 @@ function walk(s, v, path, errs, root) {
   }
 }
 /** Models often send `"downgrade": null` for "not used". Treat null as absent; every other deviation stays a schema error. */
+const MAX_WHAT_HAPPENED = 3;
 export function normalizeOutput(obj) {
-  if (obj && Array.isArray(obj.ideas)) for (const i of obj.ideas) if (i && typeof i === "object") for (const k of ["downgrade", "conflict"]) if (i[k] === null) delete i[k];
+  if (obj && Array.isArray(obj.ideas)) for (const i of obj.ideas) if (i && typeof i === "object") {
+    for (const k of ["downgrade", "conflict"]) if (i[k] === null) delete i[k];
+    // A fourth "what happened" bullet is the commonest schema miss and drops the whole call. Keep the first three, in English and Slovak alike.
+    for (const target of [i, i.sk]) if (target && Array.isArray(target.whatHappened) && target.whatHappened.length > MAX_WHAT_HAPPENED) target.whatHappened = target.whatHappened.slice(0, MAX_WHAT_HAPPENED);
+  }
   return obj;
 }
 /** Errors against the judge output schema. An empty list means the shape is valid. */
@@ -152,7 +162,7 @@ function collect(v, key, figures, dates) {
   if (v && typeof v === "object") for (const [k, x] of Object.entries(v)) collect(x, k, figures, dates);
 }
 /** Only named rule windows and the score denominator may appear without an input figure. */
-const ruleFigure = (text, value) => (value === 14 && /\bRSI\s*14\b/i.test(text)) || (value === 20 && /\b20[- ]day\b/i.test(text)) || (value === 25 && /\b(?:of|z) 25\b/i.test(text));
+const ruleFigure = (text, value) => (value === 14 && /\bRSI\s*14\b/i.test(text)) || (value === 20 && /\b20[- ]day\b/i.test(text)) || ((value === 20 || value === 60) && new RegExp(`\\b(?:relative strength|RS) ${value}\\b|\\b${value}[- ]day\\b`, "i").test(text)) || (value === 25 && /\b(?:of|z) 25\b/i.test(text));
 /** The words around the first offending figure, so a skip in the log shows what the model wrote. */
 export function figureContext(texts, figure) {
   const text = texts.map(String).join(" | ");
@@ -452,7 +462,24 @@ async function main() {
     const res = await postRun(o, token, { run: { ...runBase, status: "ok", ideaCount: result.ideas.length, output: rawOutput }, ideas: result.ideas });
     log(`POST ok: ${JSON.stringify(res)}; ${totals}`);
     if (o.gateFromDb && !skipped.size) await consumeGate(o.baseUrl, token, "judge", gate.asOf, gate.revision);
-    if (o.gateFromDb && skipped.size) { log("gate remains pending after partial judgement"); process.exitCode = 1; }
+    // A gate keeps its market date on retry, so a symbol that keeps failing would hold every later day behind it. One retry is enough:
+    // a gate older than today that is still partial is closed, and the skipped symbols stay in this log.
+    if (o.gateFromDb && skipped.size && gate.asOf < dayBefore(new Date())) { await consumeGate(o.baseUrl, token, "judge", gate.asOf, gate.revision); log(`gate ${gate.asOf} closed after a retry; not judged: ${[...skipped.keys()].join(", ")}`); }
+    else if (o.gateFromDb && skipped.size) { log("gate remains pending after partial judgement; the next run retries it once"); process.exitCode = 1; }
   } catch (e) { log(`POST failed: ${e.message}; ${totals}`); process.exit(3); }
 }
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main().catch((e) => { console.error(`fatal: ${e.stack || e.message}`); process.exit(1); });
+/** With --gate-from-db one run clears every pending gate up to today, oldest first, so one stuck day cannot leave the judge a day behind for good. */
+export async function runPendingGates(run = main, argv = process.argv.slice(2), peek = null) {
+  const drain = argv.includes("--gate-from-db") && !argv.includes("--as-of") && !argv.includes("--dry-run");
+  const next = peek ?? (async () => readGate(parseArgs(argv).baseUrl, getToken(), "judge"));
+  for (let i = 0; i < MAX_GATES_PER_RUN; i++) {
+    consumedGateDate = null;
+    await run();
+    if (!drain || process.exitCode || !consumedGateDate) return;
+    // Only another gate that is still open is worth a run; a 404 or a consumed gate means the queue is empty.
+    const open = await next().catch(() => null);
+    if (!open || open.consumed || open.asOf === consumedGateDate) return;
+  }
+}
+const MAX_GATES_PER_RUN = 5;
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) runPendingGates().catch((e) => { console.error(`fatal: ${e.stack || e.message}`); process.exit(1); });
