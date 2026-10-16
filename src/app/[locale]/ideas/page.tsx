@@ -1,7 +1,7 @@
 import { withPageLog } from "@/app/page-log";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { SectionHead } from "@/components/kit";
+import { RecordCard, RecordHead } from "@/components/record-parts";
 import "@/components/record-pages.css";
 import { MacroEvents } from "@/components/macro-events";
 import { Disclaimer } from "@/components/disclaimer";
@@ -32,25 +32,23 @@ async function Ideas({ params }: LocaleParams) {
   const data = await latestIdeas();
   return (
     <div className="frame page">
-      <header className="page-head">
-        <div className="page-title-row">
-          <h1 className="title">{m.ideas.title}</h1>
-          {data.sample && <SampleStamp text={m.common.sample} />}
-        </div>
-        <p className="lede">{m.ideas.lede}</p>
-        <p className="muted small">{m.ideas.rulesNote}</p>
-        <Disclaimer text={m.common.disclaimer} />
-      </header>
+      <RecordHead
+        title={m.ideas.title}
+        lede={m.ideas.lede}
+        stamp={data.sample && <SampleStamp text={m.common.sample} />}
+        meta={<><span className="rp-pill">{m.ideas.rulesNote}</span><Disclaimer text={m.common.disclaimer} /></>}
+      />
       <MacroEvents locale={locale} />
       <PaywallSegment id="ideas-list" viewer={viewer} locale={locale} detail={data.rows.length ? ideasCountText(locale, data.rows.length) : undefined}>
-        <SectionHead title={m.ideas.listLabel} as="h2" meta={data.rows.length ? ideasCountText(locale, data.rows.length) : undefined} />
-        {data.rows.length ? (
-          <div role="list" aria-label={m.ideas.listLabel} style={{ display: "grid", gap: "var(--s5)", marginTop: "var(--s4)" }}>
-            {data.rows.map((idea) => <div role="listitem" key={idea.id}><IdeaCard idea={idea} locale={locale} showAmounts={false} /></div>)}
-          </div>
-        ) : (
-          <p className="rp-empty">{m.ideas.empty}</p>
-        )}
+        <RecordCard id="ideas-feed" title={m.ideas.listLabel} meta={data.rows.length ? ideasCountText(locale, data.rows.length) : undefined} className="rp-bare">
+          {data.rows.length ? (
+            <div role="list" aria-label={m.ideas.listLabel} className="rp-ideas">
+              {data.rows.map((idea) => <div role="listitem" key={idea.id}><IdeaCard idea={idea} locale={locale} showAmounts={false} /></div>)}
+            </div>
+          ) : (
+            <p className="rp-empty">{m.ideas.empty}</p>
+          )}
+        </RecordCard>
       </PaywallSegment>
     </div>
   );

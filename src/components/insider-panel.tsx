@@ -16,7 +16,7 @@ export function InsiderPanel({ locale, events, ticker }: { locale: Locale; event
     const labels = [owner.isDirector && m.director, owner.isOfficer && m.officer, owner.isTenPercentOwner && m.tenPercent, owner.isOther && m.other].filter(Boolean);
     return labels.length ? labels.join(", ") : m.unknown;
   };
-  return <section className="sheet-section rp-insiders" aria-label={ticker ?? m.title}>
+  return <div className="rp-insiders" role="group" aria-label={ticker ?? m.title}>
     {ticker && <h2>{ticker}</h2>}
     {events.length === 0 ? <p className="rp-empty">{m.empty}</p> : <DataTable label={ticker ?? m.title} density="compact">
       <thead><tr>
@@ -36,12 +36,12 @@ export function InsiderPanel({ locale, events, ticker }: { locale: Locale; event
           {!ticker && <th scope="row"><Link href={`/${locale}/company/${encodeURIComponent(event.ticker)}`}>{event.ticker}</Link></th>}
           <td>{owners.map((owner) => owner.name ?? m.unknown).join(", ") || m.unknown}</td>
           <td>{owners.map((owner) => owner.role).join("; ") || m.unknown}</td>
-          <td>{isCode(event.code) ? m.codes[event.code] : event.code}</td>
+          <td><span className="rp-code" data-code={event.code}><b>{event.code}</b>{isCode(event.code) ? m.codes[event.code].replace(/^[A-Z]:\s*/, "") : event.code}</span></td>
           <td className="num">{formatNumber(locale, event.shares, Number.isInteger(event.shares) ? 0 : 2)}</td>
           <td className="num">{event.value === null ? m.notReported : money.format(event.value)}</td>
           <td>{event.secUrl ? <a href={event.secUrl} target="_blank" rel="noopener noreferrer" aria-label={`${m.openSec}: ${event.ticker}, ${formatDate(locale, event.filedAt)}`}>SEC</a> : null}</td>
         </tr>;
       })}</tbody>
     </DataTable>}
-  </section>;
+  </div>;
 }

@@ -5,7 +5,9 @@ import { latestPortfolio, portfolioIndexedSeries, stale } from "@/data/store";
 import type { IndexedSeries } from "@/portfolio/history";
 import { DataStatus } from "@/components/data-status";
 import { PerformanceChart, PerformanceKpis, summarize } from "@/components/portfolio-chart";
-import { DataTable, SectionHead } from "@/components/kit";
+import { DataTable } from "@/components/kit";
+import { KpiCard, KpiRow, RecordCard, RecordHead } from "@/components/record-parts";
+import { getRecordPagesMessages } from "@/i18n/record-pages-messages";
 import "@/components/record-pages.css";
 import { PaywallSegment } from "@/components/paywall-segment";
 import { fill, formatDate, formatNumber, getMessages } from "@/i18n";
@@ -31,24 +33,37 @@ export async function generateMetadata({ params }: LocaleParams): Promise<Metada
 async function PortfolioPage({ params }: LocaleParams) {
   const locale = await resolveLocale(params);
   const m = getMessages(locale);
+  const rp = getRecordPagesMessages(locale).portfolio;
   const snapshot = await latestPortfolio();
-  if (!snapshot) return <div className="frame page"><h1 className="title">{m.portfolio.title}</h1><DataStatus locale={locale} lastUpdated={null} stale={false} /></div>;
+  if (!snapshot) return <div className="frame page"><RecordHead title={m.portfolio.title} meta={<DataStatus locale={locale} lastUpdated={null} stale={false} />} /></div>;
   const indexed = snapshot.sample ? fixtureSeries(snapshot.series) : await portfolioIndexedSeries();
   const points = indexed?.points ?? [];
   const enough = points.length >= MIN_POINTS;
   const first = points[0]?.date ?? snapshot.asOf;
   const last = points.at(-1);
   const summary = enough ? summarize(points) : null;
+  const ranked = [...snapshot.weights].sort((x, y) => y.weightPercent - x.weightPercent);
+  const pct = (value: number) => `${formatNumber(locale, value, 1)} %`;
+  const topThree = ranked.slice(0, 3).reduce((sum, position) => sum + position.weightPercent, 0);
   return <div className="frame page">
-    <header className="page-head">
-      <div className="page-title-row"><h1 className="title">{m.portfolio.title}</h1>{snapshot.sample && <SampleStamp text={m.common.sample} />}</div>
-      <p className="lede">{snapshot.sample ? m.portfolio.lede : m.portfolio.liveLede}</p>
-      <p className="notice">{snapshot.sample ? m.portfolio.sampleDisclosure : m.portfolio.disclosure}</p>
-      <p className="muted">{fill(m.portfolio.asOf, { date: formatDate(locale, snapshot.asOf) })} · {m.portfolio.delay}</p>
-      <DataStatus locale={locale} lastUpdated={snapshot.asOf} stale={stale(snapshot.asOf)} />
-    </header>
-    <PaywallSegment id="portfolio-performance"><section className="rp-section" aria-labelledby="portfolio-chart">
-      <SectionHead id="portfolio-chart" title={fill(m.portfolio.chartTitle, { date: formatDate(locale, first) })} lede={enough ? (snapshot.sample ? m.portfolio.chartNote : m.portfolio.liveChartNote) : undefined} />
+    <RecordHead
+      title={m.portfolio.title}
+      lede={snapshot.sample ? m.portfolio.lede : m.portfolio.liveLede}
+      stamp={snapshot.sample && <SampleStamp text={m.common.sample} />}
+      meta={<>
+        <span className="rp-pill">{fill(m.portfolio.asOf, { date: formatDate(locale, snapshot.asOf) })}</span>
+        <span className="rp-pill">{m.portfolio.delay}</span>
+        <DataStatus locale={locale} lastUpdated={snapshot.asOf} stale={stale(snapshot.asOf)} />
+      </>}
+    />
+    <p className="notice">{snapshot.sample ? m.portfolio.sampleDisclosure : m.portfolio.disclosure}</p>
+    {ranked.length > 0 && <KpiRow count={3}>
+      <KpiCard featured label={rp.positions}>{formatNumber(locale, ranked.length)}</KpiCard>
+      <KpiCard label={rp.largest} note={ranked[0].symbol}>{pct(ranked[0].weightPercent)}</KpiCard>
+      <KpiCard label={rp.topThree}>{pct(topThree)}</KpiCard>
+    </KpiRow>}
+    <div className="rp-stack">
+    <PaywallSegment id="portfolio-performance"><RecordCard id="portfolio-chart" className="rp-perf" title={fill(m.portfolio.chartTitle, { date: formatDate(locale, first) })} lede={enough ? (snapshot.sample ? m.portfolio.chartNote : m.portfolio.liveChartNote) : undefined}>
       {enough && last ? <>
         {summary && <PerformanceKpis locale={locale} summary={summary} text={{ current: m.portfolio.kpiCurrent, since: m.portfolio.kpiSince, benchmark: m.portfolio.kpiBenchmark, difference: m.portfolio.kpiDifference, ahead: m.portfolio.kpiAhead, behind: m.portfolio.kpiBehind, drawdown: m.portfolio.kpiDrawdown }} />}
         <figure className="rp-figure">
@@ -57,14 +72,14 @@ async function PortfolioPage({ params }: LocaleParams) {
         </figure>
       </> : <p className="notice">{fill(m.portfolio.historyBuilding, { date: formatDate(locale, first), n: points.length })}</p>}
       {indexed?.twrPercent != null && <p className="rp-line">{formatDate(locale, first)} – {formatDate(locale, last!.date)} · {m.portfolio.twrSince}: {formatNumber(locale, indexed.twrPercent, 2)} %{indexed.benchmarkPercent != null && <> · {m.portfolio.benchmarkSince}: {formatNumber(locale, indexed.benchmarkPercent, 2)} %</>}</p>}
-    </section></PaywallSegment>
-    <PaywallSegment id="portfolio-weights"><section className="rp-section" aria-labelledby="portfolio-weights">
-      <SectionHead id="portfolio-weights" title={m.portfolio.weightsTitle} />
-      <DataTable label={m.portfolio.weightsTitle} density="compact">
-        <thead><tr><th scope="col">{m.portfolio.symbol}</th><th scope="col" className="num">{m.portfolio.weight}</th><th scope="col" className="rp-bar-col"><span className="visually-hidden">{m.portfolio.weight}</span></th></tr></thead>
-        <tbody>{snapshot.weights.map((position) => <tr key={position.symbol}><th scope="row">{position.symbol}</th><td className="num">{formatNumber(locale, position.weightPercent, 1)} %</td><td className="rp-bar-col" aria-hidden="true"><span className="rp-bar"><span style={{ width: `${Math.max(0, Math.min(100, position.weightPercent))}%` }} /></span></td></tr>)}</tbody>
+    </RecordCard></PaywallSegment>
+    <PaywallSegment id="portfolio-weights"><RecordCard id="portfolio-weights" title={m.portfolio.weightsTitle} lede={rp.holdingsNote} flush>
+      <DataTable label={m.portfolio.weightsTitle} density="compact" bounded={false}>
+        <thead><tr><th scope="col" className="rp-rank">#</th><th scope="col">{m.portfolio.symbol}</th><th scope="col" className="num">{m.portfolio.weight}</th><th scope="col" className="rp-bar-col"><span className="visually-hidden">{m.portfolio.weight}</span></th></tr></thead>
+        <tbody>{ranked.map((position, index) => <tr key={position.symbol}><td className="rp-rank num">{index + 1}</td><th scope="row">{position.symbol}</th><td className="num">{pct(position.weightPercent)}</td><td className="rp-bar-col" aria-hidden="true"><span className="rp-bar"><span style={{ width: `${Math.max(0, Math.min(100, position.weightPercent))}%` }} /></span></td></tr>)}</tbody>
       </DataTable>
-    </section></PaywallSegment>
+    </RecordCard></PaywallSegment>
+    </div>
   </div>;
 }
 

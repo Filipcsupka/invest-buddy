@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { SectionHead } from "@/components/kit";
+import { RecordHead } from "@/components/record-parts";
 import { ReadingLayout } from "@/components/reading-layout";
 import "@/components/record-pages.css";
 import { OPERATOR, OPERATOR_FIELDS, operatorIsPlaceholder } from "@/config/operator";
@@ -21,25 +21,22 @@ export function LegalPage({ locale, doc }: { locale: Locale; doc: LegalDoc }) {
   if (doc !== "disclaimer") toc.push({ id: `${doc}-operator`, label: t.operator.title });
   return (
     <article className="frame page rp-article">
-      <header className="page-head">
-        <div className="page-title-row">
-          <h1 className="title">{body.title}</h1>
-          <span className="stamp">{t.common.draft}</span>
-        </div>
-        <p className="lede">{body.lede}</p>
-        <p className="disclaimer">{t.short}</p>
-        <p className="prose">{fill(t.common.updated, { date: LEGAL_UPDATED })}</p>
-      </header>
-      <ReadingLayout locale={locale} toc={toc}>
+      <RecordHead
+        title={body.title}
+        lede={body.lede}
+        stamp={<span className="stamp">{t.common.draft}</span>}
+        meta={<><span className="rp-pill">{fill(t.common.updated, { date: LEGAL_UPDATED })}</span><p className="disclaimer">{t.short}</p></>}
+      />
+      <ReadingLayout locale={locale} toc={toc} flow="doc">
       {sections.map((key) => (
         <section key={key} aria-labelledby={`${doc}-${key}`}>
-          <SectionHead id={`${doc}-${key}`} title={(body as Record<string, string>)[`${key}Title`]} />
+          <h2 id={`${doc}-${key}`}>{(body as Record<string, string>)[`${key}Title`]}</h2>
           <p className="prose">{(body as Record<string, string>)[key]}</p>
         </section>
       ))}
       {doc !== "disclaimer" ? (
         <section aria-labelledby={`${doc}-operator`}>
-          <SectionHead id={`${doc}-operator`} title={t.operator.title} />
+          <h2 id={`${doc}-operator`}>{t.operator.title}</h2>
           <dl className="prose rp-operator" data-operator-placeholder={placeholder ? "true" : undefined}>
             {OPERATOR_FIELDS.map((field) => (
               <div key={field}>

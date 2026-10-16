@@ -1,7 +1,8 @@
 import { withPageLog } from "@/app/page-log";
 import type { Metadata } from "next";
 import { Disclaimer } from "@/components/disclaimer";
-import { DataTable, SectionHead } from "@/components/kit";
+import { DataTable } from "@/components/kit";
+import { RecordCard, RecordHead } from "@/components/record-parts";
 import "@/components/record-pages.css";
 import { PaywallSegment } from "@/components/paywall-segment";
 import { ACCOUNT_BUCKETS, sizingCap, sizingPercent } from "@/engine/sizing";
@@ -31,46 +32,39 @@ async function Sizing({ params }: LocaleParams) {
 
   return (
     <article className="frame page rp-article">
-      <header className="page-head">
-        <h1 className="title">{m.title}</h1>
-        <p className="lede">{m.lede}</p>
-        <Disclaimer text={m.disclaimer} />
-      </header>
+      <RecordHead title={m.title} lede={m.lede} meta={<Disclaimer text={m.disclaimer} />} />
 
-      <PaywallSegment id="sizing-matrix"><section aria-labelledby="sizing-matrix">
-        <SectionHead id="sizing-matrix" title={m.matrixTitle} />
-        <p className="prose">{m.matrixNote}</p>
-        <p className="muted small">{m.draft}</p>
+      <div className="rp-stack">
+      <PaywallSegment id="sizing-matrix"><RecordCard id="sizing-matrix" title={m.matrixTitle} lede={m.matrixNote} flush>
         <DataTable label={m.matrixTitle} bounded={false} density="compact" stickyFirst>
-            <thead><tr><th scope="col">{m.account}</th>{accounts.map((label) => <th scope="col" className="num" key={label}>{label}</th>)}</tr></thead>
-            <tbody>
-              {tiers.map(({ key, label, add }) => (
-                <tr key={key} data-add={add ? "true" : undefined}>
-                  <th scope="row">{label}</th>
-                  {ACCOUNT_BUCKETS.map((account) => <td className="num" key={account}>{add ? "+" : ""}{percent(sizingPercent(key, account, "10_TO_30"))}</td>)}
-                </tr>
-              ))}
-              <tr className="rp-cap"><th scope="row">{m.cap}</th>{ACCOUNT_BUCKETS.map((account) => <td className="num" key={account}>{percent(sizingCap(account))}</td>)}</tr>
-            </tbody>
-          </DataTable>
-      </section></PaywallSegment>
+          <thead><tr><th scope="col">{m.account}</th>{accounts.map((label) => <th scope="col" className="num" key={label}>{label}</th>)}</tr></thead>
+          <tbody>
+            {tiers.map(({ key, label, add }) => (
+              <tr key={key} data-add={add ? "true" : undefined}>
+                <th scope="row">{label}</th>
+                {ACCOUNT_BUCKETS.map((account) => <td className="num" key={account}>{add ? "+" : ""}{percent(sizingPercent(key, account, "10_TO_30"))}</td>)}
+              </tr>
+            ))}
+            <tr className="rp-cap"><th scope="row">{m.cap}</th>{ACCOUNT_BUCKETS.map((account) => <td className="num" key={account}>{percent(sizingCap(account))}</td>)}</tr>
+          </tbody>
+        </DataTable>
+        <p className="muted small rp-foot">{m.draft}</p>
+      </RecordCard></PaywallSegment>
 
-      <PaywallSegment id="sizing-cash"><section aria-labelledby="sizing-cash">
-        <SectionHead id="sizing-cash" title={m.cashTitle} />
-        <ul className="rp-list"><li>{m.cashLow}</li><li>{m.cashMiddle}</li><li>{m.cashHigh}</li></ul>
-      </section></PaywallSegment>
+      <PaywallSegment id="sizing-cash"><RecordCard id="sizing-cash" title={m.cashTitle}>
+        <ul className="rp-levels"><li>{m.cashLow}</li><li>{m.cashMiddle}</li><li>{m.cashHigh}</li></ul>
+      </RecordCard></PaywallSegment>
 
-      <PaywallSegment id="sizing-add"><section aria-labelledby="sizing-add">
-        <SectionHead id="sizing-add" title={m.addTitle} />
+      <PaywallSegment id="sizing-add"><RecordCard id="sizing-add" title={m.addTitle}>
         <p className="prose">{m.addRule}</p>
         <p className="prose">{m.reduceRule}</p>
-      </section></PaywallSegment>
+      </RecordCard></PaywallSegment>
 
-      <PaywallSegment id="sizing-example"><section aria-labelledby="sizing-example">
-        <SectionHead id="sizing-example" title={m.exampleTitle} />
+      <PaywallSegment id="sizing-example"><RecordCard id="sizing-example" title={m.exampleTitle}>
         <p className="prose">{m.example}</p>
         <p className="muted small">{m.privacy}</p>
-      </section></PaywallSegment>
+      </RecordCard></PaywallSegment>
+      </div>
     </article>
   );
 }
