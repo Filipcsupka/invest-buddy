@@ -10,11 +10,16 @@ describe("sitemap", () => {
     if (original.mode === undefined) delete process.env.DATA_MODE; else process.env.DATA_MODE = original.mode;
   });
   it("reads the legal flag at request time", () => expect(dynamic).toBe("force-dynamic"));
-  it("lists the canonical stock screen in both locales without the retired scanner URL", async () => {
+  it("lists the dashboard, scanner and heat map in both locales", async () => {
     const urls = (await sitemap()).map((entry) => entry.url);
-    expect(urls.some((url) => url.endsWith("/en/dashboard"))).toBe(true);
-    expect(urls.some((url) => url.endsWith("/sk/dashboard"))).toBe(true);
-    expect(urls.some((url) => url.endsWith("/scanner"))).toBe(false);
+    for (const path of ["dashboard", "scanner", "heatmap"]) {
+      expect(urls.some((url) => url.endsWith(`/en/${path}`)), path).toBe(true);
+      expect(urls.some((url) => url.endsWith(`/sk/${path}`)), path).toBe(true);
+    }
+  });
+  it("lists no filtered, preview or query URL", async () => {
+    const urls = (await sitemap()).map((entry) => entry.url);
+    expect(urls.filter((url) => url.includes("?") || url.includes("view="))).toEqual([]);
   });
   it("omits sizing until ADVICE_OUTPUT is on", async () => {
     process.env.ADVICE_OUTPUT = "off";
