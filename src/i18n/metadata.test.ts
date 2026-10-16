@@ -44,7 +44,7 @@ describe("page metadata", () => {
     process.env.SITE_NOINDEX = "1";
     expect(pageMetadata("en", "/dashboard", "T", "D").robots).toEqual({ index: false, follow: false });
   });
-  it("every public page builds its metadata with pageMetadata; the owner page is noindex", () => {
+  it("every public page builds its metadata with pageMetadata; the owner and design kit pages are noindex", () => {
     const root = join(process.cwd(), "src/app/[locale]");
     const files: string[] = [];
     const walk = (dir: string) => { for (const name of readdirSync(dir)) { const path = join(dir, name); if (statSync(path).isDirectory()) walk(path); else if (name === "page.tsx") files.push(path); } };
@@ -52,7 +52,7 @@ describe("page metadata", () => {
     expect(files.length).toBeGreaterThan(8);
     for (const file of files) {
       const source = readFileSync(file, "utf8");
-      if (file.includes("owner-allocation")) expect(source).toContain("index: false");
+      if (file.includes("owner-allocation") || file.includes("/design/")) expect(source).toContain("index: false");
       else expect(source, file).toContain("pageMetadata(");
     }
   });

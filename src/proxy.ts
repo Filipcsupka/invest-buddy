@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { instrumentUniverse } from "@/data/store";
 import { ideasEnabled } from "@/data/ideas-store";
 import { ownerViewEnabled } from "@/data/owner-allocation";
-import { flags } from "@/config/flags";
+import { designViewEnabled, flags } from "@/config/flags";
 import { withContentSecurityPolicy } from "@/security/headers";
 import { rateLimit, rateLimitRetryAfter } from "@/security/rate-limit";
 import { writeHttpLog } from "@/app/api/ingest/request-log";
@@ -36,6 +36,7 @@ async function handle(request: NextRequest) {
   const unavailable = (section === "scanner" && !featureFlags.PAYWALL)
     || (section === "sizing" && !featureFlags.ADVICE_OUTPUT)
     || (section === "pricing" && !featureFlags.WAITLIST)
+    || (section === "design" && !designViewEnabled())
     || (section === "ideas" && (!ideasEnabled() || !featureFlags.ADVICE_OUTPUT))
     || (section === "owner-allocation" && !ownerViewEnabled())
     || (section === "owner" && ticker === "research" && !featureFlags.OWNER_VIEW)

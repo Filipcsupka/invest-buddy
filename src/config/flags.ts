@@ -5,7 +5,7 @@ import { z } from "zod";
 // so tests and runtime changes to process.env are honoured.
 const onOff = z.enum(["on", "off"]);
 
-export type FlagName = "PAYWALL" | "AUTH" | "BILLING" | "WAITLIST" | "ADVICE_OUTPUT" | "IDEAS_PAGE" | "INSIDERS_PAGE" | "OWNER_VIEW";
+export type FlagName = "PAYWALL" | "AUTH" | "BILLING" | "WAITLIST" | "ADVICE_OUTPUT" | "IDEAS_PAGE" | "INSIDERS_PAGE" | "OWNER_VIEW" | "DESIGN_VIEW";
 export type Flags = Record<FlagName, boolean>;
 
 function parse(raw: string | undefined, fallback: boolean): boolean {
@@ -26,5 +26,12 @@ export function flags(env: Record<string, string | undefined> = process.env): Fl
     IDEAS_PAGE: fixture || parse(env.IDEAS_PAGE, false),
     INSIDERS_PAGE: parse(env.INSIDERS_PAGE, true),
     OWNER_VIEW: parse(env.OWNER_VIEW, false),
+    // The /design kit review page in production. Off by default.
+    DESIGN_VIEW: parse(env.DESIGN_VIEW, false),
   };
+}
+
+/** The /design review page: on with DESIGN_VIEW, in fixture mode, or outside a production build. */
+export function designViewEnabled(env: Record<string, string | undefined> = process.env): boolean {
+  return flags(env).DESIGN_VIEW || env.DATA_MODE === "fixture" || env.NODE_ENV !== "production";
 }

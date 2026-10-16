@@ -83,6 +83,23 @@ it("shows the SK title and the request id on the /sk/scanner 404, and keeps a va
   expect(response.headers.get("x-request-id")).toBe("abc-12345678");
 });
 
+it.each(["en", "sk"])("hides the %s design kit page in a production build unless DESIGN_VIEW or fixture data is on", async (locale) => {
+  const url = `https://example.com/${locale}/design`;
+  vi.stubEnv("NODE_ENV", "production");
+  vi.stubEnv("DATA_MODE", "db");
+  vi.stubEnv("DESIGN_VIEW", "");
+  try {
+    expect((await proxy(new NextRequest(url))).status).toBe(404);
+    vi.stubEnv("DESIGN_VIEW", "on");
+    expect((await proxy(new NextRequest(url))).status).toBe(200);
+    vi.stubEnv("DESIGN_VIEW", "off");
+    vi.stubEnv("DATA_MODE", "fixture");
+    expect((await proxy(new NextRequest(url))).status).toBe(200);
+  } finally {
+    vi.unstubAllEnvs();
+  }
+});
+
 it("replaces a malformed incoming id", async () => {
   process.env.PAYWALL = "on";
   const response = await proxy(new NextRequest("https://example.com/en/scanner", { headers: { "x-request-id": "bad id<script>" } }));

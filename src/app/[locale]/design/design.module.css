@@ -1,0 +1,193 @@
+/* Layout for the /design review page only. Kit components bring their own styles from kit.css. */
+.page > section {
+  margin-top: var(--s8);
+}
+.note {
+  max-width: 68ch;
+  margin-bottom: var(--s5);
+  font-size: var(--t-sm);
+  color: var(--ink-2);
+}
+.sub {
+  margin: var(--s6) 0 var(--s3);
+}
+.swatches {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+  gap: var(--s3);
+  margin-bottom: var(--s5);
+  padding: 0;
+  list-style: none;
+}
+.swatch {
+  display: grid;
+  gap: var(--s1);
+  font-size: var(--t-xs);
+  color: var(--ink-2);
+}
+.chipSwatch {
+  display: grid;
+  align-content: end;
+  gap: 0.125rem;
+  height: 4.5rem;
+  padding: var(--s2);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  font-size: var(--t-sm);
+  font-weight: 650;
+}
+.chipSwatch small {
+  font-size: var(--t-xs);
+  font-weight: 500;
+}
+.code {
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.typeList {
+  display: grid;
+  gap: var(--s4);
+  margin: 0;
+}
+.typeRow {
+  display: grid;
+  grid-template-columns: 9rem minmax(0, 1fr);
+  gap: var(--s4);
+  align-items: baseline;
+  padding-bottom: var(--s4);
+  border-bottom: 1px solid var(--rule);
+}
+.typeRow dt {
+  font-size: var(--t-xs);
+  color: var(--ink-3);
+}
+.typeRow dd {
+  margin: 0;
+  min-width: 0;
+}
+.displaySample {
+  font-size: var(--t-display);
+  font-weight: 640;
+  font-stretch: 112%;
+  line-height: 0.98;
+  letter-spacing: -0.035em;
+  max-width: 12ch;
+}
+.dials {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s5) var(--s6);
+  align-items: start;
+  margin-bottom: var(--s6);
+}
+.bars {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+  gap: var(--s5) var(--s6);
+  margin-bottom: var(--s5);
+}
+.barCell {
+  display: grid;
+  gap: var(--s2);
+  justify-items: start;
+}
+.dialCell {
+  display: grid;
+  gap: var(--s2);
+  justify-items: center;
+}
+.counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s5) var(--s7);
+  margin: 0;
+}
+.counts > div {
+  display: grid;
+  gap: var(--s1);
+}
+.counts dt {
+  font-size: var(--t-xs);
+  color: var(--ink-3);
+}
+.counts dd {
+  margin: 0;
+  font-size: var(--t-figure);
+  font-weight: 640;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+.stack {
+  display: grid;
+  gap: var(--s6);
+}
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s3) var(--s4);
+  align-items: center;
+}
+.revealBlock {
+  padding: var(--s5);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--sheet-raised);
+  box-shadow: var(--shadow-2), var(--edge-light);
+}
+.scrollBox {
+  max-width: 32rem;
+  max-height: 7rem;
+  overflow: auto;
+  padding: var(--s3);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--sheet);
+  font-size: var(--t-sm);
+  scrollbar-width: thin;
+  scrollbar-color: var(--rule-strong) transparent;
+}
+.scrollBox p + p {
+  margin-top: var(--s2);
+}
+.field {
+  display: grid;
+  gap: var(--s1);
+  max-width: 20rem;
+}
+.depth {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s5);
+}
+.depth > div {
+  display: grid;
+  place-items: center;
+  width: 10rem;
+  height: 5rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--sheet-raised);
+  font-size: var(--t-xs);
+  color: var(--ink-2);
+}
+.depth > div:nth-child(1) {
+  box-shadow: var(--shadow-1), var(--edge-light);
+}
+.depth > div:nth-child(2) {
+  box-shadow: var(--shadow-2), var(--edge-light);
+}
+.onSheet {
+  --frame-bg: var(--sheet);
+  padding: var(--s5);
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+}
+@media (max-width: 640px) {
+  .typeRow {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s1);
+  }
+  .page > section {
+    margin-top: var(--s7);
+  }
+}
