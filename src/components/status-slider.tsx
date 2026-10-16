@@ -4,6 +4,7 @@ import { type StateKey } from "@/i18n/rules";
 import type { StatusView } from "@/engine/status";
 import { CORE_RULES } from "@/engine/display-score";
 import { IconBandBroken, IconBandIgnore, IconBandSetup, IconBandWait, IconBandWatch, IconCheck, IconCross, IconNoData } from "./icons";
+import { AdrLine } from "./disclaimer";
 import styles from "./status-slider.module.css";
 
 /** Slider order, left to right: step 1 to 5. "insufficient" is not a step. */
@@ -190,6 +191,7 @@ export function StatusPanel({ view, m, locale, adviceOutput, asOf, methodHref, r
       </div>
       <p className="visually-hidden" id="status-summary">{summarySentence(view, m, adviceOutput, locale)}</p>
       <StatusTrack view={view} m={m} adviceOutput={adviceOutput} />
+      <AdrLine text={m.common.disclaimer} id="score-disclaimer" />
       {reasons.length > 0 && (broken || !scored) ? <p className={styles.because}>{fill(broken ? m.status.brokenBecause : m.status.insufficientBecause, { reasons: reasons.join("; ") })}</p> : null}
       <StatusCoverage view={view} m={m} adviceOutput={adviceOutput} />
       <ConfirmationChips view={view} m={m} />
