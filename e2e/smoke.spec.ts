@@ -23,7 +23,7 @@ test.describe("dashboard", () => {
     const showing = page.locator("[aria-live=polite]").filter({ hasText: /\d/ }).first();
     const before = await showing.innerText();
 
-    const radio = page.locator(".state-filter input[type=radio]:not([value=all]):not([disabled])").first();
+    const radio = page.locator("input[type=radio][name=state]:not([value=all]):not([disabled])").first();
     await radio.check({ force: true });
     await expect(showing).not.toHaveText(before);
 

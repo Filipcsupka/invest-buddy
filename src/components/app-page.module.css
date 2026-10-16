@@ -1,0 +1,18 @@
+/* App-style page header shared by the stock screen, scanner and sector map. */
+.page { padding-top: var(--s6); }
+.head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--s4) var(--s5); padding-bottom: var(--s5); }
+.main { display: grid; gap: var(--s2); min-width: 0; flex: 1 1 26rem; }
+.titleRow { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); }
+.title { margin: 0; font-family: var(--display); font-size: clamp(1.75rem, 1.3rem + 1.5vw, 2.5rem); font-weight: 800; letter-spacing: -0.03em; line-height: 1.1; }
+.lede { max-width: 64ch; margin: 0; color: var(--ink-2); font-size: var(--t-base); }
+.meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); color: var(--ink-3); font-size: var(--t-sm); }
+.meta :global(.data-updated) { display: inline-flex; align-items: center; margin: 0; padding: 0.1875rem 0.75rem; border: 1px solid var(--rule); border-radius: var(--radius-pill); background: var(--sheet); color: var(--ink-2); font-weight: 600; }
+.meta :global(.notice) { margin: 0; padding: var(--s2) var(--s4); border: 1px solid var(--rule); border-radius: var(--radius-lg); background: var(--sheet); box-shadow: var(--shadow-1); }
+.chip { display: inline-flex; align-items: center; margin: 0; padding: 0.1875rem 0.75rem; border: 1px solid var(--rule); border-radius: var(--radius-pill); background: var(--sheet); color: var(--ink-2); font-weight: 600; }
+.actions { display: flex; flex-wrap: wrap; gap: var(--s2); }
+.disclosure { margin: 0 0 var(--s5); max-width: 78ch; color: var(--ink-3); font-size: var(--t-xs); }
+.rule { height: 1px; margin-bottom: var(--s5); border: 0; background: var(--rule); }
+@media (max-width: 640px) {
+  .page { padding-top: var(--s4); }
+  .actions { width: 100%; }
+}

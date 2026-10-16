@@ -1,0 +1,13 @@
+.card { display: grid; gap: var(--s3); padding: var(--s4); border: 1px solid var(--rule); border-radius: var(--radius-lg); background: var(--sheet); box-shadow: var(--shadow-1); font-size: var(--t-sm); }
+.head { display: flex; align-items: center; gap: var(--s2); }
+.headIcon { display: grid; place-items: center; width: 2rem; height: 2rem; border-radius: var(--radius); background: var(--signal-wash); color: var(--signal); }
+.title { margin: 0; font-family: var(--display); font-size: var(--t-base); font-weight: 800; letter-spacing: -0.01em; }
+.list { display: grid; gap: var(--s2); margin: 0; padding: 0; list-style: none; }
+.item { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: var(--s3); padding: var(--s2) var(--s3) var(--s2) var(--s2); border-radius: var(--radius); background: var(--sheet-hover); }
+.date { display: grid; place-items: center; min-width: 2.75rem; padding: 0.25rem 0.375rem; border-radius: var(--radius); background: var(--sheet); border: 1px solid var(--rule); line-height: 1.1; text-align: center; }
+.day { font-family: var(--display); font-size: var(--t-h3); font-weight: 800; font-variant-numeric: tabular-nums lining-nums; }
+.month { font-size: var(--t-xs); font-weight: 700; color: var(--ink-3); text-transform: capitalize; }
+.what { display: grid; gap: 1px; min-width: 0; }
+.kind { font-weight: 650; overflow-wrap: anywhere; }
+.when { color: var(--ink-3); font-size: var(--t-xs); }
+.note { margin: 0; color: var(--ink-3); font-size: var(--t-xs); }

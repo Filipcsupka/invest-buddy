@@ -1,0 +1,15 @@
+/* The state strip sits first and wide; the empty state is a designed card, not a bare line. */
+.strip { margin-bottom: var(--s4); }
+.strip :global(.kit-strip) { padding: var(--s3) var(--s5) var(--s4); border-radius: var(--radius-lg); box-shadow: var(--shadow-1); }
+.strip :global(.kit-strip-label) { font-family: var(--display); font-size: var(--t-base); font-weight: 800; letter-spacing: -0.01em; color: var(--ink); }
+.strip :global(.kit-strip-link) { min-height: 3rem; padding: 0 var(--s4); border: 1px solid var(--rule); }
+.strip :global(.kit-strip-ticker) { font-size: var(--t-base); }
+.stripEmpty { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s4) var(--s6); padding: var(--s4) var(--s5); border: 1px dashed var(--rule-strong); border-radius: var(--radius-lg); background: var(--sheet); }
+.stripEmptyHead { display: flex; align-items: center; gap: var(--s4); min-width: 0; }
+.stripEmptyIcon { display: grid; place-items: center; flex: none; width: 2.75rem; height: 2.75rem; border-radius: 50%; background: var(--st-watch-wash); color: var(--st-watch); }
+.stripEmptyLabel { margin: 0; font-family: var(--display); font-size: var(--t-base); font-weight: 800; letter-spacing: -0.01em; }
+.stripEmptyText { margin: 2px 0 0; color: var(--ink-3); font-size: var(--t-sm); }
+.ghosts { display: flex; gap: var(--s3); overflow: hidden; mask-image: linear-gradient(90deg, #000 40%, transparent); }
+.ghost { display: inline-flex; align-items: center; gap: var(--s2); flex: none; min-height: 2.5rem; padding: 0 var(--s3); border-radius: var(--radius-pill); background: var(--sheet-hover); }
+.ghost b { width: 2.5rem; height: 0.625rem; border-radius: var(--radius-pill); background: color-mix(in srgb, var(--ink) 14%, transparent); }
+.ghost i { width: 4.5rem; height: 1.25rem; border-radius: var(--radius-pill); border: 1px dashed var(--rule-strong); }
