@@ -1,0 +1,11 @@
+.freeList { margin: 0; padding-left: var(--s5); display: grid; gap: var(--s2); max-width: 72ch; color: var(--ink-2); font-size: var(--t-base); }
+.tableWrap { overflow-x: auto; max-width: 100%; }
+.table { width: 100%; border-collapse: collapse; font-size: var(--t-base); }
+.caption { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.table th, .table td { text-align: left; vertical-align: top; padding: var(--s3) var(--s3); border-bottom: 1px solid var(--rule); }
+.table thead th { font-size: var(--t-xs); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); border-bottom-color: var(--rule-strong); }
+.table tbody th { font-weight: 400; min-width: 16rem; }
+.table td { min-width: 9rem; color: var(--ink-2); }
+.label { display: block; font-weight: 700; color: var(--ink); }
+.detail { display: block; color: var(--ink-2); font-size: var(--t-sm); margin-top: var(--s1); }
+.status { display: block; color: var(--ink-3); font-size: var(--t-xs); margin-top: var(--s1); }

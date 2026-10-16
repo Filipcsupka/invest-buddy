@@ -6,7 +6,8 @@ import { instrumentUniverse, latestScores } from "@/data/store";
 
 export const dynamic = "force-dynamic";
 
-const routes = ["", "/dashboard", "/heatmap", "/track-record", "/portfolio", "/methodology", "/legal/privacy", "/legal/terms", "/legal/disclaimer"];
+/** Public-safe, indexable pages. Only bare paths are listed: filtered scanner URLs and ?view= previews stay out. */
+const routes = ["", "/dashboard", "/scanner", "/heatmap", "/track-record", "/portfolio", "/methodology", "/legal/privacy", "/legal/terms", "/legal/disclaimer"];
 
 /** One entry per path and locale, each with hreflang alternates. `lastModified` is the data date, not the request time. */
 function entries(paths: { path: string; lastModified?: string }[]): MetadataRoute.Sitemap {

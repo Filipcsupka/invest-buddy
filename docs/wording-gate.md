@@ -17,7 +17,9 @@ Public cards never show the stored EUR amount, even when `ADVICE_OUTPUT` is on. 
 
 ## Wording that stays visible with the flag off
 
-- Home: “Ten rules add up to 25 points” is arithmetic. “No instructions to buy or sell” and “ani pokyny na nákup či predaj” state the product limit.
+- Home: “Nine core rules make the public percentage” describes the method. “no position sizes, price targets or personal trade instructions” and “ani cieľové ceny ani osobné pokyny k obchodom” state the product limit.
+- Disclaimer: `common.disclaimer` reads “Informational screening only. Same rules for every visitor. No personal investment advice.” and in Slovak “Iba informačný prehľad podľa pravidiel. Rovnaké pravidlá pre každého návštevníka. Nejde o osobné investičné poradenstvo.” Share images use the shorter `common.ogDisclaimer`: “Informational screening only. No personal investment advice.” The pricing page repeats the same ADR-001 line and says that both tiers show the same rules and scores.
+- Track record window: forward returns and the beat rate use 20 trading days (`trackRecord.hitRate`, `trackRecord.periodNote`).
 - Track record: “measured buy signals”, “buy signals, too few to conclude”, “Podiel nákupných signálov” and “Počet nákupných signálov” describe historical counts, not an action for the reader. “Start at zero”, “since start” and “SPY since start” refer to chart time.
 - Company and dashboard: “Nákupy insiderov alebo inštitúcií” describes source data. “Bez signálu na ďalší nákup” states that no purchase signal exists. “Znížený výhľad” and related rejection text describe guidance changes.
 - Owner allocation: `ownerAllocation.*` contains add, buy and reduce terms in both locales. It remains behind `OWNER_VIEW`; it is not a public route while that flag is off.
@@ -32,9 +34,9 @@ Each row quotes one current dictionary string containing buy, add, start, reduce
 | Key | Off state | Exact string |
 | --- | --- | --- |
 | `en.meta.sizingDescription` | Hidden | Illustrative position percentages by account and cash range, with per-name limits and add rules. |
-| `en.home.buildBody` | Visible | Ten rules add up to 25 points. Each one is a yes or no check against data you can read on the company page. A rejection rule overrides the total. |
-| `en.home.leavesOutBody` | Visible | Every visitor sees the same result. There are no position sizes, no price targets and no instructions to buy or sell. A score says which published conditions a stock meets today, and it knows nothing about your money or your goals. |
-| `en.trackRecord.hitRate` | Visible | 30-day SPY beat rate: {rate} across {n} measured buy signals. |
+| `en.home.buildBody` | Visible | Nine core rules make the public percentage. Each checks collected data you can inspect on the company page. Ad hoc catalyst evidence is shown separately. A rejection rule overrides the percentage. |
+| `en.home.leavesOutBody` | Visible | Every visitor sees the same result. There are no position sizes, price targets or personal trade instructions. A score says which published conditions a stock meets today, and it knows nothing about your money or your goals. |
+| `en.trackRecord.hitRate` | Visible | 20-trading-day SPY beat rate: {rate} across {n} measured buy signals. |
 | `en.trackRecord.smallSample` | Visible | {n} buy signals, too few to conclude. |
 | `en.trackRecord.signalTiers.STARTER` | Hidden | Starter |
 | `en.trackRecord.signalTiers.ADD_THIRD` | Hidden | Add 1/3 |
@@ -44,7 +46,7 @@ Each row quotes one current dictionary string containing buy, add, start, reduce
 | `en.portfolio.kpiCurrent` | Visible | Return since start |
 | `en.portfolio.chartAria` | Visible | Portfolio and SPY, change in percent since the first date, zero is the starting value |
 | `en.portfolio.benchmarkSince` | Visible | SPY since start |
-| `en.methodology.scoreBody` | Visible | Three groups of yes or no rules. Each matched rule adds its points; a missed rule adds nothing. |
+| `en.methodology.scoreBody` | Visible | Nine core rules use data collected at least quarterly. The percentage divides points met by points with data among those rules. A core rule without data is omitted and the page shows how many core rules have data. Ad hoc catalyst findings appear separately as a bonus and never change the percentage or displayed band. |
 | `en.errors.notFoundBody` | Visible | The address may be mistyped, or the ticker is not in the sample universe. |
 | `en.errors.notFoundBodyLive` | Visible | The address may be mistyped, or the ticker is not in the screening universe. |
 | `en.ideas.tiers.STARTER` | Hidden | Starter, about 1/3 of a full position |
@@ -81,16 +83,16 @@ Each row quotes one current dictionary string containing buy, add, start, reduce
 | `sk.rules.accumulation` | Visible | Nákupy insiderov alebo inštitúcií |
 | `sk.ruleDefinitions.accumulation` | Visible | Je nastavený príznak nákupov insiderov alebo inštitúcií. |
 | `sk.reasons.earningsMiss` | Visible | Zisk pod odhadom a znížený výhľad |
-| `sk.home.leavesOutBody` | Visible | Každý návštevník vidí rovnaký výsledok. Nenájdete tu veľkosť pozícií, cieľové ceny ani pokyny na nákup či predaj. Skóre hovorí, ktoré zverejnené podmienky akcia dnes spĺňa, a o vašich peniazoch ani cieľoch nevie nič. |
+| `sk.home.leavesOutBody` | Visible | Každý návštevník vidí rovnaký výsledok. Nenájdete tu veľkosť pozícií, cieľové ceny ani osobné pokyny k obchodom. Skóre hovorí, ktoré zverejnené podmienky akcia dnes spĺňa, a o vašich peniazoch ani cieľoch nevie nič. |
 | `sk.company.inputs.guidanceCut` | Visible | Znížený výhľad |
 | `sk.company.inputs.earningsMissAndGuidanceCut` | Visible | Zisk pod odhadom so zníženým výhľadom |
 | `sk.company.inputs.insiderOrInstitutionalAccumulation` | Visible | Nákupy insiderov alebo inštitúcií |
-| `sk.trackRecord.hitRate` | Visible | Podiel nákupných signálov, ktoré za 30 dní prekonali SPY: {rate} z {n} vyhodnotených. |
+| `sk.trackRecord.hitRate` | Visible | Podiel nákupných signálov, ktoré za 20 obchodných dní prekonali SPY: {rate} z {n} vyhodnotených. |
 | `sk.trackRecord.smallSample` | Visible | Počet nákupných signálov: {n}. Vzorka je príliš malá na záver. |
 | `sk.trackRecord.signalTiers.ADD_THIRD` | Hidden | Prikúpiť 1/3 |
 | `sk.trackRecord.signalTiers.ADD_HALF` | Hidden | Prikúpiť 1/2 |
 | `sk.portfolio.heldNoSignal` | Visible | V portfóliu, bez signálu na ďalší nákup |
-| `sk.methodology.scoreBody` | Visible | Tri skupiny pravidiel typu áno alebo nie. Splnené pravidlo pridá svoje body, nesplnené nepridá nič. |
+| `sk.methodology.scoreBody` | Visible | Deväť hlavných pravidiel používa údaje zbierané aspoň štvrťročne. Percento je podiel splnených bodov z bodov hlavných pravidiel s údajmi. Hlavné pravidlo bez údajov sa vynechá a stránka uvádza, koľko hlavných pravidiel má údaje. Príležitostné zistenia o katalyzátoroch sa zobrazujú osobitne ako bonus a nemenia percento ani zobrazený stupeň. |
 | `sk.methodology.rejectionBody` | Visible | Tieto pravidlá majú prednosť pred súčtom a presunú ticker do stavu Kritériá porušené: klesajúce tržby, zisk pod odhadom spolu so zníženým výhľadom, cena pod MA200, MA50 pod MA200 a príznak firmy bez tržieb alebo meme pumpy. |
 | `sk.ideas.tiers.ADD_THIRD` | Hidden | Prikúpiť asi 1/3 plnej pozície |
 | `sk.ideas.tiers.ADD_HALF` | Hidden | Prikúpiť asi 1/2 plnej pozície |
