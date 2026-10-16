@@ -1,4 +1,7 @@
 import Link from "next/link";
+import { SectionHead } from "@/components/kit";
+import { ReadingLayout } from "@/components/reading-layout";
+import "@/components/record-pages.css";
 import { OPERATOR, OPERATOR_FIELDS, operatorIsPlaceholder } from "@/config/operator";
 import { fill, type Locale } from "@/i18n";
 import { getLegalMessages, LEGAL_SECTION_KEYS } from "@/i18n/legal-messages";
@@ -14,8 +17,10 @@ export function LegalPage({ locale, doc }: { locale: Locale; doc: LegalDoc }) {
   const body = t[doc];
   const placeholder = operatorIsPlaceholder();
   const sections = LEGAL_SECTION_KEYS.filter((key) => key in body);
+  const toc = sections.map((key) => ({ id: `${doc}-${key}`, label: (body as Record<string, string>)[`${key}Title`] }));
+  if (doc !== "disclaimer") toc.push({ id: `${doc}-operator`, label: t.operator.title });
   return (
-    <article className="frame page reading">
+    <article className="frame page rp-article">
       <header className="page-head">
         <div className="page-title-row">
           <h1 className="title">{body.title}</h1>
@@ -25,16 +30,17 @@ export function LegalPage({ locale, doc }: { locale: Locale; doc: LegalDoc }) {
         <p className="disclaimer">{t.short}</p>
         <p className="prose">{fill(t.common.updated, { date: LEGAL_UPDATED })}</p>
       </header>
+      <ReadingLayout locale={locale} toc={toc}>
       {sections.map((key) => (
         <section key={key} aria-labelledby={`${doc}-${key}`}>
-          <h2 id={`${doc}-${key}`}>{(body as Record<string, string>)[`${key}Title`]}</h2>
+          <SectionHead id={`${doc}-${key}`} title={(body as Record<string, string>)[`${key}Title`]} />
           <p className="prose">{(body as Record<string, string>)[key]}</p>
         </section>
       ))}
       {doc !== "disclaimer" ? (
         <section aria-labelledby={`${doc}-operator`}>
-          <h2 id={`${doc}-operator`}>{t.operator.title}</h2>
-          <dl className="prose" data-operator-placeholder={placeholder ? "true" : undefined}>
+          <SectionHead id={`${doc}-operator`} title={t.operator.title} />
+          <dl className="prose rp-operator" data-operator-placeholder={placeholder ? "true" : undefined}>
             {OPERATOR_FIELDS.map((field) => (
               <div key={field}>
                 <dt>{t.operator[field]}</dt>
@@ -55,6 +61,7 @@ export function LegalPage({ locale, doc }: { locale: Locale; doc: LegalDoc }) {
           <Link href={`/${locale}/legal/disclaimer`}>{t.common.disclaimerLink}</Link>
         </p>
       ) : null}
+      </ReadingLayout>
     </article>
   );
 }

@@ -119,5 +119,5 @@ it("shows the pending count for a period with no measured window", async () => {
     signals: [signal(2, "AMD", "2026-11-04"), signal(1, "NVDA", "2026-11-05")] });
   benchmark.mockResolvedValue([]);
   const html = renderToStaticMarkup(await TrackRecord(props));
-  expect(html).toContain("<td>0<span class=\"muted small\"> (2 pending)</span></td>");
+  expect(html).toContain("<td class=\"num\">0<span class=\"muted small\"> (2 pending)</span></td>");
 });

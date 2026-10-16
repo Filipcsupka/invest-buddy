@@ -1,5 +1,7 @@
 import Link from "next/link";
 import type { InsiderEvent } from "@/db/insiders";
+import { DataTable } from "@/components/kit";
+import "./record-pages.css";
 import { formatDate, formatNumber, getMessages, intlTag, type Locale } from "@/i18n";
 
 const codes = ["P", "S", "A", "M", "F"] as const;
@@ -14,9 +16,9 @@ export function InsiderPanel({ locale, events, ticker }: { locale: Locale; event
     const labels = [owner.isDirector && m.director, owner.isOfficer && m.officer, owner.isTenPercentOwner && m.tenPercent, owner.isOther && m.other].filter(Boolean);
     return labels.length ? labels.join(", ") : m.unknown;
   };
-  return <section className="sheet-section" aria-label={ticker ?? m.title}>
+  return <section className="sheet-section rp-insiders" aria-label={ticker ?? m.title}>
     {ticker && <h2>{ticker}</h2>}
-    {events.length === 0 ? <p className="muted">{m.empty}</p> : <div className="table-scroll" role="region" tabIndex={0} aria-label={ticker ?? m.title}><table className="screen insider-table">
+    {events.length === 0 ? <p className="rp-empty">{m.empty}</p> : <DataTable label={ticker ?? m.title} density="compact">
       <thead><tr>
         <th scope="col">{m.date}</th>
         {!ticker && <th scope="col">{m.ticker}</th>}
@@ -40,6 +42,6 @@ export function InsiderPanel({ locale, events, ticker }: { locale: Locale; event
           <td>{event.secUrl ? <a href={event.secUrl} target="_blank" rel="noopener noreferrer" aria-label={`${m.openSec}: ${event.ticker}, ${formatDate(locale, event.filedAt)}`}>SEC</a> : null}</td>
         </tr>;
       })}</tbody>
-    </table></div>}
+    </DataTable>}
   </section>;
 }
