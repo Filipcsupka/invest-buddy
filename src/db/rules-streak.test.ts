@@ -41,21 +41,45 @@ describe("ruleStreak", () => {
     expect(streak).toMatchObject({ met: [], lost: [], gained: [] });
   });
 
-  it("compares a young ticker with its first day", () => {
+  it("shows no change for a young ticker without a baseline a week back", () => {
     const streak = ruleStreak([day("2026-10-14", hit("a", true)), day("2026-10-13", hit("a", false))]);
-    expect(streak).toMatchObject({ gained: ["a"], sinceDays: 0 });
+    expect(streak).toMatchObject({ gained: [], lost: [], sinceDays: 0 });
+  });
+
+  it("shows no change when the ticker was last scored more than a week before the newest snapshot", () => {
+    const days = [day("2026-09-20", hit("a", true)), day("2026-09-12", hit("a", false))];
+    expect(ruleStreak(days, "2026-10-14")).toMatchObject({ gained: [], lost: [] });
+    expect(ruleStreak(days, "2026-09-22")).toMatchObject({ gained: ["a"] });
+  });
+
+  it("ignores a baseline far outside the stated week", () => {
+    const streak = ruleStreak([day("2026-10-14", hit("a", true)), day("2026-08-01", hit("a", false))]);
+    expect(streak).toMatchObject({ gained: [], lost: [] });
   });
 });
 
 describe("streaksFromRows", () => {
   it("groups by ticker and sorts days newest first", () => {
     const out = streaksFromRows([
-      { ticker: "AMD", asOf: "2026-10-13", hits: [hit("a", true)] },
+      { ticker: "AMD", asOf: "2026-10-07", hits: [hit("a", true)] },
       { ticker: "AMD", asOf: "2026-10-14", hits: [hit("a", false)] },
       { ticker: "NVDA", asOf: "2026-10-14", hits: [hit("a", true)] },
     ]);
     expect(out.AMD).toMatchObject({ met: [], lost: ["a"], sinceDays: 0 });
     expect(out.NVDA.met).toEqual(["a"]);
+  });
+});
+
+describe("streaksFromRows recency", () => {
+  it("drops gained and lost for a ticker that stopped being scored", () => {
+    const out = streaksFromRows([
+      { ticker: "OLD", asOf: "2026-09-20", hits: [hit("a", true)] },
+      { ticker: "OLD", asOf: "2026-09-12", hits: [hit("a", false)] },
+      { ticker: "NEW", asOf: "2026-10-14", hits: [hit("a", true)] },
+      { ticker: "NEW", asOf: "2026-10-07", hits: [hit("a", false)] },
+    ]);
+    expect(out.OLD).toMatchObject({ gained: [], lost: [] });
+    expect(out.NEW).toMatchObject({ gained: ["a"] });
   });
 });
 
@@ -68,6 +92,7 @@ describe("ruleStreaksFromDb", () => {
     expect(calls).toHaveLength(1);
     expect(calls[0].params).toEqual([90]);
     expect(calls[0].text).toContain("jsonb_to_recordset");
+    expect(calls[0].text).toMatch(/s\.ticker IN \(SELECT c\.ticker FROM score_results c WHERE c\.as_of = /);
     expect(calls[0].text).not.toMatch(/s\.audit\s*,|s\.audit AS/);
   });
 });

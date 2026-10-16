@@ -187,6 +187,8 @@ export interface IdeaCardInput {
   current: StatusPoint;
   idea: StoredIdea;
   audit?: CardAudit;
+  /** Rules whose state changed vs the previous day, same filter and limit as the event alert. */
+  ruleChanges?: AlertRuleChange[];
   mode: CardMode;
   /** ADVICE_OUTPUT. Off in public mode: the card shows no model text, ratings or plan (docs/wording-gate.md). */
   adviceOutput: boolean;
@@ -274,6 +276,9 @@ export function formatIdeaCard(input: IdeaCardInput): string {
       ? escapeHtml(card.scoreRelative(Number(points), audit.evidencedMax, Math.round(audit.percent), Math.round(audit.coverage)))
       : escapeHtml(card.scorePlain(Number(points)));
 
+  const ruleLines = (input.ruleChanges ?? []).filter((c) => c.to === "pass" || (c.from === "pass" && c.to === "fail")).slice(0, MAX_RULE_LINES)
+    .map((c) => `${c.to === "pass" ? text.nowMeets : text.noLongerMeets}: ${escapeHtml(c.label)}`);
+
   const sections: Section[] = [];
   if (showModelText) {
     const happened = body.whatHappened.filter(keep).slice(0, 3);
@@ -315,7 +320,7 @@ export function formatIdeaCard(input: IdeaCardInput): string {
   const ownerLink = owner && input.research?.ownerPath ? ` · <a href="${escapeHtml(`${site}/${locale}${input.research.ownerPath}`)}">${locale === "sk" ? "Stránka vlastníka" : "Owner page"}</a>` : "";
 
   const render = (parts: Section[], evidenceLines: string[]): string => [
-    ...head, change, score,
+    ...head, change, score, ...ruleLines,
     ...parts.sort((a, b) => b.priority - a.priority).flatMap((s) => ["", ...s.lines]),
     ...(evidenceLines.length ? ["", `<b>${escapeHtml(card.evidence)}</b>`, ...evidenceLines] : []),
     ...(researchLines.length ? ["", ...researchLines] : []),

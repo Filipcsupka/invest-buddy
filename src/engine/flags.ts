@@ -54,8 +54,9 @@ function dilution(shares: readonly ShareCount[]): FlagResult {
   if (!latest) return noData("dilution");
   const earlier = sorted.find((s) => days(s.periodEnd, latest.periodEnd) >= FLAG_THRESHOLDS.dilutionMinDays);
   if (!earlier) return noData("dilution");
-  const change = r1((latest.value / earlier.value - 1) * 100);
-  return { id: "dilution", state: change >= FLAG_THRESHOLDS.dilutionPercent ? "flagged" : "clear", values: { change, from: earlier.value, to: latest.value, fromDate: earlier.periodEnd, toDate: latest.periodEnd } };
+  const raw = (latest.value / earlier.value - 1) * 100;
+  const change = r1(raw);
+  return { id: "dilution", state: raw >= FLAG_THRESHOLDS.dilutionPercent ? "flagged" : "clear", values: { change, from: earlier.value, to: latest.value, fromDate: earlier.periodEnd, toDate: latest.periodEnd } };
 }
 
 function illiquid(bars: readonly OHLCV[]): FlagResult {
@@ -69,8 +70,9 @@ function interestCover(operatingIncome: number | null, interestExpense: number |
   if (!finite(operatingIncome) || !finite(interestExpense) || interestExpense < 0) return noData("interestCover");
   // Reported zero interest expense: nothing to cover, so not flagged. Missing interest expense stays no data.
   if (interestExpense === 0) return { id: "interestCover", state: "clear", values: { interestExpense: 0 } };
-  const times = r1(operatingIncome / interestExpense);
-  return { id: "interestCover", state: times < FLAG_THRESHOLDS.interestCover ? "flagged" : "clear", values: { times } };
+  const raw = operatingIncome / interestExpense;
+  const times = r1(raw);
+  return { id: "interestCover", state: raw < FLAG_THRESHOLDS.interestCover ? "flagged" : "clear", values: { times } };
 }
 
 function shortInterest(percent: number | null): FlagResult {
@@ -84,8 +86,9 @@ function drawdown(bars: readonly OHLCV[]): FlagResult {
   const high = Math.max(...recent.map((b) => b.high));
   const close = recent.at(-1)!.close;
   if (!finite(high) || !finite(close) || high <= 0) return noData("drawdown");
-  const percent = r1((1 - close / high) * 100);
-  return { id: "drawdown", state: percent >= FLAG_THRESHOLDS.drawdownPercent ? "flagged" : "clear", values: { percent } };
+  const raw = (1 - close / high) * 100;
+  const percent = r1(raw);
+  return { id: "drawdown", state: raw >= FLAG_THRESHOLDS.drawdownPercent ? "flagged" : "clear", values: { percent } };
 }
 
 /** The five flags in fixed order. Pure; the score is not an input. */

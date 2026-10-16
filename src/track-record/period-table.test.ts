@@ -30,6 +30,12 @@ describe("periodTable", () => {
     expect(Object.keys(nov)).toEqual(Object.keys(oct));
   });
 
+  it("takes the grain from the log start, not the first signal", () => {
+    const signals = [sig("A", "2027-10-08", 0.02)];
+    expect(periodTable(signals, bars, "2027-10-20").grain).toBe("month");
+    expect(periodTable(signals, bars, "2027-10-20", "2026-10-06").grain).toBe("year");
+  });
+
   it("groups by year once the log is a year old", () => {
     const table = periodTable([sig("A", "2026-10-07", 0.02), sig("B", "2027-10-08", -0.05)], bars, "2027-10-20");
     expect(table.grain).toBe("year");
