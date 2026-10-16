@@ -1,10 +1,11 @@
 import { withPageLog } from "@/app/page-log";
 import type { Metadata } from "next";
 import { Disclaimer } from "@/components/disclaimer";
-import { DataTable, SectionHead, TierBadge } from "@/components/kit";
+import { DataTable, ResultMark, SectionHead, TierBadge } from "@/components/kit";
 import { TrackView } from "@/components/track-view";
 import { WaitlistForm } from "@/components/waitlist-form";
 import { flags } from "@/config/flags";
+import { LIVE_PAID as LIVE, paidIds } from "@/components/landing/tier-rows";
 import { FEATURE_TIERS, TIERS, TIER_LIMITS, type LimitKey, type TierId } from "@/config/tiers";
 import { fill, getMessages, plural, type Locale } from "@/i18n";
 import { getKitMessages } from "@/i18n/kit-messages";
@@ -22,16 +23,6 @@ export async function generateMetadata({ params }: LocaleParams): Promise<Metada
   const locale = await resolveLocale(params);
   const t = getLaunchMessages(locale);
   return pageMetadata(locale, "/pricing", t.pricing.title, t.pricing.lede);
-}
-
-/** Paid ids that already work in the beta. The rest are planned and say so. */
-const LIVE: ReadonlySet<TierId> = new Set<TierId>(["score-history", "scanner-filters-advanced", "scanner-streak", "insiders-history"]);
-
-/** Every id the tier config marks as paid, in the order the copy lists them. A paid id without a copy row is caught by the page test. */
-function paidIds(order: string[]): TierId[] {
-  const entries: [string, { tier: string }][] = [...Object.entries(TIERS), ...Object.entries(FEATURE_TIERS)];
-  const paid = new Set(entries.filter(([, entry]) => entry.tier === "paid").map(([id]) => id));
-  return order.filter((id) => paid.has(id)) as TierId[];
 }
 
 /** Free and paid cell text for one paid id, from the copy and TIER_LIMITS. A lock has no free text; a limit shows its numbers. */
@@ -63,14 +54,38 @@ async function Pricing({ params, searchParams }: PricingProps) {
         <p className="lede">{p.lede}</p>
         <Disclaimer text={m.common.disclaimer} />
       </header>
-      <section aria-labelledby="free" className={styles.free}>
-        <SectionHead id="free" title={pm.alwaysFreeTitle} lede={pm.alwaysFreeLede} meta={<TierBadge tier="free" label={k.tier.free} />} />
-        <ul className={styles.freeList}>
-          {pm.alwaysFree.map((item) => <li key={item}>{item}</li>)}
-        </ul>
+      <section aria-label={pm.compareTitle} className={styles.plans}>
+        <article className={`kit-card ${styles.plan}`} aria-labelledby="free">
+          <header className={styles.planHead}>
+            <h2 id="free">{pm.alwaysFreeTitle}</h2>
+            <TierBadge tier="free" label={k.tier.free} />
+          </header>
+          <p className={styles.planLede}>{pm.alwaysFreeLede}</p>
+          <ul className={styles.planList}>
+            {pm.alwaysFree.map((item) => <li key={item}><span className="kit-mark" data-result="pass"><ResultMark result="pass" /></span><span>{item}</span></li>)}
+          </ul>
+        </article>
+        <article className={`kit-card ${styles.plan} ${styles.planPaid}`} aria-labelledby="paid">
+          <header className={styles.planHead}>
+            <h2 id="paid">{pm.paidTitle}</h2>
+            <TierBadge tier="paid" label={k.tier.paid} />
+          </header>
+          <p className={styles.planLede}>{pm.paidLede}</p>
+          <ul className={styles.planList}>
+            {ids.slice(0, 6).map((id) => (
+              <li key={id}>
+                <span className={styles.dot} aria-hidden="true" />
+                <span className={styles.itemMain}>
+                  <span className={styles.itemName}>{pm.rows[id]?.label}</span>
+                  <span className={styles.itemState} data-live={LIVE.has(id) ? "" : undefined}>{LIVE.has(id) ? pm.statusLive : pm.statusPlanned}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </article>
       </section>
       <section aria-labelledby="compare" className={styles.compare}>
-        <SectionHead id="compare" title={pm.paidTitle} lede={`${pm.paidLede} ${pm.compareLede}`} meta={<TierBadge tier="paid" label={k.tier.paid} />} />
+        <SectionHead id="compare" title={pm.compareTitle} lede={pm.compareLede} />
         <DataTable label={pm.tableCaption} bounded={false} stickyFirst>
           <thead>
             <tr>
@@ -99,15 +114,13 @@ async function Pricing({ params, searchParams }: PricingProps) {
           </tbody>
         </DataTable>
       </section>
-      <section aria-labelledby="later" className={styles.later}>
-        <SectionHead id="later" title={pm.noPriceTitle} rule="quiet" />
-        <div className={styles.laterGrid}>
-          <p className="prose">{pm.noPriceBody}</p>
-          <p className="prose">{pm.adrNote}</p>
-        </div>
+      <section aria-labelledby="later" className={`kit-card ${styles.later}`}>
+        <h2 id="later">{pm.noPriceTitle}</h2>
+        <p>{pm.noPriceBody}</p>
+        <p>{pm.adrNote}</p>
       </section>
-      <section aria-labelledby="join" className={styles.join}>
-        <SectionHead id="join" title={p.waitlistTitle} />
+      <section aria-labelledby="join" className={`kit-card ${styles.join}`}>
+        <h2 id="join">{p.waitlistTitle}</h2>
         <div className={styles.joinForm}>
           <WaitlistForm locale={locale} labels={m.waitlist} source={source} hideTitle />
         </div>

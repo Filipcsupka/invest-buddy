@@ -1,19 +1,47 @@
-.page { display: grid; gap: var(--s8); }
-.head { display: grid; gap: var(--s4); max-width: 62ch; }
-.freeList { margin: var(--s5) 0 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 var(--s7); max-width: 64rem; }
-.freeList li { position: relative; padding: var(--s3) 0 var(--s3) var(--s5); border-bottom: 1px solid var(--rule); color: var(--ink); font-size: var(--t-base); }
-.freeList li::before { content: ""; position: absolute; inset-inline-start: 0; top: 1.1rem; inline-size: 0.5rem; block-size: 0.5rem; background: var(--signal); border-radius: 1px; }
+/* Pricing. Tokens only. */
+.page { display: grid; gap: var(--s8); padding-bottom: var(--s6); }
+.head { display: grid; gap: var(--s4); max-width: 46rem; padding-block: var(--s7) 0; }
+.head :global(.title) { margin: 0; font-size: clamp(2.25rem, 1.4rem + 3vw, 3.75rem); }
+.head :global(.lede) { margin: 0; }
+
+/* Two plan cards. */
+.plans { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s5); align-items: stretch; }
+.plan { align-content: start; gap: var(--s4); padding: var(--s6); }
+.planPaid { border-color: var(--tier-line); background: linear-gradient(180deg, var(--tier-wash), var(--sheet) 60%); }
+.planHead { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s2) var(--s4); }
+.planHead h2 { margin: 0; font-size: 1.75rem; letter-spacing: -0.03em; }
+.planLede { margin: 0; color: var(--ink-2); line-height: 1.55; }
+.planList { list-style: none; margin: 0; padding: 0; display: grid; }
+.planList li { display: flex; align-items: flex-start; gap: var(--s2); padding-block: var(--s3); border-bottom: 1px solid var(--rule); font-size: var(--t-base); line-height: 1.45; }
+.planList li:last-child { border-bottom: 0; }
+.planList :global(.kit-mark) { margin-right: 0; margin-top: 0.0625rem; flex: none; }
+.dot { inline-size: 1.25rem; block-size: 1.25rem; border: 1.5px dashed var(--tier-line); border-radius: var(--radius-pill); flex: none; margin-top: 0.0625rem; }
+.itemMain { display: grid; gap: var(--s1); min-width: 0; flex: 1; }
+.itemName { font-weight: 650; }
+.itemState { justify-self: start; padding: 0.0625rem var(--s2); border: 1px solid var(--rule-strong); border-radius: var(--radius-pill); color: var(--ink-3); font-size: var(--t-xs); font-weight: 600; }
+.itemState[data-live] { border-color: var(--signal); color: var(--signal); }
+
 .compare { display: grid; gap: var(--s5); }
 .label { display: block; font-weight: 700; color: var(--ink); }
 .detail { display: block; color: var(--ink-2); font-size: var(--t-sm); margin-top: var(--s1); max-width: 52ch; }
-.status { display: inline-block; margin-top: var(--s2); padding: 0.0625rem var(--s2); border: 1px solid var(--rule-strong); border-radius: var(--radius); color: var(--ink-3); font-size: var(--t-xs); }
+.status { display: inline-block; margin-top: var(--s2); padding: 0.0625rem var(--s2); border: 1px solid var(--rule-strong); border-radius: var(--radius-pill); color: var(--ink-3); font-size: var(--t-xs); }
 .status[data-live] { border-color: var(--signal); color: var(--signal); }
 .free_cell { color: var(--ink-2); min-width: 9rem; }
-.paid_cell { color: var(--ink); font-weight: 600; min-width: 9rem; box-shadow: inset 2px 0 0 var(--tier-line); }
-.laterGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s5) var(--s7); margin-top: var(--s4); }
-.laterGrid :global(.prose) { margin: 0; max-width: 52ch; }
-.joinForm { margin-top: var(--s4); max-width: 36rem; }
+.paid_cell { color: var(--ink); font-weight: 600; min-width: 9rem; background: color-mix(in srgb, var(--tier-wash) 55%, transparent); }
+
+.later { gap: var(--s3); padding: var(--s6); }
+.later h2 { margin: 0; font-size: 1.375rem; letter-spacing: -0.02em; }
+.later p { margin: 0; color: var(--ink-2); line-height: 1.6; max-width: 68ch; }
+
+.join { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: var(--s6) var(--s8); align-items: center; padding: var(--s7); }
+.join h2 { margin: 0; font-size: clamp(1.75rem, 1.3rem + 1.6vw, 2.5rem); letter-spacing: -0.03em; line-height: 1.1; max-width: 18ch; }
+.joinForm { max-width: 36rem; }
+
+@media (max-width: 900px) {
+  .join { grid-template-columns: minmax(0, 1fr); padding: var(--s5); }
+}
 @media (max-width: 760px) {
   .page { gap: var(--s7); }
-  .freeList, .laterGrid { grid-template-columns: minmax(0, 1fr); }
+  .plans { grid-template-columns: minmax(0, 1fr); }
+  .plan, .later { padding: var(--s5); }
 }
