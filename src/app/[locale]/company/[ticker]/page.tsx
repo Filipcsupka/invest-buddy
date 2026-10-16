@@ -151,6 +151,19 @@ async function Company({ params }: Params) {
         disclaimer={<><Disclaimer text={m.common.disclaimer} id="score-disclaimer" /><OperatorDisclosure text={m.common.operatorDisclosure} /></>}
       />
       {sources && <p className="source-summary muted small">{sources}</p>}
+      <section className="sheet-section" aria-labelledby="chart">
+        <div className="section-head">
+          <h2 id="chart">{data.sample ? m.company.chartTitle : m.company.chartTitleLive}</h2>
+          {data.sample && <p className="muted small">{m.company.chartNote}</p>}
+        </div>
+        <Chart
+          animate
+          bars={result.inputs.bars}
+          locale={locale}
+          labels={{ name: instrument.ticker, aria: m.chart.label, close: m.chart.close, ma50: m.chart.ma50, ma200: m.chart.ma200, dip: m.chart.dip, last: m.chart.last }}
+        />
+      </section>
+
       <div className="company-grid">
         <section className="sheet-section" aria-labelledby="rules">
           <div className="section-head">
@@ -253,19 +266,6 @@ async function Company({ params }: Params) {
           <p className="muted">{m.company.noIdea}</p>
         </section>
       )}
-
-      <section className="sheet-section" aria-labelledby="chart">
-        <div className="section-head">
-          <h2 id="chart">{data.sample ? m.company.chartTitle : m.company.chartTitleLive}</h2>
-          {data.sample && <p className="muted small">{m.company.chartNote}</p>}
-        </div>
-        <Chart
-          animate
-          bars={result.inputs.bars}
-          locale={locale}
-          labels={{ name: instrument.ticker, aria: m.chart.label, close: m.chart.close, ma50: m.chart.ma50, ma200: m.chart.ma200, dip: m.chart.dip, last: m.chart.last }}
-        />
-      </section>
 
       <section className="sheet-section" aria-labelledby="history">
         <div className="section-head">
