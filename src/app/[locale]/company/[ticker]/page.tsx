@@ -9,6 +9,7 @@ import { PaywallSegment } from "@/components/paywall-segment";
 import { ScoreHistory } from "@/components/score-history";
 import { companyScoreHistory } from "@/data/score-history";
 import { flags } from "@/config/flags";
+import { getViewer, limitFor } from "@/viewer/get-viewer";
 import { FlagsBlock } from "@/components/flags-block";
 import { companyFlags } from "@/engine/flags";
 import { storedShareCounts, storedInterestFacts } from "@/data/flag-facts";
@@ -102,7 +103,8 @@ async function Company({ params }: Params) {
   const sources = scored ? sourceSummary(locale, result) : null;
   const ideaRow = await companyIdea(instrument.ticker);
   const review = await companyReview(instrument.ticker);
-  const history = await companyScoreHistory(instrument.ticker);
+  const viewer = await getViewer();
+  const history = await companyScoreHistory(instrument.ticker, limitFor(viewer, "scoreHistoryDays"));
   // Flags read stored facts only and never feed the score. Short interest is not collected yet, so it shows no data.
   const interest = await storedInterestFacts(instrument.ticker);
   const flagResults = companyFlags({ bars: result.inputs.bars, shares: await storedShareCounts(instrument.ticker), operatingIncome: interest.operatingIncome, interestExpense: interest.interestExpense, shortInterestPercent: null });
@@ -286,7 +288,7 @@ async function Company({ params }: Params) {
             <h2 id="idea">{adviceOutput ? m.company.ideaTitle : m.ideas.evidence}</h2>
             {adviceOutput && <p className="muted small">{m.company.ideaNote}</p>}
           </div>
-          <PaywallSegment id="idea-card"><IdeaCard idea={ideaRow.idea} locale={locale} showAmounts={false} stateLabel={m.states[state]} nested /></PaywallSegment>
+          <PaywallSegment id="idea-card" viewer={viewer} locale={locale}><IdeaCard idea={ideaRow.idea} locale={locale} showAmounts={false} stateLabel={m.states[state]} nested /></PaywallSegment>
         </section>
       )}
       {!ideaRow && (
@@ -303,7 +305,7 @@ async function Company({ params }: Params) {
           <h2 id="history">{m.company.history.title}</h2>
           <p className="muted small">{m.company.history.note}</p>
         </div>
-        <PaywallSegment id="score-history"><div><ScoreHistory ticker={instrument.ticker} rows={history} locale={locale} /></div></PaywallSegment>
+        <PaywallSegment id="score-history" viewer={viewer} locale={locale}><div><ScoreHistory ticker={instrument.ticker} rows={history} locale={locale} /></div></PaywallSegment>
       </section>
     </div>
   );

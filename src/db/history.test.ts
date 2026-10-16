@@ -25,6 +25,15 @@ describe("history read model (unit)", () => {
     expect(b.calls[0].params[1]).toBe("2026-10-05");
   });
 
+  it("cuts score history at the free depth of 90 days and leaves paid depth unlimited", async () => {
+    const free = fake();
+    await scoreHistory(free.db, "NVDA", { tierLimitDays: 90, today: "2026-10-16" });
+    expect(free.calls[0].params[1]).toBe("2026-07-18");
+    const paid = fake();
+    await scoreHistory(paid.db, "NVDA", { tierLimitDays: null, today: "2026-10-16" });
+    expect(paid.calls[0].params[1]).toBeNull();
+  });
+
   it("never selects audit, first_seen_at or membership reasons", async () => {
     const a = fake();
     await scoreHistory(a.db, "NVDA");

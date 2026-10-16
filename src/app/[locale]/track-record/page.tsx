@@ -66,7 +66,7 @@ async function TrackRecord({ params }: LocaleParams) {
           labels={{ name: "SPY", aria: m.chart.label, close: "SPY", ma50: m.chart.ma50, ma200: m.chart.ma200, dip: m.chart.dip, last: m.chart.last }}
         /> : <p className="notice">{m.common.noDataYet}</p>}
       </section></PaywallSegment>
-      {periods.rows.length > 0 && <section className="sheet-section" aria-labelledby="periods">
+      {periods.rows.length > 0 && <PaywallSegment id="track-record-periods"><section className="sheet-section" aria-labelledby="periods">
         <h2 id="periods">{m.trackRecord.periodTitle}</h2>
         <div className="table-scroll" role="region" tabIndex={0} aria-label={m.trackRecord.periodTitle}><table className="screen">
           <thead><tr><th scope="col">{periods.grain === "month" ? m.trackRecord.periodMonth : m.trackRecord.periodYear}</th><th scope="col">{m.trackRecord.periodN}</th><th scope="col">{m.trackRecord.periodHit}</th><th scope="col">{m.trackRecord.periodExcess}</th><th scope="col">{m.trackRecord.periodSpy}</th></tr></thead>
@@ -81,7 +81,7 @@ async function TrackRecord({ params }: LocaleParams) {
           </tbody>
         </table></div>
         <p className="muted small">{m.trackRecord.periodNote}</p>
-      </section>}
+      </section></PaywallSegment>}
       {record.worst.length > 0 && <PaywallSegment id="track-record-worst"><section className="sheet-section" aria-labelledby="worst">
         <h2 id="worst">{m.trackRecord.worstTitle}</h2>
         <div className="table-scroll" role="region" tabIndex={0} aria-label={m.trackRecord.worstTitle}><table className="screen">
