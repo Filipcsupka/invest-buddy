@@ -75,7 +75,7 @@ describe.each(["en", "sk"])("public pages (%s)", (locale) => {
   it("gives every scrollable table region a role, a label and a tab stop", async () => {
     let seen = 0;
     for (const [name, html] of Object.entries(await pages(locale))) {
-      for (const m of html.matchAll(/<div[^>]*class="table-scroll"[^>]*>/g)) {
+      for (const m of html.matchAll(/<div[^>]*class="(?:kit-)?table-scroll"[^>]*>/g)) {
         seen += 1;
         expect(attr(m[0], "role"), `${name} role`).toBe("region");
         expect(attr(m[0], "tabindex"), `${name} tabindex`).toBe("0");
