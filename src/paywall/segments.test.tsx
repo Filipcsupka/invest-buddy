@@ -19,7 +19,7 @@ function sourceFiles(dir: string): string[] {
 }
 
 // Registry ids whose page markers land with the other tier work packages (company and record, screens).
-const pendingMarkers = new Set(["scanner-filters-advanced", "scanner-streak", "insiders-history", "ideas-list"]);
+const pendingMarkers = new Set<string>();
 
 it("keeps every page marker in the registry and every active registry entry on a page", () => {
   const used = new Set<string>();
