@@ -20,14 +20,16 @@ import { SourceList, SourceNotes } from "@/components/source-list";
 import { inputSources, ruleSourceNotes, ruleSources, sourceSummary } from "@/components/view-model";
 import { companyIdea, companyReview } from "@/data/ideas-store";
 import { instrumentUniverse, latestPortfolio, latestScores } from "@/data/store";
-import { DataStatus } from "@/components/data-status";
+import { DataStatus, DataStatusBlock } from "@/components/data-status";
+import { datasetFreshness } from "@/data/data-freshness-store";
+import { coverageOf } from "@/data/data-freshness";
 export const dynamic = "force-dynamic";
 import { fill, formatDate, formatPercent, getMessages, isLocale, type Locale } from "@/i18n";
 import { pageMetadata } from "@/i18n/metadata";
 import { TickerSeoSummary } from "@/components/ticker-seo-summary";
 import { tickerSeoText } from "@/seo/ticker-text";
 import { ruleGroups } from "@/i18n/rules";
-import { BONUS_RULE_IDS } from "@/engine/display-score";
+import { BONUS_RULE_IDS, displayScore } from "@/engine/display-score";
 import { reasonsFor, rejectionChecks, ruleDetail, rulePointsText, ruleThreshold, sectorLabel, stateKey } from "@/i18n/score-text";
 
 type Params = { params: Promise<{ locale: string; ticker: string }> };
@@ -61,7 +63,8 @@ async function Company({ params }: Params) {
   const adviceOutput = flags().ADVICE_OUTPUT;
   const portfolio = await latestPortfolio();
   const held = portfolio?.weights.some((position) => position.weightPercent > 0 && position.symbol.toUpperCase() === instrument.ticker) ?? false;
-  if (!result) return <div className="frame page"><h1 className="title">{instrument.ticker}</h1>{held && <span className="tag">{m.portfolio.heldNoSignal}</span>}<DataStatus locale={locale} lastUpdated={data.lastUpdated} stale={data.stale} /></div>;
+  const freshness = await datasetFreshness(instrument.ticker);
+  if (!result) return <div className="frame page"><h1 className="title">{instrument.ticker}</h1>{held && <span className="tag">{m.portfolio.heldNoSignal}</span>}<DataStatus locale={locale} lastUpdated={data.lastUpdated} stale={data.stale} detail={freshness ? { datasets: freshness, coverage: null } : null} /></div>;
   const state = stateKey(result.state);
   const scored = state !== "insufficient";
   const hits = new Map(result.ruleHits.map((hit) => [hit.id, hit]));
@@ -94,6 +97,7 @@ async function Company({ params }: Params) {
     signals: { insiderNetBuy: f.insiderOrInstitutionalAccumulation, epsBeat: f.epsBeat, guidanceRaised: f.guidanceRaised, productCatalyst: f.productCatalyst },
     adviceOutput,
   });
+  const coverage = displayScore(state, result.ruleHits);
   const unknownIds = new Set<string>(view.coverage.unknownRules);
   const sources = scored ? sourceSummary(locale, result) : null;
   const ideaRow = await companyIdea(instrument.ticker);
@@ -174,6 +178,7 @@ async function Company({ params }: Params) {
       </section>
 
       <FlagsBlock flags={flagResults} locale={locale} m={m} />
+      {freshness && <DataStatusBlock locale={locale} detail={{ datasets: freshness, coverage: coverageOf(coverage.coreKnown, coverage.coreTotal, coverage.evidencedMax) }} />}
 
       <div className="company-grid">
         <section className="sheet-section" aria-labelledby="rules">
