@@ -58,4 +58,15 @@ describe("company flags", () => {
     expect(by({ shortInterestPercent: 0 }).shortInterest.state).toBe("clear");
     expect(by({ shortInterestPercent: null }).shortInterest.state).toBe("no-data");
   });
+
+  it("compares raw values to the thresholds, not the rounded display value", () => {
+    const dilution = by({ shares: [{ periodEnd: "2026-09-30", value: 109.96 }, { periodEnd: "2025-09-30", value: 100 }] }).dilution;
+    expect(dilution.state).toBe("clear");
+    expect(dilution.values.change).toBe(10);
+    const down = [...bars(100, 1_000_000, 19), bar(19, 80.04, 1_000_000, 100)];
+    expect(by({ bars: down }).drawdown.state).toBe("clear");
+    expect(by({ operatingIncome: 149, interestExpense: 100 }).interestCover.state).toBe("flagged");
+    expect(by({ operatingIncome: 1.46, interestExpense: 1 }).interestCover.state).toBe("flagged");
+    expect(by({ operatingIncome: 1.54, interestExpense: 1 }).interestCover.state).toBe("clear");
+  });
 });
