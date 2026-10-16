@@ -280,3 +280,28 @@ describe("company page", () => {
     });
   });
 });
+
+describe("company page SEO text", () => {
+  it("builds title and description from the score in each locale and shows the same summary", async () => {
+    const [row] = await scoredUniverse();
+    universe.mockResolvedValue([row.instrument]);
+    scores.mockResolvedValue({ rows: [row], sample: false, lastUpdated: row.result.asOf, stale: false });
+    idea.mockResolvedValue(null);
+    for (const [locale, meets] of [["en", "meets"], ["sk", "spĺňa"]] as const) {
+      const meta = await page.generateMetadata(props(row.instrument.ticker, locale));
+      expect(String(meta.title)).toMatch(new RegExp(`${meets} \\d+ (of|z) 9 (rules|pravidiel)`));
+      expect(meta.description).toContain(meets);
+      expect(meta.description).not.toMatch(/\b(buy|sell|recommend|kúpiť|predať|odporúč)/i);
+      const html = renderToStaticMarkup(await Company(props(row.instrument.ticker, locale)));
+      expect(html).toContain("data-seo-summary");
+      expect(html).toContain(meets);
+    }
+  });
+  it("keeps the old description and no summary when the ticker has no score", async () => {
+    universe.mockResolvedValue([dbInstrument]);
+    scores.mockResolvedValue({ rows: [], sample: false, lastUpdated: null, stale: false });
+    const meta = await page.generateMetadata(props("ZZZZ"));
+    expect(meta.description).toContain("Score breakdown");
+    expect(renderToStaticMarkup(await Company(props("ZZZZ")))).not.toContain("data-seo-summary");
+  });
+});

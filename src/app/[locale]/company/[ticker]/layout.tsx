@@ -2,6 +2,7 @@ import { JsonLd } from "@/components/json-ld";
 import { instrumentUniverse, latestScores } from "@/data/store";
 import { fill, getMessages, isLocale } from "@/i18n";
 import { companyJsonLd } from "@/i18n/metadata";
+import { tickerSeoText } from "@/seo/ticker-text";
 
 export const dynamic = "force-dynamic";
 
@@ -15,9 +16,11 @@ export default async function CompanyLayout({ children, params }: { children: Re
       const instrument = (await instrumentUniverse()).find((item) => item.ticker === symbol);
       if (instrument) {
         const scores = await latestScores();
-        const asOf = scores.rows.find((row) => row.instrument.ticker === symbol)?.result.asOf ?? scores.lastUpdated;
+        const result = scores.rows.find((row) => row.instrument.ticker === symbol)?.result;
+        const asOf = result?.asOf ?? scores.lastUpdated;
         const m = getMessages(locale);
-        data = companyJsonLd(locale, symbol, instrument.name, asOf, fill(scores.sample ? m.meta.companyDescription : m.meta.companyDescriptionLive, { ticker: symbol }));
+        const seo = tickerSeoText(locale, symbol, instrument.name, result ?? null);
+        data = companyJsonLd(locale, symbol, instrument.name, asOf, seo?.description ?? fill(scores.sample ? m.meta.companyDescription : m.meta.companyDescriptionLive, { ticker: symbol }));
       }
     } catch {
       data = [];
