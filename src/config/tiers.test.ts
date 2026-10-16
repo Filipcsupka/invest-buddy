@@ -4,7 +4,7 @@ import { FEATURES, FEATURE_TIERS, TIERS, TIER_LIMITS, tierEntry, type LimitKey }
 
 /** The id column of docs/tier-map.md (PR #212), as agreed: free, lock (paid) or limit (paid, depth-limited). */
 const expected: Record<string, string> = {
-  "scanner-rows-full": "limit:scannerRows",
+  "scanner-rows-full": "free",
   "scanner-filters-advanced": "lock",
   "scanner-streak": "lock",
   "insiders-history": "limit:insiderDays",
@@ -13,10 +13,10 @@ const expected: Record<string, string> = {
   "score-history": "limit:scoreHistoryDays",
   "portfolio-performance": "free",
   "portfolio-weights": "free",
-  "track-record-periods": "lock",
-  "track-record-signals": "lock",
-  "track-record-history": "limit:trackRecordHistoryDays",
-  "track-record-worst": "lock",
+  "track-record-periods": "free",
+  "track-record-signals": "free",
+  "track-record-history": "free",
+  "track-record-worst": "free",
   "track-record-benchmark": "free",
   "sizing-matrix": "free",
   "sizing-cash": "free",
@@ -60,6 +60,6 @@ it("names a TIER_LIMITS key for every limit entry, in both columns", () => {
 });
 
 it("holds the proposed free defaults", () => {
-  const free: Record<LimitKey, number> = { scoreHistoryDays: 30, scannerRows: 20, savedScreens: 1, alerts: 3, watchlistTickers: 10, insiderDays: 90, trackRecordHistoryDays: 1 };
+  const free: Record<LimitKey, number | null> = { scoreHistoryDays: 90, scannerRows: null, savedScreens: 1, alerts: 3, watchlistTickers: 10, insiderDays: 180, trackRecordHistoryDays: null };
   expect(TIER_LIMITS.free).toEqual(free);
 });

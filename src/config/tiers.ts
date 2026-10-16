@@ -20,7 +20,7 @@ const limit = (key: LimitKey): TierEntry => ({ tier: "paid", mode: "limit", limi
 
 /** Typed by the registry keys: a segment id without a tier here fails tsc. Owner ids are not in the registry and have no tier. */
 export const TIERS: Record<PaywallSegmentId, TierEntry> = {
-  "scanner-rows-full": limit("scannerRows"),
+  "scanner-rows-full": free,
   "scanner-filters-advanced": lock,
   "scanner-streak": lock,
   "insiders-history": limit("insiderDays"),
@@ -29,10 +29,10 @@ export const TIERS: Record<PaywallSegmentId, TierEntry> = {
   "score-history": limit("scoreHistoryDays"),
   "portfolio-performance": free,
   "portfolio-weights": free,
-  "track-record-periods": lock,
-  "track-record-signals": lock,
-  "track-record-history": limit("trackRecordHistoryDays"),
-  "track-record-worst": lock,
+  "track-record-periods": free,
+  "track-record-signals": free,
+  "track-record-history": free,
+  "track-record-worst": free,
   "track-record-benchmark": free,
   "sizing-matrix": free,
   "sizing-cash": free,
@@ -55,9 +55,12 @@ export function tierEntry(id: TierId): TierEntry {
 
 /**
  * Depth limits. Proposed defaults, OWNER TO CONFIRM (docs/tier-map.md section 3). null means no limit.
+ * 2026-10-16 owner direction: the free tier is generous so a visitor sees why the paid depth is worth it. The track record is public
+ * (PRODUCT principle 3, publish the misses), the scanner lists every ticker, and the paid levers are history depth, advanced filters,
+ * streaks, saved screens, daily alerts, the ideas list and export.
  * `paid` is also what admin gets; the paid caps only stop abuse.
  */
 export const TIER_LIMITS: { free: Record<LimitKey, number | null>; paid: Record<LimitKey, number | null> } = {
-  free: { scoreHistoryDays: 30, scannerRows: 20, savedScreens: 1, alerts: 3, watchlistTickers: 10, insiderDays: 90, trackRecordHistoryDays: 1 },
+  free: { scoreHistoryDays: 90, scannerRows: null, savedScreens: 1, alerts: 3, watchlistTickers: 10, insiderDays: 180, trackRecordHistoryDays: null },
   paid: { scoreHistoryDays: null, scannerRows: null, savedScreens: 20, alerts: 50, watchlistTickers: 200, insiderDays: null, trackRecordHistoryDays: null },
 };

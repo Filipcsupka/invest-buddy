@@ -51,8 +51,7 @@ it("canSee and limitFor follow the tier", () => {
   expect(canSee(free, "portfolio-weights")).toBe(true);
   expect(canSee(paid, "idea-card")).toBe(true);
   expect(canSee(admin, "idea-card")).toBe(true);
-  expect(limitFor(free, "scoreHistoryDays")).toBe(30);
-  expect(limitFor(free, "scannerRows")).toBe(20);
+  expect(limitFor(free, "scoreHistoryDays")).toBe(90);
   expect(limitFor(paid, "scoreHistoryDays")).toBeNull();
   expect(limitFor(admin, "alerts")).toBe(50);
 });

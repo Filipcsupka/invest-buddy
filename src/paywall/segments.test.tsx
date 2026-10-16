@@ -55,19 +55,19 @@ it("leaves paid viewers with the plain marker", () => {
 });
 
 it("replaces a locked segment with a lock card for a free viewer, without the child text", () => {
-  const out = renderToStaticMarkup(<PaywallSegment id="track-record-signals" viewer={free} detail="12 signals"><section><h2>Secret heading</h2><p>Secret row</p></section></PaywallSegment>);
+  const out = renderToStaticMarkup(<PaywallSegment id="scanner-streak" viewer={free} detail="12 signals"><section><h2>Secret heading</h2><p>Secret row</p></section></PaywallSegment>);
   expect(out).not.toContain("Secret");
-  expect(out).toContain('data-tier-lock="track-record-signals"');
+  expect(out).toContain('data-tier-lock="scanner-streak"');
   expect(out).toContain("12 signals");
   expect(out).toContain("The status, score and rules stay open to everyone.");
-  expect(renderToStaticMarkup(<PaywallSegment id="track-record-signals" viewer={free} locale="sk"><p>x</p></PaywallSegment>)).toContain("V platenej úrovni");
+  expect(renderToStaticMarkup(<PaywallSegment id="scanner-streak" viewer={free} locale="sk"><p>x</p></PaywallSegment>)).toContain("V platenej úrovni");
 });
 
 it("keeps the children of a depth-limited segment and adds a note for a free viewer", () => {
   const out = renderToStaticMarkup(<PaywallSegment id="score-history" viewer={free}><div>Rows</div></PaywallSegment>);
   expect(out).toContain('<div data-paywall-candidate="score-history">Rows</div>');
   expect(out).toContain("data-tier-note=\"score-history\"");
-  expect(out).toContain("30 days");
+  expect(out).toContain("90 days");
   expect(out).not.toContain("data-tier-badge");
 });
 
