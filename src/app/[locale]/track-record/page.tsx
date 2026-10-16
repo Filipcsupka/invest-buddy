@@ -37,7 +37,7 @@ async function TrackRecord({ params }: LocaleParams) {
     const record = await recordHistory();
     const benchmark = await recordBenchmark(record.firstDate, record.lastDate);
     const universe = (await instrumentUniverse()).length;
-    const periods = periodTable(record.signals, benchmark, new Date().toISOString().slice(0, 10));
+    const periods = periodTable(record.signals, benchmark, new Date().toISOString().slice(0, 10), record.firstDate);
     const periodLabel = (period: string) => periods.grain === "month" ? formatMonth(locale, period) : period;
     return <div className="frame page">
       <header className="page-head">
@@ -72,7 +72,7 @@ async function TrackRecord({ params }: LocaleParams) {
           <thead><tr><th scope="col">{periods.grain === "month" ? m.trackRecord.periodMonth : m.trackRecord.periodYear}</th><th scope="col">{m.trackRecord.periodN}</th><th scope="col">{m.trackRecord.periodHit}</th><th scope="col">{m.trackRecord.periodExcess}</th><th scope="col">{m.trackRecord.periodSpy}</th></tr></thead>
           <tbody>
             {periods.rows.map((row) => <tr key={row.period}>
-              <td>{periodLabel(row.period)}</td><td>{formatNumber(locale, row.n)}</td>
+              <td>{periodLabel(row.period)}</td><td>{formatNumber(locale, row.n)}{row.pending > 0 && <span className="muted small"> ({fill(m.trackRecord.periodPending, { n: formatNumber(locale, row.pending) })})</span>}</td>
               <td>{row.hitRate === null ? "–" : formatPercent(locale, row.hitRate)}</td>
               <td>{row.meanExcess === null ? "–" : formatPercent(locale, row.meanExcess)}</td>
               <td>{row.spyChange === null ? "–" : formatPercent(locale, row.spyChange)}</td>
