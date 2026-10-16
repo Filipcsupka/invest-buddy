@@ -7,11 +7,13 @@ const idea = vi.fn();
 const review = vi.fn();
 const portfolio = vi.fn();
 const history = vi.fn();
+const viewHeader = vi.fn<() => string | null>(() => null);
+vi.mock("next/headers", () => ({ headers: async () => ({ get: () => viewHeader() }) }));
 const shares = vi.fn(async () => [] as { periodEnd: string; value: number }[]);
 vi.mock("@/data/flag-facts", () => ({ storedShareCounts: () => shares(), storedInterestFacts: async () => ({ operatingIncome: null, interestExpense: null }) }));
 const originalAdvice = process.env.ADVICE_OUTPUT;
 vi.mock("@/data/store", () => ({ instrumentUniverse: () => universe(), latestScores: () => scores(), latestPortfolio: () => portfolio() }));
-vi.mock("@/data/score-history", () => ({ companyScoreHistory: () => history() }));
+vi.mock("@/data/score-history", () => ({ companyScoreHistory: (...args: unknown[]) => history(...args) }));
 vi.mock("@/data/ideas-store", () => ({ companyIdea: () => idea(), companyReview: () => review() }));
 
 import Company, * as page from "./page";
@@ -19,7 +21,7 @@ import { instruments } from "@/data/fixtures";
 import { scoredUniverse } from "@/data/scored";
 import { sampleIdeas } from "@/ideas/fixtures";
 
-afterEach(() => { shares.mockReset(); shares.mockResolvedValue([]); history.mockReset(); history.mockResolvedValue([]); universe.mockReset(); scores.mockReset(); idea.mockReset(); review.mockReset(); review.mockResolvedValue(null); portfolio.mockReset(); portfolio.mockResolvedValue(null); if (originalAdvice === undefined) delete process.env.ADVICE_OUTPUT; else process.env.ADVICE_OUTPUT = originalAdvice; });
+afterEach(() => { viewHeader.mockReset(); viewHeader.mockReturnValue(null); shares.mockReset(); shares.mockResolvedValue([]); history.mockReset(); history.mockResolvedValue([]); universe.mockReset(); scores.mockReset(); idea.mockReset(); review.mockReset(); review.mockResolvedValue(null); portfolio.mockReset(); portfolio.mockResolvedValue(null); if (originalAdvice === undefined) delete process.env.ADVICE_OUTPUT; else process.env.ADVICE_OUTPUT = originalAdvice; });
 const props = (ticker: string, locale = "en") => ({ params: Promise.resolve({ locale, ticker }) });
 const dbInstrument = { ticker: "ZZZZ", name: "Zed Corp", sector: "Cloud & SaaS", tier: null, source: "guide" as const };
 
@@ -262,6 +264,39 @@ describe("company page", () => {
       const html = await render({ sample: true });
       expect(html).toContain("Price, last 100 sessions");
       expect(html).toContain("Synthetic series, for illustration only.");
+    });
+  });
+
+  describe("tiers", () => {
+    const rows = [{ asOf: "2026-10-03", technical: 5, fundamentals: 6, macro: 2, total: 13, state: "Watch" }];
+    async function setup() {
+      const [row] = await scoredUniverse();
+      universe.mockResolvedValue([row.instrument]);
+      scores.mockResolvedValue({ rows: [row], sample: false, lastUpdated: "2026-10-08", stale: false });
+      idea.mockResolvedValue({ idea: sampleIdeas[0], sample: false });
+      history.mockResolvedValue(rows);
+      return row.instrument.ticker;
+    }
+    it("shows an admin everything with Paid badges on score history and the idea card, at full depth", async () => {
+      const ticker = await setup();
+      const html = renderToStaticMarkup(await Company(props(ticker)));
+      expect(html).toContain('data-tier-badge="score-history"');
+      expect(html).toContain('data-tier-badge="idea-card"');
+      expect(html).not.toContain("data-tier-lock");
+      expect(html).not.toContain("data-tier-note");
+      expect(history).toHaveBeenCalledWith(ticker, null);
+    });
+    it("gives a free viewer 90 days of history with a note and a lock card instead of the idea card", async () => {
+      const ticker = await setup();
+      viewHeader.mockReturnValue("free");
+      const html = renderToStaticMarkup(await Company(props(ticker)));
+      expect(history).toHaveBeenCalledWith(ticker, 90);
+      expect(html).toContain('data-tier-note="score-history"');
+      expect(html).toContain("90 days");
+      expect(html).toContain('data-tier-lock="idea-card"');
+      expect(html).not.toContain("data-tier-badge");
+      expect(html).not.toContain("Opportunity cost");
+      expect(html).toContain("Score history");
     });
   });
 

@@ -3,6 +3,7 @@ import { instrumentUniverse } from "@/data/store";
 import { ideasEnabled } from "@/data/ideas-store";
 import { ownerViewEnabled } from "@/data/owner-allocation";
 import { designViewEnabled, flags } from "@/config/flags";
+import { PREVIEW_HEADER, resolveViewer } from "@/viewer/viewer";
 import { withContentSecurityPolicy } from "@/security/headers";
 import { rateLimit, rateLimitRetryAfter } from "@/security/rate-limit";
 import { writeHttpLog } from "@/app/api/ingest/request-log";
@@ -27,14 +28,18 @@ async function handle(request: NextRequest) {
   const incoming = new Headers(request.headers);
   incoming.set("x-request-id", requestId);
   incoming.set("x-request-start-ms", String(Date.now()));
+  // Never trust a client-sent preview header. Only an admin request with ?view=free gets one; resolveViewer ignores it for others.
+  incoming.delete(PREVIEW_HEADER);
+  const previewParam = request.nextUrl.searchParams.get("view");
+  if (previewParam === "free" && resolveViewer(flags(), "free").preview) incoming.set(PREVIEW_HEADER, "free");
   const [, locale, section, ticker] = request.nextUrl.pathname.split("/");
   const featureFlags = flags();
   if (section === "owner" && ticker === "research" && featureFlags.OWNER_VIEW &&
     !ownerResearchAuthorized(request.headers.get("authorization"), process.env.OWNER_RESEARCH_PASSWORD)) {
     return new NextResponse("Authentication required", { status: 401, headers: { "WWW-Authenticate": 'Basic realm="Research"', "Cache-Control": "no-store" } });
   }
-  const unavailable = (section === "scanner" && !featureFlags.PAYWALL)
-    || (section === "sizing" && !featureFlags.ADVICE_OUTPUT)
+  // Legal and owner gates come first and never read the viewer: admin does not bypass them. PAYWALL no longer hides /scanner.
+  const unavailable = (section === "sizing" && !featureFlags.ADVICE_OUTPUT)
     || (section === "pricing" && !featureFlags.WAITLIST)
     || (section === "design" && !designViewEnabled())
     || (section === "ideas" && (!ideasEnabled() || !featureFlags.ADVICE_OUTPUT))
@@ -44,6 +49,7 @@ async function handle(request: NextRequest) {
   if (!unavailable) {
     const response = NextResponse.next({ request: { headers: incoming } });
     if (section === "owner" && ticker === "research") response.headers.set("Cache-Control", "private, no-store");
+    if (request.nextUrl.searchParams.has("view")) response.headers.set("X-Robots-Tag", "noindex");
     response.headers.set("x-request-id", requestId);
     response.headers.set("server-timing", `rid;desc="${requestId}"`);
     return response;

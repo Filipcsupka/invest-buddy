@@ -45,8 +45,9 @@ describe("scanner floor page", () => {
     expect(await render("sk")).toContain(">bez údajov<");
   });
 
-  it("keeps the 404 when the paywall is off", async () => {
+  it("is visible with the paywall flag off", async () => {
     process.env.PAYWALL = "off";
-    await expect(render("en")).rejects.toMatchObject({ digest: expect.stringContaining("NEXT_HTTP_ERROR_FALLBACK;404") });
+    shares.mockResolvedValue({});
+    expect(await render("en")).toContain('href="/en/company/NVDA"');
   });
 });

@@ -111,3 +111,13 @@ it("shows the same figures in Slovak", async () => {
   expect(html).toContain("Spätný test: nezobrazený");
   expect(html).toContain("-6,0");
 });
+
+it("shows the pending count for a period with no measured window", async () => {
+  process.env.DATA_MODE = "db";
+  const signal = (id: number, ticker: string, asOf: string) => ({ id, ticker, asOf, tier: "SETUP", state: "Setup met (>=18)", score: 19, windows: { 1: null, 5: null, 20: null, 60: null } });
+  history.mockResolvedValue({ snapshotCount: 2, firstDate: "2026-10-06", lastDate: "2026-11-10", buySignalCount: 2, worst: [], hit20: { hits: 0, n: 0, rate: null },
+    signals: [signal(2, "AMD", "2026-11-04"), signal(1, "NVDA", "2026-11-05")] });
+  benchmark.mockResolvedValue([]);
+  const html = renderToStaticMarkup(await TrackRecord(props));
+  expect(html).toContain("<td>0<span class=\"muted small\"> (2 pending)</span></td>");
+});

@@ -16,6 +16,7 @@ function parse(raw: string | undefined, fallback: boolean): boolean {
 export function flags(env: Record<string, string | undefined> = process.env): Flags {
   const fixture = env.DATA_MODE === "fixture";
   return {
+    // Enforce tiers for non-admin viewers (src/config/tiers.ts). It no longer hides /scanner. While AUTH is off every viewer is admin.
     PAYWALL: parse(env.PAYWALL, false),
     AUTH: parse(env.AUTH, false),
     BILLING: parse(env.BILLING, false),

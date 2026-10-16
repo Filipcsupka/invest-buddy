@@ -16,6 +16,12 @@ it.each(["en", "sk"] as const)("hides sizing navigation while advice is off (%s)
   expect(renderToStaticMarkup(<Nav locale={locale} />)).toContain(`href="/${locale}/sizing"`);
 });
 
+it.each(["en", "sk"] as const)("links the scanner and keeps the heat map link (%s)", (locale) => {
+  const html = renderToStaticMarkup(<Nav locale={locale} />);
+  expect(html).toContain(`href="/${locale}/scanner"`);
+  expect(html).toContain(`href="/${locale}/heatmap"`);
+});
+
 it.each(["en", "sk"])("keeps the shared footer free of fixture labels in db mode (%s)", async (locale) => {
   process.env.DATA_MODE = "db";
   scores.mockResolvedValue({ rows: [], sample: false, lastUpdated: null, stale: false });

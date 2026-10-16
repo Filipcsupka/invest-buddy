@@ -44,9 +44,9 @@ function spyChange(bars: SpyBar[], from: string, to: string): number | null {
 
 /**
  * Rows by calendar period, newest first, for the unique buy signals (BROKEN rows are not buys). Each ticker and day counts once.
- * A period that lost to SPY stays a plain row. Pure: `today` decides the grain, nothing reads the clock.
+ * A period that lost to SPY stays a plain row. Pure: `today` and `logStart` (first recorded snapshot, else the first signal) decide the grain, nothing reads the clock.
  */
-export function periodTable(signals: PeriodSignal[], spyBars: SpyBar[], today: string): PeriodTable {
+export function periodTable(signals: PeriodSignal[], spyBars: SpyBar[], today: string, logStart?: string | null): PeriodTable {
   const unique = new Map<string, PeriodSignal>();
   for (const signal of signals) {
     if (signal.tier === "BROKEN") continue;
@@ -56,7 +56,7 @@ export function periodTable(signals: PeriodSignal[], spyBars: SpyBar[], today: s
   const all = [...unique.values()];
   if (!all.length) return { grain: "month", rows: [], spy: null };
   const first = all.map((s) => s.asOf).sort()[0];
-  const grain = periodGrain(first, today);
+  const grain = periodGrain(logStart ?? first, today);
   const size = grain === "month" ? 7 : 4;
   const bars = spyBars.filter((bar) => bar.close > 0).sort((a, b) => a.date.localeCompare(b.date));
   const periods = [...new Set(all.map((s) => s.asOf.slice(0, size)))].sort().reverse();
