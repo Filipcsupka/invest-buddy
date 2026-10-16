@@ -24,6 +24,8 @@ import { DataStatus } from "@/components/data-status";
 export const dynamic = "force-dynamic";
 import { fill, formatDate, formatPercent, getMessages, isLocale, type Locale } from "@/i18n";
 import { pageMetadata } from "@/i18n/metadata";
+import { TickerSeoSummary } from "@/components/ticker-seo-summary";
+import { tickerSeoText } from "@/seo/ticker-text";
 import { ruleGroups } from "@/i18n/rules";
 import { BONUS_RULE_IDS } from "@/engine/display-score";
 import { reasonsFor, rejectionChecks, ruleDetail, rulePointsText, ruleThreshold, sectorLabel, stateKey } from "@/i18n/score-text";
@@ -47,9 +49,10 @@ async function load(params: Params["params"]) {
 }
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
-  const { locale, instrument, data } = await load(params);
+  const { locale, instrument, data, result } = await load(params);
   const m = getMessages(locale);
-  return pageMetadata(locale, `/company/${instrument.ticker}`, instrument.name === instrument.ticker ? instrument.ticker : fill(m.meta.companyTitle, { ticker: instrument.ticker, name: instrument.name }), fill(data.sample ? m.meta.companyDescription : m.meta.companyDescriptionLive, { ticker: instrument.ticker }), `/${locale}/company/${instrument.ticker}/opengraph-image`);
+  const seo = tickerSeoText(locale, instrument.ticker, instrument.name, result);
+  return pageMetadata(locale, `/company/${instrument.ticker}`, seo?.title ?? (instrument.name === instrument.ticker ? instrument.ticker : fill(m.meta.companyTitle, { ticker: instrument.ticker, name: instrument.name })), seo?.description ?? fill(data.sample ? m.meta.companyDescription : m.meta.companyDescriptionLive, { ticker: instrument.ticker }), `/${locale}/company/${instrument.ticker}/opengraph-image`);
 }
 
 async function Company({ params }: Params) {
@@ -142,6 +145,7 @@ async function Company({ params }: Params) {
       </header>
 
       <DataStatus locale={locale} lastUpdated={data.lastUpdated} stale={data.stale} />
+      <TickerSeoSummary locale={locale} ticker={instrument.ticker} name={instrument.name} result={result} />
       <StatusPanel
         locale={locale}
         view={view}
