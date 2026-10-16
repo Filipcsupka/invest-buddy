@@ -14,18 +14,22 @@ const framed: Viewer = { tier: "paid", preview: false };
 
 /**
  * Kit presentation of a paid company section. The tier decision stays in src/config/tiers.ts and PaywallSegment:
+ * - `head` is the section head: inside the frame for the admin view, above the content otherwise.
  * - admin: the section inside a TierFrame with the Paid stamp; the segment inside renders as for a paid viewer, so the badge is not drawn twice.
  * - free viewer on a locked segment: a LockCard with the status first; the paid content is not rendered.
  * - free viewer on a limited segment, or a paid viewer: the segment as PaywallSegment renders it (content plus depth note).
  */
-export function PaidPart({ id, viewer, locale, status, children }: { id: PaidId; viewer: Viewer; locale: Locale; status?: ReactNode; children: (viewer: Viewer) => ReactNode }) {
+export function PaidPart({ id, viewer, locale, status, head, children }: { id: PaidId; head?: ReactNode; viewer: Viewer; locale: Locale; status?: ReactNode; children: (viewer: Viewer) => ReactNode }) {
   const kit = getKitMessages(locale);
   const tier = getTierMessages(locale);
   if (!canSee(viewer, id)) {
     return (
-      <div className="co-lock" data-paywall-candidate={id} data-tier-lock={id}>
-        <LockCard title={tier.lockTitle} behindLabel={kit.lock.behind} items={[tier.teaser[id] ?? ""].filter(Boolean)} status={status} statusNote={tier.lockSuffix} badgeLabel={tier.badge} />
-      </div>
+      <>
+        {head}
+        <div className="co-lock" data-paywall-candidate={id} data-tier-lock={id}>
+          <LockCard title={tier.lockTitle} behindLabel={kit.lock.behind} items={[tier.teaser[id] ?? ""].filter(Boolean)} status={status} statusNote={tier.lockSuffix} badgeLabel={tier.badge} />
+        </div>
+      </>
     );
   }
   if (viewer.tier === "admin") {
@@ -33,9 +37,9 @@ export function PaidPart({ id, viewer, locale, status, children }: { id: PaidId;
     const note = fill(getCompanyMessages(locale).paidNote[id], { days: days === null ? "" : plural(locale, tier.days, days) });
     return (
       <div className="co-paid" data-tier-badge={id}>
-        <TierFrame badgeLabel={tier.badge} note={note}>{children(framed)}</TierFrame>
+        <TierFrame badgeLabel={tier.badge} note={note}>{head}{children(framed)}</TierFrame>
       </div>
     );
   }
-  return <>{children(viewer)}</>;
+  return <>{head}{children(viewer)}</>;
 }

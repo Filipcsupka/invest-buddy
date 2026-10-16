@@ -167,31 +167,38 @@ export interface StatusPanelProps {
   describedBy?: string;
   /** Core rules met, for the "Meets n of m rules" line. Omitted: no line. */
   coreMet?: number;
+  /** "rail" drops the dial (the page head shows it) and stacks the track, for a narrow side column. */
+  variant?: "panel" | "rail";
+  /** Extra global classes for the section, for example the page's card class. */
+  className?: string;
 }
 
 /**
  * Header of the company page: the dial settles on the percent, the band label leads the reading column, then the
  * rule count, the five-step track with the cutoffs, the ADR line beside the score, coverage, bonus and chips.
  */
-export function StatusPanel({ view, m, locale, adviceOutput, asOf, methodHref, reasons, pullbackLabel, disclaimer, describedBy, coreMet }: StatusPanelProps) {
+export function StatusPanel({ view, m, locale, adviceOutput, asOf, methodHref, reasons, pullbackLabel, disclaimer, describedBy, coreMet, variant = "panel", className }: StatusPanelProps) {
   const label = statusLabel(m, view.display.state, adviceOutput);
   const scored = view.display.state !== "insufficient";
   const broken = view.display.state === "broken";
   const dialState = kitState(view.display.state, Boolean(pullbackLabel));
+  const rail = variant === "rail";
   return (
-    <section className={styles.panel} data-state={view.display.state} aria-labelledby="status-title">
-      <div className={styles.dialCol}>
-        <ScoreDial
-          percent={broken || !scored ? null : view.display.percent ?? null}
-          state={dialState}
-          stateLabel={pullbackLabel ? `${label}, ${pullbackLabel}` : label}
-          locale={locale}
-          size="lg"
-          motion="load"
-          describedBy={describedBy}
-          caption={broken ? m.status.pointsNotCountedPlain : undefined}
-        />
-      </div>
+    <section className={[styles.panel, rail ? styles.rail : "", className ?? ""].filter(Boolean).join(" ")} data-state={view.display.state} aria-labelledby="status-title">
+      {rail ? null : (
+        <div className={styles.dialCol}>
+          <ScoreDial
+            percent={broken || !scored ? null : view.display.percent ?? null}
+            state={dialState}
+            stateLabel={pullbackLabel ? `${label}, ${pullbackLabel}` : label}
+            locale={locale}
+            size="lg"
+            motion="load"
+            describedBy={describedBy}
+            caption={broken ? m.status.pointsNotCountedPlain : undefined}
+          />
+        </div>
+      )}
       <div className={styles.main}>
         <div className={styles.lead}>
           <h2 id="status-title" className={styles.label} aria-describedby={describedBy}>
