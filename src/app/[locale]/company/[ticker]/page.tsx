@@ -12,7 +12,7 @@ import { flags } from "@/config/flags";
 import { Disclaimer } from "@/components/disclaimer";
 import { IconArrowLeft, IconArrowRight, IconCheck, IconCross, IconNoData } from "@/components/icons";
 import { OperatorDisclosure } from "@/components/operator-disclosure";
-import { StatusPanel } from "@/components/status-slider";
+import { coreRulesMet, StatusPanel } from "@/components/status-slider";
 import { statusView } from "@/engine/status";
 import { SourceList, SourceNotes } from "@/components/source-list";
 import { inputSources, ruleSourceNotes, ruleSources, sourceSummary } from "@/components/view-model";
@@ -24,7 +24,7 @@ import { fill, formatDate, formatPercent, getMessages, isLocale, type Locale } f
 import { pageMetadata } from "@/i18n/metadata";
 import { ruleGroups } from "@/i18n/rules";
 import { BONUS_RULE_IDS } from "@/engine/display-score";
-import { reasonsFor, ruleDetail, sectorLabel, stateKey } from "@/i18n/score-text";
+import { reasonsFor, rejectionChecks, ruleDetail, rulePointsText, ruleThreshold, sectorLabel, stateKey } from "@/i18n/score-text";
 
 type Params = { params: Promise<{ locale: string; ticker: string }> };
 
@@ -148,6 +148,7 @@ async function Company({ params }: Params) {
         reasons={reasons}
         pullbackLabel={state === "watch" && result.pullbackInUptrend ? m.states.pullback : null}
         describedBy="score-disclaimer"
+        coreMet={coreRulesMet(result.ruleHits)}
         disclaimer={<><Disclaimer text={m.common.disclaimer} id="score-disclaimer" /><OperatorDisclosure text={m.common.operatorDisclosure} /></>}
       />
       {sources && <p className="source-summary muted small">{sources}</p>}
@@ -199,13 +200,14 @@ async function Company({ params }: Params) {
                             {met ? <IconCheck title={m.common.met} /> : unknown ? <IconNoData title={m.status.noData} /> : <IconCross title={m.common.notMet} />}
                             <span className="rule-name">{m.rules[rule.id]} <small>({BONUS_RULE_IDS.includes(rule.id) ? m.status.bonusLabel : m.status.coreLabel})</small></span>
                           </span>
+                          <span className="rule-def">{ruleThreshold(locale, rule.id)}</span>
                           {hit ? <span className="rule-def num">{ruleDetail(locale, hit, result)}</span> : null}
                           {hit ? <span className="rule-def rule-src">{(() => {
                             const { notes, replacesSources } = ruleSourceNotes(locale, result, rule.id, unknown);
                             return <>{replacesSources ? null : <SourceList locale={locale} items={ruleSources(locale, result, rule.id)} />}{replacesSources || !notes.length ? null : " "}<SourceNotes notes={notes} /></>;
                           })()}</span> : null}
                         </th>
-                        <td className="num rule-points">{met ? `+${rule.points}` : unknown ? m.status.noData : "0"}</td>
+                        <td className="num rule-points">{rulePointsText(locale, met ? "met" : unknown ? "no-data" : "not-met", rule.points)}</td>
                       </tr>
                     );
                   })}
@@ -224,7 +226,20 @@ async function Company({ params }: Params) {
         <aside className="company-side">
           <section className="sheet-section" aria-labelledby="rejection">
             <h2 id="rejection">{m.company.rejectionTitle}</h2>
-            {reasons.length ? (
+            {scored ? (
+              <ul className="reason-list" data-rejection-checks="">
+                {rejectionChecks(locale, result).map((check) => (
+                  <li key={check.id} data-check={check.state}>
+                    <span className="rule-line">
+                      {check.state === "clear" ? <IconCheck title={m.company.checks.clear} /> : check.state === "triggered" ? <IconCross title={m.company.checks.triggered} /> : <IconNoData title={m.status.noData} />}
+                      <span className="rule-name">{check.label}: {check.state === "no-data" ? m.status.noData : check.state === "triggered" ? m.company.checks.triggered : m.company.checks.clear}</span>
+                    </span>
+                    <span className="rule-def">{check.threshold}</span>
+                    <span className="rule-def num">{check.value}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : reasons.length ? (
               <ul className="reason-list">
                 {reasons.map((reason) => (
                   <li key={reason}>{reason}</li>

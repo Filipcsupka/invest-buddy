@@ -55,6 +55,18 @@ describe("dictionaries", () => {
   });
 });
 
+describe("status and company wording", () => {
+  it("keeps buy, sell, recommend and opportunity words out of status.* and company.* except the held-back Buy zone label", () => {
+    const words = /\b(buy|sell|recommend\w*|opportunit\w*|kúpiť|predať|odporúč\w*|príležitosť|príležitost\w*)\b/i;
+    for (const [key, value] of [...leaves(messages.en as unknown as Tree), ...leaves(messages.sk as unknown as Tree)]) {
+      if (!/^(status|company)\./.test(key)) continue;
+      // Held back by ADVICE_OUTPUT (docs/wording-gate.md), and the existing "not personal advice" disclaimer.
+      if (key === "status.advice.setup" || key === "status.headlineAdvice.setup" || key === "company.ideaNote") continue;
+      expect(words.test(value), `${key}: ${value}`).toBe(false);
+    }
+  });
+});
+
 describe("formatting", () => {
   it("uses a decimal comma in Slovak", () => {
     expect(formatNumber("sk", 1234.5, 2)).toMatch(/^1\s?234,50$/);
