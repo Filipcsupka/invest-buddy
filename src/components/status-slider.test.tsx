@@ -44,7 +44,8 @@ describe("public status panel", () => {
     const html = renderToStaticMarkup(<StatusPanel locale={locale} view={view} m={m} adviceOutput={false} asOf={null} methodHref="/m" reasons={[]} coreMet={8} />);
     expect(html).toContain(locale === "en" ? "Meets 8 of 9 rules" : "Spĺňa 8 z 9 pravidiel");
     expect(html).toContain(locale === "en" ? "Conditions met 72%+, Watching 60%+, Waiting 48%+" : "Podmienky splnené od 72 %, Sledovanie od 60 %, Čakanie od 48 %");
-    expect(html).toContain(locale === "en" ? "18/15/12 of 25" : "18/15/12 z 25");
+    expect(html).toContain(locale === "en" ? "all 23 core points evidenced that is 17, 14 and 12 points" : "Pri všetkých 23 základných bodoch s údajmi je to 17, 14 a 12 bodov");
+    expect(html).toContain(locale === "en" ? "18/15/12 are points of 25" : "18/15/12 z príručky sú body z 25");
     expect(coreRulesMet(hits(["earnings"]).map((hit) => ({ id: hit.id, matched: hit.matched })))).toBe(8);
   });
 
