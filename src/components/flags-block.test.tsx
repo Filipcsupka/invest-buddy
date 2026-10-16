@@ -26,6 +26,16 @@ describe("flags block", () => {
     expect(html).toContain("never change it");
   });
 
+  it.each([
+    [{ operatingIncome: 100, interestExpense: 10 }, "Interest cover: Not flagged", "covers interest expense 10.0 times"],
+    [{ operatingIncome: 10, interestExpense: 100 }, "Interest cover: Flagged", "covers interest expense 0.1 times"],
+    [{ operatingIncome: 100, interestExpense: 0 }, "Interest cover: Not flagged", "No interest expense reported."],
+  ])("renders interest cover from stored facts %#", (facts, word, detail) => {
+    const html = renderToStaticMarkup(<FlagsBlock flags={companyFlags({ bars, shares: [], ...facts, shortInterestPercent: null })} locale="en" m={getMessages("en")} />);
+    expect(html).toContain(word);
+    expect(html).toContain(detail);
+  });
+
   it("renders the same states in Slovak", () => {
     const html = render("sk");
     expect(html).toContain("Rast počtu akcií: Označené");
