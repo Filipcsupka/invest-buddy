@@ -1,33 +1,43 @@
-# Possible paywall segments
+# Paywall segments
 
-Decision on 2026-10-08: the markers identify sections that could become subscriber content when marketing starts. They do not check a subscription or change page copy. The separate `ADVICE_OUTPUT` legal gate hides the sizing page and action wording while it is off.
+The markers identify sections of a page that belong to the free or the paid tier. `<PaywallSegment id="...">` reads the viewer's tier and applies the entry for that id in `src/config/tiers.ts`. The ids live in `src/paywall/segments.ts`. The full reasoning, the competitor evidence and the free depth numbers are in `docs/tier-map.md`. Decision of 2026-10-08, superseded on 2026-10-16: the markers no longer stand for "candidate" sections, each id has a final tier.
 
-| Segment id | Page | What it shows | Status | Legal gate | Why |
-| --- | --- | --- | --- | --- | --- |
-| None | Landing `/` | Product introduction, sample company sheet, method and record links | Free | None | Shows what the screen does before signup. |
-| None | Pricing `/pricing` | Planned free and paid tiers, planned prices from `src/config/plans.ts`, waitlist form | Free | `WAITLIST` | Shown only while the waitlist flag is on. No checkout while `BILLING` is off. |
-| None | Methodology, legal pages | Published rules, limitations, privacy and terms | Free | None | Readers need the rules and legal text to interpret any score. |
-| None | Dashboard `/dashboard` and scanner redirect | Ticker list, score, state, search and filters | Free | None | The basic screen is the entry point. `/scanner` redirects here. |
-| None | Company `/company/[ticker]` | Name, sector, current score and state | Free | None | A reader can inspect the basic screening result. |
-| `idea-card` | Company | Action, size tier, rationale, setup, plan and evidence | Candidate | `ADVICE_OUTPUT` | The full card appears only when legal review permits advice-like wording. With the flag off, it shows the rule state and evidence. The ideas page also requires `IDEAS_PAGE`. |
-| `score-history` | Company | Total score by scan day, parts and state, as chart and table | Candidate | None | History depth is a standard paid lever; the free depth is not set yet. |
-| `portfolio-performance` | Portfolio | Indexed return, benchmark chart and performance figures | Candidate | None | Detailed portfolio performance has value beyond the basic screen. |
-| `portfolio-weights` | Portfolio | Position weights | Candidate | None | Shows portfolio composition. |
-| `track-record-signals` | Track record | Dated signals and 1, 5, 20 and 60 trading day returns | Candidate | None | Detailed outcome history supports deeper evaluation. |
-| `track-record-worst` | Track record | Five weakest stored outcomes, one per ticker and date | Candidate | None | Loser visibility sits with the detailed record. |
-| `track-record-history` | Track record | Historical score snapshots and ticker details | Candidate | None | Gives access to prior screens. |
-| `track-record-benchmark` | Track record, fixture mode | Sample benchmark chart | Candidate | None | Keeps the fixture example with the detailed record section. |
-| `sizing-matrix` | Sizing | Tier percentages by account size | Candidate | `ADVICE_OUTPUT` | Detailed application of the published method. |
-| `sizing-cash` | Sizing | Cash band rules | Candidate | `ADVICE_OUTPUT` | Part of the detailed sizing guide. |
-| `sizing-add` | Sizing | Add and reduce rules | Candidate | `ADVICE_OUTPUT` | Part of the detailed sizing guide. |
-| `sizing-example` | Sizing | Worked example | Candidate | `ADVICE_OUTPUT` | Part of the detailed sizing guide. |
-| `owner-cash` | Owner allocation | Private cash, reserve and carry amounts | Candidate | None | Owner only data, already protected by the owner view flag. |
-| `owner-suggestions` | Owner allocation | Private allocation suggestions and amounts | Candidate | None | Owner only decisions and amounts, protected by the owner view flag. |
-| None | Discovery candidates | No dedicated results page exists yet | Future candidate | None | Mark candidate details when that page is built; keep the basic dashboard state free. |
-| None | History export | No export control exists yet | Future candidate | None | Mark the export control when it is built. |
+Today no auth exists, so every request resolves to `admin`: all content shows, and a paid segment carries a small "Paid" badge. `?view=free` previews the free tier for an admin. Prices: none in beta (W17).
 
-The company page writer owns the company markers. The `idea` section uses `idea-card`. Recommended further sections are `chart` (price and moving average history), `rules` (rule hits, points and evidence), and `inputs` (full input breakdown and sources). The `rejection` section can stay free with the current state; it explains a basic screening result. Register further IDs and add their markers together.
+## Segment ids and tiers
 
-ADR-001 limits public output to informational screening. A later paywall must not turn the wording into personal investment advice or expose owner EUR amounts. The current `IDEAS_PAGE` and owner view flags retain their existing access rules.
+| Segment id | Page | What it shows | Tier | Legal gate |
+| --- | --- | --- | --- | --- |
+| `scanner-rows-full` | Scanner | Result rows, every ticker | free | None |
+| `scanner-filters-advanced` | Scanner | Score range, minimum F, T and M, source and held filters, sort by F, T or M | paid, lock | None |
+| `scanner-streak` | Scanner | Rules-met streak in days, gained and lost counts, change presets | paid, lock | None |
+| `insiders-history` | Insiders | Events older than the free window (180 days) | paid, depth-limited | `INSIDERS_PAGE` |
+| `score-history` | Company | Total score by scan day, parts and state | paid, depth-limited (90 days free) | None |
+| `idea-card` | Company | Action, size tier, rationale, setup, plan and evidence | paid, lock | `ADVICE_OUTPUT` |
+| `ideas-list` | Ideas | The ideas list | paid, lock | `ADVICE_OUTPUT` and `IDEAS_PAGE` |
+| `portfolio-performance` | Portfolio | Indexed return, benchmark chart and performance figures | free | None |
+| `portfolio-weights` | Portfolio | Position weights | free | None |
+| `track-record-periods` | Track record | By-period table | free | None |
+| `track-record-signals` | Track record | Dated signals and forward returns | free | None |
+| `track-record-history` | Track record | Historical score snapshots and ticker details | free | None |
+| `track-record-worst` | Track record | The weakest stored outcomes | free | None |
+| `track-record-benchmark` | Track record | Benchmark chart | free | None |
+| `sizing-matrix`, `sizing-cash`, `sizing-add`, `sizing-example` | Sizing | Tier percentages, cash bands, add and reduce rules, worked example | free | `ADVICE_OUTPUT` |
 
-Later implementation: make `PaywallSegment` the single place that checks subscription access when `PAYWALL=on`. With that flag absent, it must keep rendering its children as it does now. Keep a free explanation and route to subscription outside hidden sections, and test both flag states before launch. No subscription check is active now.
+Features that are not page markers yet (ids in `FEATURES` in `src/config/tiers.ts`): `discovery-list` (paid), `saved-screens` (paid, free count), `watchlist` (paid, free count), `alerts-daily` (paid, free count), `alerts-weekly` (free) and `csv-export` (paid).
+
+Everything else needs no marker and is free: landing, methodology, legal pages, dashboard, heat map, the scanner's search, state and sector filters, liquidity floor and basic presets, and the company page's status, score, rules checklist with thresholds, rejection checks, inputs, flags, data status and chart. Owner sections (`/owner-allocation`, `/owner/research`) have no tier and stay behind `OWNER_VIEW`.
+
+## Legal gates come first
+
+`ADVICE_OUTPUT`, `OWNER_VIEW` and `IDEAS_PAGE` apply before any tier check, and `admin` does not bypass them. With `ADVICE_OUTPUT` off, `/sizing` and `/ideas` return 404 and the idea card shows only the rule state and evidence, for every tier. `docs/wording-gate.md` lists what the flag holds back. ADR-001 limits public output to informational screening: a tier must not turn the wording into personal investment advice, and no owner EUR amount is ever public.
+
+## Pages and routes
+
+- `/scanner` is a public page. It is listed in the sitemap without query strings. The old statement that `/scanner` redirects to the dashboard was wrong: it returned 404 while `PAYWALL` was off, and `PAYWALL` no longer hides it. Filtered URLs and `?view=` previews are not in the sitemap.
+- `/pricing` shows the free and paid comparison built from `src/config/tiers.ts`, with no price and a waitlist form, only while `WAITLIST` is on.
+- Locked text is not in the HTML for a free viewer, so crawlers see the free version.
+
+## Adding a segment
+
+Add the id to `src/paywall/segments.ts` and its tier to `src/config/tiers.ts` (a missing tier fails `tsc`), wrap the section in `PaywallSegment`, add a teaser line in `src/i18n/tier-messages.ts`, and for a paid id add a row in `src/i18n/pricing-messages.ts` (`src/i18n/pricing-messages.test.ts` fails without it). Update the table above.
