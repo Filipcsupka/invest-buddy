@@ -1,11 +1,13 @@
 import { withPageLog } from "@/app/page-log";
 import type { Metadata } from "next";
 import { Disclaimer } from "@/components/disclaimer";
+import { DataTable, SectionHead, TierBadge } from "@/components/kit";
 import { TrackView } from "@/components/track-view";
 import { WaitlistForm } from "@/components/waitlist-form";
 import { flags } from "@/config/flags";
 import { FEATURE_TIERS, TIERS, TIER_LIMITS, type LimitKey, type TierId } from "@/config/tiers";
 import { fill, getMessages, plural, type Locale } from "@/i18n";
+import { getKitMessages } from "@/i18n/kit-messages";
 import { getLaunchMessages } from "@/i18n/launch-messages";
 import { getPricingMessages } from "@/i18n/pricing-messages";
 import { pageMetadata } from "@/i18n/metadata";
@@ -52,62 +54,63 @@ async function Pricing({ params, searchParams }: PricingProps) {
   const pm = getPricingMessages(locale);
   const ids = paidIds(Object.keys(pm.rows));
   const source = resolveSource(await searchParams, "pricing");
+  const k = getKitMessages(locale);
   return (
-    <article className="frame page reading">
+    <article className={`frame page ${styles.page}`}>
       <TrackView events={["pricing_view"]} props={{ locale }} />
-      <header className="page-head">
+      <header className={`page-head ${styles.head}`}>
         <h1 className="title">{p.title}</h1>
         <p className="lede">{p.lede}</p>
         <Disclaimer text={m.common.disclaimer} />
       </header>
-      <section aria-labelledby="free">
-        <h2 id="free">{pm.alwaysFreeTitle}</h2>
-        <p className="prose">{pm.alwaysFreeLede}</p>
+      <section aria-labelledby="free" className={styles.free}>
+        <SectionHead id="free" title={pm.alwaysFreeTitle} lede={pm.alwaysFreeLede} meta={<TierBadge tier="free" label={k.tier.free} />} />
         <ul className={styles.freeList}>
           {pm.alwaysFree.map((item) => <li key={item}>{item}</li>)}
         </ul>
       </section>
-      <section aria-labelledby="compare">
-        <h2 id="compare">{pm.paidTitle}</h2>
-        <p className="prose">{pm.paidLede} {pm.compareLede}</p>
-        <div className={styles.tableWrap}>
-          <table className={styles.table}>
-            <caption className={styles.caption}>{pm.tableCaption}</caption>
-            <thead>
-              <tr>
-                <th scope="col">{pm.colFeature}</th>
-                <th scope="col">{pm.colFree}</th>
-                <th scope="col">{pm.colPaid}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {ids.map((id) => {
-                const row = pm.rows[id]!;
-                const c = cells(locale, id, pm);
-                return (
-                  <tr key={id} data-tier-id={id}>
-                    <th scope="row">
-                      <span className={styles.label}>{row.label}</span>
-                      <span className={styles.detail}>{row.detail}</span>
-                      <span className={styles.status}>{LIVE.has(id) ? pm.statusLive : pm.statusPlanned}</span>
-                    </th>
-                    <td>{c.free}</td>
-                    <td>{c.paid}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+      <section aria-labelledby="compare" className={styles.compare}>
+        <SectionHead id="compare" title={pm.paidTitle} lede={`${pm.paidLede} ${pm.compareLede}`} meta={<TierBadge tier="paid" label={k.tier.paid} />} />
+        <DataTable label={pm.tableCaption} bounded={false} stickyFirst>
+          <thead>
+            <tr>
+              <th scope="col">{pm.colFeature}</th>
+              <th scope="col">{pm.colFree}</th>
+              <th scope="col">{pm.colPaid}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {ids.map((id) => {
+              const row = pm.rows[id]!;
+              const c = cells(locale, id, pm);
+              const live = LIVE.has(id);
+              return (
+                <tr key={id} data-tier-id={id}>
+                  <th scope="row">
+                    <span className={styles.label}>{row.label}</span>
+                    <span className={styles.detail}>{row.detail}</span>
+                    <span className={styles.status} data-live={live ? "" : undefined}>{live ? pm.statusLive : pm.statusPlanned}</span>
+                  </th>
+                  <td className={styles.free_cell}>{c.free}</td>
+                  <td className={styles.paid_cell}>{c.paid}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </DataTable>
+      </section>
+      <section aria-labelledby="later" className={styles.later}>
+        <SectionHead id="later" title={pm.noPriceTitle} rule="quiet" />
+        <div className={styles.laterGrid}>
+          <p className="prose">{pm.noPriceBody}</p>
+          <p className="prose">{pm.adrNote}</p>
         </div>
       </section>
-      <section aria-labelledby="later">
-        <h2 id="later">{pm.noPriceTitle}</h2>
-        <p className="prose">{pm.noPriceBody}</p>
-        <p className="prose">{pm.adrNote}</p>
-      </section>
-      <section aria-labelledby="join">
-        <h2 id="join">{p.waitlistTitle}</h2>
-        <WaitlistForm locale={locale} labels={m.waitlist} source={source} hideTitle />
+      <section aria-labelledby="join" className={styles.join}>
+        <SectionHead id="join" title={p.waitlistTitle} />
+        <div className={styles.joinForm}>
+          <WaitlistForm locale={locale} labels={m.waitlist} source={source} hideTitle />
+        </div>
       </section>
     </article>
   );

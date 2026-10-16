@@ -1,21 +1,25 @@
 import { withPageLog } from "@/app/page-log";
 import Link from "next/link";
 import type { Metadata } from "next";
-import { Datasheet } from "@/components/datasheet";
-import { IconArrowRight } from "@/components/icons";
-import { RuleBook, StatusSteps } from "@/components/method";
-import { latestScores } from "@/data/store";
 import { DataStatus } from "@/components/data-status";
-import { LaunchSection } from "@/components/launch-section";
+import { IconArrowRight } from "@/components/icons";
+import { StateChip, kitState } from "@/components/kit";
+import { Close, Promises, Proof, StateLedger, TierSplit, Weights } from "@/components/landing/sections";
+import { Specimen } from "@/components/landing/specimen";
+import styles from "@/components/landing/landing.module.css";
 import { recordStartDate } from "@/data/launch-facts";
-import { resolveSource } from "@/waitlist/source";
-import { getLaunchMessages } from "@/i18n/launch-messages";
-export const dynamic = "force-dynamic";
-import { statusLabel } from "@/components/status-slider";
+import { latestScores } from "@/data/store";
+import { displayScore } from "@/engine/display-score";
 import { flags } from "@/config/flags";
-import { fill, getMessages } from "@/i18n";
+import { getMessages } from "@/i18n";
+import { getLaunchMessages } from "@/i18n/launch-messages";
 import { pageMetadata } from "@/i18n/metadata";
+import { stateKey } from "@/i18n/score-text";
+import { stateOrder, type StateKey } from "@/i18n/rules";
+import { resolveSource } from "@/waitlist/source";
 import { resolveLocale, type LocaleParams } from "./locale";
+
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: LocaleParams): Promise<Metadata> {
   const locale = await resolveLocale(params);
@@ -32,14 +36,20 @@ async function Home({ params, searchParams }: HomeProps) {
   const ranked = [...rows].sort((a, b) => Number(b.result.state === "Setup met (>=18)") - Number(a.result.state === "Setup met (>=18)") || b.result.total - a.result.total || a.instrument.ticker.localeCompare(b.instrument.ticker));
   const top = ranked[0];
   const waitlist = flags().WAITLIST;
+  const adviceOutput = flags().ADVICE_OUTPUT;
   const query = waitlist ? await searchParams : undefined;
   const launch = waitlist ? getLaunchMessages(locale) : null;
   const facts = waitlist ? { tickers: data.sample || rows.length === 0 ? null : rows.length, lastScore: data.sample ? null : data.lastUpdated, recordStart: data.sample || rows.length === 0 ? null : await recordStartDate() } : null;
+  // Counts per state are shown only for live data. Sample data would present invented figures as today's.
+  const counts = data.sample || rows.length === 0 ? null : (Object.fromEntries(stateOrder.map((s) => [s, 0])) as Record<StateKey, number>);
+  if (counts) for (const row of rows) counts[displayScore(stateKey(row.result.state), row.result.ruleHits).state] += 1;
+  const topDisplay = top ? displayScore(stateKey(top.result.state), top.result.ruleHits) : null;
+  const lockStatus = top && topDisplay ? <StateChip state={kitState(topDisplay.state, topDisplay.state === "watch" && top.result.pullbackInUptrend)} label={topDisplay.state === "watch" && top.result.pullbackInUptrend ? m.states.pullback : m.states[topDisplay.state]} /> : null;
 
   return (
     <>
-      <section className="frame hero">
-        <div className="hero-copy">
+      <section className={`frame ${styles.hero}`} aria-label={m.home.title}>
+        <div className={styles.heroCopy}>
           <h1 className="display">{m.home.title}</h1>
           <p className="lede">{m.home.lede}</p>
           <div className="actions">
@@ -56,52 +66,19 @@ async function Home({ params, searchParams }: HomeProps) {
               </Link>
             ) : null}
           </div>
-        </div>
-        {top ? <><Datasheet locale={locale} instrument={top.instrument} result={top.result} sample={data.sample} /><DataStatus locale={locale} lastUpdated={data.lastUpdated} stale={data.stale} /></> : <DataStatus locale={locale} lastUpdated={data.lastUpdated} stale={data.stale} />}
-      </section>
-
-      {facts ? <LaunchSection locale={locale} facts={facts} source={resolveSource(query, "landing")} /> : null}
-
-      <section className="frame ledger" aria-labelledby="build">
-        <div className="ledger-head">
-          <h2 id="build">{m.home.buildTitle}</h2>
-          <p className="prose">{m.home.buildBody}</p>
-        </div>
-        <RuleBook locale={locale} />
-      </section>
-
-      <section className="frame ledger" aria-labelledby="states">
-        <div className="ledger-head">
-          <h2 id="states">{m.home.statusTitle}</h2>
-          <p className="prose">{fill(m.home.statusBody, { setup: statusLabel(m, "setup", flags().ADVICE_OUTPUT) })}</p>
-        </div>
-        <StatusSteps locale={locale} adviceOutput={flags().ADVICE_OUTPUT} />
-      </section>
-
-      <section className="frame ledger ledger-quiet" aria-labelledby="leaves-out">
-        <div className="ledger-head">
-          <h2 id="leaves-out">{m.home.leavesOutTitle}</h2>
-        </div>
-        <p className="prose">{m.home.leavesOutBody}</p>
-      </section>
-
-      <section className="frame ledger ledger-quiet" aria-labelledby="record">
-        <div className="ledger-head">
-          <h2 id="record">{m.home.recordTitle}</h2>
-        </div>
-        <div>
-          <p className="prose">{data.sample ? m.home.recordSampleBody : m.home.recordBody}</p>
-          <div className="actions">
-            <Link className="button" href={`/${locale}/dashboard`}>
-              {m.home.primary}
-              <IconArrowRight />
-            </Link>
-            <Link className="button secondary" href={`/${locale}/track-record`}>
-              {m.home.recordLink}
-            </Link>
+          <div className={styles.heroStatus}>
+            <DataStatus locale={locale} lastUpdated={data.lastUpdated} stale={data.stale} />
           </div>
         </div>
+        {top ? <Specimen locale={locale} instrument={top.instrument} result={top.result} sample={data.sample} /> : null}
       </section>
+
+      <Weights locale={locale} />
+      <StateLedger locale={locale} counts={counts} adviceOutput={adviceOutput} />
+      <Promises locale={locale} sample={data.sample} />
+      {waitlist ? <TierSplit locale={locale} status={lockStatus} /> : null}
+      <Proof locale={locale} facts={facts} />
+      <Close locale={locale} waitlist={waitlist} source={resolveSource(query, "landing")} />
     </>
   );
 }
