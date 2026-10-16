@@ -4,6 +4,7 @@ import type { StoredIdea } from "../db/ideas";
 import { hasBuySize, publicTier, stripEur } from "../ideas/public";
 import { localizeCodes, localizeEvidenceLabel } from "../ideas/localize";
 import { flags } from "../config/flags";
+import { AdrLine } from "./disclaimer";
 
 const RATING_KEY = { "Very strong": "Very strong", Strong: "Strong", Good: "Good", Neutral: "Neutral", Weak: "Weak" } as const;
 const PUBLIC_SOURCE_LABEL = /^(?:Sample )?(?:Earnings release|Výsledková správa|10-[QK]|8-K|Form [345]|Proxy statement|Annual report|Quarterly report|Press release|Tlačová správa)$/i;
@@ -120,6 +121,7 @@ export function IdeaCard({ idea: stored, locale, showAmounts = false, nested = f
           </ul>
         </section>
       )}
+      <AdrLine text={getMessages(locale).common.disclaimer} />
       <p className={styles.foot}>{fill(m.model, { model: idea.model })}</p>
     </article>
   );

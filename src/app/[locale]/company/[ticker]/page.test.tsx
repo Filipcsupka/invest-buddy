@@ -7,6 +7,8 @@ const idea = vi.fn();
 const review = vi.fn();
 const portfolio = vi.fn();
 const history = vi.fn();
+const shares = vi.fn(async () => [] as { periodEnd: string; value: number }[]);
+vi.mock("@/data/flag-facts", () => ({ storedShareCounts: () => shares() }));
 const originalAdvice = process.env.ADVICE_OUTPUT;
 vi.mock("@/data/store", () => ({ instrumentUniverse: () => universe(), latestScores: () => scores(), latestPortfolio: () => portfolio() }));
 vi.mock("@/data/score-history", () => ({ companyScoreHistory: () => history() }));
@@ -17,7 +19,7 @@ import { instruments } from "@/data/fixtures";
 import { scoredUniverse } from "@/data/scored";
 import { sampleIdeas } from "@/ideas/fixtures";
 
-afterEach(() => { history.mockReset(); history.mockResolvedValue([]); universe.mockReset(); scores.mockReset(); idea.mockReset(); review.mockReset(); review.mockResolvedValue(null); portfolio.mockReset(); portfolio.mockResolvedValue(null); if (originalAdvice === undefined) delete process.env.ADVICE_OUTPUT; else process.env.ADVICE_OUTPUT = originalAdvice; });
+afterEach(() => { shares.mockReset(); shares.mockResolvedValue([]); history.mockReset(); history.mockResolvedValue([]); universe.mockReset(); scores.mockReset(); idea.mockReset(); review.mockReset(); review.mockResolvedValue(null); portfolio.mockReset(); portfolio.mockResolvedValue(null); if (originalAdvice === undefined) delete process.env.ADVICE_OUTPUT; else process.env.ADVICE_OUTPUT = originalAdvice; });
 const props = (ticker: string, locale = "en") => ({ params: Promise.resolve({ locale, ticker }) });
 const dbInstrument = { ticker: "ZZZZ", name: "Zed Corp", sector: "Cloud & SaaS", tier: null, source: "guide" as const };
 
@@ -103,6 +105,33 @@ describe("company page", () => {
     expect(sk).toContain("História skóre");
     history.mockResolvedValue([]);
     expect(renderToStaticMarkup(await Company(props(row.instrument.ticker, "en")))).toContain("Not enough history yet");
+  });
+
+  it("shows the flags block apart from the score, and the ADR line under the score widget, in both languages", async () => {
+    const [row] = await scoredUniverse();
+    universe.mockResolvedValue([row.instrument]);
+    scores.mockResolvedValue({ rows: [row], sample: false, lastUpdated: "2026-10-08", stale: false });
+    idea.mockResolvedValue(null);
+    shares.mockResolvedValue([{ periodEnd: "2025-09-30", value: 100_000_000 }, { periodEnd: "2026-09-30", value: 125_000_000 }]);
+    const en = renderToStaticMarkup(await Company(props(row.instrument.ticker, "en")));
+    expect(en).toContain('data-flags=""');
+    expect(en).toContain("Share count growth: Flagged");
+    expect(en).toContain("+25.0%");
+    expect(en).toContain("Short interest: No data");
+    expect(en).toContain("Interest cover: No data");
+    expect(en.indexOf("status-title")).toBeLessThan(en.indexOf('data-adr-line=""'));
+    expect(en.indexOf('data-adr-line=""')).toBeLessThan(en.indexOf('data-flags=""'));
+    const sk = renderToStaticMarkup(await Company(props(row.instrument.ticker, "sk")));
+    expect(sk).toContain("Rast počtu akcií: Označené");
+    expect(sk).toContain("Krátke pozície: Bez údajov");
+    expect(sk).toContain("Nejde o osobné investičné poradenstvo.");
+    // The flags do not change the rendered score.
+    shares.mockResolvedValue([]);
+    const bare = renderToStaticMarkup(await Company(props(row.instrument.ticker, "en")));
+    expect(bare).toContain("Share count growth: No data");
+    const score = (html: string) => html.match(/<section class="[^"]*" data-state="[^"]*" aria-labelledby="status-title">[\s\S]*?<\/section>/)?.[0];
+    expect(score(bare)).toBeDefined();
+    expect(score(bare)).toBe(score(en));
   });
 
   it("404s a ticker missing from the universe, even if it is a fixture ticker", async () => {

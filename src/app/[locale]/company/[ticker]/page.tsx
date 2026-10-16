@@ -9,7 +9,9 @@ import { PaywallSegment } from "@/components/paywall-segment";
 import { ScoreHistory } from "@/components/score-history";
 import { companyScoreHistory } from "@/data/score-history";
 import { flags } from "@/config/flags";
-import { Disclaimer } from "@/components/disclaimer";
+import { FlagsBlock } from "@/components/flags-block";
+import { companyFlags } from "@/engine/flags";
+import { storedShareCounts } from "@/data/flag-facts";
 import { IconArrowLeft, IconArrowRight, IconCheck, IconCross, IconNoData } from "@/components/icons";
 import { OperatorDisclosure } from "@/components/operator-disclosure";
 import { coreRulesMet, StatusPanel } from "@/components/status-slider";
@@ -94,6 +96,8 @@ async function Company({ params }: Params) {
   const ideaRow = await companyIdea(instrument.ticker);
   const review = await companyReview(instrument.ticker);
   const history = await companyScoreHistory(instrument.ticker);
+  // Flags read stored facts only and never feed the score. Interest expense and short interest are not collected yet, so they show no data.
+  const flagResults = companyFlags({ bars: result.inputs.bars, shares: await storedShareCounts(instrument.ticker), operatingIncome: null, interestExpense: null, shortInterestPercent: null });
   const index = instruments.findIndex((item) => item.ticker === instrument.ticker);
   const prev = instruments[(index - 1 + instruments.length) % instruments.length];
   const next = instruments[(index + 1) % instruments.length];
@@ -149,7 +153,7 @@ async function Company({ params }: Params) {
         pullbackLabel={state === "watch" && result.pullbackInUptrend ? m.states.pullback : null}
         describedBy="score-disclaimer"
         coreMet={coreRulesMet(result.ruleHits)}
-        disclaimer={<><Disclaimer text={m.common.disclaimer} id="score-disclaimer" /><OperatorDisclosure text={m.common.operatorDisclosure} /></>}
+        disclaimer={<OperatorDisclosure text={m.common.operatorDisclosure} />}
       />
       {sources && <p className="source-summary muted small">{sources}</p>}
       <section className="sheet-section" aria-labelledby="chart">
@@ -164,6 +168,8 @@ async function Company({ params }: Params) {
           labels={{ name: instrument.ticker, aria: m.chart.label, close: m.chart.close, ma50: m.chart.ma50, ma200: m.chart.ma200, dip: m.chart.dip, last: m.chart.last }}
         />
       </section>
+
+      <FlagsBlock flags={flagResults} locale={locale} m={m} />
 
       <div className="company-grid">
         <section className="sheet-section" aria-labelledby="rules">
