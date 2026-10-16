@@ -1546,9 +1546,23 @@ th[aria-sort] .sort .icon {
   stroke-linejoin: round;
   stroke-linecap: round;
 }
+.chart {
+  --trend: var(--gain);
+}
+.chart[data-trend="down"] {
+  --trend: var(--loss);
+}
 .line-close {
-  stroke: var(--ink);
-  stroke-width: 1.75;
+  stroke: var(--trend, var(--ink));
+  stroke-width: 2;
+}
+.area-top {
+  stop-color: var(--trend);
+  stop-opacity: 0.28;
+}
+.area-bottom {
+  stop-color: var(--trend);
+  stop-opacity: 0;
 }
 .line-ma50 {
   stroke: var(--ink-2);
@@ -1565,9 +1579,83 @@ th[aria-sort] .sort .icon {
   width: 0.625rem;
   height: 0.625rem;
   translate: 0 -50%;
-  background: var(--ink);
+  background: var(--trend, var(--ink));
   border: 2px solid var(--ground);
   border-radius: 50%;
+}
+.chart-tag {
+  position: absolute;
+  left: calc(100% + 0.25rem);
+  translate: 0 -50%;
+  padding: 0.0625rem var(--s2);
+  border-radius: 0.25rem;
+  background: var(--trend);
+  color: var(--ground);
+  font-size: var(--t-xs);
+  font-weight: 700;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.chart-change {
+  font-weight: 600;
+  color: var(--gain);
+}
+.chart-change.is-down {
+  color: var(--loss);
+}
+.chart-hover {
+  position: absolute;
+  inset: 0;
+  touch-action: pan-y;
+  cursor: crosshair;
+}
+.hover-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: 1px dashed var(--rule-strong);
+  pointer-events: none;
+}
+.hover-dot {
+  position: absolute;
+  width: 0.75rem;
+  height: 0.75rem;
+  translate: -50% -50%;
+  background: var(--trend);
+  border: 2px solid var(--ground);
+  border-radius: 50%;
+  pointer-events: none;
+}
+.hover-tip {
+  position: absolute;
+  top: var(--s2);
+  translate: var(--s3) 0;
+  display: grid;
+  gap: 0.125rem;
+  min-width: 8.5rem;
+  padding: var(--s2) var(--s3);
+  background: var(--sheet);
+  border: 1px solid var(--rule-strong);
+  border-radius: 0.375rem;
+  box-shadow: 0 4px 14px var(--shadow);
+  font-size: var(--t-xs);
+  color: var(--ink);
+  pointer-events: none;
+}
+.hover-tip.is-left {
+  translate: calc(-100% - var(--s3)) 0;
+}
+.hover-date {
+  color: var(--ink-3);
+}
+.hover-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s4);
+}
+.hover-row b {
+  font-weight: 500;
+  color: var(--ink-2);
 }
 .chart-y {
   position: absolute;
@@ -1983,6 +2071,7 @@ th[aria-sort] .sort .icon {
 .caption-row { margin-bottom: var(--s2); }
 .company .score-strip { padding: var(--s3) 0 var(--s5); }
 .company .source-summary { margin-top: var(--s2); }
+.company .source-summary + .sheet-section { margin-top: var(--s6); }
 @media (max-width: 640px) {
   .company-grid { gap: var(--s6); }
   .company-grid + .sheet-section, .sheet-section + .sheet-section, .company .sheet-section:first-of-type { margin-top: var(--s6); }

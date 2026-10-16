@@ -1,4 +1,6 @@
+import { useId } from "react";
 import type { OHLCV } from "@/engine";
+import { ChartHover, type HoverPoint } from "./chart-hover";
 import { fill, formatDate, formatNumber, formatPrice, type Locale } from "@/i18n";
 
 type Labels = { name: string; aria: string; close: string; ma50: string; ma200: string; dip: string; last: string };
@@ -47,6 +49,7 @@ function path(points: (readonly [number, number] | null)[]): string {
  * so each line starts at the first plotted session where its window is full.
  */
 export function Chart({ bars, locale, labels, count = 100, dipZone = true, animate = false, averages = true }: { bars: OHLCV[]; locale: Locale; labels: Labels; count?: number; dipZone?: boolean; animate?: boolean; averages?: boolean }) {
+  const gradientId = `area-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const closes = bars.map((bar) => bar.close);
   const ma50 = averages ? movingAverages(closes, 50) : closes.map(() => null);
   const ma200 = averages ? movingAverages(closes, 200) : closes.map(() => null);
@@ -70,6 +73,21 @@ export function Chart({ bars, locale, labels, count = 100, dipZone = true, anima
   const series = (values: (number | null)[]) => path(values.slice(start).map((v, i) => (v === null ? null : ([x(i), y(v)] as const))));
 
   const closePath = series(closes);
+  const areaPath = `${closePath}L${W} ${H}L0 ${H}Z`;
+  const trend = view[view.length - 1].close >= view[0].close ? "up" : "down";
+  const change = view[view.length - 1].close / view[0].close - 1;
+  const hoverPoints: HoverPoint[] = view.map((bar, i) => {
+    const m50 = ma50[start + i];
+    const m200 = ma200[start + i];
+    return {
+      x: (i / (view.length - 1)) * 100,
+      y: (y(bar.close) / H) * 100,
+      date: formatDate(locale, bar.date),
+      close: formatPrice(locale, bar.close),
+      ma50: m50 === null ? null : formatPrice(locale, m50),
+      ma200: m200 === null ? null : formatPrice(locale, m200),
+    };
+  });
   const ma50Path = series(ma50);
   const ma200Path = series(ma200);
   const hasMa50 = ma50Path !== "";
@@ -82,7 +100,7 @@ export function Chart({ bars, locale, labels, count = 100, dipZone = true, anima
   const aria = fill(labels.aria, { name: labels.name, count: view.length, first: formatDate(locale, view[0].date), last: formatDate(locale, last.date) });
 
   return (
-    <figure className="chart">
+    <figure className="chart" data-trend={trend}>
       <div className="chart-plot" role="img" aria-label={aria}>
         <svg className="chart-layer" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true">
           {ticks.map((tick) => (
@@ -97,11 +115,22 @@ export function Chart({ bars, locale, labels, count = 100, dipZone = true, anima
           ) : null}
         </svg>
         <svg className={animate ? "chart-layer chart-lines is-plotting" : "chart-layer chart-lines"} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true">
+          <defs>
+            <linearGradient id={gradientId} x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0" className="area-top" />
+              <stop offset="1" className="area-bottom" />
+            </linearGradient>
+          </defs>
+          <path d={areaPath} className="area-close" style={{ fill: `url(#${gradientId})` }} />
           {hasMa200 ? <path d={ma200Path} className="line-ma200" vectorEffect="non-scaling-stroke" /> : null}
           {hasMa50 ? <path d={ma50Path} className="line-ma50" vectorEffect="non-scaling-stroke" /> : null}
           <path d={closePath} className="line-close" vectorEffect="non-scaling-stroke" />
         </svg>
         <span className="chart-last" style={{ top: pct(y(last.close), H) }} aria-hidden="true" />
+        <span className="chart-tag num" style={{ top: pct(y(last.close), H) }} aria-hidden="true">
+          {formatNumber(locale, last.close, 2)}
+        </span>
+        <ChartHover points={hoverPoints} labels={{ close: labels.close, ma50: labels.ma50, ma200: labels.ma200 }} />
         <div className="chart-y" aria-hidden="true">
           {ticks.map((tick) => (
             <span key={tick} style={{ top: pct(y(tick), H) }}>
@@ -123,6 +152,7 @@ export function Chart({ bars, locale, labels, count = 100, dipZone = true, anima
             <line x1="0" x2="22" y1="4" y2="4" className="line-close" />
           </svg>
           {labels.close} <span className="num legend-value">{fill(labels.last, { value: formatPrice(locale, last.close) })}</span>
+          <span className={`num chart-change is-${trend}`}>{`${change >= 0 ? "+" : "−"}${formatNumber(locale, Math.abs(change) * 100, 1)} %`}</span>
         </span>
         {hasMa50 ? (
           <span className="legend-item">

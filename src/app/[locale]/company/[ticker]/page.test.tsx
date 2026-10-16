@@ -165,6 +165,7 @@ describe("company page", () => {
         const html = await renderStatus({ locale, advice: false });
         expect(html.indexOf('aria-labelledby="status-title"')).toBeGreaterThan(-1);
         expect(html.indexOf('id="status-title"')).toBeLessThan(html.indexOf('id="chart"'));
+        expect(html.indexOf('id="chart"')).toBeLessThan(html.indexOf('id="rules"'));
         expect(html).toContain(off);
         expect(html).not.toContain(on);
         expect((await renderStatus({ locale, advice: true }))).not.toContain(on);
