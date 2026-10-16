@@ -1,11 +1,32 @@
 /* Status slider (lane STATUS, ST2). Colour comes only from the --st-* tokens in globals.css. */
 .panel {
   display: grid;
-  gap: var(--s4);
-  padding: var(--s5) 0 var(--s6);
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas: "dial main" "foot foot";
+  gap: var(--s5) var(--s7);
+  align-items: start;
+  padding: var(--s6) 0 var(--s6);
   border-top: 1px solid var(--ink);
   border-bottom: 1px solid var(--rule-strong);
 }
+.dialCol { grid-area: dial; display: grid; justify-items: center; padding-top: var(--s1); }
+.main { grid-area: main; display: grid; gap: var(--s4); min-width: 0; align-content: start; }
+.facts { display: grid; gap: var(--s1); }
+.facts [data-rules-met] { font-size: var(--t-base); font-weight: 620; color: var(--ink); }
+.cutoffs { max-width: 62ch; margin: 0; font-size: var(--t-xs); line-height: 1.45; color: var(--ink-3); }
+.foot {
+  grid-area: foot;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: var(--s4) var(--s7);
+  align-items: start;
+  padding-top: var(--s4);
+  border-top: 1px solid var(--rule);
+}
+.foot > :global(.disclosure) { grid-column: 1 / -1; color: var(--ink-3); }
+.foot [data-bonus] { font-size: var(--t-sm); color: var(--ink-2); }
+.foot [data-bonus] strong { font-weight: 650; color: var(--ink); }
+.foot [data-bonus] ul { display: flex; flex-wrap: wrap; gap: 0 var(--s3); margin: var(--s1) 0 0; padding: 0; list-style: none; }
 .row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -129,7 +150,9 @@
 .chip[data-confirm="no-data"] { border: 1px dashed var(--rule-strong); }
 
 @media (max-width: 40rem) {
-  .panel { gap: var(--s3); padding: var(--s4) 0 var(--s5); }
+  .panel { grid-template-columns: minmax(0, 1fr); grid-template-areas: "dial" "main" "foot"; gap: var(--s4); padding: var(--s5) 0; }
+  .dialCol { justify-items: start; }
+  .foot { grid-template-columns: minmax(0, 1fr); }
   .label { font-size: 1.1875rem; }
   .sub { gap: 0 var(--s2); }
   .row { grid-template-columns: minmax(0, 1fr); }

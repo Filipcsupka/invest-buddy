@@ -207,10 +207,10 @@ describe("company page", () => {
       const html = await renderStatus({ advice: false, unknown: ["catalyst", "macro-data"] });
       expect(html).toContain('id="rule-catalyst"');
       expect(html).toContain("Data from 8 of 9 core rules");
-      const row = (id: string) => html.match(new RegExp(`<tr id="rule-${id}"[\\s\\S]*?</tr>`))?.[0] ?? "";
+      const row = (id: string) => html.match(new RegExp(`<tr[^>]*id="rule-${id}"[\\s\\S]*?</tr>`))?.[0] ?? "";
       for (const id of ["catalyst", "macro-data"]) {
         expect(row(id)).toContain("no data");
-        expect(row(id)).not.toMatch(/rule-points">0</);
+        expect(row(id)).not.toMatch(/rule-points[^"]*">0/);
       }
       expect(html).toContain("Bonus findings");
       expect(html).not.toContain("mark-block is-unknown");

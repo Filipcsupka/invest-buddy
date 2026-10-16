@@ -1,6 +1,7 @@
 import { fill, formatCompact, formatDate, formatNumber, formatPercent, type Locale, type Messages } from "@/i18n";
 import { FLAG_THRESHOLDS, type FlagId, type FlagResult } from "@/engine/flags";
 import { IconCheck, IconCross, IconNoData } from "./icons";
+import { SectionHead } from "./kit";
 
 const pct = (locale: Locale, value: number) => formatPercent(locale, value / 100, 0);
 const usd = (locale: Locale, value: number) => `${formatCompact(locale, value)} USD`;
@@ -26,22 +27,19 @@ function detail(locale: Locale, m: Messages, flag: FlagResult): string {
 /** Flags block for the company page. Separate from the score; the state words are facts, not instructions. */
 export function FlagsBlock({ flags, locale, m }: { flags: FlagResult[]; locale: Locale; m: Messages }) {
   return (
-    <section className="sheet-section" aria-labelledby="flags" data-flags="">
-      <div className="section-head">
-        <h2 id="flags">{m.flags.title}</h2>
-        <p className="muted small">{m.flags.note}</p>
-      </div>
-      <ul className="reason-list" data-flag-list="">
+    <section className="sheet-section check-block" aria-labelledby="flags" data-flags="">
+      <SectionHead id="flags" title={m.flags.title} lede={m.flags.note} rule="quiet" />
+      <ul className="check-list" data-flag-list="">
         {flags.map((flag) => {
           const word = flag.state === "flagged" ? m.flags.state.flagged : flag.state === "clear" ? m.flags.state.clear : m.flags.state.noData;
           return (
-            <li key={flag.id} data-flag={flag.id} data-state={flag.state}>
-              <span className="rule-line">
+            <li key={flag.id} className="check-row" data-flag={flag.id} data-state={flag.state}>
+              <span className="check-mark" data-mark={flag.state === "flagged" ? "flag" : flag.state === "clear" ? "clear" : "none"}>
                 {flag.state === "flagged" ? <IconCross title={word} /> : flag.state === "clear" ? <IconCheck title={word} /> : <IconNoData title={word} />}
-                <span className="rule-name">{m.flags.names[flag.id]}: {word}</span>
               </span>
-              <span className="rule-def">{threshold(locale, m, flag.id)}</span>
-              <span className="rule-def num">{detail(locale, m, flag)}</span>
+              <span className="check-name">{m.flags.names[flag.id]}: {word}</span>
+              <span className="check-value num">{detail(locale, m, flag)}</span>
+              <span className="check-rule">{threshold(locale, m, flag.id)}</span>
             </li>
           );
         })}

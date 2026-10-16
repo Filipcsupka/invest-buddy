@@ -1,0 +1,473 @@
+/* Company page. Loaded by page.tsx only. Every colour is a token from globals.css; band hues (--st-*) mark state only.
+   The page's authored moment is the reading settling: the dial on first paint, the rule marks checking in once
+   when the rule table scrolls into view. Everything else is still. */
+
+/* ── Header ─────────────────────────────────────────────── */
+.company .company-head {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: var(--s5) var(--s7);
+  align-items: end;
+  padding-bottom: var(--s6);
+}
+.company-id {
+  display: grid;
+  gap: var(--s3);
+  min-width: 0;
+}
+.company .company-head .title {
+  gap: var(--s1) var(--s4);
+  text-wrap: balance;
+}
+.company .title-ticker {
+  font-stretch: 112%;
+}
+.company .title-name {
+  font-size: 0.46em;
+  font-weight: 460;
+  overflow-wrap: anywhere;
+}
+.company-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2) var(--s3);
+  font-size: var(--t-sm);
+  color: var(--ink-2);
+}
+.company-meta .tag {
+  margin-left: 0;
+}
+.company-sector {
+  font-weight: 560;
+}
+.company-sector::after {
+  content: "";
+  display: inline-block;
+  width: 1px;
+  height: 0.9em;
+  margin-left: var(--s3);
+  background: var(--rule-strong);
+  vertical-align: -0.1em;
+}
+.seo-summary {
+  max-width: 58ch;
+  font-family: var(--serif);
+  font-size: var(--t-base);
+  line-height: 1.55;
+  color: var(--ink-2);
+  text-wrap: pretty;
+}
+.company .company-head .title-block {
+  background: var(--sheet);
+  box-shadow: var(--shadow-1), var(--edge-light);
+}
+.company .data-updated {
+  margin-bottom: var(--s3);
+}
+.company > .notice {
+  margin-bottom: var(--s5);
+}
+
+/* ── Sections ───────────────────────────────────────────── */
+.company .sheet-section + .sheet-section,
+.company .company-grid,
+.company .co-facts,
+.company .co-idea,
+.company .co-history {
+  margin-top: var(--s8);
+}
+.company .source-summary {
+  margin-top: var(--s3);
+  max-width: 90ch;
+}
+.company .source-summary + .sheet-section {
+  margin-top: var(--s7);
+}
+.company .co-chart .kit-section-head {
+  margin-bottom: var(--s4);
+}
+
+/* ── Rule table ─────────────────────────────────────────── */
+.co-rules .kit-rules {
+  font-size: var(--t-sm);
+}
+.co-rules .kit-rule-group:first-child > th {
+  padding-top: var(--s2);
+}
+.co-rules .kit-rule-name {
+  width: 30%;
+  min-width: 11rem;
+}
+.co-rules .kit-rule-needs {
+  width: 26%;
+  max-width: none;
+}
+.co-rules .kit-rule-value,
+.co-checks .kit-rule-value {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  font-weight: 560;
+  line-height: 1.45;
+}
+.co-rules .kit-rule-detail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s1) var(--s2);
+  margin-top: var(--s1);
+}
+.co-rule-kind {
+  padding: 0 0.3125rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  font-size: var(--t-xs);
+  font-weight: 650;
+  font-stretch: 87%;
+  letter-spacing: var(--label-track);
+  line-height: 1.45;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.co-rule-kind[data-kind="bonus"] {
+  border-style: dashed;
+}
+.co-rule-nodata {
+  font-size: var(--t-xs);
+  color: var(--ink-3);
+}
+.co-rules .rule-src {
+  flex-basis: 100%;
+  font-size: var(--t-xs);
+  line-height: 1.45;
+  color: var(--ink-3);
+  overflow-wrap: anywhere;
+}
+.co-rules .kit-rule:hover > th,
+.co-rules .kit-rule:hover > td {
+  background: var(--sheet-hover);
+}
+.co-rules .kit-rule > th {
+  padding-left: var(--s2);
+}
+.co-rules .kit-rule:target > th,
+.co-rules .kit-rule:target > td {
+  background: var(--signal-tint);
+}
+.co-more {
+  margin-top: var(--s4);
+  font-size: var(--t-sm);
+}
+
+/* ── Rejection checks and inputs ────────────────────────── */
+.company .company-grid {
+  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+  gap: var(--s7) var(--s8);
+}
+.company .company-grid .sheet-section {
+  margin-top: 0;
+}
+.co-rejection {
+  padding: var(--s5);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--sheet);
+  --table-bg: var(--sheet);
+}
+.co-rejection .kit-section-head {
+  padding-top: 0;
+  border-top: 0;
+}
+.co-rejection[data-broken] {
+  border-color: var(--st-broken);
+}
+.co-checks thead th:last-child {
+  text-align: left;
+}
+.co-checks .kit-rule-result {
+  white-space: nowrap;
+}
+.co-checks .kit-mark[data-check="clear"] {
+  border-color: var(--ink-2);
+  color: var(--ink);
+}
+.co-checks .kit-mark[data-check="triggered"] {
+  border-color: var(--st-broken);
+  background: var(--st-broken);
+  color: var(--st-broken-on);
+}
+.co-checks .kit-mark[data-check="no-data"] {
+  border-style: dashed;
+}
+.co-check-word {
+  font-weight: 560;
+  color: var(--ink-2);
+}
+.co-checks .kit-rule[data-check="triggered"] .co-check-word,
+.co-checks .kit-rule[data-check="triggered"] .kit-rule-title {
+  color: var(--st-broken);
+  font-weight: 650;
+}
+.co-checks .kit-rule[data-check="no-data"] .co-check-word {
+  color: var(--ink-3);
+}
+.co-checks .kit-rule:last-child > th,
+.co-checks .kit-rule:last-child > td {
+  border-bottom: 0;
+}
+.co-inputs .kit-section-head {
+  margin-bottom: var(--s3);
+}
+.co-inputs .input-list {
+  border-top: 0;
+}
+.co-inputs .input-list dt {
+  color: var(--ink-2);
+}
+.co-inputs .input-list dd.input-src {
+  font-size: var(--t-xs);
+  color: var(--ink-3);
+}
+
+/* ── Flags and data status: two calm check lists ────────── */
+.co-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s7) var(--s8);
+  align-items: start;
+}
+.co-facts .sheet-section + .sheet-section {
+  margin-top: 0;
+}
+.check-block .kit-section-lede {
+  font-size: var(--t-sm);
+}
+.check-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--ink-2);
+}
+.check-row {
+  display: grid;
+  grid-template-columns: 1.25rem minmax(0, 1fr);
+  column-gap: var(--s3);
+  row-gap: 0.125rem;
+  padding: var(--s3) 0;
+  border-bottom: 1px solid var(--rule);
+  font-size: var(--t-sm);
+}
+.check-row > :not(.check-mark):not(.check-dot) {
+  grid-column: 2;
+}
+.check-mark {
+  grid-row: 1 / span 3;
+  display: inline-grid;
+  place-items: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  color: var(--ink-3);
+}
+.check-mark .icon,
+.check-mark svg {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+.check-mark[data-mark="flag"] {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--ground);
+}
+.check-mark[data-mark="clear"] {
+  border-color: var(--ink-2);
+  color: var(--ink);
+}
+.check-mark[data-mark="none"] {
+  border-style: dashed;
+}
+.check-name {
+  font-weight: 620;
+  color: var(--ink);
+}
+.check-row[data-state="clear"] .check-name,
+.check-row[data-state="no-data"] .check-name {
+  font-weight: 560;
+  color: var(--ink-2);
+}
+.check-value {
+  color: var(--ink);
+}
+.check-value:empty {
+  display: none;
+}
+.check-rule {
+  font-size: var(--t-xs);
+  line-height: 1.45;
+  color: var(--ink-3);
+}
+.check-dot {
+  grid-row: 1 / span 3;
+  justify-self: center;
+  width: 0.625rem;
+  height: 0.625rem;
+  margin-top: 0.3125rem;
+  border: 1.5px solid var(--ink-2);
+  border-radius: 1px;
+}
+.check-dot[data-dot="current"] {
+  background: var(--ink-2);
+}
+.check-dot[data-dot="stale"] {
+  background: linear-gradient(135deg, var(--ink-2) 50%, transparent 50%);
+}
+.check-dot[data-dot="none"] {
+  border-style: dashed;
+  border-color: var(--rule-strong);
+}
+.check-row[data-state="stale"] .check-name strong,
+.check-row[data-state="none"] .check-name strong {
+  color: var(--ink);
+}
+.coverage-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s1) var(--s2);
+  margin-bottom: var(--s4);
+  font-size: var(--t-sm);
+}
+.coverage-line .tag {
+  margin-left: 0;
+}
+.coverage-main {
+  font-weight: 620;
+}
+
+/* ── Chart ──────────────────────────────────────────────── */
+.co-chart .chart {
+  --trend: var(--ink);
+  padding: var(--s4) 0 0;
+}
+.co-chart .line-close {
+  stroke: var(--ink);
+  stroke-width: 1.75;
+}
+.co-chart .area-top {
+  stop-color: var(--ink);
+  stop-opacity: 0.08;
+}
+.co-chart .chart-plot {
+  border-bottom-color: var(--ink);
+}
+.co-chart .chart-tag {
+  border-radius: var(--radius);
+  background: var(--ink);
+  color: var(--ground);
+}
+.co-chart .chart-last {
+  background: var(--ink);
+}
+.co-chart .chart-zone line {
+  stroke-dasharray: 4 3;
+}
+.chart-zone-tag {
+  position: absolute;
+  translate: 0 calc(-100% - 0.25rem);
+  padding: 0 0.3125rem;
+  border: 1px solid var(--signal);
+  border-radius: var(--radius);
+  background: var(--ground);
+  color: var(--signal);
+  font-size: var(--t-xs);
+  font-weight: 650;
+  font-stretch: 87%;
+  letter-spacing: var(--label-track);
+  line-height: 1.45;
+  text-transform: uppercase;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.co-chart .chart-legend {
+  gap: var(--s2) var(--s5);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--rule);
+}
+.co-chart .hover-tip {
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-1), var(--edge-light);
+}
+
+/* ── Paid parts ─────────────────────────────────────────── */
+.co-paid .kit-tierframe {
+  padding-top: var(--s6);
+}
+.co-lock .kit-lock {
+  max-width: 44rem;
+}
+
+/* ── Narrow screens ─────────────────────────────────────── */
+@media (max-width: 1100px) {
+  .company .company-head {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+  }
+}
+@media (max-width: 900px) {
+  .company .company-grid,
+  .co-facts {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s7);
+  }
+  .company .sheet-section + .sheet-section,
+  .company .company-grid,
+  .company .co-facts,
+  .company .co-idea,
+  .company .co-history {
+    margin-top: var(--s7);
+  }
+}
+@media (max-width: 640px) {
+  .company .title-name {
+    flex-basis: 100%;
+    font-size: 0.5em;
+  }
+  .co-rules .kit-rule-name {
+    width: auto;
+    min-width: 0;
+  }
+  .co-rules .kit-rule > th,
+  .co-rules .kit-rule[data-result="pass"] > th {
+    padding-left: var(--s2);
+  }
+  .co-rules .kit-rule-value {
+    min-width: 6.5rem;
+  }
+  .co-rules .kit-rule-points {
+    min-width: 3.25rem;
+  }
+  .co-rejection {
+    padding: var(--s4);
+  }
+  .co-checks .co-check-word {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .co-checks .kit-rule-needs {
+    display: none;
+  }
+  .co-checks .kit-rule-needs-inline {
+    display: block;
+    margin-top: 0.125rem;
+    font-size: var(--t-xs);
+    color: var(--ink-2);
+  }
+  .chart-zone-tag {
+    display: none;
+  }
+}
