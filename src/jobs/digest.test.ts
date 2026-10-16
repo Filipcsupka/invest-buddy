@@ -82,6 +82,16 @@ describe("telegram delivery", () => {
     expect(bandChanges([{ ...alert, previousState: "Setup met (>=18)" }, other]).map((a) => a.ticker)).toEqual(["AMD"]);
   });
 
+  it("adds rule change lines from extras without banned words", async () => {
+    sent.length = 0;
+    const ruleChanges = [{ label: "Uptrend intact", from: "pass" as const, to: "fail" as const }, { label: "Nákupy insiderov alebo inštitúcií", from: "fail" as const, to: "pass" as const }];
+    await deliverTelegram({ ...base, locale: "en", extras: { NVDA: { ruleChanges } }, log: new MemoryDeliveryLog() });
+    await deliverTelegram({ ...base, locale: "sk", extras: { NVDA: { ruleChanges } }, log: new MemoryDeliveryLog() });
+    expect(sent[0]).toContain("No longer meets: Uptrend intact");
+    expect(sent[1]).toContain("Teraz spĺňa: Nákupy insiderov alebo inštitúcií");
+    for (const text of sent) expect(text).not.toMatch(/\b(buy|sell|kúp|predaj|EUR)\b|—/i);
+  });
+
   it("follows ADVICE_OUTPUT in the post", async () => {
     sent.length = 0;
     await deliverTelegram({ ...base, adviceOutput: true, log: new MemoryDeliveryLog() });

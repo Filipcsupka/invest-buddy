@@ -13,6 +13,10 @@ export type StateName = "Setup met (>=18)" | "Watch" | "Wait" | "Ignore" | "Crit
 export interface StatusPoint { state: StateName; points: number | null }
 export interface Coverage { known: number; total: number }
 
+/** One rule that changed state since the previous day. Only these fields reach the message; no vendor inputs. */
+export interface AlertRuleChange { label: string; from: "pass" | "fail" | "unknown"; to: "pass" | "fail" | "unknown" }
+export const MAX_RULE_LINES = 3;
+
 export interface EventAlertInput {
   ticker: string;
   locale: AlertLocale;
@@ -22,6 +26,8 @@ export interface EventAlertInput {
   /** Optional until ST1 supplies them. Absent means the line is left out, not "none". */
   confirmations?: ConfirmationKey[];
   coverage?: Coverage;
+  /** Rules whose state changed vs the previous day. Pass to fail and anything to pass get a line (max 3); a move to unknown does not. */
+  ruleChanges?: AlertRuleChange[];
   /** ADVICE_OUTPUT. Off: "Conditions met". On: "Buy zone". */
   adviceOutput: boolean;
   site: string;
@@ -59,6 +65,8 @@ interface Text {
   now: string;
   first: string;
   confirmations: string;
+  noLongerMeets: string;
+  nowMeets: string;
   chips: Record<ConfirmationKey, string>;
   coverage: (known: number, total: number) => string;
   open: (ticker: string) => string;
@@ -75,6 +83,8 @@ export const ALERT_TEXT: Record<AlertLocale, Text> = {
     now: "Now",
     first: "First rating",
     confirmations: "Confirmations",
+    noLongerMeets: "No longer meets",
+    nowMeets: "Now meets",
     chips: { revenue: "Revenue growth", eps: "EPS", guidance: "Guidance raised", catalyst: "Product catalyst", volume: "Volume", insider: "Insiders (Form 4)" },
     coverage: (known, total) => `Data: ${known} of ${total} points have verified sources`,
     open: (ticker) => `Open ${ticker}`,
@@ -89,6 +99,8 @@ export const ALERT_TEXT: Record<AlertLocale, Text> = {
     now: "Teraz",
     first: "Prvé hodnotenie",
     confirmations: "Potvrdenia",
+    noLongerMeets: "Už nespĺňa",
+    nowMeets: "Teraz spĺňa",
     chips: { revenue: "Rast tržieb", eps: "EPS", guidance: "Zvýšený výhľad", catalyst: "Produktový katalyzátor", volume: "Objem", insider: "Insideri (Form 4)" },
     coverage: (known, total) => `Údaje: ${known} z ${total} bodov má overené zdroje`,
     open: (ticker) => `Otvoriť ${ticker}`,
@@ -143,6 +155,9 @@ export function formatEventAlert(input: EventAlertInput): string {
     ? `${text.was}: ${stepText(locale, input.previous, adviceOutput, true)} → ${text.now}: ${nowText}`
     : `${text.first}: ${nowText}`);
 
+  for (const change of (input.ruleChanges ?? []).filter((c) => c.to === "pass" || (c.from === "pass" && c.to === "fail")).slice(0, MAX_RULE_LINES)) {
+    lines.push(`${change.to === "pass" ? text.nowMeets : text.noLongerMeets}: ${escapeHtml(change.label)}`);
+  }
   if (input.confirmations?.length) lines.push(`${text.confirmations}: ${input.confirmations.map((key) => `✓ ${escapeHtml(text.chips[key])}`).join(" ")}`);
   if (input.coverage) lines.push(escapeHtml(text.coverage(input.coverage.known, input.coverage.total)));
 

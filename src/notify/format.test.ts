@@ -96,3 +96,32 @@ describe("alert strings", () => {
     expect(ALERT_TEXT.sk.bands.green).not.toBe(ALERT_TEXT.en.bands.green);
   });
 });
+
+describe("rule change lines", () => {
+  const ruleChanges = [
+    { label: "Uptrend intact", from: "pass", to: "fail" },
+    { label: "Curated product catalyst", from: "fail", to: "pass" },
+    { label: "Higher volume on green days", from: "pass", to: "unknown" },
+    { label: "Close above MA50 and MA200", from: "unknown", to: "pass" },
+    { label: "Fourth line", from: "fail", to: "pass" },
+  ] as const;
+
+  it("renders up to three lines in English and skips a move to unknown", () => {
+    const lines = formatEventAlert({ ...base, locale: "en", ruleChanges: [...ruleChanges] }).split("\n");
+    expect(lines.filter((line) => /^(No longer meets|Now meets):/.test(line))).toEqual([
+      "No longer meets: Uptrend intact", "Now meets: Curated product catalyst", "Now meets: Close above MA50 and MA200",
+    ]);
+    expect(lines.join("\n")).not.toContain("Fourth line");
+    expect(lines.join("\n")).not.toContain("green days");
+  });
+
+  it("renders the Slovak lines and escapes the label", () => {
+    const text = formatEventAlert({ ...base, ruleChanges: [{ label: "Rastový trend <trvá>", from: "pass", to: "fail" }, { label: "Katalyzátor", from: "fail", to: "pass" }] });
+    expect(text).toContain("Už nespĺňa: Rastový trend &lt;trvá&gt;");
+    expect(text).toContain("Teraz spĺňa: Katalyzátor");
+  });
+
+  it("adds nothing without changes", () => {
+    expect(formatEventAlert({ ...base, ruleChanges: [] })).toBe(formatEventAlert(base));
+  });
+});
