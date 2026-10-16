@@ -2,39 +2,44 @@
 .badge {
   display: inline-flex;
   align-items: center;
+  gap: 0.3125rem;
   margin: 0 0 var(--s2);
-  padding: 0.0625rem 0.4375rem;
+  padding: 0.125rem 0.5625rem 0.125rem 0.4375rem;
   border: 1px solid var(--tier);
   border-radius: var(--radius-pill);
   background: var(--tier);
   color: var(--tier-on);
   font-size: var(--t-xs);
-  font-weight: 700;
-  letter-spacing: 0.04em;
+  font-weight: 800;
+  letter-spacing: 0.02em;
   line-height: 1.4;
-  text-transform: uppercase;
   white-space: nowrap;
   vertical-align: middle;
 }
-.badge + :global([data-segment-tier="paid"]) { box-shadow: inset 2px 0 0 var(--tier-line); }
+/* A small diamond in the badge's own ink, so the mark reads as a tier before it is read as a word. */
+.badge::before { content: ""; width: 0.4375rem; height: 0.4375rem; border-radius: 2px; background: currentColor; rotate: 45deg; opacity: 0.85; flex: none; }
+.badge + :global([data-segment-tier="paid"]) { box-shadow: inset 3px 0 0 var(--tier-line); padding-left: var(--s3); }
 .lock {
   display: grid;
-  gap: var(--s2);
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: var(--s3);
+  row-gap: var(--s1);
+  align-items: center;
   max-width: 40rem;
   padding: var(--s4) var(--s5);
-  border: 1px solid var(--tier-line);
-  border-radius: var(--radius);
-  background: var(--sheet-raised);
-  box-shadow: var(--shadow-1), var(--edge-light);
+  border: 1px dashed var(--tier-line);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--tier-wash) 55%, var(--sheet));
+  box-shadow: var(--shadow-1);
 }
 .lockTitle {
-  display: flex;
-  align-items: center;
-  gap: var(--s2);
+  display: contents;
   margin: 0;
+  font-family: var(--display);
   font-size: var(--t-base);
-  font-weight: 650;
+  font-weight: 800;
+  letter-spacing: -0.01em;
 }
-.lockTitle svg { color: var(--tier); flex: none; }
-.lockBody { font-size: var(--t-sm); color: var(--ink-2); margin: 0; }
-.note { font-size: var(--t-sm); color: var(--ink-3); margin: var(--s2) 0 0; padding-left: var(--s3); border-left: 1px solid var(--tier-line); }
+.lockTitle svg { grid-row: 1 / span 2; box-sizing: content-box; width: 1rem; height: 1rem; padding: 0.5rem; border-radius: 50%; background: var(--tier-wash); color: var(--tier); flex: none; }
+.lockBody { grid-column: 2; font-size: var(--t-sm); color: var(--ink-2); margin: 0; }
+.note { font-size: var(--t-sm); color: var(--ink-3); margin: var(--s2) 0 0; padding-left: var(--s3); border-left: 2px solid var(--tier-line); }

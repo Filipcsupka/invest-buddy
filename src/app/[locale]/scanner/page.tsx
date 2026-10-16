@@ -2,12 +2,14 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { withPageLog } from "@/app/page-log";
 import { flags } from "@/config/flags";
-import { SampleStamp, OperatorDisclosure } from "@/components/operator-disclosure";
+import { AppPageHead, HeadDisclosure, appPageClass } from "@/components/app-page-head";
+import { getHeatmapMessages } from "@/i18n/heatmap-messages";
+import { getScreenMessages } from "@/i18n/screen-messages";
 import { PaywallSegment } from "@/components/paywall-segment";
 import { TierBadge } from "@/components/tier-lock";
 import { DataTable, DataTableEmpty } from "@/components/kit/data-table";
+import { IconLock } from "@/components/kit/kit-icons";
 import { ScoreBar } from "@/components/kit/score";
-import { SectionHead } from "@/components/kit/section-head";
 import { StateChip } from "@/components/kit/state-chip";
 import { kitState } from "@/components/kit/types";
 import { getViewer } from "@/viewer/get-viewer";
@@ -53,8 +55,10 @@ const copy = {
 function FilterForm({ locale, filters, sectors, viewer }: { locale: Locale; filters: ScannerFilters; sectors: string[]; viewer: Viewer }) {
   const m = getMessages(locale);
   const c = copy[locale];
+  const sc = getScreenMessages(locale);
   const options = (max: number) => Array.from({ length: max + 1 }, (_, n) => <option key={n} value={n}>{n}</option>);
   return <form action={`/${locale}/scanner`} method="get" className={styles.filters} aria-label={m.scanner.filterLabel}>
+    <h2 className={styles.railTitle}>{sc.filters}</h2>
     {filters.preset && <input type="hidden" name="preset" value={filters.preset} />}
     {!filters.floor && <input type="hidden" name="floor" value="off" />}
     <label>{m.scanner.searchLabel}<input type="search" name="q" defaultValue={filters.q} placeholder={m.scanner.searchPlaceholder} maxLength={80} /></label>
@@ -78,16 +82,16 @@ function PresetBar({ locale, filters, counts, total, viewer }: { locale: Locale;
   const s = m.scanner;
   const href = (id: string) => `/${locale}/scanner${id ? `?preset=${id}` : ""}`;
   return <nav className={styles.presets} aria-label={s.presetsLabel}>
-    <SectionHead title={s.presetsLabel} lede={s.presetsNote} rule="quiet" />
+    <div className={styles.presetsHead}><h2 className={styles.presetsTitle}>{s.presetsLabel}</h2><p className={styles.presetsNote}>{s.presetsNote}</p></div>
     <ul className={styles.presetList}>{presets.map((preset) => {
       const text = s.presets[preset.id];
       if (isChangePreset(preset.id) && viewer.tier === "free") {
         const lock = getTierListsMessages(locale).changePresetLock;
-        return <li key={preset.id}><span className={styles.preset} aria-disabled="true"><span className={styles.presetName}>{text.name}</span><span className={styles.presetMeta}>{lock}</span></span></li>;
+        return <li key={preset.id}><span className={styles.preset} aria-disabled="true"><span className={styles.presetName}><span className={styles.presetText}>{text.name}</span></span><span className={styles.presetMeta}><IconLock />{lock}</span></span></li>;
       }
       const rules = preset.kind === "rules" ? ruleCountLabel(locale, preset.rules.length) : fill(s.presetAny, { count: preset.rules.length });
       return <li key={preset.id}><Link className={styles.preset} href={href(preset.id)} aria-current={filters.preset === preset.id ? "true" : undefined} title={text.note}>
-        <span className={styles.presetName}>{text.name}{isChangePreset(preset.id) && viewer.tier === "admin" ? <TierBadge segmentId="scanner-streak" label={getTierMessages(locale).badge} title={getTierMessages(locale).badgeHint} /> : null}</span><span className={styles.presetMeta}>{fill(s.presetMeta, { rules, count: counts[preset.id] ?? 0, total })}</span></Link></li>;
+        <span className={styles.presetName}><span className={styles.presetText}>{text.name}</span>{isChangePreset(preset.id) && viewer.tier === "admin" ? <TierBadge segmentId="scanner-streak" label={getTierMessages(locale).badge} title={getTierMessages(locale).badgeHint} /> : null}</span><span className={styles.presetMeta}>{fill(s.presetMeta, { rules, count: counts[preset.id] ?? 0, total })}</span></Link></li>;
     })}</ul>
     {filters.preset && <p className="small">{fill(s.presetActive, { name: s.presets[filters.preset].name })} <Link href={`/${locale}/scanner`}>{s.presetClear}</Link></p>}
   </nav>;
@@ -127,26 +131,35 @@ async function Scanner({ params, searchParams }: Props) {
   });
   const presetCounts = Object.fromEntries(presets.map((preset) => [preset.id, data.rows.filter(({ result }) => matchesPreset(preset, result.ruleHits, streaks[result.ticker])).length]));
   const s = m.scanner;
-  return <div className="frame page">
-    <header className="page-head"><div className="page-title-row"><h1 className="title">{m.scanner.title}</h1>{data.sample && <SampleStamp text={m.common.sample} />}</div>
-      <p className="lede">{m.meta.scannerDescription}</p><DataStatus locale={locale} lastUpdated={data.lastUpdated} stale={data.stale} /><OperatorDisclosure text={m.common.operatorDisclosure} />
-    </header>
+  const sc = getScreenMessages(locale);
+  const h = getHeatmapMessages(locale);
+  return <div className={appPageClass}>
+    <AppPageHead title={m.scanner.title} sample={data.sample} sampleText={m.common.sample} lede={m.meta.scannerDescription}
+      meta={<DataStatus locale={locale} lastUpdated={data.lastUpdated} stale={data.stale} />}
+      actions={<><Link className="button secondary" href={`/${locale}/heatmap`}>{h.navLabel}</Link><Link className="button secondary" href={`/${locale}/methodology`}>{m.nav.methodology}</Link></>} />
+    <HeadDisclosure text={m.common.operatorDisclosure} />
     <PresetBar locale={locale} filters={filters} counts={presetCounts} total={data.rows.length} viewer={viewer} />
-    <FilterForm locale={locale} filters={filters} sectors={sectors} viewer={viewer} />
-    <p className={styles.summary} aria-live="polite">{fill(filters.floor ? fl.result : fl.resultOff, { count: visible.length, total: data.rows.length })}{" "}
-      <Link className="small" href={filtersHref(locale, filters, !filters.floor)}>{filters.floor ? fl.remove : fl.apply}</Link></p>
-    <p className="muted small">{fill(filters.floor ? fl.rule : fl.ruleOff, { volume: million(SCANNER_FLOOR.minAvgDollarVolumeUsd), days: SCANNER_FLOOR.days, cap: million(SCANNER_FLOOR.minMarketCapUsd) })}{filters.floor ? ` ${hiddenText(locale, unfloored.length - visible.length)}` : ""}</p>
-    <p className="muted small">{c.sourceNote}</p>
-    <PaywallSegment id="scanner-streak" viewer={viewer} locale={locale}><p className="muted small">{getTierListsMessages(locale).streakNote}</p></PaywallSegment>
+    <div className={styles.wrap}><div className={styles.layout}>
+    <aside className={styles.rail} aria-label={sc.filters}><FilterForm locale={locale} filters={filters} sectors={sectors} viewer={viewer} /></aside>
+    <div className={styles.results}>
+    <div className={styles.toolbar}>
+      <p className={styles.summary} aria-live="polite">{fill(filters.floor ? fl.result : fl.resultOff, { count: visible.length, total: data.rows.length })}{" "}
+        <Link className={styles.floorLink} href={filtersHref(locale, filters, !filters.floor)}>{filters.floor ? fl.remove : fl.apply}</Link></p>
+      <div className={styles.notes}>
+        <p>{fill(filters.floor ? fl.rule : fl.ruleOff, { volume: million(SCANNER_FLOOR.minAvgDollarVolumeUsd), days: SCANNER_FLOOR.days, cap: million(SCANNER_FLOOR.minMarketCapUsd) })}{filters.floor ? ` ${hiddenText(locale, unfloored.length - visible.length)}` : ""}</p>
+        <p>{c.sourceNote}</p>
+        <PaywallSegment id="scanner-streak" viewer={viewer} locale={locale}><p>{getTierListsMessages(locale).streakNote}</p></PaywallSegment>
+      </div>
+    </div>
     <PaywallSegment id="scanner-rows-full" viewer={viewer} locale={locale}><section aria-label={m.scanner.title}>
       <DataTable label={m.scanner.title} density="compact" describedBy="scanner-disclaimer" stickyFirst>
         <caption className="visually-hidden">{m.scanner.title}</caption>
-        <thead><tr><th scope="col">{m.table.ticker}</th><th scope="col" className={`col-sector ${styles.colSector}`}>{m.table.sector}</th><th scope="col">{m.table.score}</th><th scope="col">{s.rulesMet}</th><th scope="col">{m.status.columns.status}</th></tr></thead>
-        <tbody>{visible.length ? visible.map((row) => {
+        <thead><tr><th scope="col">{sc.rankShort} · {m.table.ticker}</th><th scope="col" className={`col-sector ${styles.colSector}`}>{m.table.sector}</th><th scope="col">{m.table.score}</th><th scope="col">{s.rulesMet}</th><th scope="col">{m.status.columns.status}</th></tr></thead>
+        <tbody>{visible.length ? visible.map((row, index) => {
           const chipState = kitState(row.state, Boolean(row.pullbackLabel));
           const stateText = row.pullbackLabel ?? row.stateLabel;
           return <tr key={row.ticker} data-state={row.state}>
-            <th scope="row" className={`col-company ${styles.company}`}><Link className="ticker" href={`/${locale}/company/${row.ticker}`}>{row.ticker}</Link><span className="company-name">{row.name}{held.has(row.ticker) ? <span className="tag">{m.portfolio.held}</span> : null}{floorState(floorData[row.ticker]) === "unknown" ? <span className="tag" title={fl.noDataNote}>{fl.noData}</span> : null}</span></th>
+            <th scope="row" className={`col-company ${styles.company}`}><span className={styles.rank} aria-label={`${sc.rank} ${index + 1}`}>{index + 1}</span><span className={styles.who}><Link className="ticker" href={`/${locale}/company/${row.ticker}`}>{row.ticker}</Link><span className="company-name">{row.name}{held.has(row.ticker) ? <span className="tag">{m.portfolio.held}</span> : null}{floorState(floorData[row.ticker]) === "unknown" ? <span className="tag" title={fl.noDataNote}>{fl.noData}</span> : null}</span></span></th>
             <td className={`col-sector muted ${styles.colSector}`}>{row.sector}</td>
             <td className={styles.score}>
               <ScoreBar size="sm" percent={row.percent} state={chipState} stateLabel={stateText} locale={locale} label={row.ticker} describedBy="scanner-disclaimer" />
@@ -159,6 +172,7 @@ async function Scanner({ params, searchParams }: Props) {
       </DataTable>
     </section></PaywallSegment>
     <p className="disclaimer is-compact" id="scanner-disclaimer">{m.common.disclaimer}</p>
+    </div></div></div>
   </div>;
 }
 
