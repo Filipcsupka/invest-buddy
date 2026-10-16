@@ -6,23 +6,28 @@ import { OperatorDisclosure, SampleStamp } from "@/components/operator-disclosur
 import { ScreenTable } from "@/components/screen-table";
 import { toRow, type ScreenRow } from "@/components/view-model";
 import { fixtureBenchmark } from "@/data/record";
-import { scoreHistory, stale } from "@/data/store";
+import { instrumentUniverse, scoreHistory, stale } from "@/data/store";
 import { recordHistory } from "@/db/track-record";
 import { recordBenchmark } from "@/db/record-benchmark";
 import { DataStatus } from "@/components/data-status";
 import { PaywallSegment } from "@/components/paywall-segment";
 export const dynamic = "force-dynamic";
-import { fill, formatDate, formatNumber, formatPercent, getMessages, plural } from "@/i18n";
+import { fill, formatDate, formatNumber, formatPercent, getMessages, intlTag, plural, type Locale } from "@/i18n";
 import { pageMetadata } from "@/i18n/metadata";
 import { resolveLocale, type LocaleParams } from "../locale";
 import { recordSignalLabel } from "@/i18n/record-signal";
 import { flags } from "@/config/flags";
 import { WINDOWS } from "@/track-record/measure";
+import { periodTable } from "@/track-record/period-table";
 
 export async function generateMetadata({ params }: LocaleParams): Promise<Metadata> {
   const locale = await resolveLocale(params);
   const m = getMessages(locale);
   return pageMetadata(locale, "/track-record", m.meta.trackRecordTitle, m.meta.trackRecordDescription);
+}
+
+function formatMonth(locale: Locale, period: string): string {
+  return new Intl.DateTimeFormat(intlTag[locale], { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${period}-01T00:00:00Z`));
 }
 
 async function TrackRecord({ params }: LocaleParams) {
@@ -31,6 +36,9 @@ async function TrackRecord({ params }: LocaleParams) {
   if (process.env.DATA_MODE !== "fixture") {
     const record = await recordHistory();
     const benchmark = await recordBenchmark(record.firstDate, record.lastDate);
+    const universe = (await instrumentUniverse()).length;
+    const periods = periodTable(record.signals, benchmark, new Date().toISOString().slice(0, 10));
+    const periodLabel = (period: string) => periods.grain === "month" ? formatMonth(locale, period) : period;
     return <div className="frame page">
       <header className="page-head">
         <h1 className="title">{m.trackRecord.title}</h1>
@@ -44,7 +52,7 @@ async function TrackRecord({ params }: LocaleParams) {
         <p>{fill(record.snapshotCount === 1 ? m.trackRecord.summaryOne : m.trackRecord.summary, { count: formatNumber(locale, record.snapshotCount), date: record.firstDate ? formatDate(locale, record.firstDate) : m.trackRecord.none })}</p>
         {record.hit20.n > 0 && <p>{fill(m.trackRecord.hitRate, { rate: formatPercent(locale, record.hit20.rate ?? 0), n: formatNumber(locale, record.hit20.n) })}</p>}
         {record.worst.length > 0 && <p className="muted small">{m.trackRecord.worstNote}</p>}
-        <p className="muted small">{m.trackRecord.excluded}</p>
+        {record.firstDate && <p className="muted small">{fill(m.trackRecord.excluded, { date: formatDate(locale, record.firstDate) })}</p>}
         {record.buySignalCount < 30 && <p className="muted small">{fill(m.trackRecord.smallSample, { n: formatNumber(locale, record.buySignalCount) })}</p>}
       </section>
       <PaywallSegment id="track-record-benchmark"><section className="sheet-section" aria-labelledby="benchmark">
@@ -58,6 +66,22 @@ async function TrackRecord({ params }: LocaleParams) {
           labels={{ name: "SPY", aria: m.chart.label, close: "SPY", ma50: m.chart.ma50, ma200: m.chart.ma200, dip: m.chart.dip, last: m.chart.last }}
         /> : <p className="notice">{m.common.noDataYet}</p>}
       </section></PaywallSegment>
+      {periods.rows.length > 0 && <section className="sheet-section" aria-labelledby="periods">
+        <h2 id="periods">{m.trackRecord.periodTitle}</h2>
+        <div className="table-scroll" role="region" tabIndex={0} aria-label={m.trackRecord.periodTitle}><table className="screen">
+          <thead><tr><th scope="col">{periods.grain === "month" ? m.trackRecord.periodMonth : m.trackRecord.periodYear}</th><th scope="col">{m.trackRecord.periodN}</th><th scope="col">{m.trackRecord.periodHit}</th><th scope="col">{m.trackRecord.periodExcess}</th><th scope="col">{m.trackRecord.periodSpy}</th></tr></thead>
+          <tbody>
+            {periods.rows.map((row) => <tr key={row.period}>
+              <td>{periodLabel(row.period)}</td><td>{formatNumber(locale, row.n)}</td>
+              <td>{row.hitRate === null ? "–" : formatPercent(locale, row.hitRate)}</td>
+              <td>{row.meanExcess === null ? "–" : formatPercent(locale, row.meanExcess)}</td>
+              <td>{row.spyChange === null ? "–" : formatPercent(locale, row.spyChange)}</td>
+            </tr>)}
+            {periods.spy && <tr><th scope="row">{fill(m.trackRecord.periodSpyRow, { from: formatDate(locale, periods.spy.from), to: formatDate(locale, periods.spy.to) })}</th><td>–</td><td>–</td><td>–</td><td>{formatPercent(locale, periods.spy.change)}</td></tr>}
+          </tbody>
+        </table></div>
+        <p className="muted small">{m.trackRecord.periodNote}</p>
+      </section>}
       {record.worst.length > 0 && <PaywallSegment id="track-record-worst"><section className="sheet-section" aria-labelledby="worst">
         <h2 id="worst">{m.trackRecord.worstTitle}</h2>
         <div className="table-scroll" role="region" tabIndex={0} aria-label={m.trackRecord.worstTitle}><table className="screen">
@@ -78,6 +102,8 @@ async function TrackRecord({ params }: LocaleParams) {
           </tr>)}</tbody>
         </table></div>}
         <p className="muted small">{m.trackRecord.method}</p>
+        <p className="muted small">{fill(m.trackRecord.methodLine, { universe: formatNumber(locale, universe), date: record.firstDate ? formatDate(locale, record.firstDate) : m.trackRecord.none, n: formatNumber(locale, record.buySignalCount) })}</p>
+        <p className="muted small">{m.trackRecord.backtest}</p>
       </section></PaywallSegment>
       <Disclaimer text={m.common.disclaimer} />
     </div>;
