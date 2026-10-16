@@ -1,0 +1,222 @@
+import type { Locale } from "./index";
+
+/**
+ * Copy for the component kit, the app shell additions and the /design review page.
+ * Kept apart from messages.ts so the page work packages do not collide. ADR-001: informational wording only.
+ */
+const en = {
+  tier: {
+    free: "Free",
+    paid: "Paid",
+    paidSection: "Paid section",
+  },
+  banner: {
+    admin: "Admin view: every section is visible.",
+    adminNote: "Sections marked Paid have a frame. A free visitor would see a short card in their place, and the status would stay in view.",
+  },
+  lock: {
+    title: "Part of the Paid tier",
+    behind: "Behind this card",
+    statusKept: "The status stays visible on every tier.",
+    plans: "See the planned tiers",
+  },
+  rule: {
+    columns: { rule: "Rule", needs: "Needs", value: "Value", result: "Result", points: "Points" },
+    pass: "Met",
+    fail: "Not met",
+    noData: "No data",
+    pointsOf: "+{points} of {max}",
+    pointsNone: "0 of {max}",
+  },
+  score: {
+    label: "Score",
+    noScore: "No score",
+    valueText: "{percent} of the points with data, {state}",
+    ofData: "of the points with data",
+  },
+  strip: {
+    label: "State changes, {date}",
+    pause: "Pause",
+    play: "Resume",
+    changed: "{ticker}: {from} to {to}",
+    empty: "No state changed in the last session.",
+  },
+  shell: {
+    builtFor: "Built for investors in Slovakia and the Czech Republic. In Slovak and English.",
+  },
+  design: {
+    metaTitle: "Design kit",
+    title: "Design kit",
+    lede: "Every kit component in every state, for review before the pages are rebuilt. Not linked from the site and not indexed. All figures on this page are sample values.",
+    sections: {
+      colour: "Colour",
+      type: "Type",
+      states: "State chips",
+      score: "Score dial and bar",
+      count: "Counting numbers",
+      rules: "Rule rows",
+      strip: "State change strip",
+      tier: "Tiers",
+      heads: "Section heads",
+      table: "Data table",
+      surfaces: "Browser surfaces",
+      reveal: "Reveal",
+    },
+    notes: {
+      colour: "Every pair below is checked against WCAG AA in scripts/check-contrast.ts, in light and dark.",
+      states: "Each state has its own label, shape and colour. Reading any one of them is enough.",
+      score: "The first dial and bar settle on load. The ones further down settle when they scroll into view.",
+      count: "Integers count up on tabular figures in a box sized to the final value, so nothing shifts. Decimals and values over 999 stay still.",
+      rules: "The marks check in one by one on load. No data is never shown as 0 points.",
+      strip: "Moves slowly, stops on hover, on focus and with the pause button, and stands still with reduced motion.",
+      tier: "Components only. Which sections are paid is decided in the tier work package.",
+      table: "Sticky header inside a bounded box, tabular figures, hairline rows.",
+      surfaces: "Select this sentence, tab through the controls and scroll the box to see the themed selection, focus ring and scrollbar.",
+      reveal: "This block rises in once when it scrolls into view. Content is visible without JavaScript.",
+    },
+    swatches: {
+      neutrals: "Neutrals",
+      signal: "Signal",
+      bands: "State palette",
+      tier: "Tier mark",
+    },
+    typeSamples: {
+      display: "Every rule, shown in full",
+      title: "NVDA NVIDIA Corporation",
+      heading: "Rule by rule",
+      lede: "The method is public and the output is the same for every visitor.",
+      prose: "A rule without data shows No data. It adds no points and it is not counted as a failed check.",
+      label: "Session",
+      ui: "Data from 8 of 9 core rules",
+    },
+    sample: {
+      sectionTitle: "Insider filings, last 90 days",
+      sectionLede: "Form 4 purchases and sales for this ticker.",
+      lockItems: ["Every Form 4 filing with the reporting owner", "Net shares bought and sold over 90 days", "A link to each filing at the SEC"],
+      ruleDetail: "Quarterly revenue from the last two 10-Q filings.",
+      tableLabel: "Sample universe",
+      tableCaption: "Sample rows to show the table styles.",
+      columns: { ticker: "Ticker", state: "State", score: "Score", data: "Data", sector: "Sector" },
+      empty: "No tickers match this filter.",
+      buttonPrimary: "Primary action",
+      buttonSecondary: "Secondary",
+      buttonDisabled: "Disabled",
+      searchLabel: "Search",
+      searchPlaceholder: "Ticker or company",
+      metaUpdated: "Updated 16 Oct 2026",
+      quietHead: "A quieter head",
+    },
+  },
+};
+
+const sk: typeof en = {
+  tier: {
+    free: "Zadarmo",
+    paid: "Platené",
+    paidSection: "Platená sekcia",
+  },
+  banner: {
+    admin: "Pohľad správcu: všetky sekcie sú viditeľné.",
+    adminNote: "Sekcie označené ako Platené majú rámik. Návštevník bez predplatného by na ich mieste videl krátku kartu a stav by zostal viditeľný.",
+  },
+  lock: {
+    title: "Súčasť platenej úrovne",
+    behind: "Za touto kartou",
+    statusKept: "Stav zostáva viditeľný na každej úrovni.",
+    plans: "Pozrieť plánované úrovne",
+  },
+  rule: {
+    columns: { rule: "Pravidlo", needs: "Vyžaduje", value: "Hodnota", result: "Výsledok", points: "Body" },
+    pass: "Splnené",
+    fail: "Nesplnené",
+    noData: "Bez údajov",
+    pointsOf: "+{points} z {max}",
+    pointsNone: "0 z {max}",
+  },
+  score: {
+    label: "Skóre",
+    noScore: "Bez skóre",
+    valueText: "{percent} bodov s údajmi, {state}",
+    ofData: "z bodov s údajmi",
+  },
+  strip: {
+    label: "Zmeny stavov, {date}",
+    pause: "Pozastaviť",
+    play: "Pokračovať",
+    changed: "{ticker}: {from} na {to}",
+    empty: "V poslednej seancii sa žiadny stav nezmenil.",
+  },
+  shell: {
+    builtFor: "Pre investorov na Slovensku a v Česku. Po slovensky a po anglicky.",
+  },
+  design: {
+    metaTitle: "Dizajnová sada",
+    title: "Dizajnová sada",
+    lede: "Každý komponent sady v každom stave, na kontrolu pred prestavbou stránok. Stránka nie je prepojená z webu ani indexovaná. Všetky čísla na nej sú ukážkové.",
+    sections: {
+      colour: "Farby",
+      type: "Písmo",
+      states: "Štítky stavov",
+      score: "Ciferník a pruh skóre",
+      count: "Počítadlá",
+      rules: "Riadky pravidiel",
+      strip: "Pás zmien stavov",
+      tier: "Úrovne",
+      heads: "Hlavičky sekcií",
+      table: "Dátová tabuľka",
+      surfaces: "Prvky prehliadača",
+      reveal: "Odhalenie",
+    },
+    notes: {
+      colour: "Každá dvojica nižšie je overená podľa WCAG AA v scripts/check-contrast.ts, vo svetlom aj tmavom režime.",
+      states: "Každý stav má vlastný názov, tvar a farbu. Na prečítanie stačí ktorékoľvek z nich.",
+      score: "Prvý ciferník a pruh sa ustália po načítaní. Tie nižšie sa ustália, keď sa posunú do zobrazenia.",
+      count: "Celé čísla sa napočítajú na tabuľkových číslach v rámčeku s veľkosťou konečnej hodnoty, takže sa nič neposúva. Desatinné čísla a hodnoty nad 999 zostávajú bez pohybu.",
+      rules: "Značky sa po načítaní objavujú postupne. Bez údajov sa nikdy nezobrazí ako 0 bodov.",
+      strip: "Pohybuje sa pomaly, zastaví sa pod kurzorom, pri fokuse a tlačidlom pozastavenia a pri obmedzenom pohybe stojí.",
+      tier: "Len komponenty. Ktoré sekcie sú platené, určí balík práce pre úrovne.",
+      table: "Pripnutá hlavička v ohraničenom rámčeku, tabuľkové čísla, tenké čiary riadkov.",
+      surfaces: "Označte túto vetu, prejdite tabulátorom ovládacie prvky a posuňte rámček, aby ste videli farbu výberu, rámček fokusu a posuvník.",
+      reveal: "Tento blok sa raz vysunie, keď sa posunie do zobrazenia. Obsah je viditeľný aj bez JavaScriptu.",
+    },
+    swatches: {
+      neutrals: "Neutrálne",
+      signal: "Signál",
+      bands: "Paleta stavov",
+      tier: "Značka úrovne",
+    },
+    typeSamples: {
+      display: "Každé pravidlo, celý postup",
+      title: "NVDA NVIDIA Corporation",
+      heading: "Pravidlo po pravidle",
+      lede: "Metóda je verejná a výsledok je rovnaký pre každého návštevníka.",
+      prose: "Pravidlo bez údajov má označenie Bez údajov. Nepridá body a nepočíta sa ako nesplnené.",
+      label: "Seansa",
+      ui: "Údaje z 8 z 9 hlavných pravidiel",
+    },
+    sample: {
+      sectionTitle: "Hlásenia insiderov za posledných 90 dní",
+      sectionLede: "Nákupy a predaje z formulárov Form 4 pre tento ticker.",
+      lockItems: ["Každé hlásenie Form 4 s menom osoby", "Čistý počet kúpených a predaných akcií za 90 dní", "Odkaz na každé hlásenie na stránke SEC"],
+      ruleDetail: "Štvrťročné tržby z posledných dvoch hlásení 10-Q.",
+      tableLabel: "Ukážkový výber",
+      tableCaption: "Ukážkové riadky na predvedenie štýlu tabuľky.",
+      columns: { ticker: "Ticker", state: "Stav", score: "Skóre", data: "Údaje", sector: "Sektor" },
+      empty: "Tomuto filtru nezodpovedá žiadny ticker.",
+      buttonPrimary: "Hlavná akcia",
+      buttonSecondary: "Vedľajšia",
+      buttonDisabled: "Nedostupné",
+      searchLabel: "Hľadať",
+      searchPlaceholder: "Ticker alebo firma",
+      metaUpdated: "Aktualizované 16. 10. 2026",
+      quietHead: "Tichšia hlavička",
+    },
+  },
+};
+
+export type KitMessages = typeof en;
+const kitMessages: Record<Locale, KitMessages> = { en, sk };
+
+export function getKitMessages(locale: Locale): KitMessages {
+  return kitMessages[locale];
+}

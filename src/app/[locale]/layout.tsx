@@ -7,7 +7,10 @@ import { getMessages, isLocale, locales } from "@/i18n";
 import { Analytics } from "@/components/analytics";
 import { JsonLd } from "@/components/json-ld";
 import { siteJsonLd, siteNoindex, siteUrl } from "@/i18n/metadata";
+import { TierBanner } from "@/components/kit/tier";
+import { getKitMessages } from "@/i18n/kit-messages";
 import "../globals.css";
+import "@/components/kit/kit.css";
 
 const sans = Archivo({ subsets: ["latin", "latin-ext"], axes: ["wdth"], variable: "--font-sans", display: "swap" });
 const serif = Source_Serif_4({ subsets: ["latin", "latin-ext"], axes: ["opsz"], style: ["normal", "italic"], variable: "--font-serif", display: "swap" });
@@ -42,6 +45,7 @@ export default async function LocaleLayout({ children, params }: { children: Rea
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
   const m = getMessages(locale);
+  const kit = getKitMessages(locale);
   return (
     <html lang={locale} className={`${sans.variable} ${serif.variable}`} suppressHydrationWarning>
       <head>
@@ -53,6 +57,8 @@ export default async function LocaleLayout({ children, params }: { children: Rea
           {m.common.skipToContent}
         </a>
         <Nav locale={locale} />
+        {/* Tier logic is a later work package; until it decides a mode, the banner stays hidden for everyone. */}
+        <TierBanner mode="hidden" title={kit.banner.admin} note={kit.banner.adminNote} badgeLabel={kit.tier.paid} />
         <main id="main" tabIndex={-1}>
           {children}
         </main>

@@ -8,6 +8,7 @@ import { flags } from "@/config/flags";
 import { getLegalMessages } from "@/i18n/legal-messages";
 import { getLaunchMessages } from "@/i18n/launch-messages";
 import { getHeatmapMessages } from "@/i18n/heatmap-messages";
+import { getKitMessages } from "@/i18n/kit-messages";
 
 export function BrandMark() {
   return (
@@ -65,6 +66,7 @@ export async function Footer({ locale }: { locale: Locale }) {
           <span>{data.sample ? m.footer.note : m.footer.liveNote}</span>
           {data.sample && <span className="stamp">{m.common.sample}</span>}
         </p>
+        <p className="footer-built">{getKitMessages(locale).shell.builtFor}</p>
         <nav aria-label={m.footer.legal} className="footer-links">
           <Link href={`/${locale}/methodology`}>{m.footer.methodology}</Link>
           <Link href={`/${locale}/legal/privacy`}>{m.footer.privacy}</Link>

@@ -2,7 +2,8 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const css = readFileSync("src/app/globals.css", "utf8");
-const modules = ["src/components/status-slider.module.css", "src/components/idea-card.module.css"].map((path) => readFileSync(path, "utf8"));
+const modules = ["src/components/status-slider.module.css", "src/components/idea-card.module.css", "src/components/kit/kit.css", "src/app/[locale]/design/design.module.css"].map((path) => readFileSync(path, "utf8"));
+const kit = modules[2];
 
 /** Every declaration block for a selector, including ones inside media queries. */
 function blocks(source: string, selector: string): string[] {
@@ -26,6 +27,9 @@ describe("tap targets (44px = 2.75rem)", () => {
     expect(blocks(css, ".icon-button").some((body) => rem(body, "width") >= 2.75)).toBe(true);
     expect(blocks(css, ".search-field input").some((body) => rem(body, "height") >= 2.75)).toBe(true);
     expect(blocks(css, ".button").some((body) => rem(body, "min-height") >= 2.75)).toBe(true);
+  });
+  it("keeps the kit's own controls at 44px", () => {
+    for (const selector of [".kit-strip-toggle", ".kit-strip-link", ".kit-lock-action"]) expect(blocks(kit, selector).some((body) => rem(body, "min-height") >= 2.75), selector).toBe(true);
   });
   it("extends the ticker link hit area", () => {
     expect(blocks(css, ".ticker::after").join("")).toMatch(/inset:\s*-0\.75rem/);

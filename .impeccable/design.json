@@ -1,6 +1,6 @@
 {
  "schemaVersion": 2,
- "generatedAt": "2026-10-04T15:13:15.468269Z",
+ "generatedAt": "2026-10-16T12:00:00Z",
  "title": "Design System: InvestBuddy",
  "extensions": {
   "colorMeta": {
@@ -23,6 +23,42 @@
    "ink-light": {
     "role": "neutral",
     "displayName": "Graphite ink"
+   },
+   "tier-light": {
+    "role": "accent",
+    "displayName": "Mulberry tier mark"
+   },
+   "tier-dark": {
+    "role": "accent",
+    "displayName": "Mulberry tier mark (dark)"
+   },
+   "signal-strong-light": {
+    "role": "primary",
+    "displayName": "Signal strong"
+   },
+   "sheet-raised-light": {
+    "role": "neutral",
+    "displayName": "Raised sheet"
+   },
+   "st-setup-light": {
+    "role": "semantic",
+    "displayName": "Conditions met"
+   },
+   "st-wait-light": {
+    "role": "semantic",
+    "displayName": "Waiting"
+   },
+   "st-ignore-light": {
+    "role": "semantic",
+    "displayName": "Not now"
+   },
+   "st-broken-light": {
+    "role": "semantic",
+    "displayName": "Criteria broken"
+   },
+   "st-none-light": {
+    "role": "semantic",
+    "displayName": "Not enough data"
    }
   },
   "typographyMeta": {
@@ -37,25 +73,59 @@
    "prose": {
     "displayName": "Reading serif",
     "purpose": "Ledes, methodology prose, rule definitions."
+   },
+   "figure": {
+    "displayName": "Figure",
+    "purpose": "Score readouts and counts, tabular."
    }
   },
   "shadows": [
    {
-    "name": "contact",
-    "value": "0 1px 2px rgb(21 25 28 / 0.07)",
-    "purpose": "Landing datasheet only."
+    "name": "shadow-1",
+    "value": "0 1px 2px + 0 2px 6px -2px",
+    "purpose": "Contact: landing datasheet, lock cards, scrolled header."
+   },
+   {
+    "name": "shadow-2",
+    "value": "0 2px 4px -1px + 0 12px 28px -10px",
+    "purpose": "A raised specimen."
+   },
+   {
+    "name": "edge-light",
+    "value": "inset 0 1px 0",
+    "purpose": "Top light on raised surfaces, mostly for dark mode."
    }
   ],
   "motion": [
    {
-    "name": "ease-out-expo",
+    "name": "ease-expo",
+    "value": "cubic-bezier(0.19, 1, 0.22, 1)",
+    "purpose": "Settle, check-in, count and reveal."
+   },
+   {
+    "name": "ease-out",
     "value": "cubic-bezier(0.16, 1, 0.3, 1)",
-    "purpose": "All transitions and the chart plot sweep."
+    "purpose": "Transitions and the chart plot sweep."
+   },
+   {
+    "name": "settle",
+    "value": "1100ms",
+    "purpose": "Score bar and dial from zero to value."
+   },
+   {
+    "name": "reveal",
+    "value": "640ms",
+    "purpose": "Below-the-fold section reveal."
+   },
+   {
+    "name": "stagger",
+    "value": "70ms",
+    "purpose": "Rule marks checking in."
    },
    {
     "name": "plot",
     "value": "clip-path inset sweep, 1600ms, 120ms delay",
-    "purpose": "The one authored moment, company page chart."
+    "purpose": "Company page chart."
    }
   ],
   "breakpoints": [

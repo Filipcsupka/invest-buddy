@@ -11,7 +11,7 @@
   --ink-2: light-dark(#464f56, #a9b2b6);
   --ink-3: light-dark(#5d666d, #8d979c);
   --rule: light-dark(#c7cdcc, #2a3135);
-  --rule-strong: light-dark(#7e878b, #5e686e);
+  --rule-strong: light-dark(#7e878b, #646e74);
   --gain: light-dark(#13693a, #5fd391);
   --gain-wash: light-dark(#d5ecdd, #123524);
   --loss: light-dark(#a8261c, #ff8a7d);
@@ -41,6 +41,22 @@
   --st-none-on: light-dark(#ffffff, #101315);
   --st-none-wash: light-dark(#e3e6e4, #262c30);
 
+  /* Foundation (design/foundation). Light and dark are tuned separately; every pair is checked in scripts/check-contrast.ts. */
+  /* Raised sheet: dials, lock cards, the tier banner. One step above --sheet, never a third grey in between. */
+  --sheet-raised: light-dark(#fbfcfa, #1c2125);
+  /* Signal ramp around the unchanged cobalt: strong for hover and pressed text, tint for a selected row. */
+  --signal-strong: light-dark(#1a32a3, #b8c5ff);
+  --signal-tint: light-dark(#eef1fc, #151b33);
+  /* Tier mark: mulberry, a hue no status band uses. Paid badges, the paid frame and lock cards only. */
+  --tier: light-dark(#7a2a6a, #e6a6d8);
+  --tier-on: light-dark(#ffffff, #2a0b23);
+  --tier-wash: light-dark(#f4e4ef, #35192f);
+  --tier-line: light-dark(#a8789c, #93608a);
+  /* Depth: offset plus blur, two levels. Dark mode adds a hairline top light instead of a bigger shadow. */
+  --shadow-1: 0 1px 2px light-dark(rgb(21 25 28 / 0.08), rgb(0 0 0 / 0.5)), 0 2px 6px -2px light-dark(rgb(21 25 28 / 0.06), rgb(0 0 0 / 0.4));
+  --shadow-2: 0 2px 4px -1px light-dark(rgb(21 25 28 / 0.08), rgb(0 0 0 / 0.55)), 0 12px 28px -10px light-dark(rgb(21 25 28 / 0.18), rgb(0 0 0 / 0.7));
+  --edge-light: inset 0 1px 0 light-dark(rgb(255 255 255 / 0.7), rgb(255 255 255 / 0.05));
+
   /* Type */
   --sans: var(--font-sans), "Arial Narrow", Arial, sans-serif;
   --serif: var(--font-serif), Georgia, "Times New Roman", serif;
@@ -49,9 +65,13 @@
   --t-base: 0.9375rem;
   --t-prose: 1.0625rem;
   --t-lede: 1.1875rem;
+  --t-h3: 1.125rem;
   --t-h2: 1.375rem;
+  --t-figure: 2rem;
+  --t-figure-lg: clamp(2.75rem, 2.2rem + 1.8vw, 3.75rem);
   --t-title: clamp(2.25rem, 1.55rem + 2.4vw, 3.5rem);
   --t-display: clamp(2.75rem, 1.4rem + 4.6vw, 5.5rem);
+  --label-track: 0.07em;
 
   /* Space: 4px base. Tight inside groups, wide between them. */
   --s1: 0.25rem;
@@ -68,6 +88,14 @@
   --frame: min(1280px, 100% - 2 * var(--gutter));
   --radius: 2px;
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  /* Motion: exponential ease-out only, no bounce. Durations by consequence. */
+  --ease-expo: cubic-bezier(0.19, 1, 0.22, 1);
+  --dur-feedback: 120ms;
+  --dur-state: 200ms;
+  --dur-layout: 400ms;
+  --dur-reveal: 640ms;
+  --dur-settle: 1100ms;
+  --stagger: 70ms;
   --header-h: 3.5rem;
 }
 
@@ -157,6 +185,30 @@ abbr[title] {
   background: var(--rule-strong);
   border: 3px solid var(--ground);
   border-radius: 6px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--ink-3);
+}
+/* Inner scroll boxes (wide tables, the state strip) get the thin bar on their own surface. */
+.table-scroll,
+.kit-table-scroll,
+.kit-strip-viewport {
+  scrollbar-width: thin;
+  scrollbar-color: var(--rule-strong) transparent;
+}
+::placeholder {
+  color: var(--ink-3);
+  opacity: 1;
+}
+mark {
+  background: var(--signal-wash);
+  color: var(--ink);
+  padding-inline: 0.125em;
+}
+@media (forced-colors: active) {
+  :focus-visible {
+    outline-color: Highlight;
+  }
 }
 
 .num,
@@ -318,38 +370,90 @@ td,
   }
 }
 
+/* Header lifts off the page once the reader scrolls: a scroll-linked shadow, CSS only. */
+@keyframes header-lift {
+  to {
+    box-shadow: var(--shadow-1);
+    border-bottom-color: var(--rule-strong);
+  }
+}
+@supports (animation-timeline: scroll()) {
+  .site-header {
+    animation: header-lift linear both;
+    animation-timeline: scroll(root);
+    animation-range: 0 5rem;
+  }
+}
+.nav-links a:hover:not([aria-current="page"]) {
+  text-decoration: underline;
+  text-decoration-color: var(--rule-strong);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.55em;
+}
+/* The theme icon turns in when it appears: it is shown by display, so the animation restarts on every switch. */
+@keyframes icon-turn {
+  from {
+    opacity: 0;
+    rotate: -60deg;
+    scale: 0.7;
+  }
+}
+.theme-toggle .icon {
+  animation: icon-turn var(--dur-layout) var(--ease-expo);
+}
+
 /* Footer */
 .site-footer {
   margin-top: var(--s9);
-  border-top: 1px solid var(--rule);
+  border-top: 1px solid var(--ink);
   color: var(--ink-3);
   font-size: var(--t-sm);
 }
 .footer-inner {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  align-items: center;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
   gap: var(--s4) var(--s6);
-  padding-block: var(--s6);
+  padding-block: var(--s6) var(--s7);
 }
 .footer-note {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--s3);
+  color: var(--ink-2);
 }
 .footer-note .brand-mark {
   color: var(--ink-2);
 }
+.footer-built {
+  grid-column: 1;
+  max-width: 52ch;
+  color: var(--ink-3);
+}
 .footer-links {
+  grid-column: 2;
+  grid-row: 1 / span 2;
   display: flex;
   flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 0 var(--s5);
 }
 .footer-disclaimer {
-  flex-basis: 100%;
+  grid-column: 1 / -1;
   max-width: 62ch;
+  padding-top: var(--s4);
+  border-top: 1px solid var(--rule);
+}
+@media (max-width: 640px) {
+  .footer-inner {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .footer-links {
+    grid-column: 1;
+    grid-row: auto;
+    justify-content: flex-start;
+  }
 }
 .footer-links a {
   display: inline-flex;

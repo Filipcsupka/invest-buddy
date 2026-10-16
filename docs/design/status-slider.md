@@ -97,7 +97,7 @@ Contrast, computed with the WCAG 2.x relative luminance formula. `src/i18n/statu
 | setup | dark | 9.25 | 9.96 | 7.19 | 9.90 |
 | none | dark | 8.03 | 8.64 | 6.55 | 8.64 |
 
-All text pairs pass AA for normal text (4.5:1). All shape pairs pass the 3:1 non-text rule (1.4.11). Inactive step outlines use `--rule-strong`, which measures 3.44 on the light sheet, 3.14 on the light ground, 3.04 on the dark sheet and 3.27 on the dark ground.
+All text pairs pass AA for normal text (4.5:1). All shape pairs pass the 3:1 non-text rule (1.4.11). Inactive step outlines use `--rule-strong`, which measures 3.44 on the light sheet, 3.14 on the light ground, 3.32 on the dark sheet and 3.57 on the dark ground.
 
 Light yellow is a dark amber (`#8a6500`) on purpose. A bright yellow cannot reach 3:1 on a light ground. Dark mode can use a true yellow.
 
