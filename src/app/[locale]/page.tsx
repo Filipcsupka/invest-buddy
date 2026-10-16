@@ -1,18 +1,16 @@
 import { withPageLog } from "@/app/page-log";
-import Link from "next/link";
 import type { Metadata } from "next";
-import { DataStatus } from "@/components/data-status";
-import { IconArrowRight } from "@/components/icons";
-import { StateChip, kitState } from "@/components/kit";
-import { Close, Promises, Proof, StateLedger, TierSplit, Weights } from "@/components/landing/sections";
-import { Specimen } from "@/components/landing/specimen";
-import styles from "@/components/landing/landing.module.css";
+import { StateStrip, type StateChange } from "@/components/kit/state-strip";
+import { kitState } from "@/components/kit";
+import { Close, Hero, Proof, StateBoard, Steps, TierSplit, type BoardRow } from "@/components/landing/sections";
+import { coreRulesMet } from "@/components/status-slider";
 import { recordStartDate } from "@/data/launch-facts";
+import { latestStateChanges } from "@/data/state-changes";
 import { latestScores } from "@/data/store";
 import { displayScore } from "@/engine/display-score";
 import { flags } from "@/config/flags";
-import { getMessages } from "@/i18n";
-import { getLaunchMessages } from "@/i18n/launch-messages";
+import { fill, formatDate, getMessages } from "@/i18n";
+import { getKitMessages } from "@/i18n/kit-messages";
 import { pageMetadata } from "@/i18n/metadata";
 import { stateKey } from "@/i18n/score-text";
 import { stateOrder, type StateKey } from "@/i18n/rules";
@@ -31,52 +29,46 @@ type HomeProps = LocaleParams & { searchParams?: Promise<Record<string, string |
 async function Home({ params, searchParams }: HomeProps) {
   const locale = await resolveLocale(params);
   const m = getMessages(locale);
-  const data = await latestScores();
+  const k = getKitMessages(locale);
+  const [data, moved] = await Promise.all([latestScores(), latestStateChanges()]);
   const rows = data.rows;
   const ranked = [...rows].sort((a, b) => Number(b.result.state === "Setup met (>=18)") - Number(a.result.state === "Setup met (>=18)") || b.result.total - a.result.total || a.instrument.ticker.localeCompare(b.instrument.ticker));
-  const top = ranked[0];
   const waitlist = flags().WAITLIST;
   const adviceOutput = flags().ADVICE_OUTPUT;
   const query = waitlist ? await searchParams : undefined;
-  const launch = waitlist ? getLaunchMessages(locale) : null;
   const facts = waitlist ? { tickers: data.sample || rows.length === 0 ? null : rows.length, lastScore: data.sample ? null : data.lastUpdated, recordStart: data.sample || rows.length === 0 ? null : await recordStartDate() } : null;
   // Counts per state are shown only for live data. Sample data would present invented figures as today's.
   const counts = data.sample || rows.length === 0 ? null : (Object.fromEntries(stateOrder.map((s) => [s, 0])) as Record<StateKey, number>);
   if (counts) for (const row of rows) counts[displayScore(stateKey(row.result.state), row.result.ruleHits).state] += 1;
-  const topDisplay = top ? displayScore(stateKey(top.result.state), top.result.ruleHits) : null;
-  const lockStatus = top && topDisplay ? <StateChip state={kitState(topDisplay.state, topDisplay.state === "watch" && top.result.pullbackInUptrend)} label={topDisplay.state === "watch" && top.result.pullbackInUptrend ? m.states.pullback : m.states[topDisplay.state]} /> : null;
+  const view = (row: (typeof rows)[number]) => {
+    const display = displayScore(stateKey(row.result.state), row.result.ruleHits);
+    const pullback = display.state === "watch" && row.result.pullbackInUptrend;
+    return { display, state: kitState(display.state, pullback), label: pullback ? m.states.pullback : m.states[display.state] };
+  };
+  const board: BoardRow[] = ranked.slice(0, 5).map((row) => {
+    const v = view(row);
+    return { ticker: row.instrument.ticker, name: row.instrument.name, percent: v.display.percent, state: v.state, label: v.label, href: `/${locale}/company/${row.instrument.ticker}` };
+  });
+  const top = ranked[0];
+  const topView = top ? view(top) : null;
+  const specimen = top && topView ? { ticker: top.instrument.ticker, result: top.result, percent: topView.display.percent, state: topView.state, label: topView.label, known: topView.display.coreKnown, total: topView.display.coreTotal, met: coreRulesMet(top.result.ruleHits) } : null;
+  const changes: StateChange[] = moved.map(({ ticker, from, to }) => {
+    const [fromLabel, toLabel] = [m.status.labels[from], m.status.labels[to]];
+    return { ticker, from: kitState(from), to: kitState(to), fromLabel, toLabel, href: `/${locale}/company/${ticker}`, sentence: fill(k.strip.changed, { ticker, from: fromLabel, to: toLabel }) };
+  });
+  const session = top?.result.asOf ?? "";
 
   return (
     <>
-      <section className={`frame ${styles.hero}`} aria-label={m.home.title}>
-        <div className={styles.heroCopy}>
-          <h1 className="display">{m.home.title}</h1>
-          <p className="lede">{m.home.lede}</p>
-          <div className="actions">
-            <Link className="button" href={`/${locale}/dashboard`}>
-              {m.home.primary}
-              <IconArrowRight />
-            </Link>
-            <Link className="button secondary" href={`/${locale}/methodology`}>
-              {m.home.secondary}
-            </Link>
-            {launch ? (
-              <Link className="button secondary" href="#waitlist">
-                {launch.landing.ctaWaitlist}
-              </Link>
-            ) : null}
-          </div>
-          <div className={styles.heroStatus}>
-            <DataStatus locale={locale} lastUpdated={data.lastUpdated} stale={data.stale} />
-          </div>
+      <Hero locale={locale} rows={board} total={rows.length} sample={data.sample} waitlist={waitlist} lastUpdated={data.lastUpdated} stale={data.stale} />
+      {data.lastUpdated ? (
+        <div className="frame" style={{ marginTop: "var(--s5)" }}>
+          <StateStrip label={fill(k.strip.label, { date: formatDate(locale, session) })} changes={changes} empty={k.strip.empty} pauseLabel={k.strip.pause} playLabel={k.strip.play} />
         </div>
-        {top ? <Specimen locale={locale} instrument={top.instrument} result={top.result} sample={data.sample} /> : null}
-      </section>
-
-      <Weights locale={locale} />
-      <StateLedger locale={locale} counts={counts} adviceOutput={adviceOutput} />
-      <Promises locale={locale} sample={data.sample} />
-      {waitlist ? <TierSplit locale={locale} status={lockStatus} /> : null}
+      ) : null}
+      <Steps locale={locale} specimen={specimen} />
+      <StateBoard locale={locale} counts={counts} adviceOutput={adviceOutput} />
+      {waitlist ? <TierSplit locale={locale} /> : null}
       <Proof locale={locale} facts={facts} />
       <Close locale={locale} waitlist={waitlist} source={resolveSource(query, "landing")} />
     </>
