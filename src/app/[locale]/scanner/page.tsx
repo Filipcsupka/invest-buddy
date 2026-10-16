@@ -9,12 +9,15 @@ import { StatusCell, statusLabel } from "@/components/status-slider";
 import { toRow, byScore } from "@/components/view-model";
 import { DataStatus } from "@/components/data-status";
 import { latestPortfolio, latestScores } from "@/data/store";
+import { ruleStreaks, type RuleStreak } from "@/db/rules-streak";
 import { fill, getMessages, type Locale } from "@/i18n";
 import { pageMetadata } from "@/i18n/metadata";
-import { stateOrder } from "@/i18n/rules";
+import { ruleGroups, stateOrder } from "@/i18n/rules";
 import { sectorLabel } from "@/i18n/score-text";
 import { resolveLocale, type LocaleParams } from "../locale";
 import { filterScores, parseFilters, type Query, type ScannerFilters } from "./filters";
+import { ruleCountLabel, streakText } from "./format";
+import { matchesPreset, presets } from "./presets";
 import styles from "./scanner.module.css";
 
 export const dynamic = "force-dynamic";
@@ -39,6 +42,7 @@ function FilterForm({ locale, filters, sectors }: { locale: Locale; filters: Sca
   const c = copy[locale];
   const options = (max: number) => Array.from({ length: max + 1 }, (_, n) => <option key={n} value={n}>{n}</option>);
   return <form action={`/${locale}/scanner`} method="get" className={styles.filters} aria-label={m.scanner.filterLabel}>
+    {filters.preset && <input type="hidden" name="preset" value={filters.preset} />}
     <label>{m.scanner.searchLabel}<input type="search" name="q" defaultValue={filters.q} placeholder={m.scanner.searchPlaceholder} maxLength={80} /></label>
     <label>{m.scanner.filterLabel}<select name="state" defaultValue={filters.state}><option value="">{m.scanner.allStates}</option>{stateOrder.map((state) => <option key={state} value={state}>{statusLabel(m, state, flags().ADVICE_OUTPUT)}</option>)}</select></label>
     <label>{c.sector}<select name="sector" defaultValue={filters.sector}><option value="">{c.all}</option>{sectors.map((sector) => <option key={sector} value={sector}>{sectorLabel(locale, sector)}</option>)}</select></label>
@@ -51,31 +55,62 @@ function FilterForm({ locale, filters, sectors }: { locale: Locale; filters: Sca
   </form>;
 }
 
+const ruleTotal = ruleGroups.reduce((sum, group) => sum + group.rules.length, 0);
+
+function PresetBar({ locale, filters, counts, total }: { locale: Locale; filters: ScannerFilters; counts: Record<string, number>; total: number }) {
+  const m = getMessages(locale);
+  const s = m.scanner;
+  const href = (id: string) => `/${locale}/scanner${id ? `?preset=${id}` : ""}`;
+  return <nav className={styles.presets} aria-label={s.presetsLabel}>
+    <h2 className={styles.presetsTitle}>{s.presetsLabel}</h2>
+    <p className="muted small">{s.presetsNote}</p>
+    <ul className={styles.presetList}>{presets.map((preset) => {
+      const text = s.presets[preset.id];
+      const rules = preset.kind === "rules" ? ruleCountLabel(locale, preset.rules.length) : fill(s.presetAny, { count: preset.rules.length });
+      return <li key={preset.id}><Link className={styles.preset} href={href(preset.id)} aria-current={filters.preset === preset.id ? "true" : undefined} title={text.note}>
+        <span className={styles.presetName}>{text.name}</span><span className={styles.presetMeta}>{fill(s.presetMeta, { rules, count: counts[preset.id] ?? 0, total })}</span></Link></li>;
+    })}</ul>
+    {filters.preset && <p className="small">{fill(s.presetActive, { name: s.presets[filters.preset].name })} <Link href={`/${locale}/scanner`}>{s.presetClear}</Link></p>}
+  </nav>;
+}
+
+function rulesMetCell(locale: Locale, matched: string[] | null, streak: RuleStreak | undefined) {
+  const s = getMessages(locale).scanner;
+  if (!matched) return "–";
+  return <><span>{fill(s.rulesMetOf, { met: matched.length, total: ruleTotal })}</span>
+    {streak && <span className={styles.streak}>{streakText(locale, streak)}</span>}
+    {streak?.gained.length ? <span className={styles.streak}>{fill(s.streakGained, { count: streak.gained.length })}</span> : null}
+    {streak?.lost.length ? <span className={styles.streak}>{fill(s.streakLost, { count: streak.lost.length })}</span> : null}</>;
+}
+
 async function Scanner({ params, searchParams }: Props) {
   const locale = await resolveLocale(params);
   if (!flags().PAYWALL) notFound();
   const m = getMessages(locale);
   const c = copy[locale];
   const filters = parseFilters(await searchParams);
-  const [data, portfolio] = await Promise.all([latestScores(), latestPortfolio()]);
+  const [data, portfolio, streaks] = await Promise.all([latestScores(), latestPortfolio(), ruleStreaks()]);
   const held = new Set(portfolio?.weights.filter((row) => row.weightPercent > 0).map((row) => row.symbol.toUpperCase()) ?? []);
   const sectors = [...new Set(data.rows.map((row) => row.instrument.sector))].sort((a, b) => a.localeCompare(b, locale));
-  const visible = filterScores(data.rows, filters, held, locale).map((row) => toRow(locale, row)).sort((a, b) => {
+  const visible = filterScores(data.rows, filters, held, locale, streaks).map((row) => toRow(locale, row)).sort((a, b) => {
     if (filters.sort === "score") return byScore(a, b);
     const field = { f: "fundamentals", t: "technical", m: "macro", ticker: "ticker", sector: "sector", state: "state" } as const;
     const key = field[filters.sort];
     const first = a[key], second = b[key];
     return (typeof first === "number" && typeof second === "number" ? second - first : String(first).localeCompare(String(second), locale)) || a.ticker.localeCompare(b.ticker);
   });
+  const presetCounts = Object.fromEntries(presets.map((preset) => [preset.id, data.rows.filter(({ result }) => matchesPreset(preset, result.ruleHits, streaks[result.ticker])).length]));
+  const s = m.scanner;
   return <div className="frame page">
     <header className="page-head"><div className="page-title-row"><h1 className="title">{m.scanner.title}</h1>{data.sample && <SampleStamp text={m.common.sample} />}</div>
       <p className="lede">{m.meta.scannerDescription}</p><DataStatus locale={locale} lastUpdated={data.lastUpdated} stale={data.stale} /><OperatorDisclosure text={m.common.operatorDisclosure} />
     </header>
+    <PresetBar locale={locale} filters={filters} counts={presetCounts} total={data.rows.length} />
     <FilterForm locale={locale} filters={filters} sectors={sectors} />
     <p className={styles.summary} aria-live="polite">{c.result.replace("{count}", String(visible.length)).replace("{total}", String(data.rows.length))}</p>
     <p className="muted small">{c.sourceNote}</p>
     <PaywallSegment id="scanner-rows-full"><section aria-label={m.scanner.title}>
-      {visible.length ? <div className="table-scroll" role="region" tabIndex={0} aria-label={m.scanner.title}><table className="screen"><caption className="visually-hidden">{m.scanner.title}</caption><thead><tr><th scope="col">{m.table.ticker}</th><th scope="col" className="col-sector">{m.table.sector}</th><th scope="col">{m.table.score}</th><th scope="col">{m.status.columns.status}</th></tr></thead><tbody>{visible.map((row) => <tr key={row.ticker}><th scope="row" className="col-company"><Link className="ticker" href={`/${locale}/company/${row.ticker}`}>{row.ticker}</Link><span className="company-name">{row.name}{held.has(row.ticker) ? <span className="tag">{m.portfolio.held}</span> : null}</span></th><td className="col-sector muted">{row.sector}</td><td className="num" aria-describedby="scanner-disclaimer">{row.percent === null ? m.common.noScore : `${row.percentLabel} · ${row.bonusLabel} · ${fill(m.status.coreData, { known: row.pointsKnown, total: row.coreTotal })}`}</td><td><StatusCell state={row.state} position={row.position} label={row.stateLabel} ariaLabel={row.statusAria} pullbackLabel={row.pullbackLabel} describedBy="scanner-disclaimer" /></td></tr>)}</tbody></table></div> : <p className="empty-line">{c.empty}</p>}
+      {visible.length ? <div className="table-scroll" role="region" tabIndex={0} aria-label={m.scanner.title}><table className="screen"><caption className="visually-hidden">{m.scanner.title}</caption><thead><tr><th scope="col">{m.table.ticker}</th><th scope="col" className="col-sector">{m.table.sector}</th><th scope="col">{m.table.score}</th><th scope="col">{s.rulesMet}</th><th scope="col">{m.status.columns.status}</th></tr></thead><tbody>{visible.map((row) => <tr key={row.ticker}><th scope="row" className="col-company"><Link className="ticker" href={`/${locale}/company/${row.ticker}`}>{row.ticker}</Link><span className="company-name">{row.name}{held.has(row.ticker) ? <span className="tag">{m.portfolio.held}</span> : null}</span></th><td className="col-sector muted">{row.sector}</td><td className="num" aria-describedby="scanner-disclaimer">{row.percent === null ? m.common.noScore : `${row.percentLabel} · ${row.bonusLabel} · ${fill(m.status.coreData, { known: row.pointsKnown, total: row.coreTotal })}`}</td><td className="num">{rulesMetCell(locale, row.matched, streaks[row.ticker])}</td><td><StatusCell state={row.state} position={row.position} label={row.stateLabel} ariaLabel={row.statusAria} pullbackLabel={row.pullbackLabel} describedBy="scanner-disclaimer" /></td></tr>)}</tbody></table></div> : <p className="empty-line">{c.empty}</p>}
     </section></PaywallSegment>
     <p className="disclaimer is-compact" id="scanner-disclaimer">{m.common.disclaimer}</p>
   </div>;
