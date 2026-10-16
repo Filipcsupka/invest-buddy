@@ -3,12 +3,13 @@ import { sectorLabel, stateKey } from "@/i18n/score-text";
 import type { Locale } from "@/i18n";
 import { stateOrder, type StateKey } from "@/i18n/rules";
 import type { RuleStreak } from "@/db/rules-streak";
+import { floorState, type FloorMetrics } from "./floor";
 import { matchesPreset, presetById, presetIds, type PresetId } from "./presets";
 
 export type ScannerFilters = {
   q: string; state: StateKey | ""; min: number | null; max: number | null;
   sector: string; f: number | null; t: number | null; m: number | null;
-  held: boolean; preset: PresetId | ""; source: StoreRow["instrument"]["source"] | "";
+  held: boolean; floor: boolean; preset: PresetId | ""; source: StoreRow["instrument"]["source"] | "";
   sort: "score" | "ticker" | "sector" | "f" | "t" | "m" | "state";
 };
 export type Query = Record<string, string | string[] | undefined>;
@@ -24,15 +25,26 @@ export function parseFilters(query: Query): ScannerFilters {
     min: bounded(first(query.min), 25), max: bounded(first(query.max), 25),
     sector: first(query.sector).slice(0, 80), f: bounded(first(query.f), 10),
     t: bounded(first(query.t), 10), m: bounded(first(query.m), 5),
-    held: first(query.held) === "yes", preset: presetIds.includes(first(query.preset) as PresetId) ? first(query.preset) as PresetId : "",
+    held: first(query.held) === "yes", floor: first(query.floor) !== "off", preset: presetIds.includes(first(query.preset) as PresetId) ? first(query.preset) as PresetId : "",
     source: ["guide", "discovery", "sample extension"].includes(source) ? source as ScannerFilters["source"] : "",
     sort: ["ticker", "sector", "f", "t", "m", "state"].includes(sort) ? sort as ScannerFilters["sort"] : "score",
   };
 }
 export function hasFilters(filters: ScannerFilters): boolean {
-  return Boolean(filters.q || filters.state || filters.min !== null || filters.max !== null || filters.sector || filters.f !== null || filters.t !== null || filters.m !== null || filters.held || filters.preset || filters.source || filters.sort !== "score");
+  return Boolean(filters.q || filters.state || filters.min !== null || filters.max !== null || filters.sector || filters.f !== null || filters.t !== null || filters.m !== null || filters.held || !filters.floor || filters.preset || filters.source || filters.sort !== "score");
 }
-export function filterScores(rows: StoreRow[], filters: ScannerFilters, heldTickers: ReadonlySet<string>, locale: Locale = "en", streaks: Readonly<Record<string, RuleStreak>> = {}): StoreRow[] {
+/** Scanner URL for the current filters with the floor set on or off. Defaults are left out so the default URL stays clean. */
+export function filtersHref(locale: Locale, filters: ScannerFilters, floor: boolean): string {
+  const params = new URLSearchParams();
+  const add = (key: string, value: string | number | null | false) => { if (value !== null && value !== "" && value !== false) params.set(key, String(value)); };
+  add("q", filters.q); add("state", filters.state); add("min", filters.min); add("max", filters.max); add("sector", filters.sector);
+  add("f", filters.f); add("t", filters.t); add("m", filters.m); add("held", filters.held && "yes"); add("preset", filters.preset); add("source", filters.source);
+  add("sort", filters.sort !== "score" && filters.sort);
+  if (!floor) params.set("floor", "off");
+  const query = params.toString();
+  return `/${locale}/scanner${query ? `?${query}` : ""}`;
+}
+export function filterScores(rows: StoreRow[], filters: ScannerFilters, heldTickers: ReadonlySet<string>, locale: Locale = "en", streaks: Readonly<Record<string, RuleStreak>> = {}, floor: Readonly<Record<string, FloorMetrics>> = {}): StoreRow[] {
   const preset = filters.preset ? presetById(filters.preset) : undefined;
   const q = filters.q.toLocaleLowerCase();
   return rows.filter(({ instrument, result }) => (!q || `${instrument.ticker} ${instrument.name} ${instrument.sector} ${sectorLabel(locale, instrument.sector)}`.toLocaleLowerCase(locale).includes(q))
@@ -44,6 +56,7 @@ export function filterScores(rows: StoreRow[], filters: ScannerFilters, heldTick
     && (filters.t === null || result.technical >= filters.t)
     && (filters.m === null || result.macro >= filters.m)
     && (!preset || matchesPreset(preset, result.ruleHits, streaks[instrument.ticker]))
+    && (!filters.floor || heldTickers.has(instrument.ticker) || floorState(floor[instrument.ticker]) !== "below")
     && (!filters.held || heldTickers.has(instrument.ticker))
     && (!filters.source || instrument.source === filters.source));
 }
