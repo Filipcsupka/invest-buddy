@@ -39,7 +39,7 @@ export function diffRuleStates(previous: readonly RuleHit[] | null, current: rea
 }
 
 // jsonb_to_recordset keeps only the three named keys; nothing else of the audit is read.
-const HITS = `coalesce((SELECT jsonb_agg(jsonb_build_object('id', h.id, 'matched', h.matched, 'unknown', coalesce(h.unknown, false)))
+export const HITS =`coalesce((SELECT jsonb_agg(jsonb_build_object('id', h.id, 'matched', h.matched, 'unknown', coalesce(h.unknown, false)))
   FROM jsonb_to_recordset(CASE WHEN jsonb_typeof(s.audit->'ruleHits') = 'array' THEN s.audit->'ruleHits' ELSE '[]'::jsonb END) AS h(id text, matched boolean, unknown boolean)), '[]'::jsonb)`;
 
 /** Changes between the scored tickers of `asOf` and each ticker's latest earlier day, sorted by ticker then rule id. */
