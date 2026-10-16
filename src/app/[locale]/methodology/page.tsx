@@ -1,7 +1,10 @@
 import { withPageLog } from "@/app/page-log";
 import type { Metadata } from "next";
 import { Disclaimer } from "@/components/disclaimer";
-import { DataTable, ScoreBar, SectionHead, StateChip } from "@/components/kit";
+import Link from "next/link";
+import type { CSSProperties } from "react";
+import { DataTable, ScoreBar, StateChip } from "@/components/kit";
+import { KpiCard, KpiRow, RecordCard, RecordHead } from "@/components/record-parts";
 import { ReadingLayout } from "@/components/reading-layout";
 import "@/components/record-pages.css";
 import { RULESET_DATE, RULESET_VERSION } from "@/config/rules";
@@ -51,19 +54,27 @@ async function Methodology({ params }: LocaleParams) {
     { id: "data", label: m.methodology.dataTitle },
   ];
   const sourceLines = [m.sources.legendComputed, m.sources.legendSec, m.sources.legendTwo, m.sources.legendChecked, m.sources.legendSingle, m.sources.legendUnknown];
+  const ruleCount = ruleGroups.reduce((sum, group) => sum + group.rules.length, 0);
+  const pointsTotal = ruleGroups.reduce((sum, group) => sum + group.max, 0);
+  const topPoints = Math.max(...ruleGroups.flatMap((group) => group.rules.map((rule) => rule.points)));
   return (
     <article className="frame page rp-article">
-      <header className="page-head">
-        <h1 className="title">{m.methodology.title}</h1>
-        <p className="lede">{m.methodology.lede}</p>
-        <p className="rp-version">{m.methodology.versionLine.replace("{version}", RULESET_VERSION).replace("{date}", RULESET_DATE)}</p>
-        <Disclaimer text={m.common.disclaimer} />
-      </header>
+      <RecordHead
+        title={m.methodology.title}
+        lede={m.methodology.lede}
+        meta={<><span className="rp-pill">{m.methodology.versionLine.replace("{version}", RULESET_VERSION).replace("{date}", RULESET_DATE)}</span><Disclaimer text={m.common.disclaimer} /></>}
+        actions={<Link className="button secondary" href={`/${locale}/track-record`}>{rp.record}</Link>}
+      />
+
+      <KpiRow count={4}>
+        <KpiCard featured label={rp.rulesLabel}>{formatNumber(locale, ruleCount)}</KpiCard>
+        <KpiCard label={rp.pointsLabel}>{formatNumber(locale, pointsTotal)}</KpiCard>
+        <KpiCard label={rp.stepsLabel}>{formatNumber(locale, bandOrder.length)}</KpiCard>
+        <KpiCard label={rp.versionLabel}>{RULESET_DATE}</KpiCard>
+      </KpiRow>
 
       <ReadingLayout locale={locale} toc={toc}>
-        <section aria-labelledby="score">
-          <SectionHead id="score" title={m.methodology.scoreTitle} />
-          <p className="prose">{m.methodology.scoreBody}</p>
+        <RecordCard id="score" title={m.methodology.scoreTitle} lede={m.methodology.scoreBody} flush>
           <DataTable label={m.methodology.scoreTitle} bounded={false}>
             <thead>
               <tr>
@@ -87,54 +98,52 @@ async function Methodology({ params }: LocaleParams) {
                       <span className="rp-rule-def">{m.ruleDefinitions[rule.id]}</span>
                     </th>
                     <td className="rp-needs">{threshold(locale, rule.id)}</td>
-                    <td className="num rp-weight">+{rule.points}</td>
+                    <td className="num rp-weight">
+                      <span className="rp-wcell">
+                        <span className="rp-wbar" aria-hidden="true"><span style={{ width: `${Math.round((rule.points / topPoints) * 100)}%` }} /></span>
+                        +{rule.points}
+                      </span>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             ))}
           </DataTable>
-        </section>
+        </RecordCard>
 
-        <section aria-labelledby="states">
-          <SectionHead id="states" title={m.status.legendTitle} lede={m.status.legendLede} />
-          <DataTable label={m.status.legendTitle} bounded={false}>
-            <thead>
-              <tr>
-                <th scope="col">{m.status.legendStep}</th>
-                <th scope="col" className="rp-range">{rp.stepPoints}</th>
-                <th scope="col">{m.status.legendMeaning}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {bandOrder.map((state) => (
-                <tr key={state} data-state={state}>
-                  <th scope="row"><StateChip state={state} label={m.status.labels[state]} /></th>
-                  <td className="rp-range">{m.status.ranges[state]}</td>
-                  <td className="rp-meaning">
-                    {m.status.meaning[state]}
-                    {state === "broken" ? <> <a href="#rejection">{m.methodology.rejectionTitle}</a></> : null}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </DataTable>
-          <div className="rp-prose-block">
-            <SectionHead as="h3" title={m.status.legendMissingTitle} rule="quiet" />
-            <p className="prose">{m.status.legendMissing}</p>
-            <SectionHead as="h3" title={m.status.legendConfirmTitle} rule="quiet" />
-            <p className="prose">{m.status.legendConfirm}</p>
+        <RecordCard id="states" title={m.status.legendTitle} lede={m.status.legendLede}>
+          <p className="rp-axis" aria-hidden="true">{rp.higher}</p>
+          <ol className="rp-ladder">
+            {bandOrder.map((state, index) => (
+              <li key={state} data-state={state} style={{ "--i": index } as CSSProperties}>
+                <StateChip state={state} label={m.status.labels[state]} />
+                <span className="rp-ladder-range">{m.status.ranges[state]}</span>
+                <p className="rp-ladder-meaning">
+                  {m.status.meaning[state]}
+                  {state === "broken" ? <> <a href="#rejection">{m.methodology.rejectionTitle}</a></> : null}
+                </p>
+              </li>
+            ))}
+          </ol>
+          <p className="rp-axis" aria-hidden="true">{rp.lower}</p>
+          <div className="rp-two">
+            <div>
+              <h3>{m.status.legendMissingTitle}</h3>
+              <p>{m.status.legendMissing}</p>
+            </div>
+            <div>
+              <h3>{m.status.legendConfirmTitle}</h3>
+              <p>{m.status.legendConfirm}</p>
+            </div>
           </div>
-        </section>
+        </RecordCard>
 
-        <section aria-labelledby="rejection">
-          <SectionHead id="rejection" title={m.methodology.rejectionTitle} />
+        <RecordCard id="rejection" title={m.methodology.rejectionTitle}>
           <p className="prose">{m.methodology.rejectionBody}</p>
           <p className="prose">{m.methodology.historyBody}</p>
-        </section>
+        </RecordCard>
 
-        <section aria-labelledby="worked">
-          <SectionHead id="worked" title={m.methodology.workedTitle} />
-          <p className="prose">{m.methodology.workedBody}</p>
+        <RecordCard id="worked" title={m.methodology.workedTitle} lede={m.methodology.workedBody}>
           <div className="rp-worked">
             <figure aria-label={fill(rp.exampleAria, { n: 1 })}>
               <figcaption>{rp.exampleOne}</figcaption>
@@ -147,24 +156,21 @@ async function Methodology({ params }: LocaleParams) {
           </div>
           <p className="prose">{m.methodology.workedCap}</p>
           <Disclaimer text={m.common.disclaimer} id="worked-disclaimer" compact />
-        </section>
+        </RecordCard>
 
-        <section aria-labelledby="source-labels">
-          <SectionHead id="source-labels" title={m.sources.legendTitle} />
+        <RecordCard id="source-labels" title={m.sources.legendTitle}>
           <ul className="rp-list">
             {sourceLines.map((line) => <li key={line}>{line}</li>)}
           </ul>
-        </section>
+        </RecordCard>
 
-        <section aria-labelledby="limits" className="rp-limits">
-          <SectionHead id="limits" title={m.methodology.limitsTitle} rule="quiet" />
+        <RecordCard id="limits" title={m.methodology.limitsTitle} className="rp-limits">
           <p className="prose">{m.methodology.limitsBody}</p>
-        </section>
+        </RecordCard>
 
-        <section aria-labelledby="data">
-          <SectionHead id="data" title={m.methodology.dataTitle} />
+        <RecordCard id="data" title={m.methodology.dataTitle}>
           <p className="prose">{process.env.DATA_MODE === "fixture" ? m.methodology.dataBody : m.methodology.dataBodyLive}</p>
-        </section>
+        </RecordCard>
       </ReadingLayout>
     </article>
   );
