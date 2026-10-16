@@ -603,7 +603,7 @@ const en = {
     historyBody: "Invalid inputs and price histories shorter than 200 bars get no score and no state other than Insufficient data. MA200 needs 200 bars and the MA50 slope needs 60.",
     dataTitle: "Data and audit",
     dataBody: "The site currently runs on synthetic price series and illustrative structured flags. The sample universe holds the 28 tickers named in the investing guide and seven labelled extensions scored by the same rules. Each company page lists its rule hits and inputs. No live quotes, licensed data feed or alert history are connected. The guide's personal capital and position rules are left out of this public screen.",
-    dataBodyLive: "The screen combines collected SEC filings, daily prices from Twelve Data and public macro data (10-year yield from FRED, and VIX) with market calculations. Verified AI research supplies checked facts from filings and releases; AI findings do not award points on their own. Unknown fields stay unknown. Each company page shows rule results and sources. Some thresholds await review. Personal capital and position rules from the guide are excluded.",
+    dataBodyLive: "The screen combines collected SEC filings, daily prices from Twelve Data and public macro data (10-year yield from FRED) with market calculations. Verified AI research supplies checked facts from filings and releases; AI findings do not award points on their own. Unknown fields stay unknown. Each company page shows rule results and sources. Some thresholds await review. Personal capital and position rules from the guide are excluded.",
   },
   errors: {
     notFoundTitle: "Page not found",
@@ -1397,7 +1397,7 @@ const sk: Messages = {
     historyBody: "Neplatné vstupy a cenová história kratšia ako 200 záznamov nedostanú skóre ani iný stav než Nedostatok údajov. MA200 potrebuje 200 záznamov a sklon MA50 potrebuje 60.",
     dataTitle: "Údaje a overiteľnosť",
     dataBody: "Stránka zatiaľ beží na syntetických cenových radoch a ilustračných štruktúrovaných príznakoch. Ukážkový zoznam obsahuje 28 tickerov z investičnej príručky a sedem označených rozšírení, ktoré sa hodnotia rovnakými pravidlami. Na stránke každej spoločnosti sú jej splnené pravidlá aj vstupy. Nie sú pripojené živé kurzy, licencovaný zdroj údajov ani história upozornení. Osobné pravidlá príručky o kapitáli a veľkosti pozícií sú z tohto verejného prehľadu vynechané.",
-    dataBodyLive: "Prehľad spája zbierané podania SEC, denné ceny od poskytovateľa Twelve Data a verejné makro údaje (výnos 10-ročných dlhopisov z FRED a VIX) s výpočtami z trhu. Overený výskum AI dodáva kontrolované fakty z podaní a správ; samotné zistenia AI neprideľujú body. Neznáme polia zostávajú neznáme. Stránka spoločnosti ukazuje výsledky pravidiel a zdroje. Niektoré prahy čakajú na kontrolu. Osobné pravidlá kapitálu a pozícií z príručky sú vynechané.",
+    dataBodyLive: "Prehľad spája zbierané podania SEC, denné ceny od poskytovateľa Twelve Data a verejné makro údaje (výnos 10-ročných dlhopisov z FRED) s výpočtami z trhu. Overený výskum AI dodáva kontrolované fakty z podaní a správ; samotné zistenia AI neprideľujú body. Neznáme polia zostávajú neznáme. Stránka spoločnosti ukazuje výsledky pravidiel a zdroje. Niektoré prahy čakajú na kontrolu. Osobné pravidlá kapitálu a pozícií z príručky sú vynechané.",
   },
   errors: {
     notFoundTitle: "Stránka sa nenašla",

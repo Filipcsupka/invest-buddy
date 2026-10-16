@@ -10,12 +10,15 @@ import { toRow, byScore } from "@/components/view-model";
 import { DataStatus } from "@/components/data-status";
 import { latestPortfolio, latestScores } from "@/data/store";
 import { ruleStreaks, type RuleStreak } from "@/db/rules-streak";
-import { fill, getMessages, type Locale } from "@/i18n";
+import { fill, getMessages, intlTag, type Locale } from "@/i18n";
 import { pageMetadata } from "@/i18n/metadata";
 import { ruleGroups, stateOrder } from "@/i18n/rules";
 import { sectorLabel } from "@/i18n/score-text";
 import { resolveLocale, type LocaleParams } from "../locale";
-import { filterScores, parseFilters, type Query, type ScannerFilters } from "./filters";
+import { getScannerFloorMessages, hiddenText } from "@/i18n/scanner-floor-messages";
+import { latestShareCounts } from "@/data/flag-facts";
+import { filterScores, filtersHref, parseFilters, type Query, type ScannerFilters } from "./filters";
+import { floorMetrics, floorState, SCANNER_FLOOR } from "./floor";
 import { ruleCountLabel, streakText } from "./format";
 import { matchesPreset, presets } from "./presets";
 import styles from "./scanner.module.css";
@@ -43,6 +46,7 @@ function FilterForm({ locale, filters, sectors }: { locale: Locale; filters: Sca
   const options = (max: number) => Array.from({ length: max + 1 }, (_, n) => <option key={n} value={n}>{n}</option>);
   return <form action={`/${locale}/scanner`} method="get" className={styles.filters} aria-label={m.scanner.filterLabel}>
     {filters.preset && <input type="hidden" name="preset" value={filters.preset} />}
+    {!filters.floor && <input type="hidden" name="floor" value="off" />}
     <label>{m.scanner.searchLabel}<input type="search" name="q" defaultValue={filters.q} placeholder={m.scanner.searchPlaceholder} maxLength={80} /></label>
     <label>{m.scanner.filterLabel}<select name="state" defaultValue={filters.state}><option value="">{m.scanner.allStates}</option>{stateOrder.map((state) => <option key={state} value={state}>{statusLabel(m, state, flags().ADVICE_OUTPUT)}</option>)}</select></label>
     <label>{c.sector}<select name="sector" defaultValue={filters.sector}><option value="">{c.all}</option>{sectors.map((sector) => <option key={sector} value={sector}>{sectorLabel(locale, sector)}</option>)}</select></label>
@@ -92,7 +96,12 @@ async function Scanner({ params, searchParams }: Props) {
   const [data, portfolio, streaks] = await Promise.all([latestScores(), latestPortfolio(), ruleStreaks()]);
   const held = new Set(portfolio?.weights.filter((row) => row.weightPercent > 0).map((row) => row.symbol.toUpperCase()) ?? []);
   const sectors = [...new Set(data.rows.map((row) => row.instrument.sector))].sort((a, b) => a.localeCompare(b, locale));
-  const visible = filterScores(data.rows, filters, held, locale, streaks).map((row) => toRow(locale, row)).sort((a, b) => {
+  const shares = await latestShareCounts(data.rows.map((row) => row.instrument.ticker));
+  const floorData = Object.fromEntries(data.rows.map((row) => [row.instrument.ticker, floorMetrics(row.result.inputs?.bars ?? [], shares[row.instrument.ticker])]));
+  const fl = getScannerFloorMessages(locale);
+  const million = (usd: number) => fl.millions.replace("{n}", new Intl.NumberFormat(intlTag[locale]).format(usd / 1_000_000));
+  const unfloored = filterScores(data.rows, { ...filters, floor: false }, held, locale, streaks, floorData);
+  const visible = filterScores(data.rows, filters, held, locale, streaks, floorData).map((row) => toRow(locale, row)).sort((a, b) => {
     if (filters.sort === "score") return byScore(a, b);
     const field = { f: "fundamentals", t: "technical", m: "macro", ticker: "ticker", sector: "sector", state: "state" } as const;
     const key = field[filters.sort];
@@ -107,10 +116,12 @@ async function Scanner({ params, searchParams }: Props) {
     </header>
     <PresetBar locale={locale} filters={filters} counts={presetCounts} total={data.rows.length} />
     <FilterForm locale={locale} filters={filters} sectors={sectors} />
-    <p className={styles.summary} aria-live="polite">{c.result.replace("{count}", String(visible.length)).replace("{total}", String(data.rows.length))}</p>
+    <p className={styles.summary} aria-live="polite">{fill(filters.floor ? fl.result : fl.resultOff, { count: visible.length, total: data.rows.length })}{" "}
+      <Link className="small" href={filtersHref(locale, filters, !filters.floor)}>{filters.floor ? fl.remove : fl.apply}</Link></p>
+    <p className="muted small">{fill(filters.floor ? fl.rule : fl.ruleOff, { volume: million(SCANNER_FLOOR.minAvgDollarVolumeUsd), days: SCANNER_FLOOR.days, cap: million(SCANNER_FLOOR.minMarketCapUsd) })}{filters.floor ? ` ${hiddenText(locale, unfloored.length - visible.length)}` : ""}</p>
     <p className="muted small">{c.sourceNote}</p>
     <PaywallSegment id="scanner-rows-full"><section aria-label={m.scanner.title}>
-      {visible.length ? <div className="table-scroll" role="region" tabIndex={0} aria-label={m.scanner.title}><table className="screen"><caption className="visually-hidden">{m.scanner.title}</caption><thead><tr><th scope="col">{m.table.ticker}</th><th scope="col" className="col-sector">{m.table.sector}</th><th scope="col">{m.table.score}</th><th scope="col">{s.rulesMet}</th><th scope="col">{m.status.columns.status}</th></tr></thead><tbody>{visible.map((row) => <tr key={row.ticker}><th scope="row" className="col-company"><Link className="ticker" href={`/${locale}/company/${row.ticker}`}>{row.ticker}</Link><span className="company-name">{row.name}{held.has(row.ticker) ? <span className="tag">{m.portfolio.held}</span> : null}</span></th><td className="col-sector muted">{row.sector}</td><td className="num" aria-describedby="scanner-disclaimer">{row.percent === null ? m.common.noScore : `${row.percentLabel} · ${row.bonusLabel} · ${fill(m.status.coreData, { known: row.pointsKnown, total: row.coreTotal })}`}</td><td className="num">{rulesMetCell(locale, row.matched, streaks[row.ticker])}</td><td><StatusCell state={row.state} position={row.position} label={row.stateLabel} ariaLabel={row.statusAria} pullbackLabel={row.pullbackLabel} describedBy="scanner-disclaimer" /></td></tr>)}</tbody></table></div> : <p className="empty-line">{c.empty}</p>}
+      {visible.length ? <div className="table-scroll" role="region" tabIndex={0} aria-label={m.scanner.title}><table className="screen"><caption className="visually-hidden">{m.scanner.title}</caption><thead><tr><th scope="col">{m.table.ticker}</th><th scope="col" className="col-sector">{m.table.sector}</th><th scope="col">{m.table.score}</th><th scope="col">{s.rulesMet}</th><th scope="col">{m.status.columns.status}</th></tr></thead><tbody>{visible.map((row) => <tr key={row.ticker}><th scope="row" className="col-company"><Link className="ticker" href={`/${locale}/company/${row.ticker}`}>{row.ticker}</Link><span className="company-name">{row.name}{held.has(row.ticker) ? <span className="tag">{m.portfolio.held}</span> : null}{floorState(floorData[row.ticker]) === "unknown" ? <span className="tag" title={fl.noDataNote}>{fl.noData}</span> : null}</span></th><td className="col-sector muted">{row.sector}</td><td className="num" aria-describedby="scanner-disclaimer">{row.percent === null ? m.common.noScore : `${row.percentLabel} · ${row.bonusLabel} · ${fill(m.status.coreData, { known: row.pointsKnown, total: row.coreTotal })}`}</td><td className="num">{rulesMetCell(locale, row.matched, streaks[row.ticker])}</td><td><StatusCell state={row.state} position={row.position} label={row.stateLabel} ariaLabel={row.statusAria} pullbackLabel={row.pullbackLabel} describedBy="scanner-disclaimer" /></td></tr>)}</tbody></table></div> : <p className="empty-line">{c.empty}</p>}
     </section></PaywallSegment>
     <p className="disclaimer is-compact" id="scanner-disclaimer">{m.common.disclaimer}</p>
   </div>;
