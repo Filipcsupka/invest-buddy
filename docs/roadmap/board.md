@@ -1,6 +1,6 @@
 # Task board
 
-Updated 2026-10-14. One table per state. A PR that finishes a task moves it to Done in the same PR or the next status PR; "implemented" means merged with CI green. Live notes say what was checked on the cluster. Detail per task is in the lane files and in `docs/tasks-open.md` section J.
+Updated 2026-10-16. One table per state. A PR that finishes a task moves it to Done in the same PR or the next status PR; "implemented" means merged with CI green. Live notes say what was checked on the cluster. Detail per task is in the lane files and in `docs/tasks-open.md` section J.
 
 ## Done (merged, CI green)
 
@@ -70,6 +70,14 @@ Updated 2026-10-14. One table per state. A PR that finishes a task moves it to D
 | DB check | All 51 migrations applied on fresh Postgres 16, Postgres-backed tests run | #189 | one test fixed |
 | W8 (fixture) | Playwright smoke tests: home en/sk, methodology, dashboard filter and search, company page, 404s, language switch, theme toggle; `e2e` CI job, trace upload on failure | this PR | 10 tests, about 2 s locally; Postgres-backed second project not built; W9 staging is owner-gated |
 | Telegram | Channel, sealed secret, digest unsuspended | infra #37 to #41, #126 | first alert sent 2026-10-10 |
+| TASK-080, TASK-081 | Rule thresholds, points of possible and rule count on the company page | #200 | live on khtz sha-c2ec517 |
+| TASK-082 | Methodology: version line, worked example, limits, data provider | #201 | live on khtz sha-c2ec517 |
+| TASK-085, TASK-086 | Rule change lines in Telegram alerts; track record by period | #202 | live on khtz sha-c2ec517 |
+| TASK-088, TASK-089 | Scanner rules-met streak column and preset screens | #204 | live on khtz sha-c2ec517; not visible, scanner hidden while PAYWALL is off |
+| TASK-093 | Sector heat map by 1M/3M change or rules met | #203 | live on khtz sha-c2ec517 |
+| TASK-090, TASK-091 | Company flags block and ADR-001 line under the score | #205 | live on khtz sha-c2ec517; wording pending lawyer |
+| TASK-092 | Per-ticker SEO title, description and summary from the score | #206 | live on khtz sha-c2ec517 |
+| TASK-083 | Data status block with per-dataset freshness and coverage badge | #207 | merged; not checked live |
 
 ## Open
 
@@ -87,6 +95,7 @@ Detail: `lane-engine.md` (EN48) and `lane-positions.md` (PM2, PM4).
 | --- | --- | --- |
 | RS7 | Codex adapter and secret | adapter code done (`scanner/research-adapters.mjs`, strict schema, quota and call caps, fake-binary tests); auth path and PVC/secret still waiting for the owner, not done |
 | RS8 | Evaluation on the six old cards | offline harness done (fixture, `scripts/research-eval.ts`, `docs/research-eval.md`); live run tried 2026-10-13 and blocked: weekly discovery `skipped_window` (window 00:00 to 07:00 respected), deep dive INTT `skipped_quota` (403 from the Anthropic usage endpoint, cause unverified). Not bypassed. Manual Jobs `rs8-weekly-20261004` and `rs8-dd-intt` deleted 2026-10-14. The override (#175) now exists in code; owner must set `RESEARCH_QUOTA_UNKNOWN_OVERRIDE=on` for the live run. |
+| TASK-084 | Scanner default liquidity and market-cap floor | PR #208 open |
 
 ## Queued, in order
 
