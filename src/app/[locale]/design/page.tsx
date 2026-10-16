@@ -8,6 +8,7 @@ import { CountUp, DataTable, DataTableEmpty, LockCard, Reveal, RuleRow, RuleTabl
 import { designViewEnabled } from "@/config/flags";
 import { fill, formatDate, formatNumber, formatPercent, formatScorePercent, getMessages, type Locale, type Messages } from "@/i18n";
 import { getKitMessages } from "@/i18n/kit-messages";
+import { getLaunchMessages } from "@/i18n/launch-messages";
 import { resolveLocale, type LocaleParams } from "../locale";
 import styles from "./design.module.css";
 
@@ -35,6 +36,13 @@ const signal: Swatch[] = [
   { name: "signal-strong", bg: "sheet", fg: "signal-strong" },
   { name: "signal-wash / signal", bg: "signal-wash", fg: "signal" },
   { name: "signal-tint / signal", bg: "signal-tint", fg: "signal" },
+];
+const chrome: Swatch[] = [
+  { name: "navy / navy-ink", bg: "navy", fg: "navy-ink" },
+  { name: "navy-2 / navy-ink-2", bg: "navy-2", fg: "navy-ink-2" },
+  { name: "accent / accent-on", bg: "accent", fg: "accent-on" },
+  { name: "accent-hover / accent-on", bg: "accent-hover", fg: "accent-on" },
+  { name: "accent-ink", bg: "sheet", fg: "accent-ink" },
 ];
 const bands = ["setup", "watch", "wait", "ignore", "broken", "none"] as const;
 const tier: Swatch[] = [
@@ -113,6 +121,8 @@ async function DesignKit({ params }: LocaleParams) {
         <Swatches items={signal} />
         <h3 className={styles.sub}>{d.swatches.bands}</h3>
         <Swatches items={bands.flatMap((b) => [{ name: `st-${b}-wash / st-${b}`, bg: `st-${b}-wash`, fg: `st-${b}` }, { name: `st-${b} / st-${b}-on`, bg: `st-${b}`, fg: `st-${b}-on` }])} />
+        <h3 className={styles.sub}>{d.swatches.chrome}</h3>
+        <Swatches items={chrome} />
         <h3 className={styles.sub}>{d.swatches.tier}</h3>
         <Swatches items={tier} />
         <div className={styles.depth} aria-hidden="true">
@@ -131,7 +141,7 @@ async function DesignKit({ params }: LocaleParams) {
           <div className={styles.typeRow}><dt>Prose</dt><dd className="prose">{d.typeSamples.prose}</dd></div>
           <div className={styles.typeRow}><dt>UI</dt><dd>{d.typeSamples.ui}</dd></div>
           <div className={styles.typeRow}><dt>Label</dt><dd className="kit-label">{d.typeSamples.label}</dd></div>
-          <div className={styles.typeRow}><dt>Figure</dt><dd className="kit-num" style={{ fontSize: "var(--t-figure-lg)", fontWeight: 640, letterSpacing: "-0.03em", lineHeight: 1 }}>{formatScorePercent(locale, 72)}</dd></div>
+          <div className={styles.typeRow}><dt>Figure</dt><dd className="kit-num" style={{ fontSize: "var(--t-figure-lg)", fontFamily: "var(--display)", fontWeight: 800, letterSpacing: "-0.03em", lineHeight: 1 }}>{formatScorePercent(locale, 72)}</dd></div>
         </dl>
       </section>
 
@@ -313,6 +323,36 @@ async function DesignKit({ params }: LocaleParams) {
             <p>{d.notes.strip}</p>
           </div>
         </div>
+      </section>
+
+      <section aria-labelledby="kit-components">
+        <SectionHead id="kit-components" title={d.sections.components} lede={d.notes.components} />
+        <div className={styles.components}>
+          <div className="kit-card">
+            <h3>{m.nav.scanner}</h3>
+            <p className="muted">{m.common.disclaimer}</p>
+            <div className="actions" style={{ marginTop: 0 }}>
+              <a className="button cta" href="#kit-components">{getLaunchMessages(locale).landing.ctaWaitlist}</a>
+              <a className="button" href="#kit-components">{m.nav.dashboard}</a>
+              <a className="button secondary" href="#kit-components">{m.home.secondary}</a>
+            </div>
+          </div>
+          <a className="kit-card" href="#kit-components">
+            <h3>{m.nav.methodology}</h3>
+            <p className="muted">{m.common.disclaimer}</p>
+          </a>
+          <div className="kit-card" data-tone="navy">
+            <h3>{m.nav.trackRecord}</h3>
+            <p className="muted">{m.common.disclaimer}</p>
+          </div>
+        </div>
+        <nav className="kit-tabs" aria-label={d.sections.components} style={{ marginBlock: "var(--s5)", width: "fit-content", maxWidth: "100%" }}>
+          <a href="#kit-components" aria-current="page">{m.nav.dashboard}</a>
+          <a href="#kit-components">{m.nav.scanner}</a>
+          <a href="#kit-components">{m.nav.trackRecord}</a>
+          <a href="#kit-components">{m.nav.methodology}</a>
+        </nav>
+        <input className="kit-input" type="search" aria-label={d.sections.components} placeholder="NVDA" />
       </section>
 
       <section aria-labelledby="kit-reveal">

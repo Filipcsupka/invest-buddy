@@ -3,9 +3,9 @@
 .grid, .tiles { list-style: none; padding: 0; margin: 0; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr)); gap: var(--s4); margin-top: var(--s4); }
 .sector { display: grid; gap: var(--s2); align-content: start; padding: var(--s4); border: 1px solid var(--rule-strong); border-radius: var(--radius); background: var(--sheet-raised); box-shadow: var(--shadow-1), var(--edge-light); }
-.sectorName { font-size: var(--t-h2); font-weight: 620; font-stretch: 104%; line-height: 1.2; overflow-wrap: anywhere; padding-bottom: var(--s2); border-bottom: 1px solid var(--ink); }
+.sectorName { font-size: var(--t-h2); font-weight: 620; line-height: 1.2; overflow-wrap: anywhere; padding-bottom: var(--s2); border-bottom:  1px solid var(--rule); }
 .average { display: flex; justify-content: space-between; align-items: baseline; gap: var(--s3); padding: var(--s2) var(--s3); border: 1px solid var(--rule); border-radius: var(--radius); font-size: var(--t-base); font-variant-numeric: tabular-nums; }
-.averageLabel { font-size: var(--t-xs); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+.averageLabel { font-size: var(--t-xs); font-weight: 700; letter-spacing: 0.01em; text-transform: none; }
 .meta { font-size: var(--t-sm); color: var(--ink-3); }
 .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(5.5rem, 1fr)); gap: var(--s2); }
 .tile { display: grid; gap: 2px; padding: var(--s2) var(--s3); border: 1px solid var(--rule); border-radius: var(--radius); color: var(--ink); text-decoration: none; min-height: 3rem; transition: border-color var(--dur-feedback) var(--ease-out), translate var(--dur-feedback) var(--ease-out); }
@@ -15,7 +15,7 @@
 .ticker { font-weight: 700; font-size: var(--t-sm); letter-spacing: 0.02em; }
 .value { font-size: var(--t-sm); font-variant-numeric: tabular-nums; }
 .toggle { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); margin-top: var(--s4); }
-.toggleLabel { font-size: var(--t-xs); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); margin-right: var(--s2); }
+.toggleLabel { font-size: var(--t-xs); font-weight: 700; letter-spacing: 0.01em; text-transform: none; color: var(--ink-3); margin-right: var(--s2); }
 .option { display: inline-flex; align-items: center; min-height: 2.75rem; padding: var(--s2) var(--s3); border: 1px solid var(--rule-strong); border-radius: var(--radius); color: var(--ink); text-decoration: none; font-size: var(--t-sm); transition: border-color var(--dur-feedback) var(--ease-out); }
 .option:hover { border-color: var(--ink); }
 .option[aria-current="true"] { background: var(--signal); color: var(--on-signal); border-color: var(--signal); font-weight: 600; }
@@ -26,7 +26,7 @@
 .swatches { display: inline-flex; border: 1px solid var(--rule-strong); border-radius: var(--radius); overflow: hidden; }
 .swatch { width: 1.75rem; height: 0.875rem; }
 
-.none, .flat { background: light-dark(#e3e6e4, #262c30); }
+.none, .flat { background: var(--st-none-wash); }
 .up1 { background: color-mix(in srgb, var(--signal) 14%, var(--sheet)); }
 .up2 { background: color-mix(in srgb, var(--signal) 26%, var(--sheet)); }
 .up3 { background: color-mix(in srgb, var(--signal) 38%, var(--sheet)); }

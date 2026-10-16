@@ -68,7 +68,6 @@
 .displaySample {
   font-size: var(--t-display);
   font-weight: 640;
-  font-stretch: 112%;
   line-height: 0.98;
   letter-spacing: -0.035em;
   max-width: 12ch;
@@ -190,4 +189,10 @@
   .page > section {
     margin-top: var(--s7);
   }
+}
+
+.components {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: var(--s4);
 }

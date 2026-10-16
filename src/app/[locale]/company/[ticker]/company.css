@@ -19,7 +19,7 @@
   text-wrap: balance;
 }
 .company .title-ticker {
-  font-stretch: 112%;
+
 }
 .company .title-name {
   font-size: 0.46em;
@@ -122,10 +122,9 @@
   border-radius: var(--radius);
   font-size: var(--t-xs);
   font-weight: 650;
-  font-stretch: 87%;
   letter-spacing: var(--label-track);
   line-height: 1.45;
-  text-transform: uppercase;
+  text-transform: none;
   color: var(--ink-3);
 }
 .co-rule-kind[data-kind="bonus"] {
@@ -246,7 +245,7 @@
   margin: 0;
   padding: 0;
   list-style: none;
-  border-top: 1px solid var(--ink-2);
+  border-top:  1px solid var(--rule);
 }
 .check-row {
   display: grid;
@@ -313,7 +312,7 @@
   width: 0.625rem;
   height: 0.625rem;
   margin-top: 0.3125rem;
-  border: 1.5px solid var(--ink-2);
+  border:  1px solid var(--rule-strong);
   border-radius: 1px;
 }
 .check-dot[data-dot="current"] {
@@ -382,10 +381,9 @@
   color: var(--signal);
   font-size: var(--t-xs);
   font-weight: 650;
-  font-stretch: 87%;
   letter-spacing: var(--label-track);
   line-height: 1.45;
-  text-transform: uppercase;
+  text-transform: none;
   white-space: nowrap;
   pointer-events: none;
 }

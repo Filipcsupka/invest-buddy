@@ -59,6 +59,17 @@ export const pairs: [string, string, number, string][] = [
   ["tier-line", "sheet-raised", 3, "lock card border"],
   ["rule-strong", "sheet-raised", 3, "UI border"],
   ["on-signal", "signal", 3, "rule pass mark"],
+  // v2 chrome: navy header and footer, orange call to action.
+  ["navy-ink", "navy", 4.5, "header and footer text"],
+  ["navy-ink-2", "navy", 4.5, "header link and footer note"],
+  ["navy-ink-2", "navy-2", 4.5, "header link on hover"],
+  ["navy-ink", "navy-2", 4.5, "header link current"],
+  ["accent-on", "accent", 4.5, "call to action label"],
+  ["accent-on", "accent-hover", 4.5, "call to action hover"],
+  ["accent-ink", "ground", 4.5, "accent text"],
+  ["accent-ink", "sheet", 4.5, "accent text on sheet"],
+  ["navy-line", "navy", 1.2, "header divider (decorative)"],
+  ["accent", "navy", 3, "call to action edge on navy"],
 ];
 
 /** Every checked pair with its ratio in both themes, for reports and the /design notes. */

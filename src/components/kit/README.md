@@ -1,6 +1,6 @@
 # Component kit
 
-Shared parts for the page rebuilds. Import from `@/components/kit`. Styles are in `kit.css`, loaded once by `src/app/[locale]/layout.tsx`. Every colour comes from a token in `src/app/globals.css`. Copy for the kit lives in `src/i18n/kit-messages.ts`, so `messages.ts` stays untouched.
+Shared parts for the page rebuilds, in the v2 look (rounded cards, pill chips, navy shell, see `DESIGN.md`). Also in `kit.css`: `.kit-card`, `.kit-tabs`, `.kit-input` for cards, a pill tab bar and inputs. Import from `@/components/kit`. Styles are in `kit.css`, loaded once by `src/app/[locale]/layout.tsx`. Every colour comes from a token in `src/app/globals.css`. Copy for the kit lives in `src/i18n/kit-messages.ts`, so `messages.ts` stays untouched.
 
 Review every component in every state at `/en/design` and `/sk/design`. The route opens outside production builds, with `DATA_MODE=fixture`, or with `DESIGN_VIEW=on`. It is noindex and not in the sitemap.
 

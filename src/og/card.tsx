@@ -5,7 +5,7 @@ export const OG_CONTENT_TYPE = "image/png";
 
 // Tokens from DESIGN.md (light theme). Fonts: next/og bundles its default font in the package,
 // so nothing is read from disk at run time (the runtime image has a read-only root filesystem). Only Geist Regular is bundled, so no bold weight is used.
-const ink = "#15191c", ink2 = "#464f56", ground = "#eceeeb", rule = "#c7cdcc", signal = "#2340c4";
+const ink = "#141b2e", ink2 = "#434d66", ground = "#f3f5f9", rule = "#dde2ec", signal = "#016bb0";
 
 const mark = (size: number) => (
   <svg width={size} height={size} viewBox="0 0 32 32">

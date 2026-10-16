@@ -52,24 +52,24 @@ Add to `:root` in `src/app/globals.css`, next to the existing tokens and in the 
 
 ```css
   /* Status bands (lane STATUS). Only the status slider, the status chip and the row mini track use these. */
-  --st-broken: light-dark(#b3261e, #ff8a7d);
+  --st-broken: light-dark(#bd271d, #ff8f84);
   --st-broken-on: light-dark(#ffffff, #1a0705);
-  --st-broken-wash: light-dark(#f6dcd8, #3d1b17);
-  --st-ignore: light-dark(#b54708, #ffa463);
+  --st-broken-wash: light-dark(#fde5e2, #3f1a18);
+  --st-ignore: light-dark(#a8480a, #ffaa66);
   --st-ignore-on: light-dark(#ffffff, #1f0e02);
-  --st-ignore-wash: light-dark(#fbede2, #3a2412);
-  --st-wait: light-dark(#8a6500, #f2c84b);
+  --st-ignore-wash: light-dark(#fdeadb, #3a2412);
+  --st-wait: light-dark(#85620a, #f2c84b);
   --st-wait-on: light-dark(#ffffff, #1c1500);
-  --st-wait-wash: light-dark(#f7f0d9, #3a2f0d);
-  --st-watch: light-dark(#2340c4, #8fa3ff);
-  --st-watch-on: light-dark(#ffffff, #0b0f1a);
-  --st-watch-wash: light-dark(#dde3f8, #1c2547);
-  --st-setup: light-dark(#16703f, #5fd391);
+  --st-wait-wash: light-dark(#fbf0cf, #3a2f0d);
+  --st-watch: light-dark(#016bb0, #4fb4f2);
+  --st-watch-on: light-dark(#ffffff, #04131f);
+  --st-watch-wash: light-dark(#e0f0fb, #0e2a41);
+  --st-setup: light-dark(#0e7440, #4fd18b);
   --st-setup-on: light-dark(#ffffff, #04170c);
-  --st-setup-wash: light-dark(#d5ecdd, #123524);
-  --st-none: light-dark(#5d666d, #a9b2b6);
-  --st-none-on: light-dark(#ffffff, #101315);
-  --st-none-wash: light-dark(#e3e6e4, #262c30);
+  --st-setup-wash: light-dark(#dcf3e6, #0f3323);
+  --st-none: light-dark(#59647e, #aab3c5);
+  --st-none-on: light-dark(#ffffff, #0a0d13);
+  --st-none-wash: light-dark(#e6e9f0, #232b3c);
 ```
 
 `--st-watch` equals the existing `--signal`, so the cobalt keeps one meaning. `--st-none` equals `--ink-3` in light and `--ink-2` in dark.
@@ -84,18 +84,18 @@ Contrast, computed with the WCAG 2.x relative luminance formula. `src/i18n/statu
 
 | Band | Theme | Band color on `--sheet` | on `--ground` | on its wash | `-on` on band color |
 | --- | --- | --- | --- | --- | --- |
-| broken | light | 6.14 | 5.60 | 5.03 | 6.54 |
-| ignore | light | 5.09 | 4.65 | 4.73 | 5.43 |
-| wait | light | 5.00 | 4.57 | 4.67 | 5.33 |
-| watch | light | 7.58 | 6.92 | 6.31 | 8.07 |
-| setup | light | 5.76 | 5.26 | 4.93 | 6.13 |
-| none | light | 5.50 | 5.02 | 4.66 | 5.85 |
-| broken | dark | 7.58 | 8.16 | 6.72 | 8.53 |
-| ignore | dark | 8.86 | 9.54 | 7.45 | 9.57 |
-| wait | dark | 10.84 | 11.67 | 8.25 | 11.36 |
-| watch | dark | 7.30 | 7.86 | 6.30 | 8.06 |
-| setup | dark | 9.25 | 9.96 | 7.19 | 9.90 |
-| none | dark | 8.03 | 8.64 | 6.55 | 8.64 |
+| broken | light | 6.05 | 5.54 | 5.04 | 6.05 |
+| ignore | light | 5.84 | 5.35 | 5.00 | 5.84 |
+| wait | light | 5.60 | 5.13 | 4.93 | 5.60 |
+| watch | light | 5.63 | 5.16 | 4.83 | 5.63 |
+| setup | light | 5.85 | 5.36 | 5.01 | 5.85 |
+| none | light | 5.92 | 5.42 | 4.87 | 5.92 |
+| broken | dark | 8.12 | 8.81 | 6.93 | 8.84 |
+| ignore | dark | 9.56 | 10.37 | 7.77 | 9.98 |
+| wait | dark | 11.22 | 12.17 | 8.25 | 11.36 |
+| watch | dark | 7.81 | 8.47 | 6.41 | 8.18 |
+| setup | dark | 9.24 | 10.02 | 7.13 | 9.55 |
+| none | dark | 8.51 | 9.23 | 6.72 | 9.23 |
 
 All text pairs pass AA for normal text (4.5:1). All shape pairs pass the 3:1 non-text rule (1.4.11). Inactive step outlines use `--rule-strong`, which measures 3.44 on the light sheet, 3.14 on the light ground, 3.32 on the dark sheet and 3.57 on the dark ground.
 

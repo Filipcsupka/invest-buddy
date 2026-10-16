@@ -26,7 +26,7 @@
 
 .groups { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s6) var(--s7); margin-top: var(--s6); }
 .group { min-width: 0; }
-.groupTitle { display: flex; justify-content: space-between; align-items: baseline; gap: var(--s3); margin: 0 0 var(--s3); padding-bottom: var(--s2); border-bottom: 1px solid var(--ink); font-size: var(--t-h3); }
+.groupTitle { display: flex; justify-content: space-between; align-items: baseline; gap: var(--s3); margin: 0 0 var(--s3); padding-bottom: var(--s2); border-bottom:  1px solid var(--rule); font-size: var(--t-h3); }
 .groupMax { font-size: var(--t-sm); font-weight: 520; color: var(--ink-3); font-variant-numeric: tabular-nums lining-nums; white-space: nowrap; }
 .ruleList { list-style: none; margin: 0; padding: 0; display: grid; }
 .ruleItem { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s1) var(--s3); align-items: baseline; padding-block: var(--s3); border-bottom: 1px solid var(--rule); }
@@ -54,13 +54,13 @@
 .proof p { margin: 0 0 var(--s3); color: var(--ink-2); max-width: 46ch; }
 .builtFor { color: var(--ink-3); font-size: var(--t-sm); }
 .bilingual { margin: var(--s6) 0 0; }
-.bilingual figcaption { font-size: var(--t-xs); font-weight: 650; font-stretch: 87%; letter-spacing: var(--label-track); text-transform: uppercase; color: var(--ink-3); margin-bottom: var(--s2); }
+.bilingual figcaption { font-size: var(--t-xs); font-weight: 650; letter-spacing: var(--label-track); text-transform: none; color: var(--ink-3); margin-bottom: var(--s2); }
 .bilingualGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s4); }
 .bilingualGrid blockquote { margin: 0; padding: var(--s4) var(--s5); background: var(--sheet); border: 1px solid var(--rule); border-inline-start: 3px solid var(--signal); border-radius: var(--radius); font-size: var(--t-base); color: var(--ink); overflow-wrap: anywhere; }
 .lang { display: block; margin-bottom: var(--s1); font-size: var(--t-xs); color: var(--ink-3); }
 
 .close { padding-bottom: 0; }
-.closeGrid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: var(--s5) var(--s8); padding-top: var(--s5); border-top: 1px solid var(--ink); }
+.closeGrid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: var(--s5) var(--s8); padding-top: var(--s5); border-top:  1px solid var(--rule); }
 
 @media (prefers-reduced-motion: reduce) { .scan::after { animation: none; } }
 @media (max-width: 960px) {
