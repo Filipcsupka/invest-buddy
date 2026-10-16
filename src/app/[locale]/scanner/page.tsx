@@ -5,11 +5,16 @@ import { flags } from "@/config/flags";
 import { SampleStamp, OperatorDisclosure } from "@/components/operator-disclosure";
 import { PaywallSegment } from "@/components/paywall-segment";
 import { TierBadge } from "@/components/tier-lock";
+import { DataTable, DataTableEmpty } from "@/components/kit/data-table";
+import { ScoreBar } from "@/components/kit/score";
+import { SectionHead } from "@/components/kit/section-head";
+import { StateChip } from "@/components/kit/state-chip";
+import { kitState } from "@/components/kit/types";
 import { getViewer } from "@/viewer/get-viewer";
 import type { Viewer } from "@/viewer/viewer";
 import { getTierMessages } from "@/i18n/tier-messages";
 import { getTierListsMessages } from "@/i18n/tier-lists-messages";
-import { StatusCell, statusLabel } from "@/components/status-slider";
+import { statusLabel } from "@/components/status-slider";
 import { toRow, byScore } from "@/components/view-model";
 import { DataStatus } from "@/components/data-status";
 import { latestPortfolio, latestScores } from "@/data/store";
@@ -73,8 +78,7 @@ function PresetBar({ locale, filters, counts, total, viewer }: { locale: Locale;
   const s = m.scanner;
   const href = (id: string) => `/${locale}/scanner${id ? `?preset=${id}` : ""}`;
   return <nav className={styles.presets} aria-label={s.presetsLabel}>
-    <h2 className={styles.presetsTitle}>{s.presetsLabel}</h2>
-    <p className="muted small">{s.presetsNote}</p>
+    <SectionHead title={s.presetsLabel} lede={s.presetsNote} rule="quiet" />
     <ul className={styles.presetList}>{presets.map((preset) => {
       const text = s.presets[preset.id];
       if (isChangePreset(preset.id) && viewer.tier === "free") {
@@ -135,7 +139,24 @@ async function Scanner({ params, searchParams }: Props) {
     <p className="muted small">{c.sourceNote}</p>
     <PaywallSegment id="scanner-streak" viewer={viewer} locale={locale}><p className="muted small">{getTierListsMessages(locale).streakNote}</p></PaywallSegment>
     <PaywallSegment id="scanner-rows-full" viewer={viewer} locale={locale}><section aria-label={m.scanner.title}>
-      {visible.length ? <div className="table-scroll" role="region" tabIndex={0} aria-label={m.scanner.title}><table className="screen"><caption className="visually-hidden">{m.scanner.title}</caption><thead><tr><th scope="col">{m.table.ticker}</th><th scope="col" className="col-sector">{m.table.sector}</th><th scope="col">{m.table.score}</th><th scope="col">{s.rulesMet}</th><th scope="col">{m.status.columns.status}</th></tr></thead><tbody>{visible.map((row) => <tr key={row.ticker}><th scope="row" className="col-company"><Link className="ticker" href={`/${locale}/company/${row.ticker}`}>{row.ticker}</Link><span className="company-name">{row.name}{held.has(row.ticker) ? <span className="tag">{m.portfolio.held}</span> : null}{floorState(floorData[row.ticker]) === "unknown" ? <span className="tag" title={fl.noDataNote}>{fl.noData}</span> : null}</span></th><td className="col-sector muted">{row.sector}</td><td className="num" aria-describedby="scanner-disclaimer">{row.percent === null ? m.common.noScore : `${row.percentLabel} · ${row.bonusLabel} · ${fill(m.status.coreData, { known: row.pointsKnown, total: row.coreTotal })}`}</td><td className="num">{rulesMetCell(locale, row.matched, streaks[row.ticker])}</td><td><StatusCell state={row.state} position={row.position} label={row.stateLabel} ariaLabel={row.statusAria} pullbackLabel={row.pullbackLabel} describedBy="scanner-disclaimer" /></td></tr>)}</tbody></table></div> : <p className="empty-line">{c.empty}</p>}
+      <DataTable label={m.scanner.title} density="compact" describedBy="scanner-disclaimer" stickyFirst>
+        <caption className="visually-hidden">{m.scanner.title}</caption>
+        <thead><tr><th scope="col">{m.table.ticker}</th><th scope="col" className={`col-sector ${styles.colSector}`}>{m.table.sector}</th><th scope="col">{m.table.score}</th><th scope="col">{s.rulesMet}</th><th scope="col">{m.status.columns.status}</th></tr></thead>
+        <tbody>{visible.length ? visible.map((row) => {
+          const chipState = kitState(row.state, Boolean(row.pullbackLabel));
+          const stateText = row.pullbackLabel ?? row.stateLabel;
+          return <tr key={row.ticker} data-state={row.state}>
+            <th scope="row" className={`col-company ${styles.company}`}><Link className="ticker" href={`/${locale}/company/${row.ticker}`}>{row.ticker}</Link><span className="company-name">{row.name}{held.has(row.ticker) ? <span className="tag">{m.portfolio.held}</span> : null}{floorState(floorData[row.ticker]) === "unknown" ? <span className="tag" title={fl.noDataNote}>{fl.noData}</span> : null}</span></th>
+            <td className={`col-sector muted ${styles.colSector}`}>{row.sector}</td>
+            <td className={styles.score}>
+              <ScoreBar size="sm" percent={row.percent} state={chipState} stateLabel={stateText} locale={locale} label={row.ticker} describedBy="scanner-disclaimer" />
+              {row.percent === null ? null : <span className={`muted ${styles.coverage}`}>{`${row.bonusLabel} · ${fill(m.status.coreData, { known: row.pointsKnown, total: row.coreTotal })}`}</span>}
+            </td>
+            <td className="num">{rulesMetCell(locale, row.matched, streaks[row.ticker])}</td>
+            <td><StateChip state={chipState} label={stateText} size="sm" describedBy="scanner-disclaimer" /></td>
+          </tr>;
+        }) : <DataTableEmpty colSpan={5}>{c.empty}</DataTableEmpty>}</tbody>
+      </DataTable>
     </section></PaywallSegment>
     <p className="disclaimer is-compact" id="scanner-disclaimer">{m.common.disclaimer}</p>
   </div>;

@@ -4,8 +4,13 @@ import { useId, useMemo, useState } from "react";
 import { fill, getMessages } from "@/i18n";
 import { stateOrder, type StateKey } from "@/i18n/rules";
 import { IconReset, IconSearch, IconSort } from "./icons";
-import { StatusBadge, StatusCell, StatusIcon } from "./status-slider";
+import { DataTable } from "./kit/data-table";
+import { ScoreBar } from "./kit/score";
+import { StateChip } from "./kit/state-chip";
+import { kitState } from "./kit/types";
+import { StatusIcon } from "./status-slider";
 import type { ScreenRow } from "./view-model";
+import styles from "./scanner-table.module.css";
 
 type SortKey = "ticker" | "sector" | "total" | "fundamentals" | "technical" | "macro" | "state";
 type Text = {
@@ -86,34 +91,38 @@ export function ScannerTable({ locale, rows, text, heldTickers = [] }: { locale:
   const table = (list: ScreenRow[], group: string) => {
     const label = text.board ? (group === "lower" ? text.board.lowerTitle : text.states[group as StateKey]) : text.showing.replace("{shown}", String(list.length)).replace("{total}", String(rows.length));
     return (
-    <div className="table-scroll" role="region" tabIndex={0} aria-label={label} key={group}>
-      <table className="screen">
-        <caption className="visually-hidden">{label}</caption>
-        <thead><tr>
-          {header("ticker", text.columns.ticker)}
-          {header("sector", text.columns.sector, "col-sector")}
-          {header("total", text.columns.score, "col-score")}
-          {header("state", text.columns.state)}
-          {group === "broken" && <th scope="col" className="col-reason">{text.columns.criteria}</th>}
-        </tr></thead>
-        <tbody>{list.map((row) => (
-          <tr key={row.ticker} data-state={row.state}>
-            <th scope="row" className="col-company">
-              <Link className="ticker" href={`/${locale}/company/${row.ticker}`}>{row.ticker}</Link>
-              <span className="company-name">{row.name}
-                {row.agreementLabel ? <span className="tag">{row.agreementLabel}</span> : null}
-                {row.extension ? <span className="tag">{text.extension}</span> : null}
-                {held.has(row.ticker) ? <span className="tag">{row.state === "setup" || row.state === "watch" ? text.held : text.heldNoSignal}</span> : null}
-              </span>
-            </th>
-            <td className="col-sector muted">{row.sector}</td>
-            <td className="col-score num" aria-describedby={disclaimerId}>{row.percent === null ? <span className="muted">{text.noScore}</span> : <>{row.percentLabel}<span className="small muted"> {row.bonusLabel}</span><span className="small muted">{` · ${fill(getMessages(locale as "en" | "sk").status.coreData, { known: row.pointsKnown, total: row.coreTotal })}`}</span></>}</td>
-            <td><StatusCell state={row.state} position={row.position} label={row.stateLabel} ariaLabel={row.statusAria} pullbackLabel={row.pullbackLabel} describedBy={disclaimerId} /></td>
-            {group === "broken" && <td className="col-reason muted">{row.reasons.length ? row.reasons.join("; ") : text.noRejection}</td>}
-          </tr>
-        ))}</tbody>
-      </table>
-    </div>
+    <DataTable key={group} label={label} density="compact" bounded={group === "lower"} stickyFirst describedBy={disclaimerId}>
+      <caption className="visually-hidden">{label}</caption>
+      <thead><tr>
+        {header("ticker", text.columns.ticker)}
+        {header("sector", text.columns.sector, `col-sector ${styles.colSector}`)}
+        {header("total", text.columns.score, "col-score")}
+        {header("state", text.columns.state)}
+        {group === "broken" && <th scope="col" className="col-reason">{text.columns.criteria}</th>}
+      </tr></thead>
+      <tbody>{list.map((row) => {
+        const chipState = kitState(row.state, Boolean(row.pullbackLabel));
+        return (
+        <tr key={row.ticker} data-state={row.state}>
+          <th scope="row" className={`col-company ${styles.company}`}>
+            <Link className="ticker" href={`/${locale}/company/${row.ticker}`}>{row.ticker}</Link>
+            <span className="company-name">{row.name}
+              {row.agreementLabel ? <span className="tag">{row.agreementLabel}</span> : null}
+              {row.extension ? <span className="tag">{text.extension}</span> : null}
+              {held.has(row.ticker) ? <span className="tag">{row.state === "setup" || row.state === "watch" ? text.held : text.heldNoSignal}</span> : null}
+            </span>
+          </th>
+          <td className={`col-sector muted ${styles.colSector}`}>{row.sector}</td>
+          <td className={`col-score ${styles.score}`}>
+            <ScoreBar size="sm" percent={row.percent} state={chipState} stateLabel={row.pullbackLabel ?? row.stateLabel} locale={locale as "en" | "sk"} label={row.ticker} describedBy={disclaimerId} />
+            {row.percent === null ? null : <span className={`small muted ${styles.coverage}`}>{fill(getMessages(locale as "en" | "sk").status.coreData, { known: row.pointsKnown, total: row.coreTotal })}</span>}
+          </td>
+          <td><StateChip state={chipState} label={row.pullbackLabel ?? row.stateLabel} size="sm" describedBy={disclaimerId} /></td>
+          {group === "broken" && <td className="col-reason muted">{row.reasons.length ? row.reasons.join("; ") : text.noRejection}</td>}
+        </tr>
+        );
+      })}</tbody>
+    </DataTable>
     );
   };
 
@@ -152,7 +161,7 @@ export function ScannerTable({ locale, rows, text, heldTickers = [] }: { locale:
       </div>
       <p className="disclaimer is-compact" id={disclaimerId}>{text.disclaimer}</p>
       {text.board ? <>
-        <table className="tally"><caption className="visually-hidden">{text.board.summaryLabel}</caption><tbody><tr>{stateOrder.map((key) => <td key={key} data-state={key}><a href={key === "wait" || key === "ignore" || key === "insufficient" ? "#lower" : `#state-${key}`} className="tally-cell"><span className="tally-label"><StatusIcon state={key} /> {text.states[key]}</span><span className="num tally-count">{counts.get(key) ?? 0}</span></a></td>)}</tr></tbody></table>
+        <table className="tally"><caption className="visually-hidden">{text.board.summaryLabel}</caption><tbody><tr>{stateOrder.map((key) => <td key={key} data-state={key}><a href={key === "wait" || key === "ignore" || key === "insufficient" ? "#lower" : `#state-${key}`} className="tally-cell"><span className={`tally-label ${styles.fit}`}><StateChip state={key} label={text.states[key]} size="sm" /></span><span className="num tally-count">{counts.get(key) ?? 0}</span></a></td>)}</tr></tbody></table>
         {groups.map((group) => {
           const list = groupRows(group);
           if (group === "lower") return <section className="board-section" aria-labelledby="lower" key={group}>
@@ -161,7 +170,7 @@ export function ScannerTable({ locale, rows, text, heldTickers = [] }: { locale:
           </section>;
           if (!list.length && filtered) return null;
           return <section className="board-section" aria-labelledby={`state-${group}`} key={group}>
-            <div className="board-head"><h2 id={`state-${group}`}><StatusBadge state={group} label={text.states[group]} /><span className="num board-count">{list.length}</span></h2><p className="board-note">{text.board!.stateNotes[group]}</p></div>
+            <div className="board-head"><h2 id={`state-${group}`} className={styles.fit}><StateChip state={group} label={text.states[group]} size="lg" /><span className="num board-count">{list.length}</span></h2><p className="board-note">{text.board!.stateNotes[group]}</p></div>
             {list.length ? table(list, group) : <p className="empty-line">{text.board!.empty}</p>}
           </section>;
         })}

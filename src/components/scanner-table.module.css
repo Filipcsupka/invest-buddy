@@ -1,0 +1,16 @@
+/* Rows of the stock screen on the kit table. The state is a chip and the score is a bar with the band ticks. */
+.company { min-width: 11rem; }
+.score { min-width: 8.5rem; }
+.score :global(.kit-scorebar) { min-width: 0; }
+.score :global(.kit-scorebar-name) { display: none; }
+.score :global(.kit-scorebar-head) { justify-content: flex-start; }
+.coverage { display: block; margin-top: 2px; font-size: var(--t-xs); }
+@media (max-width: 640px) {
+  .company { min-width: 7rem; }
+  .colSector { display: none; }
+}
+@media (max-width: 640px) {
+  .fit { min-width: 0; max-width: 100%; }
+  .fit :global(.kit-chip) { max-width: 100%; white-space: normal; min-width: 0; }
+  .fit :global(.kit-chip-label) { white-space: normal; overflow-wrap: anywhere; }
+}

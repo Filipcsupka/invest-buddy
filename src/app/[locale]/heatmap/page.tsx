@@ -2,6 +2,7 @@ import { withPageLog } from "@/app/page-log";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { OperatorDisclosure, SampleStamp } from "@/components/operator-disclosure";
+import { SectionHead } from "@/components/kit/section-head";
 import { latestScores } from "@/data/store";
 import { aggregateSectors, intensity, metrics, parseMetric, type HeatMetric } from "@/heatmap/aggregate";
 import { fill, formatDate, getMessages, intlTag, type Locale } from "@/i18n";
@@ -74,7 +75,14 @@ async function Heatmap({ params, searchParams }: Props) {
       </li>)}
     </ul>}
     <section className={styles.legend} aria-labelledby="heatmap-legend">
-      <h2 id="heatmap-legend" className={styles.legendTitle}>{h.legendTitle}</h2>
+      <SectionHead id="heatmap-legend" title={h.legendTitle} rule="quiet" />
+      <div className={styles.scale} aria-hidden="true">
+        <span className={styles.scaleEnd}>{metric === "rules" ? h.scale.low : h.scale.down}</span>
+        <span className={styles.swatches}>{(metric === "rules" ? ["seq0", "seq1", "seq2", "seq3", "seq4"] : ["down4", "down3", "down2", "down1", "flat", "up1", "up2", "up3", "up4"]).map((step) => <span key={step} className={`${styles.swatch} ${styles[step]}`} />)}</span>
+        <span className={styles.scaleEnd}>{metric === "rules" ? h.scale.high : h.scale.up}</span>
+        <span className={styles.swatches}><span className={`${styles.swatch} ${styles.none}`} /></span>
+        <span className={styles.scaleEnd}>{h.scale.none}</span>
+      </div>
       <p>{metric === "rules" ? h.legendRules : h.legendPrice}</p>
       <p className={styles.meta}>{h.scope}</p>
       <p className={styles.meta}>{m.common.disclaimer}</p>
