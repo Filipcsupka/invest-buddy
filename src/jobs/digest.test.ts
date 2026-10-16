@@ -114,6 +114,16 @@ describe("telegram idea card", () => {
     expect(sent[1]).toContain("Score 19 of 23 evidenced (74 %), data coverage 92 %");
   });
 
+  it("adds rule change lines to the idea card in both languages", async () => {
+    const ruleChanges = [{ label: "Uptrend intact", from: "pass" as const, to: "fail" as const }, { label: "Nákupy insiderov alebo inštitúcií", from: "fail" as const, to: "pass" as const }];
+    for (const [locale, line] of [["en", "No longer meets: Uptrend intact"], ["sk", "Teraz spĺňa: Nákupy insiderov alebo inštitúcií"]] as const) {
+      sent.length = 0;
+      await deliverTelegram({ ...base, alerts: [alert], locale, extras: { NVDA: { ruleChanges } }, log: new MemoryDeliveryLog() });
+      expect(sent[0]).toContain("<b>" + (locale === "en" ? "What happened" : "Čo sa stalo") + "</b>");
+      expect(sent[0]).toContain(line);
+    }
+  });
+
   it("is public by default and shows the owner view only in owner mode", async () => {
     sent.length = 0;
     await deliverTelegram({ ...base, alerts: [alert], log: new MemoryDeliveryLog() });

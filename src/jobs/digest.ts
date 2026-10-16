@@ -90,7 +90,7 @@ export async function deliverTelegram(input: { asOf: string; alerts: AlertChange
     const idea = input.ideas?.[alert.ticker];
     const previous = alert.previousState === null ? null : { state: alert.previousState, points: alert.previousScore };
     const text = idea
-      ? formatIdeaCard({ ticker: alert.ticker, locale: input.locale, adviceOutput, site, idea, audit: input.audits?.[alert.ticker], mode: input.cardMode ?? "public", previous, current: { state: alert.currentState, points: alert.currentScore } })
+      ? formatIdeaCard({ ticker: alert.ticker, locale: input.locale, adviceOutput, site, idea, audit: input.audits?.[alert.ticker], ruleChanges: extra?.ruleChanges, mode: input.cardMode ?? "public", previous, current: { state: alert.currentState, points: alert.currentScore } })
       : formatEventAlert({ ticker: alert.ticker, locale: input.locale, adviceOutput, site, confirmations: extra?.confirmations, coverage: extra?.coverage, ruleChanges: extra?.ruleChanges,
       previous, current: { state: alert.currentState, points: alert.currentScore } });
     await post(`alert:${input.locale}:${alert.ticker}`, 1, text);
