@@ -201,3 +201,22 @@
 .stepRow { display: flex; flex-wrap: wrap; gap: var(--s3) var(--s5); margin: 0; padding: 0; list-style: none; }
 .stepRow li { display: grid; gap: var(--s1); }
 .stepRange { font-size: var(--t-xs); color: var(--ink-3); font-variant-numeric: tabular-nums; }
+
+/* Rail variant: the summary card in the company page's side column. No dial (the page head holds it), the track stacks. */
+.panel.rail {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "main" "foot";
+  gap: var(--s4);
+  align-items: start;
+}
+.rail .foot { grid-template-columns: minmax(0, 1fr); padding-top: var(--s4); }
+.rail .label { font-size: var(--t-h3); }
+.rail .track { grid-template-columns: minmax(0, 1fr); gap: var(--s1); max-width: none; margin-bottom: 0; }
+.rail .step { grid-template-rows: auto; grid-template-columns: 3rem minmax(0, 1fr); align-items: center; gap: var(--s3); }
+.rail .block { align-self: center; height: 0.875rem; }
+.rail .step[data-active] .block { height: 1.375rem; }
+.rail .marker { display: none; }
+.rail .caption { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s2); padding: 0; text-align: left; }
+.panel.rail .stepLabel, .panel.rail .range { display: block; }
+.panel.rail .step .caption { position: static; width: auto; max-width: none; transform: none; text-align: left; }
+.rail .cutoffs { max-width: none; }

@@ -1,29 +1,66 @@
 /* Company page. Loaded by page.tsx only. Every colour is a token from globals.css; band hues (--st-*) mark state only.
-   The page's authored moment is the reading settling: the dial on first paint, the rule marks checking in once
+   Structure: a hero card (identity, last close, state, score dial), a sticky tab bar, then a main column of cards
+   (chart, rules, rejection checks, evidence, history) beside a rail (summary, key facts, sources, flags). One column
+   below 1320px. The authored moment is the reading settling: the dial on first paint, the rule marks checking in once
    when the rule table scrolls into view. Everything else is still. */
 
-/* ── Header ─────────────────────────────────────────────── */
-.company .company-head {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+.company [id] {
+  scroll-margin-top: calc(var(--header-h) + 4.5rem);
+}
+
+/* ── Hero ───────────────────────────────────────────────── */
+.company .company-head.co-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "id dial" "foot foot";
   gap: var(--s5) var(--s7);
-  align-items: end;
-  padding-bottom: var(--s6);
+  align-items: center;
+  padding: var(--s6);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-lg);
+  background: radial-gradient(ellipse 60% 120% at 100% 0%, var(--signal-tint), transparent 70%), var(--sheet);
+  box-shadow: var(--shadow-1), var(--edge-light);
 }
 .company-id {
+  grid-area: id;
   display: grid;
   gap: var(--s3);
   min-width: 0;
 }
+.co-hero-dial {
+  grid-area: dial;
+  justify-self: end;
+}
+.co-hero-foot {
+  grid-area: foot;
+  padding-top: var(--s3);
+  border-top: 1px solid var(--rule);
+}
+.co-hero-foot:empty {
+  display: none;
+}
+.co-hero-foot .data-updated {
+  margin: 0;
+}
+.co-hero-foot .notice {
+  margin: var(--s2) 0 0;
+}
 .company .company-head .title {
-  gap: var(--s1) var(--s4);
+  display: grid;
+  gap: var(--s1);
+  font-size: var(--t-title);
   text-wrap: balance;
 }
 .company .title-ticker {
-
+  font-size: 1em;
+  letter-spacing: -0.035em;
 }
 .company .title-name {
-  font-size: 0.46em;
-  font-weight: 460;
+  font-family: var(--sans);
+  font-size: var(--t-lede);
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--ink-2);
   overflow-wrap: anywhere;
 }
 .company-meta {
@@ -49,42 +86,205 @@
   background: var(--rule-strong);
   vertical-align: -0.1em;
 }
+.co-price {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s1) var(--s3);
+}
+.co-price-value {
+  font-family: var(--display);
+  font-size: var(--t-figure);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+.co-price-label {
+  font-size: var(--t-sm);
+  color: var(--ink-3);
+}
 .seo-summary {
-  max-width: 58ch;
-  font-family: var(--serif);
+  max-width: 62ch;
   font-size: var(--t-base);
   line-height: 1.55;
   color: var(--ink-2);
   text-wrap: pretty;
 }
-.company .company-head .title-block {
+.company.is-empty .company-head.co-hero {
+  grid-template-areas: "id id" "foot foot";
+}
+
+/* ── Tab bar ────────────────────────────────────────────── */
+.co-tabs {
+  position: sticky;
+  top: var(--header-h);
+  z-index: 5;
+  margin: var(--s4) 0 var(--s5);
+  border-bottom: 1px solid var(--rule);
+  background: color-mix(in srgb, var(--ground) 90%, transparent);
+  backdrop-filter: blur(10px);
+}
+.co-tabs-list {
+  display: flex;
+  gap: var(--s1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.co-tabs-list::-webkit-scrollbar {
+  display: none;
+}
+.co-tab {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  padding: 0 var(--s4);
+  font-size: var(--t-sm);
+  font-weight: 650;
+  color: var(--ink-3);
+  text-decoration: none;
+  white-space: nowrap;
+  box-shadow: inset 0 -2px 0 transparent;
+  transition: color var(--dur-feedback), box-shadow var(--dur-state) var(--ease-out);
+}
+.co-tab:hover {
+  color: var(--ink);
+}
+.co-tab[aria-current] {
+  color: var(--ink);
+  box-shadow: inset 0 -2px 0 var(--signal);
+}
+.co-tab:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: -2px;
+  border-radius: var(--radius-sm);
+}
+
+/* ── Layout: one column, then main column and rail ──────── */
+.co-layout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s5);
+}
+.co-main,
+.co-rail {
+  display: contents;
+}
+.co-layout .co-summary { order: 1; }
+.co-layout [data-o="2"] { order: 2; }
+.co-layout [data-o="3"] { order: 3; }
+.co-layout [data-o="4"] { order: 4; }
+.co-layout .co-rail [data-flags] { order: 5; }
+.co-layout [data-o="6"] { order: 6; }
+.co-layout [data-o="7"] { order: 7; }
+.co-layout [data-o="8"] { order: 8; }
+.co-layout [data-o="9"] { order: 9; }
+.co-layout [data-o="10"] { order: 10; }
+.co-layout .co-rail [data-data-status] { order: 11; }
+
+/* ── Cards ──────────────────────────────────────────────── */
+.co-card,
+.co-rail .check-block {
+  --table-bg: var(--sheet);
+  min-width: 0;
+  margin: 0;
+  padding: var(--s5);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-lg);
   background: var(--sheet);
   box-shadow: var(--shadow-1), var(--edge-light);
 }
-.company .data-updated {
-  margin-bottom: var(--s3);
+.company .co-layout .sheet-section,
+.company .co-layout .sheet-section + .sheet-section {
+  margin-top: 0;
 }
-.company > .notice {
-  margin-bottom: var(--s5);
+.co-card .kit-section-head,
+.co-rail .check-block .kit-section-head {
+  margin-bottom: var(--s4);
+  padding-top: 0;
+  border-top: 0;
+}
+.co-card .kit-section-title {
+  font-size: var(--t-h3);
+}
+.co-card .kit-section-lede {
+  font-size: var(--t-sm);
+}
+.co-more {
+  margin-top: var(--s4);
+  font-size: var(--t-sm);
+}
+/* The paid sections: the admin view is the tier frame itself, so the card chrome steps aside. */
+.co-card-paid:has(> .co-paid) {
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+}
+.co-card-paid:has(> .co-paid) .kit-tierframe {
+  background: var(--sheet);
+  box-shadow: var(--shadow-1);
+}
+.co-card-paid:has(> .co-paid) .kit-tierframe-tag {
+  --frame-bg: var(--sheet);
+}
+.co-paid .kit-tierframe {
+  padding-top: var(--s6);
+}
+.co-lock .kit-lock {
+  max-width: none;
+  box-shadow: none;
+  background: var(--tier-wash);
 }
 
-/* ── Sections ───────────────────────────────────────────── */
-.company .sheet-section + .sheet-section,
-.company .company-grid,
-.company .co-facts,
-.company .co-idea,
-.company .co-history {
-  margin-top: var(--s8);
+/* Tables sit in the card, not in a card of their own. */
+.co-card .kit-table-scroll {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: none;
 }
-.company .source-summary {
-  margin-top: var(--s3);
-  max-width: 90ch;
+
+/* ── Summary and key facts ──────────────────────────────── */
+.co-card.co-summary {
+  --table-bg: var(--sheet);
+  padding: var(--s5);
+  border: 1px solid var(--rule);
 }
-.company .source-summary + .sheet-section {
-  margin-top: var(--s7);
+.co-facts-list {
+  display: grid;
+  margin: 0;
+  border-top: 1px solid var(--rule);
 }
-.company .co-chart .kit-section-head {
-  margin-bottom: var(--s4);
+.co-facts-list > div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--s1) var(--s4);
+  padding: var(--s3) 0;
+  border-bottom: 1px solid var(--rule);
+  font-size: var(--t-sm);
+}
+.co-facts-list dt {
+  color: var(--ink-3);
+}
+.co-facts-list dd {
+  margin: 0;
+  font-weight: 620;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+.co-facts-list > div:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+.co-sources .source-summary {
+  margin: 0;
+  font-size: var(--t-sm);
+  line-height: 1.55;
+  color: var(--ink-2);
 }
 
 /* ── Rule table ─────────────────────────────────────────── */
@@ -158,24 +358,6 @@
 }
 
 /* ── Rejection checks and inputs ────────────────────────── */
-.company .company-grid {
-  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
-  gap: var(--s7) var(--s8);
-}
-.company .company-grid .sheet-section {
-  margin-top: 0;
-}
-.co-rejection {
-  padding: var(--s5);
-  border: 1px solid var(--rule-strong);
-  border-radius: var(--radius);
-  background: var(--sheet);
-  --table-bg: var(--sheet);
-}
-.co-rejection .kit-section-head {
-  padding-top: 0;
-  border-top: 0;
-}
 .co-rejection[data-broken] {
   border-color: var(--st-broken);
 }
@@ -213,11 +395,14 @@
 .co-checks .kit-rule:last-child > td {
   border-bottom: 0;
 }
-.co-inputs .kit-section-head {
-  margin-bottom: var(--s3);
-}
 .co-inputs .input-list {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
+  gap: 0 var(--s6);
   border-top: 0;
+}
+.co-inputs .input-list > div:first-child,
+.co-inputs .input-list > div:nth-child(2) {
+  border-top: 1px solid var(--rule);
 }
 .co-inputs .input-list dt {
   color: var(--ink-2);
@@ -228,15 +413,6 @@
 }
 
 /* ── Flags and data status: two calm check lists ────────── */
-.co-facts {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--s7) var(--s8);
-  align-items: start;
-}
-.co-facts .sheet-section + .sheet-section {
-  margin-top: 0;
-}
 .check-block .kit-section-lede {
   font-size: var(--t-sm);
 }
@@ -397,39 +573,66 @@
   box-shadow: var(--shadow-1), var(--edge-light);
 }
 
-/* ── Paid parts ─────────────────────────────────────────── */
-.co-paid .kit-tierframe {
-  padding-top: var(--s6);
-}
-.co-lock .kit-lock {
-  max-width: 44rem;
+/* ── Wide screens: the rail beside the main column ──────── */
+@media (min-width: 1320px) {
+  .co-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 20.5rem;
+    grid-template-rows: auto 1fr;
+    grid-template-areas: "main summary" "main rail";
+    gap: var(--s5);
+    align-items: start;
+  }
+  .co-layout > .co-summary { grid-area: summary; }
+  .co-main { grid-area: main; }
+  .co-rail { grid-area: rail; }
+  .co-main,
+  .co-rail {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s5);
+    min-width: 0;
+  }
+  .co-layout .co-summary,
+  .co-layout [data-o],
+  .co-layout .co-rail [data-flags],
+  .co-layout .co-rail [data-data-status] {
+    order: 0;
+  }
+  .co-inputs .input-list > div:nth-child(2) {
+    border-top: 1px solid var(--rule);
+  }
 }
 
 /* ── Narrow screens ─────────────────────────────────────── */
-@media (max-width: 1100px) {
-  .company .company-head {
-    grid-template-columns: minmax(0, 1fr);
-    align-items: start;
-  }
-}
 @media (max-width: 900px) {
-  .company .company-grid,
-  .co-facts {
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--s7);
-  }
-  .company .sheet-section + .sheet-section,
-  .company .company-grid,
-  .company .co-facts,
-  .company .co-idea,
-  .company .co-history {
-    margin-top: var(--s7);
+  .company .company-head.co-hero {
+    padding: var(--s5);
   }
 }
 @media (max-width: 640px) {
-  .company .title-name {
-    flex-basis: 100%;
-    font-size: 0.5em;
+  .company .company-head.co-hero {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "id" "dial" "foot";
+    gap: var(--s4);
+    padding: var(--s4);
+  }
+  .co-hero-dial {
+    justify-self: start;
+  }
+  .co-hero-dial .kit-dial {
+    --dial: 7.5rem;
+  }
+  .co-card,
+  .co-card.co-summary,
+  .co-rail .check-block {
+    padding: var(--s4);
+  }
+  .co-tab {
+    padding: 0 var(--s3);
+  }
+  .co-inputs .input-list > div:nth-child(2) {
+    border-top: 0;
   }
   .co-rules .kit-rule-name {
     width: auto;
@@ -440,13 +643,10 @@
     padding-left: var(--s2);
   }
   .co-rules .kit-rule-value {
-    min-width: 6.5rem;
+    min-width: 5rem;
   }
   .co-rules .kit-rule-points {
-    min-width: 3.25rem;
-  }
-  .co-rejection {
-    padding: var(--s4);
+    min-width: 2.75rem;
   }
   .co-checks .co-check-word {
     position: absolute;
@@ -467,5 +667,11 @@
   }
   .chart-zone-tag {
     display: none;
+  }
+  /* The close tag sits inside the plot, above the last point, so it never reaches past the card edge. */
+  .co-chart .chart-tag {
+    left: auto;
+    right: 0;
+    translate: 0 calc(-100% - 0.5rem);
   }
 }

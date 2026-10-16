@@ -12,6 +12,11 @@ const en = {
   rulesTable: "Rules for {ticker}",
   dataStatusTitle: "Data behind this page",
   zoneTag: "Dip zone",
+  tabsLabel: "Sections of this page",
+  tabs: { overview: "Overview", rules: "Rules", flags: "Flags", evidence: "Evidence", history: "History" },
+  railLabel: "Summary, facts and sources",
+  factsTitle: "Key facts",
+  sourcesTitle: "Sources",
   paidNote: {
     "score-history": "Admin view: history beyond {days} is in the paid tier",
     "idea-card": "Admin view: the idea card is in the paid tier",
@@ -28,6 +33,11 @@ const sk: CompanyMessages = {
   rulesTable: "Pravidlá pre {ticker}",
   dataStatusTitle: "Údaje za touto stránkou",
   zoneTag: "Pásmo poklesu",
+  tabsLabel: "Sekcie tejto stránky",
+  tabs: { overview: "Prehľad", rules: "Pravidlá", flags: "Príznaky", evidence: "Dôkazy", history: "História" },
+  railLabel: "Zhrnutie, fakty a zdroje",
+  factsTitle: "Kľúčové údaje",
+  sourcesTitle: "Zdroje",
   paidNote: {
     "score-history": "Pohľad administrátora: história staršia než {days} je v platenej úrovni",
     "idea-card": "Pohľad administrátora: karta nápadu je v platenej úrovni",
