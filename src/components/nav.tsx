@@ -7,6 +7,7 @@ import { ideasEnabled } from "@/data/ideas-store";
 import { flags } from "@/config/flags";
 import { getLegalMessages } from "@/i18n/legal-messages";
 import { getLaunchMessages } from "@/i18n/launch-messages";
+import { getHeatmapMessages } from "@/i18n/heatmap-messages";
 
 export function BrandMark() {
   return (
@@ -33,6 +34,7 @@ export function Nav({ locale }: { locale: Locale }) {
           label={m.nav.label}
           items={[
             { href: "/dashboard", text: m.nav.dashboard },
+            { href: "/heatmap", text: getHeatmapMessages(locale).navLabel },
             ...(ideasEnabled() && flags().ADVICE_OUTPUT ? [{ href: "/ideas", text: m.nav.ideas }] : []),
             { href: "/track-record", text: m.nav.trackRecord },
             ...(flags().INSIDERS_PAGE ? [{ href: "/insiders", text: m.nav.insiders }] : []),
