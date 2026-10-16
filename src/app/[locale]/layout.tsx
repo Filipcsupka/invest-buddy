@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Archivo, Source_Serif_4 } from "next/font/google";
+import { Inter, Manrope } from "next/font/google";
 import { notFound } from "next/navigation";
 import { Footer, Nav } from "@/components/nav";
 import { themeScript } from "@/components/theme-toggle";
@@ -12,8 +12,8 @@ import { getKitMessages } from "@/i18n/kit-messages";
 import "../globals.css";
 import "@/components/kit/kit.css";
 
-const sans = Archivo({ subsets: ["latin", "latin-ext"], axes: ["wdth"], variable: "--font-sans", display: "swap" });
-const serif = Source_Serif_4({ subsets: ["latin", "latin-ext"], axes: ["opsz"], style: ["normal", "italic"], variable: "--font-serif", display: "swap" });
+const sans = Inter({ subsets: ["latin", "latin-ext"], variable: "--font-sans", display: "swap" });
+const display = Manrope({ subsets: ["latin", "latin-ext"], weight: ["600", "700", "800"], variable: "--font-display", display: "swap" });
 
 export const dynamicParams = false;
 export function generateStaticParams() {
@@ -22,8 +22,8 @@ export function generateStaticParams() {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#eceeeb" },
-    { media: "(prefers-color-scheme: dark)", color: "#111416" },
+    { media: "(prefers-color-scheme: light)", color: "#f3f5f9" },
+    { media: "(prefers-color-scheme: dark)", color: "#0a0d13" },
   ],
 };
 
@@ -47,7 +47,7 @@ export default async function LocaleLayout({ children, params }: { children: Rea
   const m = getMessages(locale);
   const kit = getKitMessages(locale);
   return (
-    <html lang={locale} className={`${sans.variable} ${serif.variable}`} suppressHydrationWarning>
+    <html lang={locale} className={`${sans.variable} ${display.variable}`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
@@ -56,13 +56,17 @@ export default async function LocaleLayout({ children, params }: { children: Rea
         <a className="skip-link" href="#main">
           {m.common.skipToContent}
         </a>
-        <Nav locale={locale} />
-        {/* Tier logic is a later work package; until it decides a mode, the banner stays hidden for everyone. */}
-        <TierBanner mode="hidden" title={kit.banner.admin} note={kit.banner.adminNote} badgeLabel={kit.tier.paid} />
-        <main id="main" tabIndex={-1}>
-          {children}
-        </main>
-        <Footer locale={locale} />
+        <div className="app-shell">
+          <Nav locale={locale} />
+          <div className="app-body">
+            {/* Tier logic is a later work package; until it decides a mode, the banner stays hidden for everyone. */}
+            <TierBanner mode="hidden" title={kit.banner.admin} note={kit.banner.adminNote} badgeLabel={kit.tier.paid} />
+            <main id="main" tabIndex={-1}>
+              {children}
+            </main>
+            <Footer locale={locale} />
+          </div>
+        </div>
         <Analytics />
       </body>
     </html>

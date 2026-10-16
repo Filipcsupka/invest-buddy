@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getMessages, localeCookie, otherLocale, type Locale } from "@/i18n";
-import { LanguageSwitch, NavLinks } from "./nav-links";
+import { LanguageSwitch, MenuToggle, NavLinks } from "./nav-links";
+import { IconArrowRight } from "./icons";
 import { ThemeToggle } from "./theme-toggle";
 import { latestScores } from "@/data/store";
 import { ideasEnabled } from "@/data/ideas-store";
@@ -12,43 +13,56 @@ import { getKitMessages } from "@/i18n/kit-messages";
 
 export function BrandMark() {
   return (
-    <svg className="brand-mark" width="28" height="16" viewBox="0 0 28 16" aria-hidden="true" focusable="false">
-      <rect x="0.75" y="4.75" width="10.5" height="6.5" fill="currentColor" stroke="currentColor" strokeWidth="1.5" />
-      <rect x="13.25" y="4.75" width="8.5" height="6.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
-      <rect x="23.75" y="4.75" width="3.5" height="6.5" className="brand-mark-signal" />
+    <svg className="brand-mark" width="30" height="30" viewBox="0 0 30 30" aria-hidden="true" focusable="false">
+      <rect className="brand-mark-tile" width="30" height="30" rx="8" />
+      <rect className="brand-mark-bar" x="6.5" y="15" width="4.5" height="8.5" rx="1.5" />
+      <rect className="brand-mark-bar" x="12.75" y="10.5" width="4.5" height="13" rx="1.5" />
+      <rect className="brand-mark-signal" x="19" y="6" width="4.5" height="17.5" rx="1.5" />
     </svg>
   );
 }
 
 export function Nav({ locale }: { locale: Locale }) {
   const m = getMessages(locale);
+  const kit = getKitMessages(locale);
   const target = otherLocale(locale);
   return (
     <header className="site-header">
-      <div className="frame header-inner">
+      <div className="side-top">
         <Link className="brand" href={`/${locale}`} aria-label={m.nav.home}>
           <BrandMark />
-          <span className="brand-name">InvestBuddy</span>
+          <span className="brand-name nav-text-wide">InvestBuddy</span>
         </Link>
+        <MenuToggle openLabel={kit.shell.openMenu} closeLabel={kit.shell.closeMenu} />
+      </div>
+      <div className="side-panel" id="side-panel">
         <NavLinks
           locale={locale}
           label={m.nav.label}
           items={[
-            { href: "/dashboard", text: m.nav.dashboard },
-            { href: "/scanner", text: m.nav.scanner },
-            { href: "/heatmap", text: getHeatmapMessages(locale).navLabel },
-            ...(ideasEnabled() && flags().ADVICE_OUTPUT ? [{ href: "/ideas", text: m.nav.ideas }] : []),
-            { href: "/track-record", text: m.nav.trackRecord },
-            ...(flags().INSIDERS_PAGE ? [{ href: "/insiders", text: m.nav.insiders }] : []),
-            { href: "/portfolio", text: m.nav.portfolio },
-            { href: "/methodology", text: m.nav.methodology },
-            ...(flags().ADVICE_OUTPUT ? [{ href: "/sizing", text: m.nav.sizing }] : []),
-            ...(flags().WAITLIST ? [{ href: "/pricing", text: getLaunchMessages(locale).pricing.title }] : []),
+            { href: "/dashboard", text: m.nav.dashboard, icon: "dashboard" },
+            { href: "/scanner", text: m.nav.scanner, icon: "scanner" },
+            { href: "/heatmap", text: getHeatmapMessages(locale).navLabel, icon: "heatmap" },
+            ...(ideasEnabled() && flags().ADVICE_OUTPUT ? [{ href: "/ideas", text: m.nav.ideas, icon: "ideas" }] : []),
+            { href: "/track-record", text: m.nav.trackRecord, icon: "track" },
+            ...(flags().INSIDERS_PAGE ? [{ href: "/insiders", text: m.nav.insiders, icon: "insiders" }] : []),
+            { href: "/portfolio", text: m.nav.portfolio, icon: "portfolio" },
+            { href: "/methodology", text: m.nav.methodology, icon: "methodology" },
+            ...(flags().ADVICE_OUTPUT ? [{ href: "/sizing", text: m.nav.sizing, icon: "sizing" }] : []),
+            ...(flags().WAITLIST ? [{ href: "/pricing", text: getLaunchMessages(locale).pricing.title, icon: "pricing" }] : []),
           ]}
         />
-        <div className="header-tools">
-          <LanguageSwitch locale={locale} target={target} name={m.language.otherName} action={m.language.otherAction} cookie={localeCookie} />
-          <ThemeToggle toDark={m.theme.toDark} toLight={m.theme.toLight} generic={m.theme.generic} />
+        <div className="side-foot">
+          {flags().WAITLIST && (
+            <Link className="button cta side-cta" href={`/${locale}/pricing`}>
+              <span className="nav-text">{getLaunchMessages(locale).landing.ctaWaitlist}</span>
+              <IconArrowRight />
+            </Link>
+          )}
+          <div className="header-tools">
+            <LanguageSwitch locale={locale} target={target} name={m.language.otherName} action={m.language.otherAction} cookie={localeCookie} />
+            <ThemeToggle toDark={m.theme.toDark} toLight={m.theme.toLight} generic={m.theme.generic} />
+          </div>
         </div>
       </div>
     </header>

@@ -50,6 +50,10 @@ The method is public and the output is the same for every visitor. The track rec
 - The scoring engine and its tests (`src/engine`), and a 35-name synthetic sample universe (`src/data/fixtures.ts`): 28 tickers named in the investing guide and seven labelled sample extensions.
 - No live market data, no subscribers, no testimonials, no measured returns. None of these may be invented.
 
+## Visual Direction
+
+A modern app shell: navy left sidebar, cool light ground (near-black in dark mode), white rounded cards, Manrope headings over Inter text, signal blue with one orange call to action. The state strip, state chips, rule rows, score dial and tier badges stay as signature parts. Details in `DESIGN.md`.
+
 ## Product Principles
 
 1. Show the working. Every score links to the rules and inputs behind it.

@@ -5,13 +5,12 @@
   margin: 0 0 var(--s2);
   padding: 0.0625rem 0.4375rem;
   border: 1px solid var(--tier);
-  border-radius: var(--radius);
+  border-radius: var(--radius-pill);
   background: var(--tier);
   color: var(--tier-on);
   font-size: var(--t-xs);
   font-weight: 700;
-  font-stretch: 87%;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
   line-height: 1.4;
   text-transform: uppercase;
   white-space: nowrap;

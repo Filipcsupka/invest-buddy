@@ -43,6 +43,8 @@ const en = {
   },
   shell: {
     builtFor: "Built for investors in Slovakia and the Czech Republic. In Slovak and English.",
+    openMenu: "Open menu",
+    closeMenu: "Close menu",
   },
   design: {
     metaTitle: "Design kit",
@@ -61,6 +63,7 @@ const en = {
       table: "Data table",
       surfaces: "Browser surfaces",
       reveal: "Reveal",
+      components: "Cards, tabs, inputs, buttons",
     },
     notes: {
       colour: "Every pair below is checked against WCAG AA in scripts/check-contrast.ts, in light and dark.",
@@ -73,12 +76,14 @@ const en = {
       table: "Sticky header inside a bounded box, tabular figures, hairline rows.",
       surfaces: "Select this sentence, tab through the controls and scroll the box to see the themed selection, focus ring and scrollbar.",
       reveal: "This block rises in once when it scrolls into view. Content is visible without JavaScript.",
+      components: "Rounded 14px cards on a soft shadow, a pill tab bar, 8px inputs and buttons. The orange button is the one call to action in a view.",
     },
     swatches: {
       neutrals: "Neutrals",
       signal: "Signal",
       bands: "State palette",
       tier: "Tier mark",
+      chrome: "Navy chrome and accent",
     },
     typeSamples: {
       display: "Every rule, shown in full",
@@ -148,6 +153,8 @@ const sk: typeof en = {
   },
   shell: {
     builtFor: "Pre investorov na Slovensku a v Česku. Po slovensky a po anglicky.",
+    openMenu: "Otvoriť ponuku",
+    closeMenu: "Zavrieť ponuku",
   },
   design: {
     metaTitle: "Dizajnová sada",
@@ -166,6 +173,7 @@ const sk: typeof en = {
       table: "Dátová tabuľka",
       surfaces: "Prvky prehliadača",
       reveal: "Odhalenie",
+      components: "Karty, záložky, polia, tlačidlá",
     },
     notes: {
       colour: "Každá dvojica nižšie je overená podľa WCAG AA v scripts/check-contrast.ts, vo svetlom aj tmavom režime.",
@@ -178,12 +186,14 @@ const sk: typeof en = {
       table: "Pripnutá hlavička v ohraničenom rámčeku, tabuľkové čísla, tenké čiary riadkov.",
       surfaces: "Označte túto vetu, prejdite tabulátorom ovládacie prvky a posuňte rámček, aby ste videli farbu výberu, rámček fokusu a posuvník.",
       reveal: "Tento blok sa raz vysunie, keď sa posunie do zobrazenia. Obsah je viditeľný aj bez JavaScriptu.",
+      components: "Zaoblené karty s jemným tieňom, záložky v tvare piluliek, polia a tlačidlá s polomerom 8 px. Oranžové tlačidlo je jediná hlavná výzva na akciu v zobrazení.",
     },
     swatches: {
       neutrals: "Neutrálne",
       signal: "Signál",
       bands: "Paleta stavov",
       tier: "Značka úrovne",
+      chrome: "Námornícky rám a akcent",
     },
     typeSamples: {
       display: "Každé pravidlo, celý postup",

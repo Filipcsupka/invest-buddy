@@ -11,7 +11,7 @@
 .meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); font-size: var(--t-sm); color: var(--ink-3); }
 .flag { color: var(--ink); }
 .verdict { font-size: var(--t-prose); font-weight: 600; }
-.label { font-size: var(--t-xs); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); margin-bottom: var(--s2); }
+.label { font-size: var(--t-xs); font-weight: 700; letter-spacing: 0.01em; text-transform: none; color: var(--ink-3); margin-bottom: var(--s2); }
 .list { padding-left: var(--s5); display: grid; gap: var(--s1); font-size: var(--t-base); }
 .pairs { display: grid; gap: var(--s1); }
 .pair { display: flex; justify-content: space-between; gap: var(--s4); padding: var(--s1) 0; border-bottom: 1px solid var(--rule); font-size: var(--t-base); }

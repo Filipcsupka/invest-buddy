@@ -6,7 +6,7 @@
   gap: var(--s5) var(--s7);
   align-items: start;
   padding: var(--s6) 0 var(--s6);
-  border-top: 1px solid var(--ink);
+  border-top:  1px solid var(--rule);
   border-bottom: 1px solid var(--rule-strong);
 }
 .dialCol { grid-area: dial; display: grid; justify-items: center; padding-top: var(--s1); }
@@ -131,7 +131,7 @@
 
 .confirm { display: grid; gap: var(--s2); }
 .confirmHead { display: flex; flex-wrap: wrap; gap: 0 var(--s3); margin: 0; font-size: var(--t-xs); }
-.confirmTitle { font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-2); }
+.confirmTitle { font-weight: 700; letter-spacing: 0.01em; text-transform: none; color: var(--ink-2); }
 .confirmNote { color: var(--ink-3); }
 .chips { display: flex; flex-wrap: wrap; gap: var(--s2); margin: 0; padding: 0; list-style: none; }
 .chip {
@@ -146,7 +146,7 @@
   font-weight: 520;
 }
 .chip svg { width: 0.75rem; height: 0.75rem; }
-.chip[data-confirm="met"] { border: 1px solid var(--ink-2); background: var(--sheet); color: var(--ink); font-weight: 620; }
+.chip[data-confirm="met"] { border:  1px solid var(--rule); background: var(--sheet); color: var(--ink); font-weight: 620; }
 .chip[data-confirm="no-data"] { border: 1px dashed var(--rule-strong); }
 
 @media (max-width: 40rem) {

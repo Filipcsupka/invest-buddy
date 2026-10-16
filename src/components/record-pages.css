@@ -59,9 +59,8 @@
 .rp-fact dt {
   font-size: var(--t-xs);
   font-weight: 650;
-  font-stretch: 87%;
   letter-spacing: var(--label-track);
-  text-transform: uppercase;
+  text-transform: none;
   color: var(--ink-3);
 }
 .rp-fact dd {
@@ -137,9 +136,8 @@
   margin: 0 0 var(--s2);
   font-size: var(--t-xs);
   font-weight: 650;
-  font-stretch: 87%;
   letter-spacing: var(--label-track);
-  text-transform: uppercase;
+  text-transform: none;
   color: var(--ink-3);
 }
 .rp-toc ol {
@@ -353,7 +351,7 @@
 /* Sizing matrix. */
 .rp-cap th,
 .rp-cap td {
-  border-top: 1px solid var(--ink);
+  border-top:  1px solid var(--rule);
   font-weight: 700;
 }
 tr[data-add="true"] th,
