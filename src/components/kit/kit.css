@@ -655,7 +655,7 @@ a.kit-strip-link:hover .kit-strip-ticker {
   width: 0.75rem;
   height: 0.75rem;
 }
-.kit-tier[data-tier="paid"] {
+.kit-tier[data-tier-mark="paid"] {
   background: var(--tier);
   border-color: var(--tier);
   color: var(--tier-on);
@@ -670,7 +670,7 @@ a.kit-strip-link:hover .kit-strip-ticker {
   padding-top: 0;
   border-top: 0;
 }
-.kit-tierframe[data-tier="free"] {
+.kit-tierframe[data-tier-mark="free"] {
   border-color: var(--rule-strong);
 }
 .kit-tierframe-tag {
@@ -688,7 +688,7 @@ a.kit-strip-link:hover .kit-strip-ticker {
   font-weight: 560;
   color: var(--tier);
 }
-.kit-tierframe[data-tier="free"] .kit-tierframe-tag {
+.kit-tierframe[data-tier-mark="free"] .kit-tierframe-tag {
   color: var(--ink-3);
 }
 .kit-tierframe-note {

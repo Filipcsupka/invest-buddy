@@ -5,6 +5,7 @@ import type { StatusView } from "@/engine/status";
 import { CORE_RULES } from "@/engine/display-score";
 import { IconBandBroken, IconBandIgnore, IconBandSetup, IconBandWait, IconBandWatch, IconCheck, IconCross, IconNoData } from "./icons";
 import { AdrLine } from "./disclaimer";
+import { ScoreDial, kitState } from "./kit";
 import styles from "./status-slider.module.css";
 
 /** Slider order, left to right: step 1 to 5. "insufficient" is not a step. */
@@ -168,14 +169,30 @@ export interface StatusPanelProps {
   coreMet?: number;
 }
 
-/** Header of the company page: label, points, track, coverage, chips. */
+/**
+ * Header of the company page: the dial settles on the percent, the band label leads the reading column, then the
+ * rule count, the five-step track with the cutoffs, the ADR line beside the score, coverage, bonus and chips.
+ */
 export function StatusPanel({ view, m, locale, adviceOutput, asOf, methodHref, reasons, pullbackLabel, disclaimer, describedBy, coreMet }: StatusPanelProps) {
   const label = statusLabel(m, view.display.state, adviceOutput);
   const scored = view.display.state !== "insufficient";
   const broken = view.display.state === "broken";
+  const dialState = kitState(view.display.state, Boolean(pullbackLabel));
   return (
     <section className={styles.panel} data-state={view.display.state} aria-labelledby="status-title">
-      <div className={styles.row}>
+      <div className={styles.dialCol}>
+        <ScoreDial
+          percent={broken || !scored ? null : view.display.percent ?? null}
+          state={dialState}
+          stateLabel={pullbackLabel ? `${label}, ${pullbackLabel}` : label}
+          locale={locale}
+          size="lg"
+          motion="load"
+          describedBy={describedBy}
+          caption={broken ? m.status.pointsNotCountedPlain : undefined}
+        />
+      </div>
+      <div className={styles.main}>
         <div className={styles.lead}>
           <h2 id="status-title" className={styles.label} aria-describedby={describedBy}>
             <StatusIcon state={view.display.state} />
@@ -187,15 +204,23 @@ export function StatusPanel({ view, m, locale, adviceOutput, asOf, methodHref, r
             <a className={styles.methodLink} href={methodHref}>{m.status.methodLink}</a>
           </p>
         </div>
-        {scored && <div className={styles.points}><p className={styles.pointsLine}>{broken ? m.status.pointsNotCountedPlain : <span className={`${styles.pointsNum} num`}>{formatScorePercent(locale, view.display.percent ?? 0)}</span>}</p>{coreMet === undefined ? null : <RulesMet view={view} m={m} coreMet={coreMet} />}<BonusBlock view={view} m={m} /></div>}
+        {scored ? (
+          <div className={styles.facts}>
+            {coreMet === undefined ? null : <RulesMet view={view} m={m} coreMet={coreMet} cutoffs={false} />}
+            <StatusCoverage view={view} m={m} adviceOutput={adviceOutput} />
+          </div>
+        ) : null}
+        <p className="visually-hidden" id="status-summary">{summarySentence(view, m, adviceOutput, locale)}</p>
+        <StatusTrack view={view} m={m} adviceOutput={adviceOutput} />
+        {coreMet !== undefined && scored && !broken ? <p className={styles.cutoffs} data-cutoffs="">{m.status.cutoffs}</p> : null}
+        <AdrLine text={m.common.disclaimer} id="score-disclaimer" />
+        {reasons.length > 0 && (broken || !scored) ? <p className={styles.because}>{fill(broken ? m.status.brokenBecause : m.status.insufficientBecause, { reasons: reasons.join("; ") })}</p> : null}
       </div>
-      <p className="visually-hidden" id="status-summary">{summarySentence(view, m, adviceOutput, locale)}</p>
-      <StatusTrack view={view} m={m} adviceOutput={adviceOutput} />
-      <AdrLine text={m.common.disclaimer} id="score-disclaimer" />
-      {reasons.length > 0 && (broken || !scored) ? <p className={styles.because}>{fill(broken ? m.status.brokenBecause : m.status.insufficientBecause, { reasons: reasons.join("; ") })}</p> : null}
-      <StatusCoverage view={view} m={m} adviceOutput={adviceOutput} />
-      <ConfirmationChips view={view} m={m} />
-      {disclaimer}
+      <div className={styles.foot}>
+        {scored ? <BonusBlock view={view} m={m} /> : null}
+        <ConfirmationChips view={view} m={m} />
+        {disclaimer}
+      </div>
     </section>
   );
 }

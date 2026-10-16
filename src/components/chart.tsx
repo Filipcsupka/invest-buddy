@@ -48,7 +48,7 @@ function path(points: (readonly [number, number] | null)[]): string {
  * dip zone under the 20-session high. Moving averages use the full history,
  * so each line starts at the first plotted session where its window is full.
  */
-export function Chart({ bars, locale, labels, count = 100, dipZone = true, animate = false, averages = true }: { bars: OHLCV[]; locale: Locale; labels: Labels; count?: number; dipZone?: boolean; animate?: boolean; averages?: boolean }) {
+export function Chart({ bars, locale, labels, count = 100, dipZone = true, animate = false, averages = true, zoneTag }: { bars: OHLCV[]; locale: Locale; labels: Labels; count?: number; dipZone?: boolean; animate?: boolean; averages?: boolean; /** Short in-plot name for the dip zone band, for example "Dip zone". Omitted: legend only. */ zoneTag?: string }) {
   const gradientId = `area-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const closes = bars.map((bar) => bar.close);
   const ma50 = averages ? movingAverages(closes, 50) : closes.map(() => null);
@@ -126,6 +126,11 @@ export function Chart({ bars, locale, labels, count = 100, dipZone = true, anima
           {hasMa50 ? <path d={ma50Path} className="line-ma50" vectorEffect="non-scaling-stroke" /> : null}
           <path d={closePath} className="line-close" vectorEffect="non-scaling-stroke" />
         </svg>
+        {zone && zoneTag ? (
+          <span className="chart-zone-tag" style={{ top: pct(y(zone.top), H), left: pct(x(view.length - recent.length), W) }} aria-hidden="true">
+            {zoneTag}
+          </span>
+        ) : null}
         <span className="chart-last" style={{ top: pct(y(last.close), H) }} aria-hidden="true" />
         <span className="chart-tag num" style={{ top: pct(y(last.close), H) }} aria-hidden="true">
           {formatNumber(locale, last.close, 2)}

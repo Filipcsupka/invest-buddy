@@ -10,7 +10,7 @@ import type { Tier } from "./types";
  */
 export function TierBadge({ tier, label }: { tier: Tier; label: string }) {
   return (
-    <span className="kit-tier" data-tier={tier}>
+    <span className="kit-tier" data-tier-mark={tier}>
       {tier === "paid" ? <IconLock /> : null}
       <span>{label}</span>
     </span>
@@ -23,7 +23,7 @@ export function TierBadge({ tier, label }: { tier: Tier; label: string }) {
  */
 export function TierFrame({ tier = "paid", badgeLabel, note, children, className }: { tier?: Tier; badgeLabel: string; note?: string; children: ReactNode; className?: string }) {
   return (
-    <div className={className ? `kit-tierframe ${className}` : "kit-tierframe"} data-tier={tier}>
+    <div className={className ? `kit-tierframe ${className}` : "kit-tierframe"} data-tier-mark={tier}>
       <p className="kit-tierframe-tag">
         <TierBadge tier={tier} label={badgeLabel} />
         {note ? <span className="kit-tierframe-note">{note}</span> : null}
