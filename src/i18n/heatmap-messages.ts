@@ -22,6 +22,7 @@ const en = {
   noteRules: "Rules met out of the rules that had data for the ticker on its last score date.",
   scope: "Only tickers in the tracked universe appear. Prices come from the same daily series as the stock screen.",
   asOf: "Scores as of {date}",
+  scale: { down: "Down", up: "Up", flat: "Near flat", none: "No data", low: "Fewer rules met", high: "More rules met" },
 };
 
 const sk: typeof en = {
@@ -45,6 +46,7 @@ const sk: typeof en = {
   noteRules: "Splnené pravidlá z pravidiel, ktoré mali pre ticker údaje v dátume posledného skóre.",
   scope: "Zobrazené sú len tickery zo sledovaného zoznamu. Ceny pochádzajú z rovnakého denného radu ako prehľad akcií.",
   asOf: "Skóre k {date}",
+  scale: { down: "Pokles", up: "Rast", flat: "Takmer bez zmeny", none: "Bez údajov", low: "Menej splnených pravidiel", high: "Viac splnených pravidiel" },
 };
 
 export type HeatmapMessages = typeof en;

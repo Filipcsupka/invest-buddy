@@ -1,24 +1,41 @@
-/* Minimal self-contained visuals. The design-system TierBadge and LockCard replace these later. */
+/* Tier marks on the kit look (see kit.css: .kit-tier, .kit-lock). The kit components set data-tier, which the rendered-page tests ban, so the look is rebuilt here from the same tokens. */
 .badge {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
   margin: 0 0 var(--s2);
-  padding: 0 var(--s2);
-  border: 1px solid var(--rule-strong);
+  padding: 0.0625rem 0.4375rem;
+  border: 1px solid var(--tier);
+  border-radius: var(--radius);
+  background: var(--tier);
+  color: var(--tier-on);
   font-size: var(--t-xs);
   font-weight: 700;
+  font-stretch: 87%;
   letter-spacing: 0.08em;
+  line-height: 1.4;
   text-transform: uppercase;
-  color: var(--ink-2);
-  background: var(--sheet);
+  white-space: nowrap;
+  vertical-align: middle;
 }
+.badge + :global([data-segment-tier="paid"]) { box-shadow: inset 2px 0 0 var(--tier-line); }
 .lock {
   display: grid;
   gap: var(--s2);
+  max-width: 40rem;
   padding: var(--s4) var(--s5);
-  border: 1px dashed var(--rule-strong);
-  background: var(--sheet);
-  max-width: 72ch;
+  border: 1px solid var(--tier-line);
+  border-radius: var(--radius);
+  background: var(--sheet-raised);
+  box-shadow: var(--shadow-1), var(--edge-light);
 }
-.lockTitle { font-size: var(--t-xs); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); margin: 0; }
-.lockBody { font-size: var(--t-base); color: var(--ink-2); margin: 0; }
-.note { font-size: var(--t-sm); color: var(--ink-3); margin: var(--s2) 0 0; }
+.lockTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  margin: 0;
+  font-size: var(--t-base);
+  font-weight: 650;
+}
+.lockTitle svg { color: var(--tier); flex: none; }
+.lockBody { font-size: var(--t-sm); color: var(--ink-2); margin: 0; }
+.note { font-size: var(--t-sm); color: var(--ink-3); margin: var(--s2) 0 0; padding-left: var(--s3); border-left: 1px solid var(--tier-line); }

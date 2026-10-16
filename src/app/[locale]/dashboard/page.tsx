@@ -4,6 +4,10 @@ import { OperatorDisclosure, SampleStamp } from "@/components/operator-disclosur
 import { ScannerTable } from "@/components/scanner-table";
 import { byScore, toRow } from "@/components/view-model";
 import { latestPortfolio, latestScores } from "@/data/store";
+import { latestStateChanges } from "@/data/state-changes";
+import { StateStrip, type StateChange } from "@/components/kit/state-strip";
+import { kitState } from "@/components/kit/types";
+import { getKitMessages } from "@/i18n/kit-messages";
 import { statusLabel } from "@/components/status-slider";
 import { flags } from "@/config/flags";
 import { stateOrder, type StateKey } from "@/i18n/rules";
@@ -24,13 +28,19 @@ export async function generateMetadata({ params }: LocaleParams): Promise<Metada
 async function Dashboard({ params }: LocaleParams) {
   const locale = await resolveLocale(params);
   const m = getMessages(locale);
-  const [data, portfolio] = await Promise.all([latestScores(), latestPortfolio()]);
+  const [data, portfolio, moved] = await Promise.all([latestScores(), latestPortfolio(), latestStateChanges()]);
+  const k = getKitMessages(locale);
+  const changes: StateChange[] = moved.map(({ ticker, from, to }) => {
+    const [fromLabel, toLabel] = [m.status.labels[from], m.status.labels[to]];
+    return { ticker, from: kitState(from), to: kitState(to), fromLabel, toLabel, href: `/${locale}/company/${ticker}`, sentence: fill(k.strip.changed, { ticker, from: fromLabel, to: toLabel }) };
+  });
   const rows = data.rows.map((row) => toRow(locale, row)).sort(byScore);
   const session = rows.find((row) => row.date)?.date ?? "";
   return <div className="frame page">
     <header className="page-head">
       <div className="page-title-row"><h1 className="title">{m.dashboard.title}</h1>{data.sample && <SampleStamp text={m.common.sample} />}</div>
       {data.lastUpdated && <p className="lede">{fill(m.dashboard.lede, { date: formatDate(locale, session), count: plural(locale, data.sample ? m.plurals.sampleTickers : m.plurals.tickers, rows.length) })}</p>}
+      {data.lastUpdated && <StateStrip label={fill(k.strip.label, { date: formatDate(locale, session) })} changes={changes} empty={k.strip.empty} pauseLabel={k.strip.pause} playLabel={k.strip.play} />}
       <MacroEvents locale={locale} />
       <DataStatus locale={locale} lastUpdated={data.lastUpdated} stale={data.stale} />
       <OperatorDisclosure text={m.common.operatorDisclosure} />
