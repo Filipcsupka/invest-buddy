@@ -1,6 +1,8 @@
 import { withPageLog } from "@/app/page-log";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { SectionHead } from "@/components/kit";
+import "@/components/record-pages.css";
 import { MacroEvents } from "@/components/macro-events";
 import { Disclaimer } from "@/components/disclaimer";
 import { IdeaCard } from "@/components/idea-card";
@@ -41,12 +43,13 @@ async function Ideas({ params }: LocaleParams) {
       </header>
       <MacroEvents locale={locale} />
       <PaywallSegment id="ideas-list" viewer={viewer} locale={locale} detail={data.rows.length ? ideasCountText(locale, data.rows.length) : undefined}>
+        <SectionHead title={m.ideas.listLabel} as="h2" meta={data.rows.length ? ideasCountText(locale, data.rows.length) : undefined} />
         {data.rows.length ? (
-          <div role="list" aria-label={m.ideas.listLabel} style={{ display: "grid", gap: "var(--s5)" }}>
+          <div role="list" aria-label={m.ideas.listLabel} style={{ display: "grid", gap: "var(--s5)", marginTop: "var(--s4)" }}>
             {data.rows.map((idea) => <div role="listitem" key={idea.id}><IdeaCard idea={idea} locale={locale} showAmounts={false} /></div>)}
           </div>
         ) : (
-          <p className="empty-line">{m.ideas.empty}</p>
+          <p className="rp-empty">{m.ideas.empty}</p>
         )}
       </PaywallSegment>
     </div>

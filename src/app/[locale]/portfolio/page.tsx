@@ -5,6 +5,8 @@ import { latestPortfolio, portfolioIndexedSeries, stale } from "@/data/store";
 import type { IndexedSeries } from "@/portfolio/history";
 import { DataStatus } from "@/components/data-status";
 import { PerformanceChart, PerformanceKpis, summarize } from "@/components/portfolio-chart";
+import { DataTable, SectionHead } from "@/components/kit";
+import "@/components/record-pages.css";
 import { PaywallSegment } from "@/components/paywall-segment";
 import { fill, formatDate, formatNumber, getMessages } from "@/i18n";
 import { pageMetadata } from "@/i18n/metadata";
@@ -45,18 +47,23 @@ async function PortfolioPage({ params }: LocaleParams) {
       <p className="muted">{fill(m.portfolio.asOf, { date: formatDate(locale, snapshot.asOf) })} · {m.portfolio.delay}</p>
       <DataStatus locale={locale} lastUpdated={snapshot.asOf} stale={stale(snapshot.asOf)} />
     </header>
-    <PaywallSegment id="portfolio-performance"><section className="sheet-section" aria-labelledby="portfolio-chart">
-      <div className="section-head"><h2 id="portfolio-chart">{fill(m.portfolio.chartTitle, { date: formatDate(locale, first) })}</h2>{enough && <p className="muted small">{snapshot.sample ? m.portfolio.chartNote : m.portfolio.liveChartNote}</p>}</div>
+    <PaywallSegment id="portfolio-performance"><section className="rp-section" aria-labelledby="portfolio-chart">
+      <SectionHead id="portfolio-chart" title={fill(m.portfolio.chartTitle, { date: formatDate(locale, first) })} lede={enough ? (snapshot.sample ? m.portfolio.chartNote : m.portfolio.liveChartNote) : undefined} />
       {enough && last ? <>
         {summary && <PerformanceKpis locale={locale} summary={summary} text={{ current: m.portfolio.kpiCurrent, since: m.portfolio.kpiSince, benchmark: m.portfolio.kpiBenchmark, difference: m.portfolio.kpiDifference, ahead: m.portfolio.kpiAhead, behind: m.portfolio.kpiBehind, drawdown: m.portfolio.kpiDrawdown }} />}
-        <PerformanceChart locale={locale} points={points} label={m.portfolio.chartAria} />
-        <div className="portfolio-legend"><span>{m.portfolio.portfolioLine}</span><span>{m.portfolio.benchmarkLine}</span></div>
+        <figure className="rp-figure">
+          <PerformanceChart locale={locale} points={points} label={m.portfolio.chartAria} />
+          <div className="portfolio-legend"><span>{m.portfolio.portfolioLine}</span><span>{m.portfolio.benchmarkLine}</span></div>
+        </figure>
       </> : <p className="notice">{fill(m.portfolio.historyBuilding, { date: formatDate(locale, first), n: points.length })}</p>}
-      {indexed?.twrPercent != null && <p className="muted small">{formatDate(locale, first)} – {formatDate(locale, last!.date)} · {m.portfolio.twrSince}: {formatNumber(locale, indexed.twrPercent, 2)} %{indexed.benchmarkPercent != null && <> · {m.portfolio.benchmarkSince}: {formatNumber(locale, indexed.benchmarkPercent, 2)} %</>}</p>}
+      {indexed?.twrPercent != null && <p className="rp-line">{formatDate(locale, first)} – {formatDate(locale, last!.date)} · {m.portfolio.twrSince}: {formatNumber(locale, indexed.twrPercent, 2)} %{indexed.benchmarkPercent != null && <> · {m.portfolio.benchmarkSince}: {formatNumber(locale, indexed.benchmarkPercent, 2)} %</>}</p>}
     </section></PaywallSegment>
-    <PaywallSegment id="portfolio-weights"><section className="sheet-section" aria-labelledby="portfolio-weights">
-      <h2 id="portfolio-weights">{m.portfolio.weightsTitle}</h2>
-      <div className="table-scroll" role="region" tabIndex={0} aria-label={m.portfolio.weightsTitle}><table className="data-table"><thead><tr><th scope="col">{m.portfolio.symbol}</th><th scope="col">{m.portfolio.weight}</th></tr></thead><tbody>{snapshot.weights.map((position) => <tr key={position.symbol}><th scope="row">{position.symbol}</th><td className="num">{formatNumber(locale, position.weightPercent, 1)} %</td></tr>)}</tbody></table></div>
+    <PaywallSegment id="portfolio-weights"><section className="rp-section" aria-labelledby="portfolio-weights">
+      <SectionHead id="portfolio-weights" title={m.portfolio.weightsTitle} />
+      <DataTable label={m.portfolio.weightsTitle} density="compact">
+        <thead><tr><th scope="col">{m.portfolio.symbol}</th><th scope="col" className="num">{m.portfolio.weight}</th><th scope="col" className="rp-bar-col"><span className="visually-hidden">{m.portfolio.weight}</span></th></tr></thead>
+        <tbody>{snapshot.weights.map((position) => <tr key={position.symbol}><th scope="row">{position.symbol}</th><td className="num">{formatNumber(locale, position.weightPercent, 1)} %</td><td className="rp-bar-col" aria-hidden="true"><span className="rp-bar"><span style={{ width: `${Math.max(0, Math.min(100, position.weightPercent))}%` }} /></span></td></tr>)}</tbody>
+      </DataTable>
     </section></PaywallSegment>
   </div>;
 }

@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { withPageLog } from "@/app/page-log";
 import { Disclaimer } from "@/components/disclaimer";
+import { SectionHead } from "@/components/kit";
+import "@/components/record-pages.css";
 import { InsiderPanel } from "@/components/insider-panel";
 import { PaywallSegment } from "@/components/paywall-segment";
 import { flags } from "@/config/flags";
@@ -36,9 +38,11 @@ async function Insiders({ params, searchParams }: LocaleParams & { searchParams?
     </header>
     <p className="notice">{m.insiders.note}</p>
     <PaywallSegment id="insiders-history" viewer={viewer} locale={locale}><InsiderPanel locale={locale} events={events} /></PaywallSegment>
-    <section className="sheet-section insider-codes" aria-labelledby="form4-codes">
-      <h2 id="form4-codes">{m.insiders.codesTitle}</h2>
-      <ul>{Object.values(m.insiders.codes).map((description) => <li key={description}>{description}</li>)}</ul>
+    <section className="rp-section insider-codes" aria-labelledby="form4-codes">
+      <SectionHead id="form4-codes" title={m.insiders.codesTitle} />
+      <dl className="rp-codes">
+        {Object.entries(m.insiders.codes).map(([code, description]) => <div key={code}><dt>{code}</dt><dd>{description.replace(/^[A-Z]:\s*/, "")}</dd></div>)}
+      </dl>
     </section>
   </div>;
 }
