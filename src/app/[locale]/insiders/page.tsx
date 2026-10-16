@@ -3,7 +3,10 @@ import { notFound } from "next/navigation";
 import { withPageLog } from "@/app/page-log";
 import { Disclaimer } from "@/components/disclaimer";
 import { InsiderPanel } from "@/components/insider-panel";
+import { PaywallSegment } from "@/components/paywall-segment";
 import { flags } from "@/config/flags";
+import { getViewer, limitFor } from "@/viewer/get-viewer";
+import { withinDays } from "./depth";
 import { insiderEvents } from "@/db/insiders";
 import { getMessages } from "@/i18n";
 import { pageMetadata } from "@/i18n/metadata";
@@ -23,7 +26,8 @@ async function Insiders({ params, searchParams }: LocaleParams & { searchParams?
   const m = getMessages(locale);
   const raw = (await searchParams)?.ticker;
   const ticker = (Array.isArray(raw) ? raw[0] : raw)?.trim().toUpperCase().slice(0, 12);
-  const events = await insiderEvents(ticker || undefined);
+  const viewer = await getViewer();
+  const events = withinDays(await insiderEvents(ticker || undefined), limitFor(viewer, "insiderDays"));
   return <div className="frame page">
     <header className="page-head">
       <h1 className="title">{m.insiders.title}</h1>
@@ -31,7 +35,7 @@ async function Insiders({ params, searchParams }: LocaleParams & { searchParams?
       <Disclaimer text={m.common.disclaimer} />
     </header>
     <p className="notice">{m.insiders.note}</p>
-    <InsiderPanel locale={locale} events={events} />
+    <PaywallSegment id="insiders-history" viewer={viewer} locale={locale}><InsiderPanel locale={locale} events={events} /></PaywallSegment>
     <section className="sheet-section insider-codes" aria-labelledby="form4-codes">
       <h2 id="form4-codes">{m.insiders.codesTitle}</h2>
       <ul>{Object.values(m.insiders.codes).map((description) => <li key={description}>{description}</li>)}</ul>

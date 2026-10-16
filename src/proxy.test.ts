@@ -5,10 +5,10 @@ const universe = vi.fn();
 vi.mock("@/data/store", () => ({ instrumentUniverse: () => universe() }));
 import { proxy } from "./proxy";
 
-const original = { mode: process.env.DATA_MODE, ideas: process.env.IDEAS_PAGE, owner: process.env.OWNER_VIEW, password: process.env.OWNER_RESEARCH_PASSWORD, paywall: process.env.PAYWALL, advice: process.env.ADVICE_OUTPUT };
+const original = { mode: process.env.DATA_MODE, ideas: process.env.IDEAS_PAGE, owner: process.env.OWNER_VIEW, password: process.env.OWNER_RESEARCH_PASSWORD, paywall: process.env.PAYWALL, auth: process.env.AUTH, advice: process.env.ADVICE_OUTPUT };
 afterEach(() => {
   universe.mockReset();
-  for (const [key, value] of [["DATA_MODE", original.mode], ["IDEAS_PAGE", original.ideas], ["OWNER_VIEW", original.owner], ["OWNER_RESEARCH_PASSWORD", original.password], ["PAYWALL", original.paywall], ["ADVICE_OUTPUT", original.advice]] as const) {
+  for (const [key, value] of [["DATA_MODE", original.mode], ["IDEAS_PAGE", original.ideas], ["OWNER_VIEW", original.owner], ["OWNER_RESEARCH_PASSWORD", original.password], ["PAYWALL", original.paywall], ["AUTH", original.auth], ["ADVICE_OUTPUT", original.advice]] as const) {
     if (value === undefined) delete process.env[key]; else process.env[key] = value;
   }
 });
@@ -29,7 +29,7 @@ it("challenges for private research and accepts only the owner password", async 
 it.each(["en", "sk"])("returns a real 404 for unavailable %s routes", async (locale) => {
   delete process.env.DATA_MODE; delete process.env.IDEAS_PAGE; delete process.env.OWNER_VIEW; delete process.env.PAYWALL; delete process.env.ADVICE_OUTPUT;
   universe.mockResolvedValue([{ ticker: "NVDA" }]);
-  for (const path of ["ideas", "owner-allocation", "scanner", "sizing", "company/ZZZZ"]) {
+  for (const path of ["ideas", "owner-allocation", "sizing", "company/ZZZZ"]) {
     const response = await proxy(new NextRequest(`https://example.com/${locale}/${path}`));
     expect(response.status, path).toBe(404);
     expect(response.headers.get("x-request-id")).toBeTruthy();
@@ -55,11 +55,43 @@ it.each(["en", "sk"])("keeps %s ideas unavailable while advice is off", async (l
   expect((await proxy(new NextRequest(`https://example.com/${locale}/ideas`))).status).toBe(200);
 });
 
-it.each(["en", "sk"])("opens the %s scanner only with PAYWALL on", async (locale) => {
-  process.env.PAYWALL = "on";
-  const response = await proxy(new NextRequest(`https://example.com/${locale}/scanner?min=12`));
-  expect(response.status).toBe(200);
-  expect(response.headers.get("x-request-id")).toBeTruthy();
+it.each(["en", "sk"])("opens the %s scanner whatever PAYWALL says", async (locale) => {
+  for (const paywall of ["on", "off", undefined]) {
+    if (paywall === undefined) delete process.env.PAYWALL; else process.env.PAYWALL = paywall;
+    const response = await proxy(new NextRequest(`https://example.com/${locale}/scanner?min=12`));
+    expect(response.status, String(paywall)).toBe(200);
+    expect(response.headers.get("x-request-id")).toBeTruthy();
+  }
+});
+
+it("marks ?view= previews noindex and drops a client-sent preview header", async () => {
+  delete process.env.AUTH;
+  const plain = await proxy(new NextRequest("https://example.com/en/scanner"));
+  expect(plain.headers.get("x-robots-tag")).toBeNull();
+  const preview = await proxy(new NextRequest("https://example.com/en/scanner?view=free"));
+  expect(preview.status).toBe(200);
+  expect(preview.headers.get("x-robots-tag")).toBe("noindex");
+  expect(preview.headers.get("x-middleware-request-x-tier-preview")).toBe("free");
+  const spoof = await proxy(new NextRequest("https://example.com/en/scanner", { headers: { "x-tier-preview": "free" } }));
+  expect(spoof.headers.get("x-middleware-request-x-tier-preview")).toBeNull();
+});
+
+it("does not forward the preview for a non-admin viewer", async () => {
+  process.env.AUTH = "on";
+  try {
+    const response = await proxy(new NextRequest("https://example.com/en/scanner?view=free"));
+    expect(response.headers.get("x-middleware-request-x-tier-preview")).toBeNull();
+  } finally { delete process.env.AUTH; }
+});
+
+it.each(["en", "sk"])("keeps legal and owner gates shut for an admin viewer on %s, preview or not", async (locale) => {
+  delete process.env.AUTH; delete process.env.IDEAS_PAGE; delete process.env.OWNER_VIEW; delete process.env.ADVICE_OUTPUT; delete process.env.DATA_MODE;
+  for (const query of ["", "?view=free"]) {
+    for (const path of ["sizing", "ideas", "owner-allocation", "owner/research/SMPL"]) {
+      const response = await proxy(new NextRequest(`https://example.com/${locale}/${path}${query}`));
+      expect(response.status, `${path}${query}`).toBe(404);
+    }
+  }
 });
 
 it("passes api requests through and limits a caller over the cap", async () => {
@@ -73,9 +105,9 @@ it("passes api requests through and limits a caller over the cap", async () => {
   resetRateLimits();
 });
 
-it("shows the SK title and the request id on the /sk/scanner 404, and keeps a valid incoming id", async () => {
-  delete process.env.PAYWALL;
-  const response = await proxy(new NextRequest("https://example.com/sk/scanner", { headers: { "x-request-id": "abc-12345678" } }));
+it("shows the SK title and the request id on the /sk/sizing 404, and keeps a valid incoming id", async () => {
+  delete process.env.ADVICE_OUTPUT;
+  const response = await proxy(new NextRequest("https://example.com/sk/sizing", { headers: { "x-request-id": "abc-12345678" } }));
   expect(response.status).toBe(404);
   const body = await response.text();
   expect(body).toContain("Stránka sa nenašla");

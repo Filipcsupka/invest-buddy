@@ -34,6 +34,7 @@ export function Nav({ locale }: { locale: Locale }) {
           label={m.nav.label}
           items={[
             { href: "/dashboard", text: m.nav.dashboard },
+            { href: "/scanner", text: m.nav.scanner },
             { href: "/heatmap", text: getHeatmapMessages(locale).navLabel },
             ...(ideasEnabled() && flags().ADVICE_OUTPUT ? [{ href: "/ideas", text: m.nav.ideas }] : []),
             { href: "/track-record", text: m.nav.trackRecord },

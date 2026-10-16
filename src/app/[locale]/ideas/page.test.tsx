@@ -27,6 +27,33 @@ it.each(["en", "sk"])("hides %s ideas while ADVICE_OUTPUT is off", async (locale
   expect(ideas).not.toHaveBeenCalled();
 });
 
+it("gives a free viewer a lock card without the idea cards, and an admin the cards with a Paid badge", async () => {
+  const saved = { AUTH: process.env.AUTH, PAYWALL: process.env.PAYWALL };
+  process.env.ADVICE_OUTPUT = "on";
+  enabled.mockReturnValue(true);
+  ideas.mockResolvedValue({ rows: sampleIdeas.slice(0, 1), sample: false });
+  try {
+    process.env.AUTH = "on";
+    process.env.PAYWALL = "on";
+    const free = renderToStaticMarkup(await Ideas({ params: Promise.resolve({ locale: "en" }) }));
+    expect(free).toContain('data-tier-lock="ideas-list"');
+    expect(free).not.toContain("Add 1/3");
+    delete process.env.AUTH;
+    const admin = renderToStaticMarkup(await Ideas({ params: Promise.resolve({ locale: "en" }) }));
+    expect(admin).toContain('data-tier-badge="ideas-list"');
+    expect(admin).toContain("Add 1/3");
+  } finally {
+    for (const [key, value] of Object.entries(saved)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
+  }
+});
+
+it("keeps /ideas a 404 for admin while ADVICE_OUTPUT is off", async () => {
+  delete process.env.AUTH;
+  process.env.ADVICE_OUTPUT = "off";
+  enabled.mockReturnValue(true);
+  await expect(Ideas({ params: Promise.resolve({ locale: "en" }) })).rejects.toThrow(/404|NOT_FOUND/);
+});
+
 it.each(["en", "sk"])("keeps owner EUR amounts off the public %s ideas list", async (locale) => {
   process.env.ADVICE_OUTPUT = "on";
   enabled.mockReturnValue(true);

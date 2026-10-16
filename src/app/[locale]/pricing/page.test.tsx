@@ -1,6 +1,8 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, expect, it, vi } from "vitest";
 import { scoredUniverse } from "@/data/scored";
+import { FEATURE_TIERS, TIERS, TIER_LIMITS } from "@/config/tiers";
+import { getPricingMessages } from "@/i18n/pricing-messages";
 
 vi.mock("next/navigation", () => ({ notFound: () => { throw new Error("NEXT_NOT_FOUND"); } }));
 const scores = vi.fn();
@@ -28,9 +30,46 @@ it.each([["en", "Beta: free while we test. Paid plans later. No prices yet.", "J
   expect(text(html)).toContain(lede);
   expect(html).toContain(button);
   expect(html).toContain('name="email"');
-  expect(html).not.toContain("<table");
   expect(text(html)).not.toMatch(money);
   expect(html).not.toMatch(/checkout|stripe|subscribe now|lifetime|doživotn/i);
+});
+
+const paid = [...Object.entries(TIERS), ...Object.entries(FEATURE_TIERS)].filter(([, e]) => e.tier === "paid").map(([id]) => id);
+/** Banned promise, urgency and recommendation wording, English and Slovak. */
+const banned = /beat the market|guarantee|\bbuy\b|\bbest\b|limited time|act now|hurry|last chance|don't miss|poraz\w* trh|zaručen|\bkúp\w*|\bnajlepš\w*|len dnes|neváhajte/i;
+
+it.each(["en", "sk"] as const)("compares free and paid from the tier config, with every paid id as a row, in %s", async (locale) => {
+  process.env.WAITLIST = "on";
+  const html = await render(locale);
+  expect(html).toContain("<table");
+  expect(paid.length).toBeGreaterThan(5);
+  for (const id of paid) expect(html, id).toContain(`data-tier-id="${id}"`);
+  expect(html.match(/data-tier-id="/g)).toHaveLength(paid.length);
+  const pm = getPricingMessages(locale);
+  for (const id of paid) expect(pm.rows[id as keyof typeof pm.rows], id).toBeDefined();
+  // A free id never appears as a paid row.
+  expect(html).not.toContain('data-tier-id="scanner-rows-full"');
+  expect(text(html)).not.toMatch(money);
+  expect(text(html)).not.toMatch(banned);
+  expect(text(html)).not.toContain("—");
+});
+
+it("shows the depth numbers from TIER_LIMITS in the matching cells", async () => {
+  process.env.WAITLIST = "on";
+  const en = text(await render("en"));
+  expect(en).toContain(`Last ${TIER_LIMITS.free.scoreHistoryDays} days`);
+  expect(en).toContain(`Last ${TIER_LIMITS.free.insiderDays} days`);
+  expect(en).toContain(`Saved screens: ${TIER_LIMITS.paid.savedScreens}`);
+  expect(en).toContain(`Up to ${TIER_LIMITS.paid.watchlistTickers} tickers`);
+  const sk = text(await render("sk"));
+  expect(sk).toContain(`Posledných ${TIER_LIMITS.free.scoreHistoryDays} dní`);
+});
+
+it("keeps the ADR-001 note and the no-price note", async () => {
+  process.env.WAITLIST = "on";
+  expect(text(await render("en"))).toContain("not personal investment advice");
+  expect(text(await render("en"))).toContain("No price is set");
+  expect(text(await render("sk"))).toContain("nie o osobné investičné poradenstvo");
 });
 
 it("names no price on the landing page either", async () => {

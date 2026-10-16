@@ -1,0 +1,24 @@
+/* Minimal self-contained visuals. The design-system TierBadge and LockCard replace these later. */
+.badge {
+  display: inline-block;
+  margin: 0 0 var(--s2);
+  padding: 0 var(--s2);
+  border: 1px solid var(--rule-strong);
+  font-size: var(--t-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  background: var(--sheet);
+}
+.lock {
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s4) var(--s5);
+  border: 1px dashed var(--rule-strong);
+  background: var(--sheet);
+  max-width: 72ch;
+}
+.lockTitle { font-size: var(--t-xs); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); margin: 0; }
+.lockBody { font-size: var(--t-base); color: var(--ink-2); margin: 0; }
+.note { font-size: var(--t-sm); color: var(--ink-3); margin: var(--s2) 0 0; }

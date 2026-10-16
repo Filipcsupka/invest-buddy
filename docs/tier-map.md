@@ -1,6 +1,6 @@
 # Free, paid and admin tier map (draft)
 
-Status 2026-10-16. First draft for owner review, no code changed yet. It replaces the "Candidate" column in `docs/paywall-segments.md` once the owner signs it off (lane-web W32).
+Status 2026-10-16. Updated with the owner decisions of the same day: a generous free tier, the whole track record free, no scanner row cap, no prices in beta, and the Telegram direction (sections 2, 3, 6 and 7). The tier code is in `src/config/tiers.ts`; `docs/paywall-segments.md` is the short pointer plus the legal gates.
 
 Sources: competitor synthesis item 12 and the price anchors (`ops-brain/projects/investing-platform/research/competitors/_synthesis.md`), `research/market-homework/99-lessons.md` (free tier design), `130-positioning-and-business-model.md` section 8, `roadmap-2026q4/lane-web.md` W27 to W45, ADR-001, `docs/wording-gate.md`, and the current code (`src/paywall/segments.ts`, `src/components/paywall-segment.tsx`, `src/config/flags.ts`, `src/proxy.ts`, `src/app/sitemap.ts`).
 
@@ -44,9 +44,10 @@ Order of checks: the proxy and the page apply the legal and owner gates first an
 
 Admin preview: `?view=free` makes an `admin` request render as `free`, so the owner can check the lock cards before auth exists. The proxy turns it into a request header and adds `X-Robots-Tag: noindex`. It is ignored for non-admin viewers.
 
+
 ## 2. Tier table
 
-"Free sees" is the free viewer's version once tiers are enforced. Rows without an id need no marker.
+Owner decision 2026-10-16: the free tier is generous, so a visitor sees why the paid tier is worth it. "Free sees" is the free viewer's version once tiers are enforced. Rows without an id need no marker. The ids match `src/config/tiers.ts`.
 
 ### Public pages
 
@@ -55,13 +56,13 @@ Admin preview: `?view=free` makes an `admin` request render as `free`, so the ow
 | Landing `/` | - | free | Shows the method before signup (justETF keeps information free) | All |
 | Methodology `/methodology` | - | free | Rules, thresholds, weights and limits are the product's edge; thresholds never go behind a paywall (Alocano free; Validea avoided) | All |
 | Legal `/legal/*` | - | free | Needed to read any score | All |
-| Pricing `/pricing` (`WAITLIST`) | - | free | Plan table and waitlist form | All |
+| Pricing `/pricing` (`WAITLIST`) | - | free | Free and paid comparison built from `tiers.ts`, no prices, waitlist form | All |
 | Waitlist confirm and unsubscribe | - | free | Transactional | All |
-| Dashboard `/dashboard`: table with status, score, search | - | free | Entry point and the status of every ticker; never hide the status (synthesis 12; Finviz and TradingView free tools build habit) | All |
+| Dashboard `/dashboard`: table with status, score, search | - | free | Entry point and the status of every ticker; never hide the status (synthesis 12) | All |
 | Dashboard: macro events, data status | - | free | Context for the status | All |
 | Dashboard: discovery candidates (future) | `discovery-list` | paid | New names beyond the fixed screen (130: later, paid) | Lock card with count |
 | Heatmap `/heatmap`, all metrics | - | free | Shareable SEO page with no advice (synthesis 15) | All |
-| Insiders `/insiders`, latest events | - | free | Public SEC Form 4 data | Events from the last `insiderDays` |
+| Insiders `/insiders`, last 180 days | - | free | Public SEC Form 4 data | Events from the last `insiderDays` (180) |
 | Insiders: older events | `insiders-history` | paid | History depth lever (Finviz, Koyfin) | Note "older events are in the paid tier" |
 | Portfolio: performance | `portfolio-performance` | free | ADR-001 asks for disclosure of the owner's holdings; Finex shows its real portfolio in public | All |
 | Portfolio: weights | `portfolio-weights` | free | Same disclosure reason | All |
@@ -73,11 +74,10 @@ Admin preview: `?view=free` makes an `admin` request render as `free`, so the ow
 | Section | Segment id | Tier | Reason and evidence | Free sees |
 | --- | --- | --- | --- | --- |
 | Search, state and sector filters, default sort, liquidity floor and its toggle | - | free | Basic screen; the floor is a data-quality default (synthesis 6) | All |
-| Presets with names and match counts | - | free | Counts are status, not depth | All; opening one applies the row cap |
-| Result rows up to `scannerRows` | - | free | Count cap like MarketScreener's 40 results | First rows in the default sort |
-| Rows beyond the cap | `scanner-rows-full` | paid | Same | Teaser row "N more rows in the paid tier" |
+| Basic presets with names and match counts | - | free | Counts are status, not depth | All |
+| Result rows, every ticker | `scanner-rows-full` | free | Owner 2026-10-16: no row cap. With about 36 tickers a cap would hide the product; `scannerRows` stays `null` | All rows |
 | Score range, minimum F/T/M, source and held filters, sort by F/T/M | `scanner-filters-advanced` | paid | Full screens are paid at Koyfin and MarketScreener | Controls shown disabled with a lock note |
-| "Rules met since N days", gained and lost counts | `scanner-streak` | paid | History-derived (TipRanks streak, synthesis 11) | Column hidden, lock note in the header |
+| "Rules met since N days", gained and lost counts, change presets | `scanner-streak` | paid | History-derived (TipRanks streak, synthesis 11) | Column hidden, lock note in the header |
 | Saved screens (future, W36) | `saved-screens` | paid, free count | TradingView, Stock Rover limits | Up to `savedScreens` |
 
 ### Company page `/company/[ticker]`
@@ -90,51 +90,53 @@ Admin preview: `?view=free` makes an `admin` request render as `free`, so the ow
 | Flags block | - | free | Same flags for every user (synthesis 10) | All |
 | Data status and coverage badge | - | free | Trust (Alocano, Stock Rover) | All |
 | Price chart | - | free | Kept as today; the display licence question (ADR-002) is separate from tiers | All |
-| Score history | `score-history` | paid, depth-limited | History depth is the standard lever (Finviz 3 vs 8 years) | Last `scoreHistoryDays` days, note about the rest |
+| Score history | `score-history` | paid, depth-limited | History depth is the standard lever (Finviz 3 vs 8 years) | Last `scoreHistoryDays` (90) days, note about the rest |
 | Idea evidence (card with `ADVICE_OUTPUT` off: rule state and sources) | - | free | Evidence explains the status | All |
 | Idea card with action, tier, plan (`ADVICE_OUTPUT` on) | `idea-card` | paid | Paid only if the lawyer clears it (130) | Lock card under the evidence |
 | Watchlist star (future, W36) | `watchlist` | paid, free count | TradingView 1 watchlist free | Up to `watchlistTickers` |
 
 ### Track record `/track-record`
 
+Owner 2026-10-16: the whole record is free. Publishing the misses is product principle 3, and Validea-style hiding of the record is on the synthesis "Avoid" list.
+
 | Section | Segment id | Tier | Reason and evidence | Free sees |
 | --- | --- | --- | --- | --- |
 | Lede, live note, method text, data status | - | free | Method text beside every figure (Danelfin, Stockopedia, Finax) | All |
-| Summary, including signal count, losing count and worst outcome as one line | - | free | Losers stay visible; no headline rate without method (synthesis 8, Tickeron avoided) | All |
+| Summary with signal count, losing count and worst outcome | - | free | Losers stay visible; no headline rate without method (synthesis 8, Tickeron avoided) | All |
 | SPY benchmark (live and fixture) | `track-record-benchmark` | free | Context for the summary | All |
-| By-period table | `track-record-periods` (new) | paid | Detailed record (owner brief for this draft) | Lock card |
-| Worst outcomes list | `track-record-worst` | paid | Same | Lock card; the summary still names the worst outcome |
-| Signals table | `track-record-signals` | paid | Same | Lock card with the signal count |
-| Score snapshot history | `track-record-history` | paid, depth-limited | History depth | Latest scan day |
+| By-period table | `track-record-periods` | free | Part of the full record | All |
+| Worst outcomes list | `track-record-worst` | free | The misses are published | All |
+| Signals table | `track-record-signals` | free | Part of the full record | All |
+| Score snapshot history | `track-record-history` | free | Part of the full record; `trackRecordHistoryDays` is `null` | All |
 
 ### Delivery and export
 
 | Feature | Id | Tier | Reason and evidence | Free gets |
 | --- | --- | --- | --- | --- |
-| Telegram digest (today, one public channel) | - | free | Same message for everyone (`docs/alerts-telegram.md`) | All |
+| Telegram public channel (today, one channel) | - | free | Same daily state changes for everyone (`docs/alerts-telegram.md`); the free funnel | All |
 | Weekly summary mail (W38) | `alerts-weekly` | free | 130: free-limited weekly | All |
-| Daily state-change alerts per ticker (W37) | `alerts-daily` | paid, free count | Alerts are the main paid lever (Finviz Elite, justETF; TradingView 3 free) | Up to `alerts` tickers |
+| Per-user daily alerts on the watchlist (W37) | `alerts-daily` | paid, free count | Alerts are the main paid lever (Finviz Elite, justETF; TradingView 3 free) | Up to `alerts` tickers |
 | CSV export (W35) | `csv-export` | paid | Heavy users (Fundamenty Ultra, Finviz Elite) | Not offered; button with lock note |
 
 ### Owner (outside tiers)
 
 `/owner-allocation` (`owner-cash`, `owner-suggestions`) and `/owner/research/[symbol]` stay behind `OWNER_VIEW` and basic auth. They get no tier and no badge, and `admin` does not open them.
 
-## 3. Free-tier depth (proposed, owner to confirm)
+## 3. Free-tier depth
 
-One place: `TIER_LIMITS` in `src/config/tiers.ts`. Pages, the pricing table and later the alert job read only from there. `null` means no limit.
+One place: `TIER_LIMITS` in `src/config/tiers.ts`. Pages, the pricing table and later the alert job read only from there. `null` means no limit. The free values below are in the code; the owner confirmed the direction (generous free tier) on 2026-10-16 and has not signed off every number.
 
-| Key | Free (proposed) | Paid | Basis |
+| Key | Free | Paid | Basis |
 | --- | --- | --- | --- |
-| `scoreHistoryDays` | 30 | `null` | History started 2026-10-02, so 30 days shows nearly everything until mid November |
-| `scannerRows` | 20 | `null` | Universe is about 36 tickers; revisit when discovery widens it |
+| `scoreHistoryDays` | 90 | `null` | History started 2026-10-02, so 90 days is a lever only from the new year; the free window grows into the paid one slowly |
+| `scannerRows` | `null` | `null` | Every ticker is free |
 | `savedScreens` | 1 | 20 | TradingView 1 watchlist, Stock Rover plan limits |
 | `alerts` | 3 | 50 | TradingView 3 free alerts |
 | `watchlistTickers` | 10 | 200 | Sharesight free plan: 10 holdings |
-| `insiderDays` | 90 | `null` | Recent events only |
-| `trackRecordHistoryDays` | 1 | `null` | Latest scan day; the dashboard shows it anyway |
+| `insiderDays` | 180 | `null` | Half a year of events is enough to read the pattern |
+| `trackRecordHistoryDays` | `null` | `null` | The whole record is free |
 
-All values are owner to confirm. Paid caps exist only to stop abuse.
+Paid caps exist only to stop abuse. Prices: none in beta (W17). The pricing page says so and shows no number.
 
 ## 4. Implementation
 
@@ -151,13 +153,13 @@ All values are owner to confirm. Paid caps exist only to stop abuse.
 - `src/components/tier-lock.tsx` and `tier.module.css` (new): lock card and badge. Own CSS module, so `globals.css` stays untouched.
 - `src/i18n/tier-messages.ts` (new, EN and SK): badge text, lock card text and one teaser line per segment id. Kept out of `messages.ts` to avoid merge conflicts with other lanes.
 - Pages call `canSee`/`limitFor` before an expensive loader, so locked data is never fetched. Example: the company page passes `limitFor(viewer, "scoreHistoryDays")` to the history query.
-- Un-hide `/scanner`: remove the `section === "scanner" && !featureFlags.PAYWALL` rule in `src/proxy.ts` and the `if (!flags().PAYWALL) notFound()` in the scanner page. Update the `PAYWALL` comment in `flags.ts`. Fix `docs/paywall-segments.md`, which says `/scanner` redirects to the dashboard while it really returns 404.
+- Un-hide `/scanner`: remove the `section === "scanner" && !featureFlags.PAYWALL` rule in `src/proxy.ts` and the `if (!flags().PAYWALL) notFound()` in the scanner page. Update the `PAYWALL` comment in `flags.ts`. `docs/paywall-segments.md` is corrected: `/scanner` never redirected, it returned 404 while `PAYWALL` was off.
 
 ### SEO
 
 - Tiers never change whether a page is indexed. Crawlers are anonymous, so once tiers are enforced they get the free version, and locked text is not in the HTML (W31 acceptance test on rendered markup).
 - No page whose main content is paid goes in the sitemap. Today that only affects `/ideas`, which the legal gate already keeps out.
-- `/scanner` stays out of the sitemap while it shows the same universe as `/dashboard` (the canonical screen in `sitemap.test.ts`). Base `/scanner` is indexable; filtered URLs keep `noindex`; `?view=` previews get `X-Robots-Tag: noindex`.
+- The sitemap lists the bare `/scanner` and `/heatmap` (both free and carry no advice). Filtered scanner URLs keep `noindex`, `?view=` previews get `X-Robots-Tag: noindex`, and neither appears in the sitemap (`sitemap.test.ts` checks that no listed URL has a query string).
 - `TickerSeoSummary`, titles and descriptions use free fields only (status, rules met), as they do today.
 - Reading the viewer makes a page dynamic. Any later page cache (W5) must key on tier or cache only the free shell.
 
@@ -182,11 +184,44 @@ WP1 lands first. WP2 to WP4 can start in parallel against the contracts in secti
 
 i18n rule: nobody edits `src/i18n/messages.ts` for this work. WP1 writes every lock and teaser string listed in section 2 into `tier-messages.ts`. If WP2 or WP3 needs another string, it goes in a page-local file such as `src/i18n/tier-company-messages.ts`, following `scanner-floor-messages.ts`.
 
-## 6. Open questions for the owner
 
-1. Should the "Paid" badges show on the public site while `AUTH` is off, or only to a preview switch? Every visitor is `admin` today, and the pricing page says "free while we test, no prices yet".
-2. This draft puts track record signals, by-period and worst outcomes in paid. 130 and the synthesis treat the full record as a free trust asset. Is the free summary line with the losing count and worst outcome enough?
-3. The depth numbers in section 3.
-4. With about 36 tickers, is a 20-row scanner cap worth having before discovery widens the universe, and should the advanced filters be paid?
-5. Free scores are proposed as same-day, with no delay. PRODUCT.md mentions "delayed top-level scores" for free. Which one?
-6. Should the Telegram channel stay one free public channel after tiers, with per-user daily alerts as the only paid alert product?
+## 6. Owner questions
+
+Answered on 2026-10-16:
+
+1. Admin "Paid" badges: admin sees everything with Paid badges (master account, auth later). While `AUTH` is off every visitor resolves to `admin`, so the badges show on the public site until auth exists. Answered; whether to hide them behind a preview switch in the meantime is still open (see below).
+2. Track record: the whole record is free, misses included. Answered (section 2). Sections stay marked in the registry as free ids.
+3. Depth numbers: direction confirmed (generous free tier). The values in section 3 are what the code uses. Answered for direction; individual numbers can still change in `TIER_LIMITS`.
+4. Scanner cap: no cap. Every ticker is free; advanced filters and the streak are paid. Answered.
+5. Delay on free scores: no delay, same-day scores for everyone. Answered. `PRODUCT.md` still mentions "delayed top-level scores" and should be corrected.
+6. Telegram: one public channel stays the free funnel, with per-user alerts as the paid product. Answered in principle; the delivery mechanism is open (section 7).
+7. Prices: none in beta (W17). Answered.
+
+Still open:
+
+- Should the Paid badges be visible to anonymous visitors before `AUTH` exists, or only with a preview switch? Today the proxy only turns on `?view=free` for admin.
+- Section 7: which delivery option for paid alerts.
+- The lawyer questions on `ideas-list` and `idea-card` (G5 in `docs/tasks-open.md`) decide whether those two ever ship, in any tier.
+
+## 7. Telegram decision for the owner
+
+Today: one public channel, about 2 subscribers, fed by the digest job (`docs/alerts-telegram.md`). Everyone gets the same daily state changes, with up to 3 rule-change lines per ticker. No Telegram code changes with this document.
+
+Proposal:
+
+- Keep the public channel as the free funnel. Same daily state changes, same message for all, no change.
+- Paid alerts come later as per-user alerts, once auth and billing exist. They carry rule-level changes on the user's watchlist ("Now meets", "No longer meets") and a weekly digest of new matches. They need accounts, so they cannot start before W29 and W30.
+
+Options for the paid delivery:
+
+| Option | What it needs | Membership and unsubscribe | Fit |
+| --- | --- | --- | --- |
+| A. One channel for all | Nothing new | None; everyone sees everything, so nothing can be paid | Fine for the free funnel only. It cannot carry a per-user watchlist. |
+| B. Two channels: public and private paid | A second channel with its own chat id (new secret key), the bot as admin there, an invite-link flow | Someone must add and remove members when a plan starts or ends. Telegram invite links can be single-use and expiring; removal is a bot call, but it has to be wired to billing. Unsubscribe means leaving the channel or losing the entitlement. | One feed for all paid users. It cannot filter by each user's watchlist, so it is a bigger feed, not a personal one. |
+| C. Bot DM per user | The existing bot works for DMs. Needs account linking (`t.me/<bot>?start=<token>` from the settings page) and a store of user chat ids, and the delivery job must read each user's watchlist | The user must press Start first; a user can block the bot at any time (the send then fails and the link should be marked inactive). Unsubscribe is a setting in the app plus `/stop` in the bot. | The only option that gives a per-user watchlist. Sends are many small messages, so the job needs rate limits (Telegram caps bulk sends) and the existing `notification_deliveries` dedupe keyed per user. |
+
+Recommendation: A for free, C for paid. The paid product is defined by the watchlist, and only a bot DM can follow it. Option B adds membership management and still does not personalise. Revisit B only if users ask for a shared private feed. Cost of C is the account link, one new table for chat ids, and a per-user job in `src/jobs/digest.ts`. It reuses the bot, the message formatter and the delivery table.
+
+What the owner has to supply for C when auth and billing exist: nothing new for the bot token (the same `invest-buddy-telegram` secret); a decision whether the bot name stays public; and the privacy text change for storing a Telegram chat id (legal pages).
+
+Open point for the owner: confirm A plus C, or ask for B first. The lawyer question on a public signal feed (G5) applies to A and to every option.
