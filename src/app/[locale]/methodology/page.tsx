@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { Disclaimer } from "@/components/disclaimer";
 import { RuleBook, StatusLegend } from "@/components/method";
 import { flags } from "@/config/flags";
+import { RULESET_DATE, RULESET_VERSION } from "@/config/rules";
 import { getMessages } from "@/i18n";
 import { pageMetadata } from "@/i18n/metadata";
 import { resolveLocale, type LocaleParams } from "../locale";
@@ -21,6 +22,7 @@ async function Methodology({ params }: LocaleParams) {
       <header className="page-head">
         <h1 className="title">{m.methodology.title}</h1>
         <p className="lede">{m.methodology.lede}</p>
+        <p className="prose">{m.methodology.versionLine.replace("{version}", RULESET_VERSION).replace("{date}", RULESET_DATE)}</p>
         <Disclaimer text={m.common.disclaimer} />
       </header>
 
@@ -41,11 +43,22 @@ async function Methodology({ params }: LocaleParams) {
         <p className="prose">{m.methodology.historyBody}</p>
       </section>
 
+      <section aria-labelledby="worked">
+        <h2 id="worked">{m.methodology.workedTitle}</h2>
+        <p className="prose">{m.methodology.workedBody}</p>
+        <p className="prose">{m.methodology.workedCap}</p>
+      </section>
+
       <section aria-labelledby="source-labels">
         <h2 id="source-labels">{m.sources.legendTitle}</h2>
         <ul className="prose">
           {([m.sources.legendComputed, m.sources.legendSec, m.sources.legendTwo, m.sources.legendChecked, m.sources.legendSingle, m.sources.legendUnknown]).map((line) => <li key={line}>{line}</li>)}
         </ul>
+      </section>
+
+      <section aria-labelledby="limits">
+        <h2 id="limits">{m.methodology.limitsTitle}</h2>
+        <p className="prose">{m.methodology.limitsBody}</p>
       </section>
 
       <section aria-labelledby="data">

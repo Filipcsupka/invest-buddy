@@ -29,6 +29,9 @@ export const TURNOVER_TARGET_PCT = 30;
 /** Score rules version and signal rules version as one string. Stored versions elsewhere stay as they are (see docs/rules-changelog.md). */
 export const RULESET_VERSION = `${SCORE_RULES_VERSION}+${SIGNAL_RULES.version}`;
 
+/** Date of the newest rule change: the later of the two version dates (first segment, before the dot). */
+export const RULESET_DATE = [SCORE_RULES_VERSION, SIGNAL_RULES.version].map((v) => v.split(".")[0]).sort().at(-1) as string;
+
 /** Everything the hash test covers: score weights, thresholds and relative-score percents (Setup 72) as well as signal and placeholder values. Functions are dropped by the stringify, so only values count. */
 export const RULES_SNAPSHOT = {
   scoreRulesVersion: SCORE_RULES_VERSION,
