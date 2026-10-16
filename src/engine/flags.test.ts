@@ -47,7 +47,9 @@ describe("company flags", () => {
     expect(by({ operatingIncome: 50, interestExpense: 100 }).interestCover.state).toBe("flagged");
     expect(by({ operatingIncome: 100, interestExpense: null }).interestCover.state).toBe("no-data");
     expect(by({ operatingIncome: null, interestExpense: 10 }).interestCover.state).toBe("no-data");
-    expect(by({ operatingIncome: 100, interestExpense: 0 }).interestCover.state).toBe("no-data");
+    expect(by({ operatingIncome: 100, interestExpense: 0 }).interestCover.state).toBe("clear");
+    expect(by({ operatingIncome: null, interestExpense: 0 }).interestCover.state).toBe("no-data");
+    expect(by({ operatingIncome: -20, interestExpense: 10 }).interestCover.state).toBe("flagged");
   });
 
   it("flags short interest at 20% of float or more and keeps null as no data", () => {

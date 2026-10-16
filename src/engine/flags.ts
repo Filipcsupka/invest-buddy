@@ -66,7 +66,9 @@ function illiquid(bars: readonly OHLCV[]): FlagResult {
 }
 
 function interestCover(operatingIncome: number | null, interestExpense: number | null): FlagResult {
-  if (!finite(operatingIncome) || !finite(interestExpense) || interestExpense <= 0) return noData("interestCover");
+  if (!finite(operatingIncome) || !finite(interestExpense) || interestExpense < 0) return noData("interestCover");
+  // Reported zero interest expense: nothing to cover, so not flagged. Missing interest expense stays no data.
+  if (interestExpense === 0) return { id: "interestCover", state: "clear", values: { interestExpense: 0 } };
   const times = r1(operatingIncome / interestExpense);
   return { id: "interestCover", state: times < FLAG_THRESHOLDS.interestCover ? "flagged" : "clear", values: { times } };
 }

@@ -11,7 +11,7 @@ import { companyScoreHistory } from "@/data/score-history";
 import { flags } from "@/config/flags";
 import { FlagsBlock } from "@/components/flags-block";
 import { companyFlags } from "@/engine/flags";
-import { storedShareCounts } from "@/data/flag-facts";
+import { storedShareCounts, storedInterestFacts } from "@/data/flag-facts";
 import { IconArrowLeft, IconArrowRight, IconCheck, IconCross, IconNoData } from "@/components/icons";
 import { OperatorDisclosure } from "@/components/operator-disclosure";
 import { coreRulesMet, StatusPanel } from "@/components/status-slider";
@@ -103,8 +103,9 @@ async function Company({ params }: Params) {
   const ideaRow = await companyIdea(instrument.ticker);
   const review = await companyReview(instrument.ticker);
   const history = await companyScoreHistory(instrument.ticker);
-  // Flags read stored facts only and never feed the score. Interest expense and short interest are not collected yet, so they show no data.
-  const flagResults = companyFlags({ bars: result.inputs.bars, shares: await storedShareCounts(instrument.ticker), operatingIncome: null, interestExpense: null, shortInterestPercent: null });
+  // Flags read stored facts only and never feed the score. Short interest is not collected yet, so it shows no data.
+  const interest = await storedInterestFacts(instrument.ticker);
+  const flagResults = companyFlags({ bars: result.inputs.bars, shares: await storedShareCounts(instrument.ticker), operatingIncome: interest.operatingIncome, interestExpense: interest.interestExpense, shortInterestPercent: null });
   const index = instruments.findIndex((item) => item.ticker === instrument.ticker);
   const prev = instruments[(index - 1 + instruments.length) % instruments.length];
   const next = instruments[(index + 1) % instruments.length];

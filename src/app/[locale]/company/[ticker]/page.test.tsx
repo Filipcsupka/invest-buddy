@@ -8,7 +8,7 @@ const review = vi.fn();
 const portfolio = vi.fn();
 const history = vi.fn();
 const shares = vi.fn(async () => [] as { periodEnd: string; value: number }[]);
-vi.mock("@/data/flag-facts", () => ({ storedShareCounts: () => shares() }));
+vi.mock("@/data/flag-facts", () => ({ storedShareCounts: () => shares(), storedInterestFacts: async () => ({ operatingIncome: null, interestExpense: null }) }));
 const originalAdvice = process.env.ADVICE_OUTPUT;
 vi.mock("@/data/store", () => ({ instrumentUniverse: () => universe(), latestScores: () => scores(), latestPortfolio: () => portfolio() }));
 vi.mock("@/data/score-history", () => ({ companyScoreHistory: () => history() }));

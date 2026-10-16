@@ -17,7 +17,7 @@ function detail(locale: Locale, m: Messages, flag: FlagResult): string {
   switch (flag.id) {
     case "dilution": return fill(m.flags.values.dilution, { change: signed(Number(v.change)), from: formatCompact(locale, Number(v.from)), to: formatCompact(locale, Number(v.to)), fromDate: formatDate(locale, String(v.fromDate)), toDate: formatDate(locale, String(v.toDate)) });
     case "illiquid": return fill(m.flags.values.illiquid, { amount: usd(locale, Number(v.average)) });
-    case "interestCover": return fill(m.flags.values.interestCover, { times: formatNumber(locale, Number(v.times), 1) });
+    case "interestCover": return v.times === undefined ? m.flags.values.interestCoverNone : fill(m.flags.values.interestCover, { times: formatNumber(locale, Number(v.times), 1) });
     case "shortInterest": return fill(m.flags.values.shortInterest, { percent: formatNumber(locale, Number(v.percent), 1) + "%" });
     case "drawdown": return fill(m.flags.values.drawdown, { percent: formatNumber(locale, Number(v.percent), 1) + "%" });
   }
