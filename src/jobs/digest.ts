@@ -6,7 +6,8 @@ import { PostgresScoreRepository } from "../db/postgres";
 import { isIsoDate } from "../db/iso-date";
 import { PostgresDeliveryLog, type DeliveryLog } from "../db/notifications";
 import { telegramFromEnv, type Notifier } from "../notify/telegram";
-import { bandOf, cardModeFromEnv, escapeHtml, formatEventAlert, formatIdeaCard, type CardAudit, type CardMode, type ConfirmationKey, type Coverage } from "../notify/format";
+import { bandOf, cardModeFromEnv, escapeHtml, formatEventAlert, formatIdeaCard, type AlertRuleChange, type CardAudit, type CardMode, type ConfirmationKey, type Coverage } from "../notify/format";
+import { ruleChangesForDate } from "../db/rule-changes";
 import { ideasForDate, type StoredIdea } from "../db/ideas";
 import { flags } from "../config/flags";
 import { getMessages } from "../i18n";
@@ -69,7 +70,7 @@ export function bandChanges(alerts: AlertChange[]): AlertChange[] {
  * One failed ticker does not stop the others; the first error is thrown after all were tried.
  * A day with no band change posts the plain list only when postEmpty is set.
  */
-export async function deliverTelegram(input: { asOf: string; alerts: AlertChange[]; locale: DigestLocale; notifier: Notifier; log: DeliveryLog; target: string; postEmpty?: boolean; adviceOutput?: boolean; site?: string; extras?: Record<string, { confirmations?: ConfirmationKey[]; coverage?: Coverage }>; ideas?: Record<string, StoredIdea>; audits?: Record<string, CardAudit>; cardMode?: CardMode }): Promise<TelegramResult> {
+export async function deliverTelegram(input: { asOf: string; alerts: AlertChange[]; locale: DigestLocale; notifier: Notifier; log: DeliveryLog; target: string; postEmpty?: boolean; adviceOutput?: boolean; site?: string; extras?: Record<string, { confirmations?: ConfirmationKey[]; coverage?: Coverage; ruleChanges?: AlertRuleChange[] }>; ideas?: Record<string, StoredIdea>; audits?: Record<string, CardAudit>; cardMode?: CardMode }): Promise<TelegramResult> {
   const changes = bandChanges(input.alerts);
   const site = input.site ?? siteUrl;
   const adviceOutput = input.adviceOutput ?? flags().ADVICE_OUTPUT;
@@ -90,7 +91,7 @@ export async function deliverTelegram(input: { asOf: string; alerts: AlertChange
     const previous = alert.previousState === null ? null : { state: alert.previousState, points: alert.previousScore };
     const text = idea
       ? formatIdeaCard({ ticker: alert.ticker, locale: input.locale, adviceOutput, site, idea, audit: input.audits?.[alert.ticker], mode: input.cardMode ?? "public", previous, current: { state: alert.currentState, points: alert.currentScore } })
-      : formatEventAlert({ ticker: alert.ticker, locale: input.locale, adviceOutput, site, confirmations: extra?.confirmations, coverage: extra?.coverage,
+      : formatEventAlert({ ticker: alert.ticker, locale: input.locale, adviceOutput, site, confirmations: extra?.confirmations, coverage: extra?.coverage, ruleChanges: extra?.ruleChanges,
       previous, current: { state: alert.currentState, points: alert.currentScore } });
     await post(`alert:${input.locale}:${alert.ticker}`, 1, text);
   }
@@ -120,7 +121,9 @@ async function main() {
     if (telegram && pool) {
       const ideas = Object.fromEntries((await ideasForDate(pool, asOf)).map((idea) => [idea.symbol, idea]));
       const audits = Object.fromEntries((await repo.scores(asOf)).map((score) => [score.ticker, { evidencedMax: score.evidencedMax, percent: score.percent, coverage: score.coverage }]));
-      const telegramResult = await deliverTelegram({ asOf, alerts, locale, ideas, audits, cardMode: cardModeFromEnv(process.env.TELEGRAM_CARD_MODE), notifier: telegram, log: new PostgresDeliveryLog(pool), target: process.env.TELEGRAM_CHAT_ID!.trim(), postEmpty: process.env.TELEGRAM_POST_EMPTY === "on" });
+      const extras: Record<string, { ruleChanges: AlertRuleChange[] }> = {};
+      for (const change of await ruleChangesForDate(pool, asOf, locale)) (extras[change.ticker] ??= { ruleChanges: [] }).ruleChanges.push({ label: change.label, from: change.from, to: change.to });
+      const telegramResult = await deliverTelegram({ asOf, alerts, locale, ideas, extras, audits, cardMode: cardModeFromEnv(process.env.TELEGRAM_CARD_MODE), notifier: telegram, log: new PostgresDeliveryLog(pool), target: process.env.TELEGRAM_CHAT_ID!.trim(), postEmpty: process.env.TELEGRAM_POST_EMPTY === "on" });
       return { alerts: alerts.length, telegram: telegramResult.empty ? "empty" : telegramResult.sent ? "sent" : "duplicate", sent: telegramResult.sent, duplicates: telegramResult.duplicates, failures: 0 };
     }
     await new ConsoleMailer().send(buildDigest(to, asOf, alerts, locale));
