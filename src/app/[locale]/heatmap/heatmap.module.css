@@ -1,0 +1,37 @@
+/* Diverging blue (up) and orange (down) for price change, sequential blue for rules met. Blue and orange stay apart for red-green colour blindness,
+   and every tile also carries its value as text. Tile text uses --ink on washes that stay under 55% mix, so contrast holds in light and dark. */
+.grid, .tiles { list-style: none; padding: 0; margin: 0; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr)); gap: var(--s4); margin-top: var(--s4); }
+.sector { display: grid; gap: var(--s2); align-content: start; padding: var(--s4); border: 1px solid var(--rule-strong); background: var(--sheet); }
+.sectorName { font-size: var(--t-h2); line-height: 1.2; overflow-wrap: anywhere; }
+.average { display: flex; justify-content: space-between; align-items: baseline; gap: var(--s3); padding: var(--s2) var(--s3); border: 1px solid var(--rule); font-size: var(--t-base); }
+.averageLabel { font-size: var(--t-xs); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+.meta { font-size: var(--t-sm); color: var(--ink-3); }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(5.5rem, 1fr)); gap: var(--s2); }
+.tile { display: grid; gap: 2px; padding: var(--s2) var(--s3); border: 1px solid var(--rule); color: var(--ink); text-decoration: none; min-height: 3rem; }
+.tile:hover { border-color: var(--ink); }
+.tile:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+.ticker { font-weight: 700; font-size: var(--t-sm); letter-spacing: 0.02em; }
+.value { font-size: var(--t-sm); font-variant-numeric: tabular-nums; }
+.toggle { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); margin-top: var(--s4); }
+.toggleLabel { font-size: var(--t-xs); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); margin-right: var(--s2); }
+.option { padding: var(--s2) var(--s3); border: 1px solid var(--rule-strong); color: var(--ink); text-decoration: none; font-size: var(--t-sm); }
+.option[aria-current="true"] { background: var(--signal); color: var(--on-signal); border-color: var(--signal); font-weight: 600; }
+.option:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+.legend { margin-top: var(--s6); display: grid; gap: var(--s2); max-width: 72ch; }
+.legendTitle { font-size: var(--t-h2); }
+
+.none, .flat { background: light-dark(#e3e6e4, #262c30); }
+.up1 { background: color-mix(in srgb, var(--signal) 14%, var(--sheet)); }
+.up2 { background: color-mix(in srgb, var(--signal) 26%, var(--sheet)); }
+.up3 { background: color-mix(in srgb, var(--signal) 38%, var(--sheet)); }
+.up4 { background: color-mix(in srgb, var(--signal) 50%, var(--sheet)); }
+.down1 { background: color-mix(in srgb, var(--st-ignore) 14%, var(--sheet)); }
+.down2 { background: color-mix(in srgb, var(--st-ignore) 26%, var(--sheet)); }
+.down3 { background: color-mix(in srgb, var(--st-ignore) 38%, var(--sheet)); }
+.down4 { background: color-mix(in srgb, var(--st-ignore) 50%, var(--sheet)); }
+.seq0 { background: color-mix(in srgb, var(--signal) 6%, var(--sheet)); }
+.seq1 { background: color-mix(in srgb, var(--signal) 14%, var(--sheet)); }
+.seq2 { background: color-mix(in srgb, var(--signal) 26%, var(--sheet)); }
+.seq3 { background: color-mix(in srgb, var(--signal) 38%, var(--sheet)); }
+.seq4 { background: color-mix(in srgb, var(--signal) 50%, var(--sheet)); }
