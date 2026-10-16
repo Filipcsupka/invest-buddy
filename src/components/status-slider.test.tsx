@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { getMessages, type Locale } from "@/i18n";
 import { ruleGroups, type StateKey } from "@/i18n/rules";
 import { statusView } from "@/engine/status";
-import { StatusPanel } from "./status-slider";
+import { coreRulesMet, StatusPanel } from "./status-slider";
 
 const rules = ruleGroups.flatMap((group) => group.rules);
 const hits = (missing: string[] = [], bonusMatched = false) => rules.map((rule) => ({ id: rule.id, matched: rule.id === "catalyst" ? bonusMatched : !missing.includes(rule.id), unknown: missing.includes(rule.id) || (rule.id === "catalyst" && !bonusMatched) }));
@@ -36,6 +36,23 @@ describe("public status panel", () => {
     expect(render("en", "broken")).toContain("No percentage: criteria broken");
     expect(render("en", "broken")).toContain("Rejected by: Close below MA200");
     expect(render("en", "insufficient")).not.toContain("100%");
+  });
+
+  it.each(["en", "sk"] as const)("shows the core rule count and band cutoffs in %s", (locale) => {
+    const view = statusView({ state: "setup", points: 25, ruleHits: hits(["earnings"]), adviceOutput: false });
+    const m = getMessages(locale);
+    const html = renderToStaticMarkup(<StatusPanel locale={locale} view={view} m={m} adviceOutput={false} asOf={null} methodHref="/m" reasons={[]} coreMet={8} />);
+    expect(html).toContain(locale === "en" ? "Meets 8 of 9 rules" : "Spĺňa 8 z 9 pravidiel");
+    expect(html).toContain(locale === "en" ? "Conditions met 72%+, Watching 60%+, Waiting 48%+" : "Podmienky splnené od 72 %, Sledovanie od 60 %, Čakanie od 48 %");
+    expect(html).toContain(locale === "en" ? "18/15/12 of 25" : "18/15/12 z 25");
+    expect(coreRulesMet(hits(["earnings"]).map((hit) => ({ id: hit.id, matched: hit.matched })))).toBe(8);
+  });
+
+  it("omits the cutoffs when criteria are broken", () => {
+    const view = statusView({ state: "broken", points: 5, ruleHits: hits(), adviceOutput: false });
+    const html = renderToStaticMarkup(<StatusPanel locale="en" view={view} m={getMessages("en")} adviceOutput={false} asOf={null} methodHref="/m" reasons={[]} coreMet={4} />);
+    expect(html).toContain("Meets 4 of 9 rules");
+    expect(html).not.toContain("Waiting 48%+");
   });
 
   it("keeps advice wording out of public output when the flag is on", () => {

@@ -9,6 +9,7 @@ import { Disclaimer } from "./disclaimer";
 import { IconArrowRight, IconCheck, IconCross } from "./icons";
 import { OperatorDisclosure, SampleStamp } from "./operator-disclosure";
 import { StateChip } from "./score-badge";
+import { coreRulesMet } from "./status-slider";
 
 /** Title block: the field grid at the head of every datasheet. */
 export function TitleBlock({ fields, stamp }: { fields: { label: string; value: React.ReactNode; wide?: boolean }[]; stamp?: string }) {
@@ -62,6 +63,7 @@ export function Datasheet({ locale, instrument, result, sample = true }: { local
         </div>
       </div>
       <p className="small">{fill(m.status.coreData, { known: display.coreKnown, total: display.coreTotal })}</p>
+      <p className="small">{fill(m.status.rulesMet, { met: coreRulesMet(result.ruleHits), total: display.coreTotal })}</p>
       <p className="small">{m.status.bonusTitle}: {display.bonus.map(({ id, hit }) => `${m.status.ruleShort[id]} ${hit?.matched ? m.common.met : !hit || hit.unknown ? m.status.noData : m.common.notMet}`).join(", ")}</p>
       <ul className="hit-list">
         {ruleGroups.flatMap((group) =>

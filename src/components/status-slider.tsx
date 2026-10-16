@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { fill, formatScorePercent, type Locale, type Messages } from "@/i18n";
 import { type StateKey } from "@/i18n/rules";
 import type { StatusView } from "@/engine/status";
+import { CORE_RULES } from "@/engine/display-score";
 import { IconBandBroken, IconBandIgnore, IconBandSetup, IconBandWait, IconBandWatch, IconCheck, IconCross, IconNoData } from "./icons";
 import styles from "./status-slider.module.css";
 
@@ -101,6 +102,21 @@ export function StatusCoverage({ view, m }: { view: StatusView; m: Messages; adv
   </div>;
 }
 
+/** Number of core rules (bonus excluded) that matched. A rule with no data is not met. */
+export function coreRulesMet(hits: readonly { id: string; matched?: boolean }[]): number {
+  const core = new Set<string>(CORE_RULES.map((rule) => rule.id));
+  return hits.filter((hit) => hit.matched === true && core.has(hit.id)).length;
+}
+
+/** "Meets 6 of 9 rules" and, unless criteria broke, the band cutoffs. Bonus findings are not in the count. */
+export function RulesMet({ view, m, coreMet, cutoffs = true }: { view: StatusView; m: Messages; coreMet: number; cutoffs?: boolean }) {
+  if (view.display.state === "insufficient") return null;
+  return <>
+    <p className={styles.pointsLine} data-rules-met="">{fill(m.status.rulesMet, { met: coreMet, total: view.display.coreTotal })}</p>
+    {cutoffs && view.display.state !== "broken" ? <p className={styles.pointsLine} data-cutoffs="">{m.status.cutoffs}</p> : null}
+  </>;
+}
+
 export function BonusBlock({ view, m }: { view: StatusView; m: Messages }) {
   if (view.display.state === "insufficient") return null;
   return <div className={styles.coverage} data-bonus=""><strong>{m.status.bonusTitle}</strong><span> {m.status.bonusNote}</span>
@@ -147,10 +163,12 @@ export interface StatusPanelProps {
   pullbackLabel?: string | null;
   disclaimer?: ReactNode;
   describedBy?: string;
+  /** Core rules met, for the "Meets n of m rules" line. Omitted: no line. */
+  coreMet?: number;
 }
 
 /** Header of the company page: label, points, track, coverage, chips. */
-export function StatusPanel({ view, m, locale, adviceOutput, asOf, methodHref, reasons, pullbackLabel, disclaimer, describedBy }: StatusPanelProps) {
+export function StatusPanel({ view, m, locale, adviceOutput, asOf, methodHref, reasons, pullbackLabel, disclaimer, describedBy, coreMet }: StatusPanelProps) {
   const label = statusLabel(m, view.display.state, adviceOutput);
   const scored = view.display.state !== "insufficient";
   const broken = view.display.state === "broken";
@@ -168,7 +186,7 @@ export function StatusPanel({ view, m, locale, adviceOutput, asOf, methodHref, r
             <a className={styles.methodLink} href={methodHref}>{m.status.methodLink}</a>
           </p>
         </div>
-        {scored && <div className={styles.points}><p className={styles.pointsLine}>{broken ? m.status.pointsNotCountedPlain : <span className={`${styles.pointsNum} num`}>{formatScorePercent(locale, view.display.percent ?? 0)}</span>}</p><BonusBlock view={view} m={m} /></div>}
+        {scored && <div className={styles.points}><p className={styles.pointsLine}>{broken ? m.status.pointsNotCountedPlain : <span className={`${styles.pointsNum} num`}>{formatScorePercent(locale, view.display.percent ?? 0)}</span>}</p>{coreMet === undefined ? null : <RulesMet view={view} m={m} coreMet={coreMet} />}<BonusBlock view={view} m={m} /></div>}
       </div>
       <p className="visually-hidden" id="status-summary">{summarySentence(view, m, adviceOutput, locale)}</p>
       <StatusTrack view={view} m={m} adviceOutput={adviceOutput} />
