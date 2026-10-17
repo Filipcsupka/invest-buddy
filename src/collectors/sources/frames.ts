@@ -70,7 +70,7 @@ const signed = (value: number) => `${value >= 0 ? "+" : ""}${value}`;
 const line = (growth: Growth) => `revenue ${money(growth.revenue)}, YoY ${signed(growth.yoyPercent)}%, prior-quarter YoY ${signed(growth.priorYoyPercent)}%, acceleration ${signed(growth.accelerationPp)} pp, QoQ ${signed(growth.qoqPercent)}%`;
 
 /** The SEC returns 404 for a concept with no filers in a quarter (SalesRevenueNet was retired). That is an empty frame, not a failed source. */
-async function fetchFrame(ctx: SourceContext, concept: string, quarter: Quarter) {
+export async function fetchFrame(ctx: SourceContext, concept: string, quarter: Quarter) {
   try { return parseFrame(await ctx.http.get(frameUrl(concept, quarter), { maxBytes: 60 * 1024 * 1024 })); }
   catch (error) {
     if (error instanceof Error && /^HTTP 404 at /.test(error.message)) return new Map<number, FrameValue>();
