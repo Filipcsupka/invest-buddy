@@ -1,0 +1,16 @@
+# Horizon rules (TASK-099, report only)
+
+Version `2026-10-17.1`. A descriptive profile per ticker: sustained growth, event-driven, mixed or no data. It is not read by the score, the status or the display percentage, and profit or loss is never an input. Thresholds are placeholders for owner review. Public output stays informational (ADR-001); nothing here is shown on a page yet.
+
+Code: `src/engine/horizon.ts` (profile), `src/engine/exit-facts.ts` (review facts), `scripts/horizon-report.ts` (`npm run horizon:report`, reads the database, writes `labels.csv` and `review.md`).
+
+## Profile
+- Sustained growth: YoY at least 15% in each of the last 4 quarters, market cap at least 20B USD, 20-day average dollar volume at least 100M USD, ATR% (14) at most 4, no company flag.
+- Event-driven: market cap under 5B USD, ATR% at least 5, or any flag. Below 20B USD a recent spike also counts: a latest-quarter YoY at least 2x the median of the prior quarters, a 5-session move of 15% or more, or volume at least 2.5x the 20-session mean. A large steady grower keeps its label through a transient event.
+- Mixed: neither. No data: fewer than 60 bars, fewer than 4 growth quarters, or no market cap.
+
+## Exit facts (owner decision 2026-10-17)
+Review facts, never a sell signal, not read by the score. `exitFacts()` returns: the trailing level (highest close of the last 50 sessions minus 3 x ATR(22)) and whether the close is below it; whether the close is under the 50-day average on at least 2x the 20-session mean volume; with a cost basis, the gain from cost and whether it reached the +25% review mark. No stop-loss rule. Public wording is a neutral statement of the fact.
+
+## First report (live data 2026-10-17, 36 names)
+Sustained 5 (AMZN, AVGO, CRM, MELI, NVDA), event-driven 11, mixed 7, no data 13. GOOGL and META have no revenue quarters stored; the other no-data names are listed in the report. Interest cover and short interest are not loaded in the report, so those flags read no data.

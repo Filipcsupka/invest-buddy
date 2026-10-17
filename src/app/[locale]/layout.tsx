@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Manrope } from "next/font/google";
 import { notFound } from "next/navigation";
 import { Footer, Nav } from "@/components/nav";
 import { themeScript } from "@/components/theme-toggle";
@@ -9,11 +8,9 @@ import { JsonLd } from "@/components/json-ld";
 import { siteJsonLd, siteNoindex, siteUrl } from "@/i18n/metadata";
 import { TierBanner } from "@/components/kit/tier";
 import { getKitMessages } from "@/i18n/kit-messages";
+import "../fonts.css";
 import "../globals.css";
 import "@/components/kit/kit.css";
-
-const sans = Inter({ subsets: ["latin", "latin-ext"], variable: "--font-sans", display: "swap" });
-const display = Manrope({ subsets: ["latin", "latin-ext"], weight: ["600", "700", "800"], variable: "--font-display", display: "swap" });
 
 export const dynamicParams = false;
 export function generateStaticParams() {
@@ -47,7 +44,7 @@ export default async function LocaleLayout({ children, params }: { children: Rea
   const m = getMessages(locale);
   const kit = getKitMessages(locale);
   return (
-    <html lang={locale} className={`${sans.variable} ${display.variable}`} suppressHydrationWarning>
+    <html lang={locale} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
