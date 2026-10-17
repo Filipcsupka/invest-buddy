@@ -22,3 +22,6 @@ The score rules version (`SCORE_RULES_VERSION` in `src/engine/score.ts`), the si
 - `2026-10-10.1`: start and add thresholds clarified (#107, EN3).
 - `2026-10-09.1`: START_POSITION needs score 18; 15 to 17 can qualify for ADD (#80).
 - `2026-10-06.1`: signals from data only, size tiers instead of EUR bands.
+
+## Horizon rules 2026-10-17.1
+New, report only. Own version, not part of `RULES_SNAPSHOT`; scoring, status and `RULESET_VERSION` are unchanged. See `docs/horizon-rules.md`.
