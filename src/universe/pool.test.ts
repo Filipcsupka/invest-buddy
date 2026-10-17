@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { poolCsv, rankPool } from "./universe-pool";
-import type { Growth } from "../src/collectors/sources/frames";
+import { poolCsv, rankPool } from "./pool";
+import type { Growth } from "../collectors/sources/frames";
 
 const g = (cik: number, yoy: number, prior: number, revenue = 100_000_000): Growth => ({ cik, name: `Co ${cik}`, concept: "Revenues", end: "2026-06-30", revenue, yoyPercent: yoy, qoqPercent: 5, priorYoyPercent: prior, accelerationPp: yoy - prior });
 const tickers = new Map([[1, "AAA"], [2, "BBB"], [3, "CCC"], [4, "DDD"], [5, "EEE"]]);
