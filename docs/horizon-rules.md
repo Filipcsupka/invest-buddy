@@ -13,4 +13,8 @@ Code: `src/engine/horizon.ts` (profile), `src/engine/exit-facts.ts` (review fact
 Review facts, never a sell signal, not read by the score. `exitFacts()` returns: the trailing level (highest close of the last 50 sessions minus 3 x ATR(22)) and whether the close is below it; whether the close is under the 50-day average on at least 2x the 20-session mean volume; with a cost basis, the gain from cost and whether it reached the +25% review mark. No stop-loss rule. Public wording is a neutral statement of the fact.
 
 ## First report (live data 2026-10-17, 36 names)
-Sustained 5 (AMZN, AVGO, CRM, MELI, NVDA), event-driven 11, mixed 7, no data 13. GOOGL and META have no revenue quarters stored; the other no-data names are listed in the report. Interest cover and short interest are not loaded in the report, so those flags read no data.
+Sustained 5 (AMZN, AVGO, CRM, MELI, NVDA), event-driven 11, mixed 7, no data 13. The report treated revenue tags separately and had no stored share counts for GOOGL or META. Interest cover and short interest are not loaded in the report, so those flags read no data.
+
+## Collector check (2026-10-18)
+
+The report now combines quarterly revenue across the allowed SEC tags. The collector also stores `CommonStockSharesOutstanding` when the SEC provides it. On the same 2026-10-17 data date, after the approved 36-name collection, the report has 4 sustained, 12 event-driven, 11 mixed and 9 no data. GOOGL, AFRM, PLTR and ROKU moved out of no data. META remains there because its SEC companyfacts response contains no undimensioned share count for market cap. The profile rules did not change. See `docs/collectors-fixes.md` for collection counts.

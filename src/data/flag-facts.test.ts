@@ -3,6 +3,8 @@ import type { FundamentalsHistoryRow } from "../db/history";
 import { companyFlags } from "../engine/flags";
 import { FUNDAMENTALS_CONCEPTS, INTEREST_EXPENSE_CONCEPTS } from "./fundamentals-concepts";
 import { pickInterestFacts } from "./flag-facts";
+import realCases from "../collectors/sources/fixtures/sec-real-collector-cases.json";
+import { parseCompanyfacts } from "../collectors/sources/companyfacts";
 
 const row = (concept: string, value: number, over: Partial<FundamentalsHistoryRow> = {}): FundamentalsHistoryRow => ({
   concept, unit: "USD", periodStart: "2025-01-01", periodEnd: "2025-12-31", fy: 2025, fp: "FY", form: "10-K", filed: "2026-02-15", accession: "a-1", value, ...over,
@@ -29,6 +31,20 @@ describe("pickInterestFacts", () => {
     const income = [row("OperatingIncomeLoss", 500, { filed: "2026-02-15" }), row("OperatingIncomeLoss", 450, { filed: "2027-02-15", accession: "a-2" })];
     const interest = { InterestExpenseNonoperating: [row("InterestExpenseNonoperating", 50)] };
     expect(pickInterestFacts(income, interest)).toEqual({ operatingIncome: 450, interestExpense: 50 });
+  });
+
+  it("finds Affirm's annual debt interest but leaves Apple and CRISPR unmatched", () => {
+    const facts = (ticker: "AAPL" | "AFRM" | "CRSP") => {
+      const rows = parseCompanyfacts(JSON.stringify(realCases[ticker]), ticker).map((fact) => ({
+        concept: fact.concept, unit: fact.unit, periodStart: fact.periodStart, periodEnd: fact.periodEnd,
+        fy: fact.fy, fp: fact.fp, form: fact.form, filed: fact.filed, accession: fact.accession, value: fact.value,
+      }));
+      return pickInterestFacts(rows.filter((fact) => fact.concept === "OperatingIncomeLoss"),
+        Object.fromEntries(INTEREST_EXPENSE_CONCEPTS.map((concept) => [concept, rows.filter((fact) => fact.concept === concept)])));
+    };
+    expect(facts("AFRM").interestExpense).toBe(454016000);
+    expect(facts("AAPL").interestExpense).toBeNull();
+    expect(facts("CRSP").interestExpense).toBeNull();
   });
 
   it("ignores quarterly, year-to-date and 10-Q facts", () => {
