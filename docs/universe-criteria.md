@@ -50,3 +50,9 @@ Writes `selected.csv`, `excluded.csv` (with reason codes) and `review.md` (count
 `npm run universe:pool -- --out tmp/universe --held TICKER,TICKER` screens every SEC filer from the quarterly revenue frames (about 3,000 with growth data). A name enters when quarterly revenue is at least 50 million USD, YoY growth is at least 15% and the prior quarter's YoY is at least 10%. Names rank by the weaker of the two growth rates, so a one-quarter spike does not lead. Output is `pool.csv` and `pool.json`, top 300, current universe excluded. SEC only, no database write.
 
 The pool has no price data. Step 2 fetches bars for the pool within the Twelve Data limit (800 requests a day), then `select-universe` applies price, volume, filer-type and sector rules.
+
+### Pool bars (step 2) and refresh
+
+`npm run pool-bars -- --limit 250` fetches 260 daily bars per pool name into `discovery_price_bars` (one request each, 7 a minute, ledger job `pool-bars`). A name is skipped when it has at least 200 bars and the newest is at most 5 days old. 2026-10-18 result: 297 of 300 covered, 3 rejected by Twelve Data (`PHXE-P`, `HGIT`, `ZARE`). The pool changes each quarter after the SEC frames and selection needs bars at most 5 days old, so a weekly refresh is proposed: `deploy/gitops/gitops/apps/invest-buddy/base/pool-bars-cronjob.yaml` (suspended, Sunday 10:00 Bratislava, 300 requests, about 43 minutes).
+
+Known limit of the 2026-10-18 selection run: pool names have sector `Unclassified`, so `sector_cap` removed 206 of them. See `docs/d36-approval.md`.

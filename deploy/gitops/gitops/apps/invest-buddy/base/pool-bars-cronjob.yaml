@@ -1,0 +1,73 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: invest-buddy-pool-bars
+  namespace: invest
+spec:
+  # Proposal (D35). Suspended until the owner approves it. Writes discovery_price_bars only; no web page reads that table.
+  suspend: true
+  # Sunday 10:00: the prices chain (Tue-Sat 00:30) and discovery (Sat 09:30) are done and nothing else uses Twelve Data on Sunday.
+  # Budget: one request per name, pool of 300, 7 requests a minute = about 43 minutes. Bars older than 5 days are refetched, so a weekly run refreshes the whole pool.
+  # Twelve Data cap 800 a day; pool-bars may use 700 (100 are reserved for prices), and the ledger stops the job at that limit.
+  schedule: "0 10 * * 0"
+  timeZone: Europe/Bratislava
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      # A retry would spend the same requests again; the next Sunday, or a manual run, is the retry.
+      backoffLimit: 0
+      activeDeadlineSeconds: 3600
+      template:
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          nodeSelector:
+            kubernetes.io/hostname: k8s-worker-01
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: pool-bars
+              image: ghcr.io/filipcsupka/invest-buddy:latest
+              command: ["node", "dist/jobs/pool-bars.js", "--limit", "350"]
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-secrets
+                      key: DATABASE_URL
+                - name: SEC_USER_AGENT
+                  valueFrom:
+                    configMapKeyRef:
+                      name: invest-buddy-reconcile-config
+                      key: SEC_USER_AGENT
+                - name: TWELVE_DATA_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-market-secrets
+                      key: TWELVE_DATA_API_KEY
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 128Mi
+                limits:
+                  cpu: 300m
+                  memory: 512Mi
+              volumeMounts:
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: tmp
+              emptyDir:
+                sizeLimit: 1Gi
