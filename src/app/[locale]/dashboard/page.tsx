@@ -10,6 +10,8 @@ import { byScore, toRow } from "@/components/view-model";
 import { latestPortfolio, latestScores } from "@/data/store";
 import { publicHorizons } from "@/data/public-horizons";
 import { ProfileLists } from "./profile-lists";
+import { StateFilterProvider } from "@/components/state-filter";
+import { profileCopy } from "@/i18n/profile-messages";
 import { latestStateChanges } from "@/data/state-changes";
 import { StateStrip, type StateChange } from "@/components/kit/state-strip";
 import { kitState } from "@/components/kit/types";
@@ -58,7 +60,9 @@ async function Dashboard({ params }: LocaleParams) {
       </section>}
     </div>
     <HeadDisclosure text={m.common.operatorDisclosure} />
-    <ScannerTable locale={locale} rows={rows} aside={<MacroEvents locale={locale} />} heldTickers={portfolio?.weights.filter((p) => p.weightPercent > 0).map((p) => p.symbol.toUpperCase()) ?? []} text={{
+    <StateFilterProvider>
+    <ScannerTable locale={locale} rows={rows} profiles={Object.fromEntries(Object.entries(horizons).map(([ticker, h]) => [ticker, h.profile]))} aside={<MacroEvents locale={locale} />} heldTickers={portfolio?.weights.filter((p) => p.weightPercent > 0).map((p) => p.symbol.toUpperCase()) ?? []} text={{
+      profileTags: profileCopy[locale].tags,
       searchLabel: m.scanner.searchLabel, searchPlaceholder: m.scanner.searchPlaceholder,
       filterLabel: m.scanner.filterLabel, allStates: m.scanner.allStates, clear: m.scanner.clear,
       empty: m.scanner.empty, showing: m.scanner.showing, sortBy: m.table.sortBy,
@@ -73,6 +77,7 @@ async function Dashboard({ params }: LocaleParams) {
         showLower: m.dashboard.showLower, empty: m.dashboard.empty, stateNotes: m.dashboard.stateNotes },
     }} />
     <ProfileLists locale={locale} rows={data.rows} horizons={horizons} />
+    </StateFilterProvider>
   </div>;
 }
 
