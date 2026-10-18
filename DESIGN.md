@@ -86,7 +86,8 @@ Rules: orange is rare. Red and green never carry meaning alone. Dark mode is des
 
 ## Layout
 
-- **App shell.** Sidebar plus content. From 1200px the sidebar is 15.5rem with labels. From 900px to 1199px it is a 4.75rem icon rail (labels stay in the DOM and show as tooltips). Below 900px it is a 3.5rem navy top bar with a menu button that opens the panel as a drawer (Escape and link click close it).
+- **App shell.** Sidebar plus content. From 1200px the sidebar is 15.5rem with labels. From 900px to 1199px it is a 4.75rem icon rail (labels stay in the DOM and show as tooltips). A collapse button under the brand switches between the full sidebar and the rail from 900px up; the choice is stored in `localStorage` (`ib-side`, in try/catch) and applied to `<html data-side>` by an inline script before first paint, so the width never jumps. Below 900px it is a 3.5rem navy top bar with a menu button that opens the panel as a drawer (Escape and link click close it); the collapse button is hidden there.
+- **Aligned columns.** Table-like lists use a real grid, never a flex row whose columns follow content width. Tables use `table-layout: fixed` with a `colgroup`; card lists use a parent grid with `subgrid` rows. Header cells of numeric columns carry `.num` so they align with their figures.
 - **Content.** `.frame` is `min(1240px, 100% - 2 * gutter)` inside the content column. `.page-head` is the page header: title and meta left, actions right.
 - **Footer.** Sits at the foot of the content column on every page: brand and data note, legal links, and the ADR-001 disclaimer line.
 - **Rhythm.** 4px base. Sections are 3rem to 4.5rem apart, rows 0.5rem, cards pad 1.5rem.

@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { notFound } from "next/navigation";
 import { Footer, Nav } from "@/components/nav";
-import { themeScript } from "@/components/theme-toggle";
+import { sideScript, themeScript } from "@/components/pre-paint";
 import { getMessages, isLocale, locales } from "@/i18n";
 import { Analytics } from "@/components/analytics";
 import { JsonLd } from "@/components/json-ld";
@@ -46,7 +46,7 @@ export default async function LocaleLayout({ children, params }: { children: Rea
   return (
     <html lang={locale} suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        <script dangerouslySetInnerHTML={{ __html: themeScript + sideScript }} />
       </head>
       <body>
         <JsonLd data={siteJsonLd(locale)} />

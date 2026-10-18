@@ -11,8 +11,16 @@ export function ScreenTable({ locale, rows, columns, caption, disclaimerId, labe
   const has = (column: Column) => columns.includes(column);
   return (
     <div className="table-scroll" role="region" tabIndex={0} aria-label={label ?? m.dashboard.title}>
-      <table className="screen">
+      <table className="screen screen-fixed">
         <caption>{caption}</caption>
+        <colgroup>
+          {has("date") ? <col className="sc-date" /> : null}
+          <col className="sc-company" />
+          {has("sector") ? <col className="sc-sector" /> : null}
+          {has("score") ? <col className="sc-score" /> : null}
+          {has("state") ? <col className="sc-state" /> : null}
+          {has("reason") ? <col /> : null}
+        </colgroup>
         <thead>
           <tr>
             {has("date") ? <th scope="col">{m.table.date}</th> : null}

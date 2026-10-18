@@ -78,24 +78,44 @@
 .empty p { margin: 0; }
 .emptyIcon { display: grid; place-items: center; width: 2.75rem; height: 2.75rem; border-radius: 50%; background: var(--sheet-hover); color: var(--ink-3); }
 
+/* Rows. Fixed layout: every row of a group table shares the same column edges, whatever the badge or name widths.
+   Widths are shares of the table, so the table fits the board column and only scrolls on narrow screens. */
+.grid { table-layout: fixed; min-width: 40rem; }
+.cCompany { width: 30%; }
+.cSector { width: 18%; }
+.cScore { width: auto; }
+.cRules { width: 7.5rem; }
+.cState { width: 9rem; }
+.gridReason { min-width: 50rem; }
+.gridReason .cCompany { width: 21%; }
+.gridReason .cSector { width: 12.5%; }
+.gridReason .cScore { width: 13%; }
+@media (max-width: 640px) {
+  .grid { min-width: 34rem; }
+  .gridReason { min-width: 50rem; }
+  .cSector { display: none; }
+  .cCompany { width: 34%; }
+}
+
 /* Rows. */
-.company { min-width: 14rem; }
+.company { min-width: 0; }
 .rank { display: inline-grid; place-items: center; min-width: 1.5rem; height: 1.5rem; margin-right: var(--s3); border-radius: var(--radius-sm); background: var(--sheet-hover); color: var(--ink-3); font-size: var(--t-xs); font-weight: 800; font-variant-numeric: tabular-nums lining-nums; vertical-align: middle; }
-.who { display: inline-flex; flex-direction: column; vertical-align: middle; gap: 1px; }
-.score { min-width: 8.5rem; }
+.who { display: inline-flex; flex-direction: column; vertical-align: middle; gap: 1px; max-width: calc(100% - 2.75rem); min-width: 0; }
+.score { min-width: 0; }
 .score :global(.kit-scorebar) { min-width: 0; }
 .score :global(.kit-scorebar-name) { display: none; }
 .score :global(.kit-scorebar-head) { justify-content: flex-start; }
+.who :global(.tag) { display: inline-block; max-width: 100%; white-space: normal; border-radius: var(--radius); }
 .coverage { display: block; margin-top: 2px; font-size: var(--t-xs); }
 .colRules { white-space: nowrap; }
-.rules { display: inline-flex; flex-direction: column; gap: 4px; }
+.rules { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 4px; }
 .pips { display: inline-flex; gap: 2px; }
 .pips i { width: 0.3125rem; height: 0.5rem; border-radius: 2px; background: color-mix(in srgb, var(--ink) 13%, transparent); }
 .pips i[data-on] { background: var(--signal); }
 @media (max-width: 640px) {
-  .company { min-width: 8rem; }
   .colSector { display: none; }
   .rank { margin-right: var(--s2); }
+  .who { max-width: calc(100% - 2.25rem); }
 }
 .fit { min-width: 0; max-width: 100%; }
 @media (max-width: 640px) {

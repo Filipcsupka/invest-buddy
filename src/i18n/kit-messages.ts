@@ -45,6 +45,8 @@ const en = {
     builtFor: "Built for investors in Slovakia and the Czech Republic. In Slovak and English.",
     openMenu: "Open menu",
     closeMenu: "Close menu",
+    collapseSide: "Collapse sidebar",
+    expandSide: "Expand sidebar",
   },
   design: {
     metaTitle: "Design kit",
@@ -155,6 +157,8 @@ const sk: typeof en = {
     builtFor: "Pre investorov na Slovensku a v Česku. Po slovensky a po anglicky.",
     openMenu: "Otvoriť ponuku",
     closeMenu: "Zavrieť ponuku",
+    collapseSide: "Zbaliť bočný panel",
+    expandSide: "Rozbaliť bočný panel",
   },
   design: {
     metaTitle: "Dizajnová sada",

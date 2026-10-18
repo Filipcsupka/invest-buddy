@@ -11,6 +11,8 @@ export interface DataTableProps {
   /** Keep the first column in place while the table scrolls sideways. */
   stickyFirst?: boolean;
   describedBy?: string;
+  /** Extra class on the table, for a fixed column layout. */
+  className?: string;
   children: ReactNode;
 }
 
@@ -19,10 +21,10 @@ export interface DataTableProps {
  * hairline rows and a calm hover. Cells take `className="num"` for right-aligned figures. Mark a selected
  * row with `aria-selected="true"` (in a grid) or `data-selected`.
  */
-export function DataTable({ label, caption, bounded = true, density = "default", stickyFirst = false, describedBy, children }: DataTableProps) {
+export function DataTable({ label, caption, bounded = true, density = "default", stickyFirst = false, describedBy, className, children }: DataTableProps) {
   return (
     <div className="kit-table-scroll" role="region" aria-label={label} tabIndex={0} data-bounded={bounded ? "" : undefined}>
-      <table className="kit-table" data-density={density} data-sticky-first={stickyFirst ? "" : undefined} aria-describedby={describedBy}>
+      <table className={className ? `kit-table ${className}` : "kit-table"} data-density={density} data-sticky-first={stickyFirst ? "" : undefined} aria-describedby={describedBy}>
         {caption ? <caption>{caption}</caption> : null}
         {children}
       </table>

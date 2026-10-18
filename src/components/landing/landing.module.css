@@ -36,8 +36,9 @@
 .board { background: var(--sheet); color: var(--ink); border-radius: var(--radius-lg); box-shadow: 0 30px 60px -24px rgb(0 0 0 / 0.5), var(--edge-light); min-width: 0; overflow: hidden; }
 .boardHead { display: flex; justify-content: space-between; align-items: center; gap: var(--s3); padding: var(--s4) var(--s5); border-bottom: 1px solid var(--rule); }
 .boardTitle { margin: 0; font-size: var(--t-h3); letter-spacing: -0.01em; }
-.boardList { list-style: none; margin: 0; padding: var(--s2); display: grid; gap: var(--s1); }
-.boardRow { display: grid; grid-template-columns: 1.75rem minmax(0, 1fr) minmax(6rem, 9rem) auto; gap: var(--s3); align-items: center; padding: var(--s3); border-radius: var(--radius); color: inherit; text-decoration: none; transition: background var(--dur-state) var(--ease-out); }
+.boardList { list-style: none; margin: 0; padding: var(--s2); display: grid; grid-template-columns: 1.75rem minmax(0, 1fr) minmax(6rem, 9rem) max-content; column-gap: var(--s3); row-gap: var(--s1); }
+.boardList > li { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; }
+.boardRow { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; gap: var(--s3); align-items: center; padding: var(--s3); border-radius: var(--radius); color: inherit; text-decoration: none; transition: background var(--dur-state) var(--ease-out); }
 .boardRow:hover { background: var(--sheet-hover); }
 .rank { color: var(--ink-3); font-weight: 700; font-size: var(--t-sm); text-align: center; }
 .boardName { display: grid; min-width: 0; }
@@ -59,14 +60,14 @@
 .step h3 { margin: 0; font-size: 1.375rem; line-height: 1.2; letter-spacing: -0.02em; }
 .stepNo { margin: 0; align-self: start; justify-self: start; padding: var(--s1) var(--s3); border-radius: var(--radius-pill); background: var(--signal-wash); color: var(--signal-strong); font-size: var(--t-xs); font-weight: 750; }
 .stepBody { margin: 0; color: var(--ink-2); line-height: 1.55; }
-.groupBars { list-style: none; margin: var(--s3) 0 0; padding: 0; display: grid; gap: var(--s4); }
-.groupBars li { display: grid; grid-template-columns: 6.5rem minmax(0, 1fr) auto; gap: var(--s3); align-items: center; }
+.groupBars { list-style: none; margin: var(--s3) 0 0; padding: 0; display: grid; grid-template-columns: 6.5rem minmax(0, 1fr) max-content; column-gap: var(--s3); row-gap: var(--s4); }
+.groupBars li { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; align-items: center; }
 .groupName { font-weight: 650; font-size: var(--t-sm); }
 .groupTrack { display: block; block-size: 10px; border-radius: var(--radius-pill); background: color-mix(in srgb, var(--ink) 10%, transparent); overflow: hidden; }
 .groupTrack > span { display: block; block-size: 100%; border-radius: var(--radius-pill); background: var(--signal); }
 .groupPts { color: var(--ink-3); font-size: var(--t-sm); white-space: nowrap; }
-.miniRules { list-style: none; margin: var(--s3) 0 0; padding: 0; display: grid; }
-.miniRules li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--s2); align-items: center; padding-block: var(--s2); border-bottom: 1px solid var(--rule); font-size: var(--t-sm); }
+.miniRules { list-style: none; margin: var(--s3) 0 0; padding: 0; display: grid; grid-template-columns: auto minmax(0, 1fr) max-content; column-gap: var(--s2); }
+.miniRules li { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; align-items: center; padding-block: var(--s2); border-bottom: 1px solid var(--rule); font-size: var(--t-sm); }
 .miniRules :global(.kit-mark) { margin-right: 0; }
 .miniRules li[data-result="fail"] .miniName { color: var(--ink-2); }
 .miniName { min-width: 0; overflow-wrap: anywhere; }
@@ -139,7 +140,7 @@
   .heroPanel, .navyPanel { padding: var(--s6) var(--s4); border-radius: var(--radius-lg); }
   .tiers, .stateGrid, .bilingualGrid, .leaves { grid-template-columns: minmax(0, 1fr); }
   .tierCard, .closeCard { padding: var(--s5); }
-  .boardRow { grid-template-columns: 1.5rem minmax(0, 1fr) auto; }
+  .boardList { grid-template-columns: 1.5rem minmax(0, 1fr) max-content; }
   .boardBar { display: none; }
   .boardHead, .boardFoot { padding-inline: var(--s4); }
 }
