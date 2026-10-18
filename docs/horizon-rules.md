@@ -1,6 +1,6 @@
-# Horizon rules (TASK-099, report only)
+# Horizon rules
 
-Version `2026-10-17.1`. A descriptive profile per ticker: sustained growth, event-driven, mixed or no data. It is not read by the score, the status or the display percentage, and profit or loss is never an input. Thresholds are placeholders for owner review. Public output stays informational (ADR-001); nothing here is shown on a page yet.
+Version `2026-10-17.1`. A descriptive profile per ticker: sustained growth, event-driven, mixed or no data. It is not read by the score, the status or the display percentage, and profit or loss is never an input. Thresholds are placeholders for owner review. Public output stays informational (ADR-001); the labels appear only in the private owner view.
 
 Code: `src/engine/horizon.ts` (profile), `src/engine/exit-facts.ts` (review facts), `scripts/horizon-report.ts` (`npm run horizon:report`, reads the database, writes `labels.csv` and `review.md`).
 
@@ -18,3 +18,9 @@ Sustained 5 (AMZN, AVGO, CRM, MELI, NVDA), event-driven 11, mixed 7, no data 13.
 ## Collector check (2026-10-18)
 
 The report now combines quarterly revenue across the allowed SEC tags. The collector also stores `CommonStockSharesOutstanding` when the SEC provides it. On the same 2026-10-17 data date, after the approved 36-name collection, the report has 4 sustained, 12 event-driven, 11 mixed and 9 no data. GOOGL, AFRM, PLTR and ROKU moved out of no data. META remains there because its SEC companyfacts response contains no undimensioned share count for market cap. The profile rules did not change. See `docs/collectors-fixes.md` for collection counts.
+
+## Stored labels (TASK-100)
+
+Migration 087 stores immutable daily observations in `horizon_labels`. Each row records the profile, observed result, input numbers, reasons, rule version and pending change. A different observed profile must persist for 10 distinct price sessions before the stored profile changes. A new filing can change it immediately. Same-day reruns leave the existing row intact.
+
+Owner overrides are new dated rows with a reason. The private `/en/owner/horizons` and `/sk/owner/horizons` pages require `OWNER_VIEW` and the owner research credential. They show the latest stored numbers and any override. The CronJob proposal is suspended pending owner review of the placeholder thresholds.
