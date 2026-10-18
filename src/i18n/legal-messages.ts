@@ -37,6 +37,8 @@ const en = {
     s5: "Any decision you make is yours. Investing can lose part or all of the money put in. Talk to a licensed adviser if you need advice for your own situation.",
     s6Title: "Data may be incomplete or delayed",
     s6: "Prices, filings and other inputs come from third parties and from our own collection. They can be late, wrong or missing, and a score built on them can be wrong too. Check important figures at the original source.",
+    s7Title: "Owner interest",
+    s7: "The site owner may hold, add or sell securities of companies shown here, before or after the site shows them. Positions the owner holds are listed on the portfolio page, one trading day late. A holding can bias what the owner writes about a company, so read the rules and the data yourself.",
   },
   privacy: {
     title: "Privacy notice",
@@ -54,9 +56,13 @@ const en = {
     s6Title: "After you unsubscribe",
     s6: "When you unsubscribe, we keep the address on a suppression list, marked as unsubscribed. We do this so that nobody can add it again and mail you by mistake. The list is used for nothing else.",
     s7Title: "Who else sees the data",
-    s7: "Service providers that host the site and send our mail process data for us under our instructions. We do not sell personal data and we do not pass it on for advertising.",
+    s7: "Service providers that host the site and send our mail process data for us under our instructions. These are a hosting provider and a mail provider. If paid plans start, a payment provider will be added and this page will say so first. We do not sell personal data and we do not pass it on for advertising.",
     s8Title: "Your rights",
-    s8: "You can ask us for a copy of your data, ask us to correct or delete it, ask us to limit its use, or object to it. You can also complain to the data protection authority in your country. To have your waitlist address deleted, including from the suppression list, write to the contact address below.",
+    s8: "You can ask us for a copy of your data, ask us to correct or delete it, ask us to limit its use, or object to it. Where we rely on your consent, you can withdraw it at any time, for example by using the unsubscribe link in a mail. You can also complain to the data protection authority in your country. To have your waitlist address deleted, including from the suppression list, write to the contact address below.",
+    s9Title: "Why we may use your data",
+    s9: "For the waitlist mail we rely on your consent, which you give by ticking the box and confirming your address. For server logs we rely on our legitimate interest in running and protecting the site.",
+    s10Title: "How long we keep it",
+    s10: "Server logs stay in the hosting platform's container logs and are rotated automatically. We set no longer period for them. Waitlist addresses follow the rules in the waitlist section above. Transfers outside the EU: the operator has to confirm where the hosting and mail providers process data before launch.",
   },
   terms: {
     title: "Terms of use",
@@ -77,6 +83,8 @@ const en = {
     s7: "To the extent the law allows, we are not liable for losses that come from using the site or relying on its content. This does not limit liability that the law does not allow us to limit.",
     s8Title: "Changes and law",
     s8: "We may change these terms and the new text applies from the date shown on this page. Slovak law applies, subject to any mandatory consumer rules of your own country. TODO for the owner: confirm the governing law and courts with a lawyer.",
+    s9Title: "Owner interest",
+    s9: "The site owner may hold securities of companies shown here. See the disclaimer page and the portfolio page.",
   },
 };
 
@@ -113,6 +121,8 @@ const sk: LegalMessages = {
     s5: "Každé rozhodnutie je vaše. Investovanie môže znamenať stratu časti alebo celej vloženej sumy. Ak potrebujete radu pre vlastnú situáciu, obráťte sa na licencovaného poradcu.",
     s6Title: "Údaje môžu byť neúplné alebo oneskorené",
     s6: "Ceny, podania a ďalšie vstupy pochádzajú od tretích strán a z nášho vlastného zberu. Môžu meškať, byť chybné alebo chýbať a skóre z nich môže byť tiež chybné. Dôležité čísla si overte v pôvodnom zdroji.",
+    s7Title: "Záujem majiteľa",
+    s7: "Majiteľ webu môže držať, prikupovať alebo predávať cenné papiere firiem zobrazených na webe, pred ich zobrazením aj po ňom. Pozície, ktoré majiteľ drží, sú uvedené na stránke portfólia s oneskorením jedného obchodného dňa. Držba môže ovplyvniť to, čo majiteľ o firme píše, preto si pravidlá a údaje overte sami.",
   },
   privacy: {
     title: "Zásady ochrany súkromia",
@@ -130,9 +140,13 @@ const sk: LegalMessages = {
     s6Title: "Po odhlásení",
     s6: "Keď sa odhlásite, adresu ponecháme v zozname vylúčených, označenú ako odhlásenú. Robíme to preto, aby ju nikto nemohol pridať znova a omylom vám písať. Zoznam sa nepoužíva na nič iné.",
     s7Title: "Kto ďalší údaje vidí",
-    s7: "Poskytovatelia služieb, ktorí web hostujú a posielajú našu poštu, spracúvajú údaje pre nás podľa našich pokynov. Osobné údaje nepredávame a neposkytujeme ich na reklamu.",
+    s7: "Poskytovatelia služieb, ktorí web hostujú a posielajú našu poštu, spracúvajú údaje pre nás podľa našich pokynov. Ide o hostingového poskytovateľa a poskytovateľa pošty. Ak sa spustia platené plány, pribudne platobný poskytovateľ a táto stránka to uvedie vopred. Osobné údaje nepredávame a neposkytujeme ich na reklamu.",
     s8Title: "Vaše práva",
-    s8: "Môžete nás požiadať o kópiu svojich údajov, o ich opravu alebo vymazanie, o obmedzenie ich používania, alebo proti nim namietať. Sťažnosť môžete podať aj na úrade na ochranu osobných údajov vo svojej krajine. Ak chcete vymazať svoju adresu z čakacej listiny, aj zo zoznamu vylúčených, napíšte na kontakt nižšie.",
+    s8: "Môžete nás požiadať o kópiu svojich údajov, o ich opravu alebo vymazanie, o obmedzenie ich používania, alebo proti nim namietať. Ak sa opierame o váš súhlas, môžete ho kedykoľvek odvolať, napríklad odkazom na odhlásenie v e-maile. Sťažnosť môžete podať aj na úrade na ochranu osobných údajov vo svojej krajine. Ak chcete vymazať svoju adresu z čakacej listiny, aj zo zoznamu vylúčených, napíšte na kontakt nižšie.",
+    s9Title: "Prečo môžeme údaje používať",
+    s9: "Pri e-maile z čakacej listiny sa opierame o váš súhlas, ktorý dáte zaškrtnutím políčka a potvrdením adresy. Pri záznamoch servera sa opierame o náš oprávnený záujem prevádzkovať a chrániť web.",
+    s10Title: "Ako dlho údaje uchovávame",
+    s10: "Záznamy servera zostávajú v kontajnerových logoch hostingovej platformy a rotujú sa automaticky. Dlhšie obdobie nenastavujeme. Adresy z čakacej listiny sa riadia pravidlami v sekcii o čakacej listine vyššie. Prenosy mimo EÚ: prevádzkovateľ musí pred spustením potvrdiť, kde hostingový poskytovateľ a poskytovateľ pošty údaje spracúvajú.",
   },
   terms: {
     title: "Podmienky používania",
@@ -153,6 +167,8 @@ const sk: LegalMessages = {
     s7: "V rozsahu, ktorý zákon dovoľuje, nezodpovedáme za straty, ktoré vzniknú používaním webu alebo spoliehaním sa na jeho obsah. Toto neobmedzuje zodpovednosť, ktorú zákon obmedziť nedovoľuje.",
     s8Title: "Zmeny a právo",
     s8: "Tieto podmienky môžeme zmeniť a nové znenie platí od dátumu uvedeného na tejto stránke. Uplatňuje sa slovenské právo, s výhradou záväzných spotrebiteľských pravidiel vašej krajiny. TODO pre majiteľa: rozhodné právo a súdy potvrďte s právnikom.",
+    s9Title: "Záujem majiteľa",
+    s9: "Majiteľ webu môže držať cenné papiere firiem zobrazených na webe. Pozrite stránku s upozornením a stránku portfólia.",
   },
 };
 
@@ -162,4 +178,4 @@ export function getLegalMessages(locale: Locale): LegalMessages {
   return catalog[locale];
 }
 
-export const LEGAL_SECTION_KEYS = ["s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8"] as const;
+export const LEGAL_SECTION_KEYS = ["s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9", "s10"] as const;
