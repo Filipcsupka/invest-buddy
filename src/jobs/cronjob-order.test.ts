@@ -34,6 +34,15 @@ describe("daily pipeline order", () => {
     for (const text of ["runAsNonRoot: true", "automountServiceAccountToken: false", "allowPrivilegeEscalation: false", "readOnlyRootFilesystem: true", 'drop: ["ALL"]', "type: RuntimeDefault", "concurrencyPolicy: Forbid"]) expect(doc).toContain(text);
     expect(readFileSync(join(base, "kustomization.yaml"), "utf8")).toContain("- master-refresh-cronjob.yaml");
   });
+  it("keeps the weekly pool-bars refresh suspended, on Sunday, after the Saturday discovery and before the Sunday summary", () => {
+    const doc = job("pool-bars");
+    expect(minutes("pool-bars").days).toBe("0");
+    expect(doc).toContain("suspend: true");
+    expect(doc).toContain('command: ["node", "dist/jobs/pool-bars.js", "--limit", "350"]');
+    for (const name of ["DATABASE_URL", "SEC_USER_AGENT", "TWELVE_DATA_API_KEY"]) expect(doc).toContain(`name: ${name}`);
+    expect(minutes("pool-bars").at + startWindow("pool-bars") + deadline("pool-bars")).toBeLessThanOrEqual(minutes("weekly").at);
+    expect(readFileSync(join(base, "kustomization.yaml"), "utf8")).toContain("- pool-bars-cronjob.yaml");
+  });
   it("keeps the weekly Telegram summary suspended, Sunday 18:00 Bratislava, after the Sunday master refresh", () => {
     const doc = job("weekly");
     expect(minutes("weekly")).toEqual({ at: 18 * 60, days: "0" });
