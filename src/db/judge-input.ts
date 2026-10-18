@@ -6,6 +6,7 @@ import { freshnessDays } from "../data/evidence";
 import { CITABLE_AGREEMENTS, SEC_PUBLIC_URL } from "../data/sources";
 import { eventNote, upcomingMacroEvents } from "../data/macro-calendar";
 import { latestBaseline, type Baseline } from "./portfolio-baseline";
+import { scoredMember } from "./universe";
 import { latestIdeaPerSymbol, ideaSignature, type IdeaAction, type Idea, type SizeTier } from "./ideas";
 
 /** The benchmark every idea is compared against: the default home for money that has no better use. */
@@ -120,7 +121,7 @@ export async function buildJudgeInput(pool: Pick<pg.Pool, "query">, asOf: string
   const previous = await latestIdeaPerSymbol(pool);
   const scores = await pool.query<ScoreRow>(`SELECT DISTINCT ON (s.ticker) s.ticker, i.name, i.sector, m.tier, s.audit FROM score_results s
     JOIN instruments i ON i.ticker=s.ticker JOIN universe_membership m ON m.ticker=i.ticker
-    WHERE s.as_of <= $1 AND s.as_of >= ($1::date - 10) AND s.as_of >= m.valid_from AND m.list <> 'benchmark'
+    WHERE s.as_of <= $1 AND s.as_of >= ($1::date - 10) AND s.as_of >= m.valid_from AND ${scoredMember()}
       AND m.valid_from <= $1::date AND (m.valid_to IS NULL OR m.valid_to > $1::date)
     ORDER BY s.ticker, s.as_of DESC`, [asOf]);
   const held = new Set((baseline?.positions ?? []).map((p) => p.symbol));

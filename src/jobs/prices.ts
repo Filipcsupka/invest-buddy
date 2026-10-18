@@ -65,7 +65,7 @@ async function main() {
   if (!memory && !url) throw new Error("DATABASE_URL is required; use --memory for a run without a database");
   const pool = memory ? null : new pg.Pool({ connectionString: url });
   try {
-    const all = priceTickers(pool ? await loadUniverse(pool) : universe.instruments);
+    const all = priceTickers(pool ? await loadUniverse(pool, undefined, { collect: true }) : universe.instruments);
     const unknown = (only ?? []).filter((t) => !all.includes(t));
     if (unknown.length) throw new Error(`Unknown ticker(s): ${unknown.join(", ")}`);
     const tickers = only ?? all;

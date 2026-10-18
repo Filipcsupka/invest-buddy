@@ -35,7 +35,7 @@ async function main() {
   try {
     const stored = await loadStoredCiks(pool), secSymbols = await loadVendorSymbols(pool, "sec");
     const ledger = new PostgresUsageLedger(pool), http = defaultHttp();
-    for (const company of await loadUniverse(pool)) {
+    for (const company of await loadUniverse(pool, undefined, { collect: true })) {
       const cik = resolveCik(company.symbol, stored, ciks, secSymbols);
       if (!cik) { process.stderr.write(`${company.symbol}: no CIK\n`); missing++; continue; }
       const url = `https://data.sec.gov/submissions/CIK${String(cik).padStart(10, "0")}.json`;

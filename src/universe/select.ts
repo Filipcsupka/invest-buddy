@@ -1,5 +1,6 @@
 /** Pure universe selection (D35). No I/O: the script gathers inputs, this module ranks and explains. */
 import { createHash } from "node:crypto";
+import { UNCLASSIFIED } from "./sector";
 
 export const CRITERIA_VERSION = "d35-2026-10-draft";
 
@@ -17,7 +18,7 @@ export type UniverseCriteria = { [K in keyof typeof UNIVERSE_CRITERIA]: number }
 export type ReasonCode =
   | "not_common_stock" | "foreign_filer" | "filer_unknown" | "no_revenue_history" | "short_revenue_history"
   | "no_growth_data" | "growth_not_positive" | "no_price_data" | "short_bar_history" | "price_below_min"
-  | "volume_below_floor" | "sector_cap" | "below_cut";
+  | "volume_below_floor" | "duplicate_filer" | "sector_cap" | "below_cut";
 
 export type Candidate = {
   ticker: string; name: string; sector: string; cik: number | null;
@@ -36,6 +37,11 @@ export type Selected = Candidate & { rank: number; list: "core" | "extended"; gr
 export type Excluded = { ticker: string; name: string; sector: string; reason: ReasonCode };
 export type Selection = { criteria: UniverseCriteria; selected: Selected[]; excluded: Excluded[]; sectorCap: number };
 
+/** Second filers of an already listed company (same revenue under another CIK). Explicit list; the first name is the one kept. */
+export const DUPLICATE_FILERS: Readonly<Record<string, { of: string; note: string }>> = {
+  SUNC: { of: "SUN", note: "same revenue as SUN (14,259M USD in the 2026-10-18 pool)" },
+};
+
 const NON_COMMON_NAME = /\b(warrants?|units?|rights?|preferred|depositary|notes|etf|trust)\b/i;
 const COMMON_TICKER = /^[A-Z]{1,5}([.-][A-C])?$/;
 
@@ -53,6 +59,7 @@ export function filerType(forms: string[]): "domestic" | "foreign" | "unknown" {
 /** First failed criterion, or null. Order is fixed so reason codes are stable. */
 export function failedCriterion(c: Candidate, k: UniverseCriteria): ReasonCode | null {
   if (!isCommonStock(c)) return "not_common_stock";
+  if (DUPLICATE_FILERS[c.ticker]) return "duplicate_filer";
   const filer = filerType(c.forms);
   if (filer === "foreign") return "foreign_filer";
   if (filer === "unknown") return "filer_unknown";
@@ -76,6 +83,8 @@ export function selectUniverse(input: Candidate[], overrides: Partial<UniverseCr
   const sectorCap = Math.floor((k.target * k.sectorCapPct) / 100);
   const sectorCount = new Map<string, number>();
   const bump = (sector: string) => sectorCount.set(sector, (sectorCount.get(sector) ?? 0) + 1);
+  /** `Unclassified` is not a sector, so it is never capped. */
+  const capped = (sector: string) => sector !== UNCLASSIFIED && (sectorCount.get(sector) ?? 0) >= sectorCap;
 
   const selected: Selected[] = [];
   for (const c of all.filter((x) => x.core)) {
@@ -97,7 +106,7 @@ export function selectUniverse(input: Candidate[], overrides: Partial<UniverseCr
     || byTicker(a, b));
   for (const c of eligible) {
     const reason: ReasonCode | null = selected.length >= k.target ? "below_cut"
-      : (sectorCount.get(c.sector) ?? 0) >= sectorCap ? "sector_cap" : null;
+      : capped(c.sector) ? "sector_cap" : null;
     if (reason) { excluded.push({ ticker: c.ticker, name: c.name, sector: c.sector, reason }); continue; }
     selected.push({ ...c, rank: 0, list: "extended", group: isGrowth(c) ? "growth" : "other", notes: [] });
     bump(c.sector);

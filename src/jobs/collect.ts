@@ -208,7 +208,7 @@ async function main() {
   if (!memory && !process.env.DATABASE_URL) throw new Error("DATABASE_URL is required; use --memory for a run without a database");
   const pool = memory ? null : new pg.Pool({ connectionString: process.env.DATABASE_URL });
   try {
-    const activeCompanies = pool ? await loadUniverse(pool) : companies;
+    const activeCompanies = pool ? await loadUniverse(pool, undefined, { collect: true }) : companies;
     const symbols = only ? [...new Set(only.split(",").map((s) => s.trim().toUpperCase()))] : activeCompanies.map((c) => c.symbol);
     const unknown = symbols.filter((s) => !activeCompanies.some((c) => c.symbol === s));
     if (unknown.length) throw new Error(`Unknown ticker(s): ${unknown.join(", ")}`);

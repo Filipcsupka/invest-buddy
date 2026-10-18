@@ -62,3 +62,22 @@ describe("universe selection", () => {
     expect(barMetrics(bars)).toEqual({ lastClose: 10, avgDollarVolume50: 10_000, barDays: 50 });
   });
 });
+
+describe("sector cap and duplicate filers", () => {
+  it("never caps Unclassified, and still caps a named sector", () => {
+    const rows = [...Array.from({ length: 6 }, (_, i) => base(`U${"ABCDEF"[i]}`, { sector: "Unclassified", yoyGrowthPct: 90 - i })), ...Array.from({ length: 6 }, (_, i) => base(`S${"ABCDEF"[i]}`, { sector: "Biotech", yoyGrowthPct: 50 - i }))];
+    const s = selectUniverse(rows, { target: 10, sectorCapPct: 30 });
+    expect(s.sectorCap).toBe(3);
+    expect(s.selected.filter((r) => r.sector === "Unclassified")).toHaveLength(6);
+    expect(s.selected.filter((r) => r.sector === "Biotech")).toHaveLength(3);
+    expect(s.excluded.map((e) => e.reason)).toEqual(["sector_cap", "sector_cap", "sector_cap"]);
+  });
+  it("excludes SUNC as duplicate_filer and keeps SUN", () => {
+    const s = selectUniverse([base("SUN"), base("SUNC")]);
+    expect(s.selected.map((r) => r.ticker)).toEqual(["SUN"]);
+    expect(s.excluded).toEqual([{ ticker: "SUNC", name: "SUNC Corp", sector: "Tech", reason: "duplicate_filer" }]);
+  });
+  it("keeps a core name even when it is on the duplicate list", () => {
+    expect(selectUniverse([base("SUNC", { core: true })]).selected[0]).toMatchObject({ ticker: "SUNC", list: "core" });
+  });
+});

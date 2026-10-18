@@ -4,7 +4,8 @@ import { defaultHttp } from "../collectors/sources/client";
 import { loadTickers } from "../collectors/sources/sec";
 import { DailyLimitError, SymbolNotFoundError, TwelveDataProvider } from "../data/twelvedata";
 import { CapReached, PostgresUsageLedger } from "../data/usage";
-import { rankPool } from "../universe/pool";
+import { NOT_FOUND_SYMBOLS, rankPool } from "../universe/pool";
+import { DUPLICATE_FILERS } from "../universe/select";
 import { saveDiscoveryPriceBars } from "./discovery";
 
 /**
@@ -26,6 +27,9 @@ export function parsePoolBarsArgs(args: string[]): PoolBarsOptions {
   }
   return out;
 }
+
+/** Names that need no request: Twelve Data does not know them, or they are a duplicate filer excluded from selection. */
+export const skipsBars = (ticker: string) => NOT_FOUND_SYMBOLS.has(ticker) || ticker in DUPLICATE_FILERS;
 
 /** A name is covered when it has at least 200 stored bars and the newest one is at most 5 days old. */
 export function needsBars(bars: { count: number; newest: string | null }, today: string): boolean {
@@ -52,7 +56,7 @@ async function main() {
     const stored = await pool.query<{ symbol: string; count: string; newest: string | null }>(
       "SELECT symbol, count(*)::text AS count, max(bar_date)::text AS newest FROM discovery_price_bars WHERE symbol = ANY($1) GROUP BY symbol", [ranked.map((r) => r.ticker)]);
     const have = new Map(stored.rows.map((r) => [r.symbol, { count: Number(r.count), newest: r.newest }]));
-    const todo = ranked.filter((r) => needsBars(have.get(r.ticker) ?? { count: 0, newest: null }, today));
+    const todo = ranked.filter((r) => !skipsBars(r.ticker) && needsBars(have.get(r.ticker) ?? { count: 0, newest: null }, today));
     const usage = new PostgresUsageLedger(pool);
     const provider = new TwelveDataProvider({ apiKey: process.env.TWELVE_DATA_API_KEY, reserve: () => usage.reserve("twelvedata", 1, { job: "pool-bars", credits: 1 }) });
     let fetched = 0, notFound = 0, stopped: string | null = null;
@@ -67,7 +71,7 @@ async function main() {
         process.stderr.write(`${row.ticker}: ${error instanceof Error ? error.message : "failed"}\n`);
       }
     }
-    process.stdout.write(`${JSON.stringify({ job: "pool-bars", quarter: label(quarter), pool: ranked.length, alreadyCovered: ranked.length - todo.length, fetched, notFound, requests: provider.requests, remaining: todo.length - fetched - notFound, stopped })}\n`);
+    process.stdout.write(`${JSON.stringify({ job: "pool-bars", quarter: label(quarter), pool: ranked.length, skipped: ranked.filter((r) => skipsBars(r.ticker)).length, alreadyCovered: ranked.filter((r) => !skipsBars(r.ticker)).length - todo.length, fetched, notFound, requests: provider.requests, remaining: todo.length - fetched - notFound, stopped })}\n`);
   } finally { await pool.end(); }
 }
 

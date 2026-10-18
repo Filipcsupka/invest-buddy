@@ -33,13 +33,14 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("membership history in PostgreSQ
   it("adds and removes dated membership while keeping bars and scores", async () => {
     const add = parseChange(["add", ticker, "--date", "2026-10-11", "--name", "History test", "--sector", "Test", "--list", "extended", "--tier", "2", "--criteria-version", "v1", "--reason", "Reviewed", "--actor", "owner"]);
     await changeUniverse(db, add);
-    expect((await loadUniverse(db, "2026-10-10")).some((row) => row.symbol === ticker)).toBe(false);
-    expect((await loadUniverse(db, "2026-10-11")).find((row) => row.symbol === ticker)?.tier).toBe(2);
+    expect((await loadUniverse(db, "2026-10-10", { collect: true })).some((row) => row.symbol === ticker)).toBe(false);
+    expect((await loadUniverse(db, "2026-10-11", { collect: true })).find((row) => row.symbol === ticker)?.tier).toBe(2);
+    expect((await loadUniverse(db, "2026-10-11")).some((row) => row.symbol === ticker)).toBe(false);
     await db.query("INSERT INTO daily_bars(ticker,bar_date,open,high,low,close,volume) VALUES ($1,'2026-10-11',10,11,9,10,100)", [ticker]);
     await db.query("INSERT INTO score_results(ticker,as_of,technical,fundamentals,macro,total,state,audit) VALUES ($1,'2026-10-11',1,1,1,3,'Wait','{}')", [ticker]);
     await changeUniverse(db, parseChange(["remove", ticker, "--date", "2026-10-12", "--reason", "Left screen", "--actor", "owner"]));
-    expect((await loadUniverse(db, "2026-10-11")).some((row) => row.symbol === ticker)).toBe(true);
-    expect((await loadUniverse(db, "2026-10-12")).some((row) => row.symbol === ticker)).toBe(false);
+    expect((await loadUniverse(db, "2026-10-11", { collect: true })).some((row) => row.symbol === ticker)).toBe(true);
+    expect((await loadUniverse(db, "2026-10-12", { collect: true })).some((row) => row.symbol === ticker)).toBe(false);
     expect((await db.query("SELECT 1 FROM daily_bars WHERE ticker=$1", [ticker])).rowCount).toBe(1);
     expect((await db.query("SELECT 1 FROM score_results WHERE ticker=$1", [ticker])).rowCount).toBe(1);
     await expect(changeUniverse(db, parseChange(["remove", ticker, "--date", "2026-10-13", "--reason", "Again", "--actor", "owner"]))).rejects.toThrow("not an active member");

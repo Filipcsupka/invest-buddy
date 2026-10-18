@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formsFromSubmissions, mergePool, withForms, type PoolRowWithForms } from "./forms";
+import { formsFromSubmissions, mergePool, sicFromSubmissions, withForms, type PoolRowWithForms } from "./forms";
 import type { PoolRow } from "./pool";
 
 const row = (ticker: string, cik: number): PoolRow => ({ ticker, cik, name: `${ticker} Inc`, concept: "Revenues", end: "2026-06-30", revenue: 1e8, yoyPercent: 40, qoqPercent: 5, priorYoyPercent: 30, accelerationPp: 10, rank: 1 });
@@ -37,5 +37,23 @@ describe("mergePool", () => {
   it("adds pool names the database does not know, without bars, and keeps unknown forms empty", () => {
     const out = mergePool([], [p("NEW", null)]);
     expect(out[0]).toMatchObject({ ticker: "NEW", forms: [], lastClose: null, barDays: 0 });
+  });
+});
+
+describe("sic", () => {
+  it("reads the SIC code from submissions and tolerates a missing or bad value", () => {
+    expect(sicFromSubmissions(JSON.stringify({ sic: "2834" }))).toBe(2834);
+    expect(sicFromSubmissions(JSON.stringify({ sic: "" }))).toBeNull();
+    expect(sicFromSubmissions("{}")).toBeNull();
+  });
+  it("withForms returns sic from the same fetch and null on failure", async () => {
+    const http = { get: async (url: string) => { if (url.includes("0000000002")) throw new Error("HTTP 500"); return JSON.stringify({ sic: "3674", filings: { recent: { form: ["10-K"] } } }); } };
+    const out = await withForms([row("AAA", 1), row("BBB", 2)], http);
+    expect(out.map((r) => r.sic)).toEqual([3674, null]);
+  });
+  it("mergePool sets the sector from SIC for new names and fills Unclassified ones, never a named sector", () => {
+    const p = (ticker: string, sic: number | null): PoolRowWithForms => ({ ...row(ticker, 7), forms: ["10-K"], sic });
+    const out = mergePool([cand("OLD", { sector: "Growth" }), cand("UNC")], [p("NEW", 2834), p("OLD", 3674), p("UNC", 7372), p("ODD", 1040)]);
+    expect(Object.fromEntries(out.map((c) => [c.ticker, c.sector]))).toEqual({ OLD: "Growth", UNC: "Cloud & SaaS", NEW: "Biotech", ODD: "Unclassified" });
   });
 });

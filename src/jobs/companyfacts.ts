@@ -12,7 +12,7 @@ import type { BackfillJob } from "./backfill";
 type Db = Pick<pg.Pool, "query">;
 export interface CompanyfactsSubject { ticker: string; cik: number }
 export async function companyfactsSubjects(db: Db, http: SourceHttp, only?: string[], watchSince?: string): Promise<CompanyfactsSubject[]> {
-  let universe = await loadUniverse(db);
+  let universe = await loadUniverse(db, undefined, { collect: true });
   if (only) {
     const known = new Set(universe.map((row) => row.symbol));
     const unknown = only.filter((ticker) => !known.has(ticker));

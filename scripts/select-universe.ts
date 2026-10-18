@@ -36,8 +36,9 @@ export function writeReport(candidates: Candidate[], opts: { asOf: string; out: 
 type Q = Pick<pg.Pool, "query">;
 
 export async function loadCandidates(db: Q, asOf: string, secCik: Map<string, number>): Promise<Candidate[]> {
-  const members = await db.query<{ ticker: string; list: string }>(
-    "SELECT ticker,list FROM universe_membership WHERE valid_from<=$1 AND (valid_to IS NULL OR valid_to>$1) AND list<>'benchmark'", [asOf]);
+  // Core = every member except the collect-only list. The 7 seeded names were stored as 'extended' before D36 and are live core names.
+  const members = await db.query<{ ticker: string }>(
+    "SELECT ticker FROM universe_membership WHERE valid_from<=$1 AND (valid_to IS NULL OR valid_to>$1) AND list<>'benchmark' AND (list<>'extended' OR added_by='seed')", [asOf]);
   const core = new Set(members.rows.map((r) => r.ticker));
   const names = await db.query<{ symbol: string; name: string; sector: string }>(
     `SELECT DISTINCT ON (symbol) symbol,name,sector FROM (
