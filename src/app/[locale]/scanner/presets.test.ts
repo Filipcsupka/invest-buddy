@@ -19,9 +19,9 @@ const tickers = (list: StoreRow[]) => list.map((r) => r.instrument.ticker);
 
 describe("presets", () => {
   const known = new Set(ruleGroups.flatMap((group) => group.rules.map((rule) => rule.id)));
-  it("define 5 to 8 presets from real rule ids", () => {
+  it("define rule and profile presets from real rule ids", () => {
     expect(presets.length).toBeGreaterThanOrEqual(5);
-    expect(presets.length).toBeLessThanOrEqual(8);
+    expect(presets.length).toBe(9);
     for (const preset of presets) for (const id of preset.rules) expect(known.has(id)).toBe(true);
     expect(new Set(presets.map((preset) => preset.id)).size).toBe(presets.length);
   });
@@ -46,6 +46,13 @@ describe("presets", () => {
     expect(parseFilters({ preset: "nonsense" }).preset).toBe("");
     expect(presetById("rules-lost")?.kind).toBe("lost");
     expect(matchesPreset(presets[0], [], undefined)).toBe(false);
+  });
+
+  it("filters stored profiles without inferring one from score hits", () => {
+    const horizon = { ticker: "AAA", profile: "sustained" as const, values: {} };
+    const query = parseFilters({ preset: "sustained-growers" });
+    expect(filterScores(rows, query, new Set(), "en", {}, {}, { AAA: horizon })).toEqual([rows[0]]);
+    expect(filterScores(rows, query, new Set())).toEqual([]);
   });
 });
 

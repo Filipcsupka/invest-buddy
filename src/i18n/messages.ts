@@ -399,6 +399,8 @@ const en = {
       "macro-tailwind": { name: "Macro tailwind", note: "Both the growth-sector rotation flag and the macro data flag are on." },
       "newly-meeting": { name: "Newly meeting rules", note: "At least one rule is met now that was not met a week ago." },
       "rules-lost": { name: "Rules lost this week", note: "At least one rule that was met a week ago now fails." },
+      "sustained-growers": { name: "Sustained growers", note: "Stored profile with sustained revenue growth and lower price swings." },
+      "event-driven": { name: "Higher volatility, event-driven", note: "Stored profile with bigger price swings or unusual recent movement." },
     },
   },
   company: {
@@ -1204,6 +1206,8 @@ const sk: Messages = {
       "macro-tailwind": { name: "Priaznivé makro", note: "Platí príznak rotácie do rastových sektorov aj príznak makro údajov." },
       "newly-meeting": { name: "Novo splnené pravidlá", note: "Aspoň jedno pravidlo je splnené teraz a pred týždňom splnené nebolo." },
       "rules-lost": { name: "Pravidlá stratené za týždeň", note: "Aspoň jedno pravidlo splnené pred týždňom teraz neplatí." },
+      "sustained-growers": { name: "Stabilne rastúce spoločnosti", note: "Uložený profil s trvalejším rastom tržieb a menšími cenovými výkyvmi." },
+      "event-driven": { name: "Vyššia volatilita, viazané na udalosti", note: "Uložený profil s väčšími cenovými výkyvmi alebo nezvyčajným nedávnym pohybom." },
     },
   },
   company: {

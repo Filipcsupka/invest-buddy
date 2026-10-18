@@ -24,7 +24,9 @@ describe("horizonProfile", () => {
   const base = { bars: calm, revenue: quarters([30, 28, 26, 24]), marketCapUsd: 50e9, flags: [], tier: 1 };
   it("labels a large, calm, steady grower as sustained", () => {
     const bigVolume = bars(100, () => ({ close: 100, spread: 2, volume: 5_000_000 }));
-    expect(horizonProfile({ ...base, bars: bigVolume }).profile).toBe("sustained");
+    const result = horizonProfile({ ...base, bars: bigVolume });
+    expect(result.profile).toBe("sustained");
+    expect(result.values.drawdownPercent).toBe(1);
   });
   it("labels a small cap with a one-quarter revenue spike as event", () => {
     const r = horizonProfile({ ...base, revenue: quarters([90, 20, 18, 16]), marketCapUsd: 2e9 });

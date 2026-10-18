@@ -20,6 +20,8 @@ import { statusLabel } from "@/components/status-slider";
 import { toRow, byScore } from "@/components/view-model";
 import { DataStatus } from "@/components/data-status";
 import { latestPortfolio, latestScores } from "@/data/store";
+import { publicHorizons } from "@/data/public-horizons";
+import { profileCopy } from "@/i18n/profile-messages";
 import { ruleStreaks, type RuleStreak } from "@/db/rules-streak";
 import { fill, getMessages, intlTag, type Locale } from "@/i18n";
 import { pageMetadata } from "@/i18n/metadata";
@@ -31,7 +33,7 @@ import { latestShareCounts } from "@/data/flag-facts";
 import { filterScores, filtersHref, parseFilters, type Query, type ScannerFilters } from "./filters";
 import { floorMetrics, floorState, SCANNER_FLOOR } from "./floor";
 import { ruleCountLabel, streakText } from "./format";
-import { matchesPreset, presets } from "./presets";
+import { matchesPreset, presetById, presets } from "./presets";
 import { isChangePreset, limitFiltersFor } from "./access";
 import styles from "./scanner.module.css";
 
@@ -89,7 +91,7 @@ function PresetBar({ locale, filters, counts, total, viewer }: { locale: Locale;
         const lock = getTierListsMessages(locale).changePresetLock;
         return <li key={preset.id}><span className={styles.preset} aria-disabled="true"><span className={styles.presetName}><span className={styles.presetText}>{text.name}</span></span><span className={styles.presetMeta}><IconLock />{lock}</span></span></li>;
       }
-      const rules = preset.kind === "rules" ? ruleCountLabel(locale, preset.rules.length) : fill(s.presetAny, { count: preset.rules.length });
+      const rules = preset.kind === "profile" ? profileCopy[locale].profile : preset.kind === "rules" ? ruleCountLabel(locale, preset.rules.length) : fill(s.presetAny, { count: preset.rules.length });
       return <li key={preset.id}><Link className={styles.preset} href={href(preset.id)} aria-current={filters.preset === preset.id ? "true" : undefined} title={text.note}>
         <span className={styles.presetName}><span className={styles.presetText}>{text.name}</span>{isChangePreset(preset.id) && viewer.tier === "admin" ? <TierBadge segmentId="scanner-streak" label={getTierMessages(locale).badge} title={getTierMessages(locale).badgeHint} /> : null}</span><span className={styles.presetMeta}>{fill(s.presetMeta, { rules, count: counts[preset.id] ?? 0, total })}</span></Link></li>;
     })}</ul>
@@ -112,7 +114,7 @@ async function Scanner({ params, searchParams }: Props) {
   const m = getMessages(locale);
   const c = copy[locale];
   const filters = limitFiltersFor(viewer, parseFilters(await searchParams));
-  const [data, portfolio, streakData] = await Promise.all([latestScores(), latestPortfolio(), ruleStreaks()]);
+  const [data, portfolio, streakData, horizons] = await Promise.all([latestScores(), latestPortfolio(), ruleStreaks(), publicHorizons()]);
   // A free viewer gets no streak data, neither in the column nor in the change presets.
   const streaks = viewer.tier === "free" ? {} : streakData;
   const held = new Set(portfolio?.weights.filter((row) => row.weightPercent > 0).map((row) => row.symbol.toUpperCase()) ?? []);
@@ -121,15 +123,15 @@ async function Scanner({ params, searchParams }: Props) {
   const floorData = Object.fromEntries(data.rows.map((row) => [row.instrument.ticker, floorMetrics(row.result.inputs?.bars ?? [], shares[row.instrument.ticker])]));
   const fl = getScannerFloorMessages(locale);
   const million = (usd: number) => fl.millions.replace("{n}", new Intl.NumberFormat(intlTag[locale]).format(usd / 1_000_000));
-  const unfloored = filterScores(data.rows, { ...filters, floor: false }, held, locale, streaks, floorData);
-  const visible = filterScores(data.rows, filters, held, locale, streaks, floorData).map((row) => toRow(locale, row)).sort((a, b) => {
+  const unfloored = filterScores(data.rows, { ...filters, floor: false }, held, locale, streaks, floorData, horizons);
+  const visible = filterScores(data.rows, filters, held, locale, streaks, floorData, horizons).map((row) => toRow(locale, row)).sort((a, b) => {
     if (filters.sort === "score") return byScore(a, b);
     const field = { f: "fundamentals", t: "technical", m: "macro", ticker: "ticker", sector: "sector", state: "state" } as const;
     const key = field[filters.sort];
     const first = a[key], second = b[key];
     return (typeof first === "number" && typeof second === "number" ? second - first : String(first).localeCompare(String(second), locale)) || a.ticker.localeCompare(b.ticker);
   });
-  const presetCounts = Object.fromEntries(presets.map((preset) => [preset.id, data.rows.filter(({ result }) => matchesPreset(preset, result.ruleHits, streaks[result.ticker])).length]));
+  const presetCounts = Object.fromEntries(presets.map((preset) => [preset.id, data.rows.filter(({ result }) => matchesPreset(preset, result.ruleHits, streaks[result.ticker], horizons[result.ticker])).length]));
   const s = m.scanner;
   const sc = getScreenMessages(locale);
   const h = getHeatmapMessages(locale);
@@ -168,7 +170,7 @@ async function Scanner({ params, searchParams }: Props) {
             <td className="num">{rulesMetCell(locale, row.matched, streaks[row.ticker])}</td>
             <td><StateChip state={chipState} label={stateText} size="sm" describedBy="scanner-disclaimer" /></td>
           </tr>;
-        }) : <DataTableEmpty colSpan={5}>{c.empty}</DataTableEmpty>}</tbody>
+        }) : <DataTableEmpty colSpan={5}>{filters.preset && presetById(filters.preset)?.kind === "profile" && !Object.keys(horizons).length ? profileCopy[locale].notComputed : c.empty}</DataTableEmpty>}</tbody>
       </DataTable>
     </section></PaywallSegment>
     <p className="disclaimer is-compact" id="scanner-disclaimer">{m.common.disclaimer}</p>

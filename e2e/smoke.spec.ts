@@ -51,6 +51,32 @@ test.describe("company page", () => {
   });
 });
 
+test.describe("public profiles", () => {
+  test("fixture pages show labelled empty states and profile presets", async ({ page }) => {
+    await page.goto("/en/dashboard");
+    const lists = page.getByRole("region", { name: "Company profile" });
+    await expect(lists.getByRole("region", { name: "Sustained growers" })).toContainText("Profiles not computed yet");
+    await expect(lists.getByRole("region", { name: "Higher volatility, event-driven" })).toContainText("Profiles not computed yet");
+    await page.goto("/en/company/NVDA");
+    const profile = page.locator("[data-profile-block]");
+    await expect(profile.getByRole("heading", { name: "Company profile" })).toBeVisible();
+    await expect(profile).toContainText("Profiles not computed yet");
+    await page.goto("/en/scanner");
+    await expect(page.getByRole("link", { name: /Sustained growers/ })).toBeVisible();
+    await expect(page.getByRole("link", { name: /Higher volatility, event-driven/ })).toBeVisible();
+    await page.getByRole("link", { name: /Sustained growers/ }).click();
+    await expect(page.getByRole("table")).toContainText("Profiles not computed yet");
+  });
+
+  test("profile empty state has an accessible heading in Slovak", async ({ page }) => {
+    await page.goto("/sk/company/NVDA");
+    const section = page.locator("[data-profile-block]");
+    await expect(section).toHaveAttribute("aria-labelledby", "public-profile-title");
+    await expect(section.locator("#public-profile-title")).toBeVisible();
+    await expect(section).toContainText("Profily ešte nie sú vypočítané");
+  });
+});
+
 test.describe("chrome", () => {
   test("language switch keeps the path and sets the cookie", async ({ page, context }) => {
     await page.goto("/en/methodology");

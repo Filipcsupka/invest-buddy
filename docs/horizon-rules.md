@@ -24,3 +24,7 @@ The report now combines quarterly revenue across the allowed SEC tags. The colle
 Migration 087 stores immutable daily observations in `horizon_labels`. Each row records the profile, observed result, input numbers, reasons, rule version and pending change. A different observed profile must persist for 10 distinct price sessions before the stored profile changes. A new filing can change it immediately. Same-day reruns leave the existing row intact.
 
 Owner overrides are new dated rows with a reason. The private `/en/owner/horizons` and `/sk/owner/horizons` pages require `OWNER_VIEW` and the owner research credential. They show the latest stored numbers and any override. The CronJob proposal is suspended pending owner review of the placeholder thresholds.
+
+## Public profiles (TASK-101)
+
+The dashboard lists sustained and event-driven names from the latest computed `horizon_labels` observation for each ticker. The scanner offers the same two filters. The company page shows the observed profile and stored input values beside Flags. Owner overrides remain visible only in the owner view. Empty tables show "Profiles not computed yet"; public pages do not calculate a profile during a request. Both lists are available to free viewers. Newly computed rows include drawdown from the most recent 20 sessions. Older rows show "No data" for that field.

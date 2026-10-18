@@ -8,6 +8,8 @@ import { getScreenMessages } from "@/i18n/screen-messages";
 import { ScannerTable } from "@/components/scanner-table";
 import { byScore, toRow } from "@/components/view-model";
 import { latestPortfolio, latestScores } from "@/data/store";
+import { publicHorizons } from "@/data/public-horizons";
+import { ProfileLists } from "./profile-lists";
 import { latestStateChanges } from "@/data/state-changes";
 import { StateStrip, type StateChange } from "@/components/kit/state-strip";
 import { kitState } from "@/components/kit/types";
@@ -33,7 +35,7 @@ export async function generateMetadata({ params }: LocaleParams): Promise<Metada
 async function Dashboard({ params }: LocaleParams) {
   const locale = await resolveLocale(params);
   const m = getMessages(locale);
-  const [data, portfolio, moved] = await Promise.all([latestScores(), latestPortfolio(), latestStateChanges()]);
+  const [data, portfolio, moved, horizons] = await Promise.all([latestScores(), latestPortfolio(), latestStateChanges(), publicHorizons()]);
   const k = getKitMessages(locale);
   const changes: StateChange[] = moved.map(({ ticker, from, to }) => {
     const [fromLabel, toLabel] = [m.status.labels[from], m.status.labels[to]];
@@ -70,6 +72,7 @@ async function Dashboard({ params }: LocaleParams) {
       board: { summaryLabel: m.dashboard.summaryLabel, lowerTitle: m.dashboard.lowerTitle, lowerBody: m.dashboard.lowerBody,
         showLower: m.dashboard.showLower, empty: m.dashboard.empty, stateNotes: m.dashboard.stateNotes },
     }} />
+    <ProfileLists locale={locale} rows={data.rows} horizons={horizons} />
   </div>;
 }
 

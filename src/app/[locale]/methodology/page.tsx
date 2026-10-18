@@ -17,6 +17,7 @@ import { pageMetadata } from "@/i18n/metadata";
 import { getRecordPagesMessages } from "@/i18n/record-pages-messages";
 import { ruleGroups } from "@/i18n/rules";
 import { resolveLocale, type LocaleParams } from "../locale";
+import { profileCopy } from "@/i18n/profile-messages";
 
 export async function generateMetadata({ params }: LocaleParams): Promise<Metadata> {
   const locale = await resolveLocale(params);
@@ -47,6 +48,7 @@ async function Methodology({ params }: LocaleParams) {
   const toc = [
     { id: "score", label: m.methodology.scoreTitle },
     { id: "states", label: m.status.legendTitle },
+    { id: "profiles", label: profileCopy[locale].methodTitle },
     { id: "rejection", label: m.methodology.rejectionTitle },
     { id: "worked", label: m.methodology.workedTitle },
     { id: "source-labels", label: m.sources.legendTitle },
@@ -74,6 +76,7 @@ async function Methodology({ params }: LocaleParams) {
       </KpiRow>
 
       <ReadingLayout locale={locale} toc={toc}>
+        <RecordCard id="profiles" title={profileCopy[locale].methodTitle}><p>{profileCopy[locale].methodBody}</p></RecordCard>
         <RecordCard id="score" title={m.methodology.scoreTitle} lede={m.methodology.scoreBody} flush>
           <DataTable label={m.methodology.scoreTitle} bounded={false}>
             <thead>
