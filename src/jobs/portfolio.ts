@@ -41,6 +41,8 @@ export async function postBaseline(xml: string, target: BaselineTarget, today?: 
     asOf: eur.asOf, source: "flex", currency: "EUR", cashEur: eur.cashEur,
     monthlyContributionEur: stored?.monthlyContributionEur ?? null,
     positions: eur.positions,
+    trades: eur.trades,
+    tradeFromDate: eur.fromDate,
   });
   const response = await fetcher(`${base}/api/ingest/portfolio-baseline`, { method: "POST", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify(body) });
   return { status: response.ok ? "posted" : "rejected", positions: eur.positions.length, skipped: eur.warnings.skippedPositions };

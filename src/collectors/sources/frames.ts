@@ -3,14 +3,9 @@ import type { SourceHttp } from "./client";
 import { isoDate, LICENSES, parseJson, PING_REQUEST, round, runPing, sourceDocument, type PendingFact, type PingResult, type SourceContext, type SourceOutput, type Env } from "./common";
 import { loadTickers, universeByCik } from "./sec";
 import { defaultHttp } from "./client";
+import { REVENUE_CONCEPTS } from "../../engine/revenue-concepts";
+export { REVENUE_CONCEPTS } from "../../engine/revenue-concepts";
 
-/** Revenue concepts in priority order. A filer uses the first one that has every quarter we need. */
-export const REVENUE_CONCEPTS = [
-  "Revenues",
-  "RevenueFromContractWithCustomerExcludingAssessedTax",
-  "RevenueFromContractWithCustomerIncludingAssessedTax",
-  "SalesRevenueNet",
-] as const;
 /** Ignore filers below this quarterly revenue in the ranking (USD). */
 export const MIN_REVENUE = 50_000_000;
 export const DISCOVERY_SIZE = 25;

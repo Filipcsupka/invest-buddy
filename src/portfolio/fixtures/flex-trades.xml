@@ -1,0 +1,14 @@
+<FlexQueryResponse queryName="synthetic-trades" type="AF">
+  <FlexStatements count="1"><FlexStatement fromDate="20250930" toDate="20260930">
+    <ChangeInNAV startingValue="1000" depositsWithdrawals="0" endingValue="1100" />
+    <CashReport><CashReportCurrency currency="EUR" endingCash="600" /></CashReport>
+    <OpenPositions><OpenPosition currency="EUR" symbol="LONG" position="2" positionValue="500" costBasisPrice="200" /></OpenPositions>
+    <ConversionRates><ConversionRate reportDate="20260930" fromCurrency="USD" toCurrency="EUR" rate="0.9" /></ConversionRates>
+    <Trades>
+      <Trade tradeID="1" assetCategory="STK" tradeDate="20260901" symbol="EVENT" quantity="-2" currency="USD" proceeds="400" ibCommission="-1" ibCommissionCurrency="USD" />
+      <Trade tradeID="2" assetCategory="STK" tradeDate="20260915" symbol="LONG" quantity="2" currency="EUR" proceeds="-200" ibCommission="-0.5" ibCommissionCurrency="EUR" />
+      <Trade tradeID="2" assetCategory="STK" tradeDate="20260915" symbol="LONG" quantity="2" currency="EUR" proceeds="-200" ibCommission="-0.5" ibCommissionCurrency="EUR" />
+      <Trade tradeID="3" assetCategory="OPT" tradeDate="20260920" symbol="EVENT" quantity="-1" currency="USD" proceeds="100" ibCommission="-1" />
+    </Trades>
+  </FlexStatement></FlexStatements>
+</FlexQueryResponse>

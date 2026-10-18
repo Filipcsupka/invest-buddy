@@ -68,6 +68,8 @@ describe("portfolio job baseline post", () => {
     expect(JSON.parse(String(calls[1].init?.body))).toEqual({
       asOf: "2026-09-30", source: "flex", currency: "EUR", cashEur: 1495, monthlyContributionEur: 300,
       positions: [{ symbol: "AAAA", quantity: 10, valueEur: 990, costEur: 810 }, { symbol: "BBBB", quantity: 20, valueEur: 3000, costEur: 2800 }],
+      trades: [],
+      tradeFromDate: "2026-09-01",
     });
   });
 

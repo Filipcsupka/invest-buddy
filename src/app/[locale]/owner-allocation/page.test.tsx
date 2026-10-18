@@ -32,4 +32,18 @@ describe("owner allocation page", () => {
     expect(sk).toContain("40,00 EUR");
     expect(sk).toContain("Podiel stupňa na počiatočnej voľnej hotovosti.");
   });
+  it("keeps sale proceeds and holding facts on the private owner page", async () => {
+    enabled.mockReturnValue(true);
+    data.mockResolvedValue({ sample: false, baseline: { asOf: "2026-09-30", cashEur: 100, monthlyContributionEur: 200 }, result: {
+      reserveEur: 0, carriedCashEur: 60, recycledCashEur: 20, cashDrag: false,
+      suggestions: [{ symbol: "LONG", tier: "STARTER", amountEur: 40, recycledEur: 40, reason: "TIER_AMOUNT", capped: false }],
+    }, sales: [{ date: "2026-09-01", symbol: "EVENT", netProceedsEur: 100, remainingEur: 60 }],
+    holdings: [{ symbol: "LONG", gainFromCostPercent: 25, daysHeld: 15 }] });
+    const html = renderToStaticMarkup(await OwnerAllocationPage(props()));
+    expect(html).toContain("Sale proceeds ledger");
+    expect(html).toContain("100.00 EUR");
+    expect(html).toContain("Holding facts");
+    expect(html).toContain("25.00%");
+    expect(html).toContain("Days held");
+  });
 });

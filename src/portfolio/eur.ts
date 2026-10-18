@@ -1,11 +1,13 @@
 import type { FlexRaw } from "./flex";
 
 export interface EurPosition { symbol: string; quantity: number; valueEur: number; costEur: number }
+export interface EurTrade { date: string; symbol: string; quantity: number; proceedsEur: number; feesEur: number }
 export interface EurPortfolio {
   /** Report date YYYY-MM-DD, or null when the statement has no toDate. */
   asOf: string | null;
   fromDate: string | null;
   positions: EurPosition[];
+  trades: EurTrade[];
   cashEur: number;
   nav: { start: number; end: number; deposits: number };
   /** Counts and labels only. No amounts, symbols or account ids. */
@@ -53,6 +55,26 @@ export function toEurPortfolio(raw: FlexRaw): EurPortfolio {
   if (start === null || end === null) throw new Error("Flex NAV values invalid");
   const deposits = num(raw.navSummary.depositsWithdrawals) ?? 0;
   const rates = latestEurRates(raw.rates);
+  const trades: EurTrade[] = [];
+  const tradeKeys = new Set<string>();
+  for (const { row, rates: tradeRates } of raw.trades) {
+    if (row.assetCategory && row.assetCategory !== "STK") continue;
+    const date = isoFlexDate(row.tradeDate);
+    const symbol = String(row.symbol ?? "").trim().toUpperCase().replace(/\s+/g, ".");
+    const quantity = num(row.quantity);
+    const proceeds = num(row.proceeds);
+    const fees = num(row.ibCommission ?? row.commission);
+    const localRates = latestEurRates(tradeRates);
+    const baseRate = num(row.fxRateToBase);
+    const rate = baseRate !== null && baseRate > 0 ? baseRate : localRates.get(cur(row.currency)) ?? rates.get(cur(row.currency));
+    const feeRate = localRates.get(cur(row.ibCommissionCurrency ?? row.currency)) ?? rates.get(cur(row.ibCommissionCurrency ?? row.currency));
+    if (!date || !/^[A-Z0-9.]{1,10}$/.test(symbol) || quantity === null || quantity === 0 || proceeds === null || fees === null || rate === undefined || feeRate === undefined) continue;
+    const key = `${row.accountId ?? ""}:${String(row.tradeID ?? `${date}:${symbol}:${quantity}:${proceeds}:${fees}`)}`;
+    if (tradeKeys.has(key)) continue;
+    tradeKeys.add(key);
+    trades.push({ date, symbol, quantity, proceedsEur: round2(proceeds * rate), feesEur: round2(Math.abs(fees * feeRate)) });
+  }
+  trades.sort((a, b) => a.date.localeCompare(b.date) || a.symbol.localeCompare(b.symbol) || a.quantity - b.quantity);
 
   const bySymbol = new Map<string, EurPosition>();
   let skippedPositions = 0;
@@ -92,5 +114,5 @@ export function toEurPortfolio(raw: FlexRaw): EurPortfolio {
     if (base !== null && Math.abs(base - sum) > Math.max(1, Math.abs(sum) * 0.01)) cashSource = "sum-base-mismatch";
   } else if (base !== null) { cashEur = base; cashSource = "base-summary"; }
   else throw new Error("Flex cash missing");
-  return { asOf: isoFlexDate(raw.toDate), fromDate: isoFlexDate(raw.fromDate), positions, cashEur: round2(cashEur), nav: { start, end, deposits }, warnings: { skippedPositions, skippedCashRows, cashSource } };
+  return { asOf: isoFlexDate(raw.toDate), fromDate: isoFlexDate(raw.fromDate), positions, trades, cashEur: round2(cashEur), nav: { start, end, deposits }, warnings: { skippedPositions, skippedCashRows, cashSource } };
 }

@@ -3,7 +3,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { companyFlags } from "../src/engine/flags";
 import { HORIZON_RULES, horizonProfile, type HorizonResult, type QuarterRevenue } from "../src/engine/horizon";
-import { REVENUE_CONCEPTS } from "../src/collectors/sources/frames";
+import { REVENUE_CONCEPTS } from "../src/engine/revenue-concepts";
 import type { OHLCV } from "../src/engine/types";
 
 /** TASK-099: report only. Labels every stored instrument with its horizon profile and writes labels.csv and review.md. Reads the database, writes nothing back. */

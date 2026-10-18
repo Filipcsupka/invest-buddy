@@ -1,16 +1,17 @@
 import { ALLOCATION_CONFIG } from "./allocation-config";
 import { sizingCap, type AccountBucket } from "./sizing";
 import type { SizeTier } from "./signals";
+import type { HorizonProfile } from "./horizon";
 
 export type AllocationReason =
   | "TIER_AMOUNT" | "ORDER_CEILING" | "CASH_LIMIT" | "RESERVE_LIMIT" | "NAME_CAP"
-  | "BELOW_MINIMUM" | "NO_CASH" | "NO_BUY_SIGNAL" | "ADD_ALREADY_THIS_MONTH" | "ADD_HISTORY_UNKNOWN" | "DUPLICATE_SIGNAL";
+  | "BELOW_MINIMUM" | "NO_CASH" | "NO_BUY_SIGNAL" | "ADD_ALREADY_THIS_MONTH" | "ADD_HISTORY_UNKNOWN" | "DUPLICATE_SIGNAL" | "EVENT_SLEEVE_CAP";
 
-export interface AllocationPosition { symbol: string; valueEur: number; /** null confirms no add this month; undefined means history is unknown. */ lastAddMonth?: string | null }
-export interface AllocationSignal { symbol: string; tier: SizeTier; score: number; asOf: string; action: "START_POSITION" | "ADD" | "HIGH_CONVICTION_ADD" | "WATCH" | "HOLD" | "REDUCE" | "THESIS_BROKEN" | "CSPX_ALLOCATION" }
-export interface AllocationInput { monthlyContributionEur: number; freeCashEur: number; portfolioValueEur: number; positions: AllocationPosition[]; signals: AllocationSignal[] }
-export interface AllocationSuggestion { symbol: string; tier: SizeTier; amountEur: number; reason: AllocationReason; capped: boolean }
-export interface AllocationResult { suggestions: AllocationSuggestion[]; carriedCashEur: number; cashDrag: boolean; reserveEur: number }
+export interface AllocationPosition { symbol: string; valueEur: number; profile?: HorizonProfile; /** null confirms no add this month; undefined means history is unknown. */ lastAddMonth?: string | null }
+export interface AllocationSignal { symbol: string; tier: SizeTier; score: number; asOf: string; profile?: HorizonProfile; action: "START_POSITION" | "ADD" | "HIGH_CONVICTION_ADD" | "WATCH" | "HOLD" | "REDUCE" | "THESIS_BROKEN" | "CSPX_ALLOCATION" }
+export interface AllocationInput { monthlyContributionEur: number; freeCashEur: number; recycledCashEur?: number; portfolioValueEur: number; positions: AllocationPosition[]; signals: AllocationSignal[] }
+export interface AllocationSuggestion { symbol: string; tier: SizeTier; amountEur: number; recycledEur: number; reason: AllocationReason; capped: boolean }
+export interface AllocationResult { suggestions: AllocationSuggestion[]; carriedCashEur: number; recycledCashEur: number; cashDrag: boolean; reserveEur: number }
 
 const cents = (value: number) => Math.round(value * 100);
 const eur = (value: number) => value / 100;
@@ -40,17 +41,20 @@ export function allocate(input: AllocationInput): AllocationResult {
   const contribution = cents(safe(input.monthlyContributionEur));
   const portfolio = cents(safe(input.portfolioValueEur));
   const reserve = Math.min(cash, Math.round(contribution * c.addReservePercentOfContribution / 100));
-  const positions = new Map<string, { value: number; lastAddMonth?: string | null }>();
+  const positions = new Map<string, { value: number; profile?: HorizonProfile; lastAddMonth?: string | null }>();
   for (const p of input.positions) {
     const old = positions.get(p.symbol);
-    positions.set(p.symbol, { value: (old?.value ?? 0) + cents(safe(p.valueEur)), lastAddMonth: p.lastAddMonth === undefined ? old?.lastAddMonth : p.lastAddMonth });
+    positions.set(p.symbol, { value: (old?.value ?? 0) + cents(safe(p.valueEur)), profile: p.profile ?? old?.profile, lastAddMonth: p.lastAddMonth === undefined ? old?.lastAddMonth : p.lastAddMonth });
   }
-  const sorted = input.signals.map((signal, index) => ({ signal, index })).sort((a, b) => b.signal.score - a.signal.score || a.signal.symbol.localeCompare(b.signal.symbol) || a.index - b.index);
+  let recycled = Math.min(cash, cents(safe(input.recycledCashEur ?? 0)));
+  let eventValue = [...positions.values()].filter((p) => p.profile === "event").reduce((sum, p) => sum + p.value, 0);
+  const sorted = input.signals.map((signal, index) => ({ signal, index })).sort((a, b) =>
+    (recycled > 0 ? Number(b.signal.profile === "sustained") - Number(a.signal.profile === "sustained") : 0) || b.signal.score - a.signal.score || a.signal.symbol.localeCompare(b.signal.symbol) || a.index - b.index);
   const seen = new Set<string>();
   const suggestions: AllocationSuggestion[] = [];
   let remaining = cash;
   for (const { signal } of sorted) {
-    const result = (amount: number, reason: AllocationReason, capped = false) => suggestions.push({ symbol: signal.symbol, tier: signal.tier, amountEur: eur(amount), reason, capped });
+    const result = (amount: number, reason: AllocationReason, capped = false, recycledUsed = 0) => suggestions.push({ symbol: signal.symbol, tier: signal.tier, amountEur: eur(amount), recycledEur: eur(recycledUsed), reason, capped });
     if (seen.has(signal.symbol)) { result(0, "DUPLICATE_SIGNAL"); continue; }
     seen.add(signal.symbol);
     const rule = tierRule(signal);
@@ -64,17 +68,23 @@ export function allocate(input: AllocationInput): AllocationResult {
     const floor = Math.max(cents(rule.floor), cents(c.minimumOrderEur), c.maxFeePercent > 0 ? Math.ceil(cents(c.estimatedFeeEur) * 100 / c.maxFeePercent) : Number.POSITIVE_INFINITY);
     const requested = Math.max(Math.round(cash * rule.percent / 100), cents(rule.floor));
     const target = Math.min(requested, cents(rule.ceiling), Math.round(cash * rule.cashCeiling / 100));
-    const nameCap = Math.max(0, Math.floor(portfolio * sizingCap(accountBucket(eur(portfolio))) / 100) - (held?.value ?? 0));
+    const nameFraction = signal.profile === "event" ? c.eventNameCapFraction : 1;
+    const nameCap = Math.max(0, Math.floor(portfolio * sizingCap(accountBucket(eur(portfolio))) / 100 * nameFraction) - (held?.value ?? 0));
+    const sleeveCap = signal.profile === "event" ? Math.max(0, Math.floor(portfolio * c.eventSleeveCapPercent / 100) - eventValue) : Number.POSITIVE_INFINITY;
     const spendable = add ? remaining : Math.max(0, remaining - reserve);
-    const amount = Math.min(target, nameCap, spendable);
+    const amount = Math.min(target, nameCap, sleeveCap, spendable);
     if (amount < floor) {
-      const reason = nameCap < floor ? "NAME_CAP" : target < floor ? "BELOW_MINIMUM" : spendable < floor ? (add ? "CASH_LIMIT" : "RESERVE_LIMIT") : "BELOW_MINIMUM";
+      const reason = sleeveCap < floor ? "EVENT_SLEEVE_CAP" : nameCap < floor ? "NAME_CAP" : target < floor ? "BELOW_MINIMUM" : spendable < floor ? (add ? "CASH_LIMIT" : "RESERVE_LIMIT") : "BELOW_MINIMUM";
       result(0, reason, amount < target);
       continue;
     }
+    const ordinaryAvailable = remaining - recycled;
     remaining -= amount;
-    const reason = amount < target ? nameCap <= spendable ? "NAME_CAP" : add ? "CASH_LIMIT" : "RESERVE_LIMIT" : target < requested ? "ORDER_CEILING" : "TIER_AMOUNT";
-    result(amount, reason, amount < requested);
+    if (signal.profile === "event") eventValue += amount;
+    const recycledUsed = signal.profile === "sustained" ? Math.min(amount, recycled) : Math.min(recycled, Math.max(0, amount - ordinaryAvailable));
+    recycled -= recycledUsed;
+    const reason = amount < target ? sleeveCap <= nameCap && sleeveCap <= spendable ? "EVENT_SLEEVE_CAP" : nameCap <= spendable ? "NAME_CAP" : add ? "CASH_LIMIT" : "RESERVE_LIMIT" : target < requested ? "ORDER_CEILING" : "TIER_AMOUNT";
+    result(amount, reason, amount < requested, recycledUsed);
   }
-  return { suggestions, carriedCashEur: eur(remaining), cashDrag: contribution > 0 && cash > contribution * c.cashDragMonths, reserveEur: eur(reserve) };
+  return { suggestions, carriedCashEur: eur(remaining), recycledCashEur: eur(recycled), cashDrag: contribution > 0 && cash > contribution * c.cashDragMonths, reserveEur: eur(reserve) };
 }

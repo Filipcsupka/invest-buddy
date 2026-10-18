@@ -59,6 +59,7 @@ export function flexServiceFromEnv(transport?: FlexTransport, pause?: (ms: numbe
 
 export interface FlexRaw {
   positions: Record<string, unknown>[];
+  trades: { row: Record<string, unknown>; rates: Record<string, unknown>[] }[];
   nav: Record<string, unknown>[];
   /** Live-shape extras. Empty or undefined when the statement uses the older shape. */
   cash: Record<string, unknown>[];
@@ -105,6 +106,7 @@ export function parseFlexStatement(xml: string): FlexRaw {
   const earliest = [...statements].sort((a, b) => String(a.fromDate ?? a.toDate ?? "").localeCompare(String(b.fromDate ?? b.toDate ?? "")))[0];
   return {
     positions: rows(statement, "OpenPositions", "OpenPosition"),
+    trades: statements.flatMap((item) => rows(item, "Trades", "Trade").map((row) => ({ row, rates: rows(item, "ConversionRates", "ConversionRate") }))),
     nav: nested,
     cash: rows(statement, "CashReport", "CashReportCurrency"),
     rates: rows(statement, "ConversionRates", "ConversionRate"),
