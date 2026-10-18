@@ -97,7 +97,8 @@ export function ScannerTable({ locale, rows, text, heldTickers = [], aside }: { 
   const table = (list: ScreenRow[], group: string) => {
     const label = text.board ? (group === "lower" ? text.board.lowerTitle : text.states[group as StateKey]) : text.showing.replace("{shown}", String(list.length)).replace("{total}", String(rows.length));
     return (
-    <DataTable key={group} label={label} density="compact" bounded={group === "lower"} stickyFirst describedBy={disclaimerId}>
+    <DataTable key={group} label={label} density="compact" bounded={group === "lower"} stickyFirst describedBy={disclaimerId} className={group === "broken" ? `${styles.grid} ${styles.gridReason}` : styles.grid}>
+      <colgroup><col className={styles.cCompany} /><col className={styles.cSector} /><col className={styles.cScore} /><col className={styles.cRules} /><col className={styles.cState} />{group === "broken" ? <col /> : null}</colgroup>
       <caption className="visually-hidden">{label}</caption>
       <thead><tr>
         {header("ticker", text.rank ? `${text.rank.short} · ${text.columns.ticker}` : text.columns.ticker, undefined, text.columns.ticker)}

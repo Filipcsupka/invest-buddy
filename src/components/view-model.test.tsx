@@ -63,7 +63,7 @@ describe("rule sources by agreement type", () => {
   it("technical rules name own price bars; macro rules name their data, none when unknown", async () => {
     const r = await base();
     expect(ruleSources("en", r, "dip")).toEqual([expect.objectContaining({ label: "Own price bars", href: null })]);
-    expect(ruleSources("en", r, "macro-data").map((s) => [s.label, s.href])).toEqual([["FRED 10-year yield", null], ["Macro series, internal source", null]]);
+    expect(ruleSources("en", r, "macro-data").map((s) => [s.label, s.href])).toEqual([["FRED 10-year yield", null], ["Market volatility index", null]]);
     expect(ruleSources("en", r, "rotation")[0].label).toContain("Own price data");
     const unknown = { ...r, inputs: { ...r.inputs, macro: { growthSectorRotation: null, dataTailwind: null } } };
     expect(ruleSources("en", unknown, "macro-data")).toEqual([]);
@@ -97,7 +97,7 @@ describe("link safety", () => {
 describe("source summary", () => {
   it("counts distinct sources per type under the score", async () => {
     const r = withSources(await base(), { revenueAccelerating: "xbrl_override" }, { revenueAccelerating: [{ kind: "xbrl", href: XBRL, publishedAt: null }], guidanceRaised: [{ kind: "release", href: RELEASE, publishedAt: "2026-08-26" }], insiderOrInstitutionalBuying: [{ kind: "form4", href: "https://www.sec.gov/a.xml", publishedAt: "2026-09-01" }, { kind: "form4", href: "https://www.sec.gov/b.xml", publishedAt: "2026-09-02" }] });
-    expect(sourceSummary("en", r)).toBe("Data sources: Earnings release (1), SEC Form 4 (2), SEC XBRL company facts (1), FRED 10-year yield (1), Macro series, internal source (1), Own price bars (1), Own price data (SPY and universe tickers) (1)");
+    expect(sourceSummary("en", r)).toBe("Data sources: Earnings release (1), SEC Form 4 (2), SEC XBRL company facts (1), FRED 10-year yield (1), Market volatility index (1), Own price bars (1), Own price data (SPY and universe tickers) (1)");
     expect(sourceSummary("sk", r)).toContain("Zdroje údajov: ");
   });
 });

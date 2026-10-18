@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getMessages, localeCookie, otherLocale, type Locale } from "@/i18n";
-import { LanguageSwitch, MenuToggle, NavLinks } from "./nav-links";
+import { LanguageSwitch, MenuToggle, NavLinks, SideToggle } from "./nav-links";
 import { IconArrowRight } from "./icons";
 import { ThemeToggle } from "./theme-toggle";
 import { latestScores } from "@/data/store";
@@ -33,6 +33,7 @@ export function Nav({ locale }: { locale: Locale }) {
           <BrandMark />
           <span className="brand-name nav-text-wide">InvestBuddy</span>
         </Link>
+        <SideToggle collapseLabel={kit.shell.collapseSide} expandLabel={kit.shell.expandSide} />
         <MenuToggle openLabel={kit.shell.openMenu} closeLabel={kit.shell.closeMenu} />
       </div>
       <div className="side-panel" id="side-panel">

@@ -1,9 +1,9 @@
 "use client";
 import { useSyncExternalStore } from "react";
 import { IconMoon, IconSun } from "./icons";
+import { themeStorageKey as storageKey } from "./pre-paint";
 
 type Theme = "light" | "dark";
-const storageKey = "ib-theme";
 const query = "(prefers-color-scheme: dark)";
 
 function resolved(): Theme {
@@ -47,6 +47,3 @@ export function ThemeToggle({ toDark, toLight, generic }: { toDark: string; toLi
     </button>
   );
 }
-
-/** Runs before first paint so a stored choice never flashes the other theme. */
-export const themeScript = `try{var t=localStorage.getItem("${storageKey}");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}`;

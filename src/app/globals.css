@@ -461,18 +461,18 @@ td,
   }
 }
 
-/* Tablet: icon rail. Labels stay in the DOM for screen readers and show as tooltips. */
+/* Icon rail: the default from 900px to 1199px, and a stored choice on wider screens. Labels stay in the DOM for screen readers and show as tooltips. */
 @media (min-width: 900px) and (max-width: 1199px) {
-  :root {
+  :root:not([data-side="full"]) {
     --side-w: 4.75rem;
   }
-  .site-header {
+  :root:not([data-side="full"]) .site-header {
     align-items: center;
     padding-inline: var(--s2);
   }
-  .nav-text,
-  .brand-name,
-  .lang-name {
+  :root:not([data-side="full"]) .nav-text,
+  :root:not([data-side="full"]) .brand-name,
+  :root:not([data-side="full"]) .lang-name {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -480,33 +480,123 @@ td,
     clip-path: inset(50%);
     white-space: nowrap;
   }
-  .side-top {
+  :root:not([data-side="full"]) .side-top {
     padding-inline: 0;
   }
-  .side-panel,
-  .side-foot,
-  .nav-links {
+  :root:not([data-side="full"]) .side-panel,
+  :root:not([data-side="full"]) .side-foot,
+  :root:not([data-side="full"]) .nav-links {
     align-items: center;
     width: 100%;
   }
-  .nav-links a {
+  :root:not([data-side="full"]) .nav-links a {
     justify-content: center;
     width: 2.75rem;
     padding: 0;
   }
-  .side-cta {
+  :root:not([data-side="full"]) .side-cta {
     justify-content: center;
     width: 2.75rem;
     padding: 0;
   }
-  .header-tools {
+  :root:not([data-side="full"]) .header-tools {
     flex-direction: column;
   }
-  .lang-switch {
+  :root:not([data-side="full"]) .lang-switch {
     flex: none;
     justify-content: center;
     width: 2.75rem;
     padding: 0;
+  }
+
+}
+@media (min-width: 1200px) {
+  :root[data-side="rail"] {
+    --side-w: 4.75rem;
+  }
+  :root[data-side="rail"] .site-header {
+    align-items: center;
+    padding-inline: var(--s2);
+  }
+  :root[data-side="rail"] .nav-text,
+  :root[data-side="rail"] .brand-name,
+  :root[data-side="rail"] .lang-name {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  :root[data-side="rail"] .side-top {
+    padding-inline: 0;
+  }
+  :root[data-side="rail"] .side-panel,
+  :root[data-side="rail"] .side-foot,
+  :root[data-side="rail"] .nav-links {
+    align-items: center;
+    width: 100%;
+  }
+  :root[data-side="rail"] .nav-links a {
+    justify-content: center;
+    width: 2.75rem;
+    padding: 0;
+  }
+  :root[data-side="rail"] .side-cta {
+    justify-content: center;
+    width: 2.75rem;
+    padding: 0;
+  }
+  :root[data-side="rail"] .header-tools {
+    flex-direction: column;
+  }
+  :root[data-side="rail"] .lang-switch {
+    flex: none;
+    justify-content: center;
+    width: 2.75rem;
+    padding: 0;
+  }
+
+}
+
+/* Collapse button: desktop only. In the rail it sits under the brand mark. */
+.side-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 2.75rem;
+  height: 2.75rem;
+  border: 1px solid var(--navy-line);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--navy-ink-2);
+  cursor: pointer;
+  transition:
+    color 160ms var(--ease-out),
+    background-color 160ms var(--ease-out);
+}
+.side-toggle:hover {
+  color: var(--navy-ink);
+  background: var(--navy-2);
+}
+@media (min-width: 900px) {
+  .side-toggle {
+    display: inline-flex;
+  }
+  .side-toggle[aria-expanded="false"] .side-toggle-chevron {
+    transform: scaleX(-1);
+    transform-origin: 12.75px 10px;
+  }
+}
+@media (min-width: 900px) and (max-width: 1199px) {
+  :root:not([data-side="full"]) .side-top {
+    flex-direction: column;
+  }
+}
+@media (min-width: 1200px) {
+  :root[data-side="rail"] .side-top {
+    flex-direction: column;
   }
 }
 
@@ -1582,6 +1672,27 @@ h3 {
 }
 .col-company {
   min-width: 11rem;
+}
+/* Fixed layout: columns keep one left edge in every row and every table, whatever the cell text. */
+.screen-fixed {
+  table-layout: fixed;
+  min-width: 52rem;
+}
+.screen-fixed .sc-date { width: 7.5rem; }
+.screen-fixed .sc-company { width: 16rem; }
+.screen-fixed .sc-sector { width: 11rem; }
+.screen-fixed .sc-score { width: 13rem; }
+.screen-fixed .sc-state { width: 10rem; }
+.screen-fixed th,
+.screen-fixed td {
+  overflow-wrap: anywhere;
+}
+.screen-fixed .col-score,
+.screen-fixed thead .col-score {
+  text-align: left;
+}
+.screen-fixed .col-reason {
+  min-width: 0;
 }
 .ticker {
   display: inline-block;

@@ -183,7 +183,10 @@
 .miniStep[data-state="wait"][data-active] { background: var(--st-wait); }
 .miniStep[data-state="watch"][data-active] { background: var(--st-watch); }
 .miniStep[data-state="setup"][data-active] { background: var(--st-setup); }
-.cell, .badge { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2); color: var(--st-none); }
+.badge { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2); color: var(--st-none); }
+/* The cell is a grid so the track always sits above the icon and label, whatever the label width. */
+.cell { display: inline-grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: var(--s1) var(--s2); color: var(--st-none); }
+.cell > :first-child, .cell > .qualifier { grid-column: 1 / -1; }
 .cell[data-state="broken"], .badge[data-state="broken"] { color: var(--st-broken); }
 .cell[data-state="ignore"], .badge[data-state="ignore"] { color: var(--st-ignore); }
 .cell[data-state="wait"], .badge[data-state="wait"] { color: var(--st-wait); }

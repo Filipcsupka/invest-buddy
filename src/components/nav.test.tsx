@@ -28,3 +28,9 @@ it.each(["en", "sk"])("keeps the shared footer free of fixture labels in db mode
   const html = renderToStaticMarkup(await Footer({ locale: locale as "en" | "sk" }));
   expect(html).not.toMatch(/SAMPLE DATA|UKÁŽKOVÉ ÚDAJE|sample data|ukážkových údajoch/i);
 });
+
+it.each([["en", "Collapse sidebar"], ["sk", "Zbaliť bočný panel"]] as const)("renders a labelled sidebar collapse button (%s)", (locale, label) => {
+  const html = renderToStaticMarkup(<Nav locale={locale} />);
+  expect(html).toMatch(new RegExp(`<button[^>]*class="side-toggle"[^>]*aria-controls="side-panel"[^>]*aria-label="${label}"`));
+  expect(html).toContain(`title="${label}"`);
+});

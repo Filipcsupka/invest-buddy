@@ -858,7 +858,7 @@ a.kit-strip-link:hover .kit-strip-ticker {
   background: var(--sheet-hover);
   text-align: left;
   white-space: nowrap;
-  vertical-align: bottom;
+  vertical-align: middle;
 }
 .kit-table tbody th,
 .kit-table tbody td {
@@ -872,7 +872,8 @@ a.kit-strip-link:hover .kit-strip-ticker {
 .kit-table td:first-child {
   padding-left: var(--s4);
 }
-.kit-table .num {
+.kit-table .num,
+.kit-table thead th.num {
   text-align: right;
 }
 .kit-table[data-density="compact"] tbody th,
@@ -898,6 +899,7 @@ a.kit-strip-link:hover .kit-strip-ticker {
 }
 .kit-table[data-sticky-first] thead th:first-child {
   z-index: 2;
+  background: var(--sheet-hover);
 }
 .kit-table[data-sticky-first] tbody tr:hover > :first-child {
   background: var(--sheet-hover);
