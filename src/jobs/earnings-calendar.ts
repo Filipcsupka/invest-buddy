@@ -21,7 +21,7 @@ async function main() {
   const options = parseCalendarArgs(process.argv.slice(2));
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
   try {
-    const universe = (await loadUniverse(pool)).map((row) => row.symbol);
+    const universe = (await loadUniverse(pool, undefined, { collect: true })).map((row) => row.symbol);
     const result = await collectEarningsCalendar(pool, defaultHttp(), new PostgresUsageLedger(pool), { key: process.env[KEY_VARIABLE], universe, ...options });
     process.stdout.write(result.skipped ? `earnings-calendar: skip, ${result.skipped}\n`
       : `earnings-calendar: ${result.rows} rows, ${result.universeRows} universe, ${result.inserted} inserted${options.dryRun ? " (dry run)" : ""}\n`);

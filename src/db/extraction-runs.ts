@@ -1,6 +1,7 @@
 import type pg from "pg";
 import { z } from "zod";
 import { isoDate } from "./iso-date";
+import { scoredMember } from "./universe";
 
 /** One AI extraction attempt for a ticker. Stored so an unchanged input is skipped and token use is visible per run. */
 export const extractionRunSchema = z.object({
@@ -34,7 +35,7 @@ export async function hasOkExtraction(pool: Pick<pg.Pool, "query">, key: { symbo
 /** Stale reviews first, rotated by the latest extraction attempt so failures cannot starve other symbols. */
 export async function reviewDueSymbols(pool: Pick<pg.Pool, "query">, days: number, limit: number): Promise<string[]> {
   const result = await pool.query<{ ticker: string }>(`SELECT i.ticker FROM instruments i
-    JOIN universe_membership m ON m.ticker=i.ticker AND m.list <> 'benchmark'
+    JOIN universe_membership m ON m.ticker=i.ticker AND ${scoredMember()}
       AND m.valid_from <= CURRENT_DATE AND (m.valid_to IS NULL OR m.valid_to > CURRENT_DATE)
     LEFT JOIN LATERAL (SELECT max(as_of) AS reviewed_at FROM extraction_runs e
       WHERE e.symbol=i.ticker AND e.status='ok' AND e.applied_at IS NOT NULL) r ON true

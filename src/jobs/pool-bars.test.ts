@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { needsBars, parsePoolBarsArgs } from "./pool-bars";
+import { needsBars, parsePoolBarsArgs, skipsBars } from "./pool-bars";
 
 describe("pool-bars", () => {
   it("defaults to 250 requests and a 300 name pool", () => {
@@ -15,5 +15,9 @@ describe("pool-bars", () => {
     expect(needsBars({ count: 150, newest: "2026-10-16" }, "2026-10-17")).toBe(true);
     expect(needsBars({ count: 260, newest: "2026-10-01" }, "2026-10-17")).toBe(true);
     expect(needsBars({ count: 260, newest: "2026-10-16" }, "2026-10-17")).toBe(false);
+  });
+  it("skips the not-found symbols and duplicate filers, nothing else", () => {
+    expect(["PHXE-P", "HGIT", "ZARE", "SUNC"].every(skipsBars)).toBe(true);
+    expect(["SUN", "LQDA"].some(skipsBars)).toBe(false);
   });
 });

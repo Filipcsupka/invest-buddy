@@ -4,7 +4,7 @@ const query = vi.fn();
 const end = vi.fn(async () => undefined);
 vi.mock("pg", () => ({ default: { Pool: vi.fn(() => ({ query, end, on: vi.fn() })) } }));
 
-import { instrumentUniverse, latestPortfolio } from "./store";
+import { instrumentUniverse, latestPortfolio, latestScores } from "./store";
 import { closePool } from "../db/pool";
 import { instruments as fixtures } from "./fixtures";
 
@@ -34,8 +34,17 @@ describe("instrumentUniverse", () => {
     const rows = [{ ticker: "AAA", name: "A", sector: "S", tier: null, source: "guide" }];
     query.mockResolvedValue({ rows });
     expect(await instrumentUniverse()).toEqual(rows);
-    expect(query.mock.calls[0][0]).toContain("m.list <> 'benchmark'");
+    expect(query.mock.calls[0][0]).toContain("m.list NOT IN ('benchmark', 'extended')");
     expect(end).not.toHaveBeenCalled();
+  });
+
+  it("hides the collect-only list from pages and the sitemap (instrumentUniverse and latestScores)", async () => {
+    process.env.DATA_MODE = "db"; process.env.DATABASE_URL = "postgresql://x";
+    query.mockResolvedValue({ rows: [] });
+    await instrumentUniverse();
+    await latestScores();
+    for (const call of query.mock.calls) expect(call[0]).toContain("m.list NOT IN ('benchmark', 'extended')");
+    expect(query.mock.calls.length).toBeGreaterThanOrEqual(2);
   });
 
   it("is empty in db mode without DATABASE_URL", async () => {

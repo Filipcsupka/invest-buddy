@@ -1,5 +1,6 @@
 import type pg from "pg";
 import { getPool } from "./pool";
+import { scoredMember } from "./universe";
 
 export interface InsiderEvent {
   accession: string;
@@ -41,7 +42,7 @@ export async function insiderEvents(ticker?: string, db: Pick<pg.Pool, "query"> 
      WHERE t.display_allowed = true
        AND EXISTS (SELECT 1 FROM data_sources s WHERE s.id = 'sec' AND s.display_allowed = true)
        AND EXISTS (SELECT 1 FROM universe_membership m WHERE m.ticker = t.ticker
-         AND m.list <> 'benchmark' AND m.valid_from <= CURRENT_DATE
+         AND ${scoredMember()} AND m.valid_from <= CURRENT_DATE
          AND (m.valid_to IS NULL OR m.valid_to > CURRENT_DATE))
        AND ($1::text IS NULL OR t.ticker = $1)
        AND t.code IN ('P', 'S', 'A', 'M', 'F')

@@ -19,12 +19,13 @@ A candidate must pass all of these, in this order. The first failure is its reas
 | `no_price_data` / `short_bar_history` | 50 trading days of our own bars | 50 |
 | `price_below_min` | Last close above | 5 USD |
 | `volume_below_floor` | 50-day average dollar volume (close times volume) above | 10 million USD |
+| `duplicate_filer` | Second filer of a listed company, explicit list in `src/universe/select.ts` (`SUNC`, same revenue as `SUN`) | |
 
 Ranking: names above 15% YoY growth first (same threshold as `src/jobs/discovery-config.ts`), then the rest. Inside each group by growth, then dollar volume, then ticker.
 
-Sector cap: no sector above 25% of the target (37 names of 150). Names that would exceed it get `sector_cap`. Names past the target get `below_cut`.
+Sector cap: no named sector above 25% of the target (37 names of 150). Names that would exceed it get `sector_cap`. `Unclassified` is not a sector and is never capped. Pool names get their sector from the SEC SIC code (`src/universe/sector.ts`: Biotech, AI & semiconductors, Cloud & SaaS, Fintech, Energy & EV); other codes stay `Unclassified`. Names past the target get `below_cut`.
 
-The 36 current names are always kept and marked `core`, even if they fail a rule; the review file lists which ones.
+The 36 current names are always kept and marked `core` (every member except the collect-only list `extended`), even if they fail a rule; the review file lists which ones.
 
 ## Inputs (read only)
 
@@ -55,4 +56,8 @@ The pool has no price data. Step 2 fetches bars for the pool within the Twelve D
 
 `npm run pool-bars -- --limit 250` fetches 260 daily bars per pool name into `discovery_price_bars` (one request each, 7 a minute, ledger job `pool-bars`). A name is skipped when it has at least 200 bars and the newest is at most 5 days old. 2026-10-18 result: 297 of 300 covered, 3 rejected by Twelve Data (`PHXE-P`, `HGIT`, `ZARE`). The pool changes each quarter after the SEC frames and selection needs bars at most 5 days old, so a weekly refresh is proposed: `deploy/gitops/gitops/apps/invest-buddy/base/pool-bars-cronjob.yaml` (suspended, Sunday 10:00 Bratislava, 300 requests, about 43 minutes).
 
-Known limit of the 2026-10-18 selection run: pool names have sector `Unclassified`, so `sector_cap` removed 206 of them. See `docs/d36-approval.md`.
+`pool-bars` skips `PHXE-P`, `HGIT` and `ZARE` (Twelve Data: not found) and `SUNC` (`NOT_FOUND_SYMBOLS` in `src/universe/pool.ts`, `DUPLICATE_FILERS`).
+
+## Collect-only list
+
+Names added with `--list extended` are collected and priced but not scored, not shown on any page or in the sitemap, and not sent to extract or judge, until they are promoted (10 clean sessions, D16) to `core`. See `docs/d36-approval.md`. The 2026-10-18 selection rerun (150 names, 114 adds) is documented there.

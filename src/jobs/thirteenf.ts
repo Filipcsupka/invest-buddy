@@ -30,7 +30,7 @@ async function main() {
   requireSecUserAgent(process.env.SEC_USER_AGENT);
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
   try {
-    const companies = await loadUniverse(pool);
+    const companies = await loadUniverse(pool, undefined, { collect: true });
     const result = await runThirteenF({ http: defaultHttp(), store: new PostgresInstitutionalStore(pool), cusips: options.dryRun ? new MemoryCusipStore() : new PostgresCusipStore(pool),
       companies, now: new Date(), dryRun: options.dryRun, zipPath: options.zip, period: options.period });
     let documentsWritten = 0, factsWritten = 0;
