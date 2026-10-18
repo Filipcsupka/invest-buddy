@@ -25,7 +25,7 @@ export const EXPECTED_JOBS: ExpectedJob[] = [
   { cronJob: "retention", schedule: "0 3 * * *", enabled: false, runJob: "retention", graceMinutes: 20 },
   { cronJob: "discovery", schedule: "30 9 * * 6", enabled: true, runJob: "discovery", graceMinutes: 40 },
   { cronJob: "watch", schedule: "45 0 * * 2-6", enabled: true, runJob: "watch", graceMinutes: 20 },
-  { cronJob: "prices", schedule: "30 0 * * 2-6", enabled: true, runJob: "prices", graceMinutes: 35 },
+  { cronJob: "prices", schedule: "10 0 * * 2-6", enabled: true, runJob: "prices", graceMinutes: 40 },
   { cronJob: "reconcile", schedule: "10 4 * * 2-6", enabled: true, runJob: "reconcile", graceMinutes: 20 },
   { cronJob: "daily", schedule: "25 4 * * 2-6", enabled: true, runJob: "daily", graceMinutes: 70 },
   { cronJob: "portfolio", schedule: "0 6 * * 2-6", timeZone: "UTC", enabled: true, runJob: "portfolio", graceMinutes: 40 },

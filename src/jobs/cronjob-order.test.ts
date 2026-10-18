@@ -60,7 +60,7 @@ describe("daily pipeline order", () => {
   });
   const chain = ["prices", "collect", "detect", "extract", "macro", "reconcile", "daily", "judge"];
   it("uses the night schedule in Bratislava", () => {
-    const expected = ["00:30", "01:00", "01:35", "01:50", "04:00", "04:10", "04:25", "05:30"];
+    const expected = ["00:10", "01:00", "01:35", "01:50", "04:00", "04:10", "04:25", "05:30"];
     for (const [index, name] of chain.entries()) {
       const [hour, minute] = expected[index].split(":").map(Number);
       expect(minutes(name).at, name).toBe(hour * 60 + minute);
