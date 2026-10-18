@@ -7,7 +7,7 @@ const input = (changes: Partial<AllocationInput> = {}): AllocationInput => ({ mo
 
 describe("owner monthly allocation", () => {
   it("gives the owner's EUR 200 starter example and keeps an add reserve", () => {
-    expect(allocate(input())).toEqual({ suggestions: [{ symbol: "A", tier: "STARTER", amountEur: 40, reason: "TIER_AMOUNT", capped: false }], carriedCashEur: 160, reserveEur: 66.67, cashDrag: false });
+    expect(allocate(input())).toEqual({ suggestions: [{ symbol: "A", tier: "STARTER", amountEur: 40, recycledEur: 0, reason: "TIER_AMOUNT", capped: false }], carriedCashEur: 160, recycledCashEur: 0, reserveEur: 66.67, cashDrag: false });
   });
   it("carries all cash without signals or without an eligible signal", () => {
     expect(allocate(input({ signals: [] })).carriedCashEur).toBe(200);
@@ -51,5 +51,19 @@ describe("owner monthly allocation", () => {
     const r = allocate(input({ freeCashEur: 601, signals: [] }));
     expect(r.cashDrag).toBe(true);
     expect(r.carriedCashEur).toBe(601);
+  });
+  it("allocates recycled cash to sustained profiles before higher-scored event profiles", () => {
+    const r = allocate(input({ freeCashEur: 100, recycledCashEur: 70, monthlyContributionEur: 0, portfolioValueEur: 2000,
+      signals: [{ ...starter("B", 24), profile: "event" }, { ...starter("A", 18), profile: "sustained" }] }));
+    expect(r.suggestions.map((s) => [s.symbol, s.amountEur, s.recycledEur])).toEqual([["A", 40, 40], ["B", 40, 10]]);
+    expect(r.recycledCashEur).toBe(20);
+    expect(allocate(input({ freeCashEur: 100, recycledCashEur: 70, monthlyContributionEur: 0, portfolioValueEur: 2000,
+      signals: [{ ...starter("B", 24), profile: "event" }, { ...starter("A", 18), profile: "sustained" }] }))).toEqual(r);
+  });
+  it("caps event-driven names at half the ordinary name cap and the sleeve at 20 percent", () => {
+    const name = allocate(input({ portfolioValueEur: 1000, monthlyContributionEur: 0, signals: [{ ...starter("B"), profile: "event" }], positions: [{ symbol: "B", valueEur: 40, profile: "event" }] }));
+    expect(name.suggestions[0]).toMatchObject({ amountEur: 0, reason: "NAME_CAP" });
+    const sleeve = allocate(input({ portfolioValueEur: 1000, monthlyContributionEur: 0, signals: [{ ...starter("B"), profile: "event" }], positions: [{ symbol: "OLD", valueEur: 180, profile: "event" }] }));
+    expect(sleeve.suggestions[0]).toMatchObject({ amountEur: 0, reason: "EVENT_SLEEVE_CAP" });
   });
 });

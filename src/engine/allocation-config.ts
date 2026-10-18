@@ -1,5 +1,10 @@
 /** Owner allocation placeholders. The owner must confirm every value and the broker fee before use. */
 export const ALLOCATION_CONFIG = {
+  version: "2026-10-18.1",
+  // Draft share of total portfolio held in event-driven names.
+  eventSleeveCapPercent: 20,
+  // Draft event-driven per-name limit as a fraction of sizingCap().
+  eventNameCapFraction: 0.5,
   // Owner example: a starter is about one fifth of free cash, or EUR 40 on EUR 200.
   starterPercent: 20,
   // Owner example: a usual starter is at least EUR 40.

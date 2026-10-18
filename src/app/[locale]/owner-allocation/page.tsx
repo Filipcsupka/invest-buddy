@@ -34,6 +34,7 @@ async function OwnerAllocationPage({ params }: LocaleParams) {
           <div><dt>{m.freeCash}</dt><dd>{euro(data.baseline.cashEur)}</dd></div>
           <div><dt>{m.reserve}</dt><dd>{euro(data.result.reserveEur)}</dd></div>
           <div><dt>{m.carried}</dt><dd>{euro(data.result.carriedCashEur)}</dd></div>
+          <div><dt>{m.recycled}</dt><dd>{euro(data.result.recycledCashEur ?? 0)}</dd></div>
         </dl>
         {data.result.cashDrag && <p className="notice">{m.cashDrag}</p>}
         {data.baseline.monthlyContributionEur == null && <p className="muted small">{m.monthlyMissing}</p>}
@@ -41,13 +42,15 @@ async function OwnerAllocationPage({ params }: LocaleParams) {
       <section className="sheet-section" aria-labelledby="owner-suggestions">
         <h2 id="owner-suggestions">{m.suggestions}</h2>
         {data.result.suggestions.length ? <div className="table-scroll" role="region" tabIndex={0} aria-label={m.suggestions}><table className="screen">
-          <thead><tr><th scope="col">{m.symbol}</th><th scope="col">{m.tier}</th><th scope="col">{m.amount}</th><th scope="col">{m.reason}</th></tr></thead>
+          <thead><tr><th scope="col">{m.symbol}</th><th scope="col">{m.tier}</th><th scope="col">{m.amount}</th><th scope="col">{m.recycledUsed}</th><th scope="col">{m.reason}</th></tr></thead>
           <tbody>{data.result.suggestions.map((suggestion) => <tr key={`${suggestion.symbol}-${suggestion.tier}`}>
-            <th scope="row">{suggestion.symbol}</th><td>{m.tiers[suggestion.tier]}</td><td className="num">{suggestion.amountEur ? euro(suggestion.amountEur) : m.wait}</td><td>{m.reasons[suggestion.reason]}{suggestion.capped ? ` ${m.capped}` : ""}</td>
+            <th scope="row">{suggestion.symbol}</th><td>{m.tiers[suggestion.tier]}</td><td className="num">{suggestion.amountEur ? euro(suggestion.amountEur) : m.wait}</td><td className="num">{euro(suggestion.recycledEur ?? 0)}</td><td>{m.reasons[suggestion.reason]}{suggestion.capped ? ` ${m.capped}` : ""}</td>
           </tr>)}</tbody>
         </table></div> : <p className="empty-line">{m.noSignals}</p>}
         <p className="muted small">{m.historyNote}</p>
       </section>
+      {!!data.sales?.length && <section className="sheet-section" aria-labelledby="owner-sales"><h2 id="owner-sales">{m.sales}</h2><div className="table-scroll"><table className="screen"><thead><tr><th>{m.symbol}</th><th>{m.tradeDate}</th><th>{m.netProceeds}</th><th>{m.remainingProceeds}</th></tr></thead><tbody>{data.sales.map((sale, index) => <tr key={`${sale.date}-${sale.symbol}-${index}`}><th scope="row">{sale.symbol}</th><td>{formatDate(locale, sale.date)}</td><td className="num">{euro(sale.netProceedsEur)}</td><td className="num">{euro(sale.remainingEur)}</td></tr>)}</tbody></table></div></section>}
+      {!!data.holdings?.length && <section className="sheet-section" aria-labelledby="owner-holdings"><h2 id="owner-holdings">{m.holdings}</h2><div className="table-scroll"><table className="screen"><thead><tr><th>{m.symbol}</th><th>{m.gainFromCost}</th><th>{m.daysHeld}</th></tr></thead><tbody>{data.holdings.map((holding) => <tr key={holding.symbol}><th scope="row">{holding.symbol}</th><td className="num">{holding.gainFromCostPercent == null ? m.unknown : `${formatNumber(locale, holding.gainFromCostPercent, 2)}%`}</td><td className="num">{holding.daysHeld ?? m.unknown}</td></tr>)}</tbody></table></div></section>}
     </>}
   </article>;
 }
