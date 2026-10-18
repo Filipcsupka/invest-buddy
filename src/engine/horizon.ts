@@ -81,6 +81,8 @@ export function horizonProfile(input: HorizonInput): HorizonResult {
   const move5 = bars.length > 5 ? r1((last.close / bars[bars.length - 6].close - 1) * 100) : null;
   const meanVolume = bars.slice(-21, -1).reduce((s, b) => s + b.volume, 0) / 20;
   const volumeRatio = meanVolume > 0 ? r1(last.volume / meanVolume) : null;
+  const recentHigh = Math.max(...recent.map((bar) => bar.high));
+  const drawdownPercent = recentHigh > 0 ? r1((1 - last.close / recentHigh) * 100) : null;
   const flagged = input.flags.filter((f) => f.state === "flagged").map((f) => f.id);
 
   const sustained = yoy.every((v) => v >= R.sustainedYoyPercent);
@@ -97,7 +99,7 @@ export function horizonProfile(input: HorizonInput): HorizonResult {
   if (volumeRatio !== null && volumeRatio >= R.eventVolumeMultiple) transient.push("volume_spike");
   const eventReasons = [...structural, ...(input.marketCapUsd < R.longMinMarketCapUsd ? transient : [])];
 
-  const values = { yoyLatest: yoy[0], yoyPrior1: yoy[1], yoyPrior2: yoy[2], yoyOldest: yoy[yoy.length - 1], marketCapUsd: input.marketCapUsd, dollarVolume, atrPercent, move5, volumeRatio, tier: input.tier };
+  const values = { yoyLatest: yoy[0], yoyPrior1: yoy[1], yoyPrior2: yoy[2], yoyOldest: yoy[yoy.length - 1], marketCapUsd: input.marketCapUsd, dollarVolume, atrPercent, drawdownPercent, move5, volumeRatio, tier: input.tier };
   if (longOk) return { profile: "sustained", reasons: ["sustained_growth", "large_liquid", "low_atr", "no_flags"], values };
   if (eventReasons.length) return { profile: "event", reasons: eventReasons, values };
   return { profile: "mixed", reasons: sustained ? ["sustained_growth_below_size_or_liquidity"] : ["growth_not_sustained"], values };

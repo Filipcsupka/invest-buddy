@@ -1,0 +1,17 @@
+.section { margin-top: var(--s6); }
+.section > h2 { margin: 0 0 var(--s2); font-family: var(--display); font-size: var(--t-xl); }
+.section > p { max-width: 70ch; color: var(--ink-2); }
+.lists { display: grid; gap: var(--s5); margin-top: var(--s5); }
+.list { min-width: 0; padding: var(--s5); background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--radius-lg); }
+.list h3 { margin: 0 0 var(--s4); font-family: var(--display); font-size: var(--t-lg); }
+.list p { color: var(--ink-2); }
+.scroll { overflow-x: auto; }
+.table { width: 100%; min-width: 670px; table-layout: fixed; border-collapse: collapse; text-align: left; }
+.table th, .table td { padding: var(--s3); vertical-align: top; border-bottom: 1px solid var(--rule); }
+.table thead th { color: var(--ink-3); font-size: var(--t-sm); }
+.table th:nth-child(1) { width: 15%; }
+.table th:nth-child(2) { width: 22%; }
+.table th:nth-child(3) { width: 20%; }
+.table th:nth-child(4) { width: 43%; }
+.table tbody th span { display: block; color: var(--ink-3); font-weight: 400; font-size: var(--t-sm); overflow-wrap: anywhere; }
+.table :global(dl) { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s2); }

@@ -177,6 +177,7 @@
 .co-layout [data-o="3"] { order: 3; }
 .co-layout [data-o="4"] { order: 4; }
 .co-layout .co-rail [data-flags] { order: 5; }
+.co-layout .co-rail [data-profile-block] { order: 5; }
 .co-layout [data-o="6"] { order: 6; }
 .co-layout [data-o="7"] { order: 7; }
 .co-layout [data-o="8"] { order: 8; }
@@ -596,6 +597,7 @@
   .co-layout .co-summary,
   .co-layout [data-o],
   .co-layout .co-rail [data-flags],
+  .co-layout .co-rail [data-profile-block],
   .co-layout .co-rail [data-data-status] {
     order: 0;
   }

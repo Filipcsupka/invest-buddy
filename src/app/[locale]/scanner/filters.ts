@@ -5,6 +5,7 @@ import { stateOrder, type StateKey } from "@/i18n/rules";
 import type { RuleStreak } from "@/db/rules-streak";
 import { floorState, type FloorMetrics } from "./floor";
 import { matchesPreset, presetById, presetIds, type PresetId } from "./presets";
+import type { PublicHorizon } from "@/data/public-horizons";
 
 export type ScannerFilters = {
   q: string; state: StateKey | ""; min: number | null; max: number | null;
@@ -44,7 +45,7 @@ export function filtersHref(locale: Locale, filters: ScannerFilters, floor: bool
   const query = params.toString();
   return `/${locale}/scanner${query ? `?${query}` : ""}`;
 }
-export function filterScores(rows: StoreRow[], filters: ScannerFilters, heldTickers: ReadonlySet<string>, locale: Locale = "en", streaks: Readonly<Record<string, RuleStreak>> = {}, floor: Readonly<Record<string, FloorMetrics>> = {}): StoreRow[] {
+export function filterScores(rows: StoreRow[], filters: ScannerFilters, heldTickers: ReadonlySet<string>, locale: Locale = "en", streaks: Readonly<Record<string, RuleStreak>> = {}, floor: Readonly<Record<string, FloorMetrics>> = {}, horizons: Readonly<Record<string, PublicHorizon>> = {}): StoreRow[] {
   const preset = filters.preset ? presetById(filters.preset) : undefined;
   const q = filters.q.toLocaleLowerCase();
   return rows.filter(({ instrument, result }) => (!q || `${instrument.ticker} ${instrument.name} ${instrument.sector} ${sectorLabel(locale, instrument.sector)}`.toLocaleLowerCase(locale).includes(q))
@@ -55,7 +56,7 @@ export function filterScores(rows: StoreRow[], filters: ScannerFilters, heldTick
     && (filters.f === null || result.fundamentals >= filters.f)
     && (filters.t === null || result.technical >= filters.t)
     && (filters.m === null || result.macro >= filters.m)
-    && (!preset || matchesPreset(preset, result.ruleHits, streaks[instrument.ticker]))
+    && (!preset || matchesPreset(preset, result.ruleHits, streaks[instrument.ticker], horizons[instrument.ticker]))
     && (!filters.floor || heldTickers.has(instrument.ticker) || floorState(floor[instrument.ticker]) !== "below")
     && (!filters.held || heldTickers.has(instrument.ticker))
     && (!filters.source || instrument.source === filters.source));

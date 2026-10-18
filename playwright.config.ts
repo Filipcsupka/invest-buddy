@@ -20,6 +20,6 @@ export default defineConfig({
     url: `http://127.0.0.1:${port}/en`,
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,
-    env: { DATA_MODE: "fixture", NODE_ENV: "production" },
+    env: { DATA_MODE: "fixture", NODE_ENV: "production", RATE_LIMIT: "off" },
   },
 });
