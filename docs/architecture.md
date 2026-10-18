@@ -60,7 +60,7 @@ These are CronJob start times, not completion guarantees. Tuesday through Saturd
 
 ```mermaid
 flowchart LR
-  prices[00:30 prices] --> collect[01:00 collect]
+  prices[00:10 prices] --> collect[01:00 collect]
   collect --> detect[01:35 detect]
   detect --> extract[01:50 extract]
   extract --> macro[04:00 macro]
@@ -81,7 +81,7 @@ flowchart LR
 
 | Job | Manifest schedule | State |
 | --- | --- | --- |
-| prices, watch, collect, detect, extract | Tue–Sat 00:30, 00:45, 01:00, 01:35, 01:50 | active |
+| prices, watch, collect, detect, extract | Tue–Sat 00:10, 00:45, 01:00, 01:35, 01:50 | active |
 | GDELT collect, retention | Tue–Sat 01:05; daily 03:00 | suspended |
 | macro, reconcile, daily, judge | Tue–Sat 04:00, 04:10, 04:25, 05:30 | active |
 | portfolio | Tue–Sat 06:00 **UTC** | active |
