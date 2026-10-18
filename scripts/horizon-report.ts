@@ -20,22 +20,34 @@ export async function buildRows(db: Q, asOf: string): Promise<Row[]> {
     `SELECT DISTINCT ON (ticker,concept,period_end) ticker,concept,period_end::text,value::text FROM fundamentals_pit
      WHERE taxonomy='us-gaap' AND unit='USD' AND concept=ANY($1) AND filed<=$2::date AND period_start IS NOT NULL AND period_end-period_start BETWEEN 80 AND 100
      ORDER BY ticker,concept,period_end,filed DESC`, [[...REVENUE_CONCEPTS], asOf]);
-  const revBy = new Map<string, Map<string, QuarterRevenue[]>>();
-  for (const r of rev.rows) { const m = revBy.get(r.ticker) ?? revBy.set(r.ticker, new Map()).get(r.ticker)!; (m.get(r.concept) ?? m.set(r.concept, []).get(r.concept)!).push({ periodEnd: r.period_end, value: +r.value }); }
+  const revBy = mergeRevenueConcepts(rev.rows);
   const sh = await db.query<{ ticker: string; period_end: string; value: string }>(
-    "SELECT DISTINCT ON (ticker,period_end) ticker,period_end::text,value::text FROM fundamentals_pit WHERE concept='EntityCommonStockSharesOutstanding' AND filed<=$1::date ORDER BY ticker,period_end,filed DESC", [asOf]);
+    `SELECT DISTINCT ON (ticker,period_end) ticker,period_end::text,value::text FROM fundamentals_pit
+     WHERE concept IN ('EntityCommonStockSharesOutstanding','CommonStockSharesOutstanding') AND filed<=$1::date
+     ORDER BY ticker,period_end,CASE WHEN concept='EntityCommonStockSharesOutstanding' THEN 0 ELSE 1 END,filed DESC`, [asOf]);
   const shares = new Map<string, { periodEnd: string; value: number }[]>();
   for (const s of sh.rows) (shares.get(s.ticker) ?? shares.set(s.ticker, []).get(s.ticker)!).push({ periodEnd: s.period_end, value: +s.value });
   return inst.rows.map((i) => {
     const b = bars.get(i.ticker) ?? [];
-    const concepts = [...(revBy.get(i.ticker)?.values() ?? [])].sort((x, y) => y.length - x.length);
+    const revenue = revBy.get(i.ticker) ?? [];
     const counts = shares.get(i.ticker) ?? [];
     const latestShares = [...counts].sort((x, y) => y.periodEnd.localeCompare(x.periodEnd))[0]?.value;
     const last = b[b.length - 1];
     // Interest cover and short interest need their own loaders; the report leaves them as no data.
     const flags = companyFlags({ bars: b, shares: counts, operatingIncome: null, interestExpense: null, shortInterestPercent: null });
-    return { ticker: i.ticker, name: i.name, tier: i.tier, result: horizonProfile({ bars: b, revenue: concepts[0] ?? [], marketCapUsd: last && latestShares ? last.close * latestShares : null, flags, tier: i.tier }) };
+    return { ticker: i.ticker, name: i.name, tier: i.tier, result: horizonProfile({ bars: b, revenue, marketCapUsd: last && latestShares ? last.close * latestShares : null, flags, tier: i.tier }) };
   });
+}
+
+/** A filer may change its revenue tag. Keep one value per quarter, preferring the SEC tag order. */
+export function mergeRevenueConcepts(rows: readonly { ticker: string; concept: string; period_end: string; value: string }[]): Map<string, QuarterRevenue[]> {
+  const byTicker = new Map<string, Map<string, QuarterRevenue>>();
+  for (const concept of REVENUE_CONCEPTS) for (const row of rows) {
+    if (row.concept !== concept) continue;
+    const quarters = byTicker.get(row.ticker) ?? byTicker.set(row.ticker, new Map()).get(row.ticker)!;
+    if (!quarters.has(row.period_end)) quarters.set(row.period_end, { periodEnd: row.period_end, value: +row.value });
+  }
+  return new Map([...byTicker].map(([ticker, quarters]) => [ticker, [...quarters.values()]]));
 }
 
 export function labelsCsv(rows: Row[]): string {

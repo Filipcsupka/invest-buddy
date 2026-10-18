@@ -1,6 +1,7 @@
 import pg from "pg";
 import { describe, expect, it } from "vitest";
 import { collectCompanyfacts, companyfactsUrl, parseCompanyfacts } from "./companyfacts";
+import realCases from "./fixtures/sec-real-collector-cases.json";
 
 const fixture = (revision = false) => JSON.stringify({ cik: 1045810, facts: {
   "us-gaap": {
@@ -21,6 +22,19 @@ describe("SEC companyfacts", () => {
     expect(rows).toContainEqual(expect.objectContaining({ concept: "Revenues", filed: "2025-05-01", value: 100 }));
   });
   it("formats a ten digit CIK", () => expect(companyfactsUrl(1045810)).toMatch(/CIK0001045810\.json$/));
+  it("keeps Alphabet's replacement revenue tag and common shares", () => {
+    const rows = parseCompanyfacts(JSON.stringify(realCases.GOOGL), "GOOGL");
+    expect(rows).toContainEqual(expect.objectContaining({ concept: "Revenues", periodEnd: "2026-06-30", periodStart: "2026-04-01" }));
+    expect(rows).toContainEqual(expect.objectContaining({ concept: "CommonStockSharesOutstanding", periodEnd: "2026-06-30", unit: "shares" }));
+  });
+  it("keeps Affirm's annual debt interest expense", () => {
+    const rows = parseCompanyfacts(JSON.stringify(realCases.AFRM), "AFRM");
+    expect(rows).toContainEqual(expect.objectContaining({ concept: "InterestExpenseDebt", periodEnd: "2026-06-30", form: "10-K" }));
+  });
+  it("does not invent a common-share count for Meta", () => {
+    const rows = parseCompanyfacts(JSON.stringify(realCases.META), "META");
+    expect(rows.some((row) => row.concept === "CommonStockSharesOutstanding" || row.concept === "EntityCommonStockSharesOutstanding")).toBe(false);
+  });
 });
 
 describe.skipIf(!process.env.TEST_DATABASE_URL)("SEC companyfacts (Postgres)", () => {
