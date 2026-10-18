@@ -97,7 +97,7 @@ export function horizonProfile(input: HorizonInput): HorizonResult {
   if (volumeRatio !== null && volumeRatio >= R.eventVolumeMultiple) transient.push("volume_spike");
   const eventReasons = [...structural, ...(input.marketCapUsd < R.longMinMarketCapUsd ? transient : [])];
 
-  const values = { yoyLatest: yoy[0], yoyOldest: yoy[yoy.length - 1], marketCapUsd: input.marketCapUsd, dollarVolume, atrPercent, move5, volumeRatio, tier: input.tier };
+  const values = { yoyLatest: yoy[0], yoyPrior1: yoy[1], yoyPrior2: yoy[2], yoyOldest: yoy[yoy.length - 1], marketCapUsd: input.marketCapUsd, dollarVolume, atrPercent, move5, volumeRatio, tier: input.tier };
   if (longOk) return { profile: "sustained", reasons: ["sustained_growth", "large_liquid", "low_atr", "no_flags"], values };
   if (eventReasons.length) return { profile: "event", reasons: eventReasons, values };
   return { profile: "mixed", reasons: sustained ? ["sustained_growth_below_size_or_liquidity"] : ["growth_not_sustained"], values };

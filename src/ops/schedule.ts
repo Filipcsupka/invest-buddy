@@ -39,6 +39,7 @@ export const EXPECTED_JOBS: ExpectedJob[] = [
   { cronJob: "master-refresh", schedule: "0 5 * * 0", enabled: false, runJob: "master-refresh", graceMinutes: 25 },
   { cronJob: "pool-bars", schedule: "0 10 * * 0", enabled: false, runJob: null, graceMinutes: 70, note: "not logged to job_runs; writes discovery_price_bars only" },
   { cronJob: "outcomes", schedule: "30 6 * * 2-6", enabled: false, runJob: "outcomes", graceMinutes: 15 },
+  { cronJob: "horizon-labels", schedule: "45 6 * * 2-6", enabled: false, runJob: "horizon-labels", graceMinutes: 15 },
   { cronJob: "research-weekly", schedule: "0 1 * * 0", enabled: false, runJob: null, graceMinutes: 50, note: "shell script, not in job_runs" },
   { cronJob: "research-daily", schedule: "40 2 * * 2-6", enabled: false, runJob: null, graceMinutes: 50, note: "shell script, not in job_runs" },
   { cronJob: "research-verify", schedule: "30 3 * * 0-6", enabled: false, runJob: "research-verify", graceMinutes: 25 },

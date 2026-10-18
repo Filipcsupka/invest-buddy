@@ -18,6 +18,7 @@ resources:
   - thirteenf-cronjob.yaml
   - master-refresh-cronjob.yaml
   - outcomes-cronjob.yaml
+  - horizon-labels-cronjob.yaml
   - weekly-cronjob.yaml
   - watchdog-cronjob.yaml
   - backup-cronjob.yaml
