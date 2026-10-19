@@ -5,8 +5,11 @@ metadata:
   namespace: invest
 spec:
   suspend: false
-  # After prices (00:30 Tue-Sat, latest end 01:00). Ends by 01:35 before detect.
-  schedule: "0 1 * * 2-6"
+  # After prices (00:10 Tue-Sat, latest end 00:50). Ends by 01:35 before detect.
+  # Monday is a store-only catch-up: weekend filings and press releases are saved before the
+  # RSS feeds roll over. No prices, detect, extract or scoring run on Monday; Tuesday's detect
+  # gates everything collected since Saturday.
+  schedule: "0 1 * * 1-6"
   timeZone: Europe/Bratislava
   concurrencyPolicy: Forbid
   startingDeadlineSeconds: 300

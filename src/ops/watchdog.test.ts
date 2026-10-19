@@ -50,9 +50,11 @@ describe("missed jobs", () => {
     expect(keys).toContain("job-missed:collect");
   });
 
-  it("does not expect Tuesday to Saturday jobs on a Monday morning", () => {
+  it("expects only the Monday collect on a Monday morning", () => {
     const monday = d("2026-10-12T06:00:00Z");
     const good = new Map([...allGood(monday)].map(([k]) => [k, d("2026-10-10T10:00:00Z")]));
+    expect(missedJobs(monday, good, allKnown()).map((f) => f.key)).toEqual(["job-missed:collect"]);
+    good.set("collect", d("2026-10-11T23:20:00Z")); // Monday 01:20 local
     expect(missedJobs(monday, good, allKnown())).toEqual([]);
   });
 });

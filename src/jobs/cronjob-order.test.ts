@@ -68,10 +68,11 @@ describe("daily pipeline order", () => {
     }
     expect(minutes("digest")).toEqual({ at: 7 * 60 + 30, days: "2-6" });
   });
-  it("runs the scheduled chain in order on the same weekdays", () => {
+  it("runs the scheduled chain in order on the same weekdays, with collect also on Monday", () => {
     const times = chain.map((name) => minutes(name));
     for (let i = 1; i < chain.length; i++) expect(times[i].at, `${chain[i]} after ${chain[i - 1]}`).toBeGreaterThan(times[i - 1].at);
-    expect(new Set(times.map((t) => t.days))).toEqual(new Set(["2-6"]));
+    expect(minutes("collect").days).toBe("1-6");
+    expect(new Set(chain.filter((name) => name !== "collect").map((name) => minutes(name).days))).toEqual(new Set(["2-6"]));
   });
   it("starts each step after the previous step's job deadline", () => {
     for (let i = 1; i < chain.length; i++) {
@@ -163,6 +164,32 @@ describe("daily pipeline order", () => {
   it("runs the digest now that the Telegram secret is set", () => {
     expect(job("digest")).toContain("suspend: false");
     expect(minutes("daily").at + startWindow("daily") + deadline("daily")).toBeLessThanOrEqual(minutes("judge").at);
+  });
+});
+
+describe("Monday catch-up", () => {
+  const days = (spec: string) => spec === "*" ? [0, 1, 2, 3, 4, 5, 6] : spec.split(",").flatMap((part) => {
+    const [from, to] = part.split("-").map(Number);
+    return Array.from({ length: (to ?? from) - from + 1 }, (_, i) => from + i);
+  });
+  const scheduled = docs.flatMap((doc) => {
+    const name = /name: invest-buddy-([\w-]+)\n/.exec(doc)?.[1];
+    const m = /schedule: "\d+ \d+ \* \* ([\d,*-]+)"/.exec(doc);
+    return name && m ? [{ name, days: days(m[1]), active: !/^\s{2}suspend: true\b/m.test(doc) }] : [];
+  });
+  it("runs only the store-only collect on Monday", () => {
+    // Detect writes a gate per date and extract reads one pending gate per run, so a Monday gate would push Tuesday's gate to Wednesday.
+    // A Monday extract is judged on Tuesday against Friday's scores, and Tuesday's detect skips filings already extracted.
+    expect(scheduled.filter((job) => job.active && job.days.includes(1)).map((job) => job.name)).toEqual(["collect"]);
+    for (const name of ["prices", "watch", "detect", "extract", "macro", "reconcile", "daily", "judge", "digest"]) expect(days(minutes(name).days), name).not.toContain(1);
+  });
+  it("ends Monday's collect before any later Monday job and keeps it free of AI and price keys", () => {
+    const end = minutes("collect").at + startWindow("collect") + deadline("collect");
+    expect(end).toBeLessThanOrEqual(minutes("detect").at);
+    const doc = job("collect");
+    expect(doc).toContain('command: ["node", "dist/jobs/collect.js"]');
+    expect(doc).not.toContain("args:");
+    for (const key of ["TWELVE_DATA_API_KEY", "INGEST_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"]) expect(doc).not.toContain(key);
   });
 });
 
