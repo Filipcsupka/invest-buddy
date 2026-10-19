@@ -33,7 +33,7 @@ List `extended` now means collected and priced, not scored, not shown, no AI cos
 - Hidden for `extended`: scoring input (`DatabaseUniverseProvider.instruments`), pages and sitemap (`store.ts` `latestScores`, `instrumentUniverse`), insiders page, extract (`reviewDueSymbols`, detect gate universe, `/api/ingest/universe`, extraction-runs and bundle ingest) and judge input.
 - Still collected for `extended`: prices, collect, watch, companyfacts, earnings calendar, 13F (`loadUniverse(..., { collect: true })`). Macro fields are written for scored names only; the next macro run covers a name after promotion.
 - The 7 names seeded as `extended` before D36 (AAPL, ASML, MDB, META, NOW, ORCL, UBER) are live scored names. Migration `089_extended_collect_only.sql` moves them to `core` so the gate does not hide them. It runs in the web init container before the new image serves.
-- Promotion (10 clean sessions, D16): `universe-promote` job, at most 10 a week, CronJob suspended (see `docs/universe-criteria.md`, Promotion to core).
+- Promotion (10 clean sessions, D16): `universe-promote` job, at most 10 a week, CronJob on since 2026-10-19 (see `docs/universe-criteria.md`, Promotion to core).
 - `select-universe` treats `extended` names (other than the 7 seeded ones) as candidates again, not as core.
 
 ## Criteria thresholds (`src/universe/select.ts`, `src/universe/pool.ts`)

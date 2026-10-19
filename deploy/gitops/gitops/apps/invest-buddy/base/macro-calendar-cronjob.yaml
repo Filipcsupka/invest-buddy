@@ -4,8 +4,8 @@ metadata:
   name: invest-buddy-macro-calendar
   namespace: invest
 spec:
-  # Suspended until the owner applies migration 090 and approves the first run.
-  suspend: true
+  # Enabled by the owner 2026-10-19 after migration 090 and a manual run (44 dates).
+  suspend: false
   # Three BLS schedule pages and the Fed calendar file, no metered API. 03:20 is before the 05:30 judge that reads macro_events.
   schedule: "20 3 * * 2-6"
   timeZone: Europe/Bratislava

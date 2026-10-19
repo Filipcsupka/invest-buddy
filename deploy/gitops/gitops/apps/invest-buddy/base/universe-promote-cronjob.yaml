@@ -4,11 +4,11 @@ metadata:
   name: invest-buddy-universe-promote
   namespace: invest
 spec:
-  # Proposal (D36). Suspended until the owner approves it. Moves extended names with 10 clean sessions (D16) to core.
+  # D36, enabled by the owner 2026-10-19. Moves extended names with 10 clean sessions (D16) to core.
   # At most 10 a week (PROMOTE.weeklyCap): a core name is scored and goes to extract and judge, so each promotion adds AI cost.
   # Sunday 15:00, after the week's last prices run (Saturday 00:10) and pool-bars (ends by 14:10); the new core names are scored on Tuesday.
   # Database only, no external API. For a dry run by hand, add --dry-run to the command.
-  suspend: true
+  suspend: false
   schedule: "0 15 * * 0"
   timeZone: Europe/Bratislava
   concurrencyPolicy: Forbid
