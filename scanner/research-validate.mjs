@@ -101,7 +101,7 @@ var research_output_schema_default = {
         symbol: { $ref: "#/$defs/symbol" },
         companyName: { type: "string", minLength: 1, maxLength: 120 },
         exchange: { type: ["string", "null"], maxLength: 20 },
-        kind: { type: "string", enum: ["earnings", "guidance", "contract", "regulatory", "clinical", "product", "partnership", "capex", "m_and_a", "capital_allocation", "insider", "narrative", "supply_chain", "unusual_move", "risk"] },
+        kind: { type: "string", enum: ["earnings", "guidance", "contract", "regulatory", "clinical", "product", "partnership", "capex", "m_and_a", "capital_allocation", "insider", "narrative", "supply_chain", "unusual_move", "risk", "macro_release"] },
         field: { type: ["string", "null"], enum: ["productCatalyst", "guidanceRaised", "guidanceCut", "narrativeChanged", null] },
         polarity: { type: "string", enum: ["positive", "negative", "neutral"] },
         claim: { type: "string", minLength: 1, maxLength: 240 },
@@ -218,8 +218,28 @@ var FINDING_KINDS = [
   "narrative",
   "supply_chain",
   "unusual_move",
-  "risk"
+  "risk",
+  "macro_release"
 ];
+var MACRO_SYMBOL = "MACRO";
+var MACRO_RELEASES = [
+  "CPI",
+  "Core CPI",
+  "PPI",
+  "Core PPI",
+  "Nonfarm payrolls",
+  "Unemployment rate",
+  "Average hourly earnings",
+  "FOMC rate decision",
+  "PCE",
+  "Core PCE",
+  "GDP",
+  "Retail sales",
+  "Initial jobless claims",
+  "ISM manufacturing",
+  "ISM services"
+];
+var MACRO_FIGURE_LABELS = ["consensus", "actual", "prior"];
 var SCORE_FIELDS = ["productCatalyst", "guidanceRaised", "guidanceCut", "narrativeChanged"];
 var POLARITIES = ["positive", "negative", "neutral"];
 var CONFIDENCES = ["high", "medium", "low"];
@@ -327,6 +347,33 @@ function numberTokens(text) {
   const joined = text.replace(/(\d),(?=\d{3}(?!\d))/g, "$1");
   return (joined.match(/\d+(?:\.\d+)?/g) ?? []).map((t) => t.replace(/^0+(?=\d)/, ""));
 }
+function macroErrors(f, at, asOf) {
+  const errs = [];
+  if (f.symbol !== MACRO_SYMBOL) errs.push(`${at}.symbol: a macro_release finding uses ${MACRO_SYMBOL}`);
+  if (!MACRO_RELEASES.includes(f.companyName)) errs.push(`${at}.companyName: must name a release: ${MACRO_RELEASES.join(", ")}`);
+  if (f.exchange !== null) errs.push(`${at}.exchange: a macro_release finding has none`);
+  if (f.field !== null) errs.push(`${at}.field: a macro_release finding never feeds a score input`);
+  if (f.polarity !== "neutral") errs.push(`${at}.polarity: a macro_release finding is neutral`);
+  if (f.eventDate === null) errs.push(`${at}.eventDate: the release date is required`);
+  else if (f.eventDate > asOf) errs.push(`${at}.eventDate: release after the run date ${asOf}`);
+  f.figures.forEach((g, j) => {
+    if (!MACRO_FIGURE_LABELS.includes(g.label)) errs.push(`${at}.figures[${j}].label: must be one of ${MACRO_FIGURE_LABELS.join(", ")}`);
+  });
+  for (const label of ["consensus", "actual"]) {
+    const hits = f.figures.filter((g) => g.label === label);
+    if (hits.length !== 1) {
+      errs.push(`${at}.figures: needs exactly one ${label} figure`);
+      continue;
+    }
+    const wanted = numberTokens(hits[0].value);
+    f.evidence.forEach((e, j) => {
+      const have = new Set(numberTokens(e.quote));
+      const missing = wanted.filter((t) => !have.has(t));
+      if (missing.length) errs.push(`${at}.evidence[${j}].quote: ${label} ${missing.join(", ")} not in this quote`);
+    });
+  }
+  return errs;
+}
 function contractErrors(o) {
   const errs = [];
   const { run, output } = o;
@@ -339,6 +386,8 @@ function contractErrors(o) {
     const at = `$.output.findings[${i}]`;
     if (findings.has(f.id)) errs.push(`${at}.id: duplicate ${f.id}`);
     findings.set(f.id, f);
+    if (f.kind === "macro_release") errs.push(...macroErrors(f, at, run.asOf));
+    else if (f.symbol === MACRO_SYMBOL) errs.push(`${at}.symbol: ${MACRO_SYMBOL} is reserved for macro_release findings`);
     if (f.evidence.every((e) => e.sourceClassHint === "social") && !f.lead) errs.push(`${at}.lead: a finding with only social sources must be a lead`);
     if (f.lead && f.field !== null) errs.push(`${at}.field: a lead never feeds a score input`);
     if (f.field !== null) {
@@ -366,7 +415,9 @@ function contractErrors(o) {
     });
   });
   const known = (id, at) => {
-    if (!findings.has(id)) errs.push(`${at}: unknown finding ${id}`);
+    const f = findings.get(id);
+    if (!f) errs.push(`${at}: unknown finding ${id}`);
+    else if (f.kind === "macro_release") errs.push(`${at}: macro_release finding ${id} is owner context only and cannot be cited`);
   };
   const symbols = /* @__PURE__ */ new Set();
   output.candidates.forEach((c, i) => {
@@ -423,6 +474,9 @@ export {
   CHAIN_RELATIONS,
   CONFIDENCES,
   FINDING_KINDS,
+  MACRO_FIGURE_LABELS,
+  MACRO_RELEASES,
+  MACRO_SYMBOL,
   PIPELINE_STATES,
   POLARITIES,
   READING_LABEL,

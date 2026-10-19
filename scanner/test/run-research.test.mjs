@@ -15,6 +15,14 @@ const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..", "..");
 const sample = JSON.parse(readFileSync(join(root, "src/research/fixtures/sample-output.json"), "utf8"));
 const clone = () => structuredClone(sample);
+const macro = () => ({
+  id: "f90", symbol: "MACRO", companyName: "CPI", exchange: null, kind: "macro_release", field: null, polarity: "neutral",
+  claim: "September CPI rose 0.4% against a 0.3% consensus.", eventDate: "2026-10-09", themes: [],
+  evidence: [{ url: "https://example.com/news/2026-10-09-cpi", sourceName: "Example Wire (fixture)", sourceClassHint: "press", publishedAt: "2026-10-09",
+    quote: "Consumer prices rose 0.4% in September after 0.2% in August, above the 0.3% increase economists had expected." }],
+  figures: [{ label: "consensus", value: "0.3%", evidenceIndex: 0 }, { label: "actual", value: "0.4%", evidenceIndex: 0 }],
+  confidence: "medium", lead: false,
+});
 
 const cases = [
   ["valid", () => clone()],
@@ -39,6 +47,11 @@ const cases = [
   ["finding limit", (o) => { o.run.limits.maxFindings = 2; return o; }],
   ["advice wording", (o) => { o.output.findings[0].claim = "Investors should start a position before earnings."; o.output.candidates[0].card.verdict = "Moves to START_READY."; return o; }],
   ["shape wrong", (o) => { o.output.findings = "none"; return o; }],
+  ["macro valid", (o) => { o.output.findings.push(macro()); return o; }],
+  ["macro no consensus", (o) => { const f = macro(); f.figures = f.figures.filter((g) => g.label !== "consensus"); o.output.findings.push(f); return o; }],
+  ["macro assumed value", (o) => { const f = macro(); f.figures[0].value = "0.5%"; o.output.findings.push(f); return o; }],
+  ["macro scored and cited", (o) => { o.output.findings.push({ ...macro(), field: "narrativeChanged", polarity: "positive", symbol: "SMPL", companyName: "Inflation", eventDate: null }); o.output.candidates[0].findingIds.push("f90"); return o; }],
+  ["macro symbol reserved", (o) => { o.output.findings[0].symbol = "MACRO"; return o; }],
 ];
 test("scanner validator matches RS0 TypeScript validator for every contract case", () => {
   for (const [name, change] of cases) assert.deepEqual(validateScanner(change(clone())), validateTypes(change(clone())), name);
