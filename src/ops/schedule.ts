@@ -18,7 +18,7 @@ export interface ExpectedJob {
 
 export const EXPECTED_JOBS: ExpectedJob[] = [
   { cronJob: "backup", schedule: "30 2 * * *", enabled: false, runJob: null, graceMinutes: 70, note: "shell script, not logged to job_runs (PL23 prints a JSON line)" },
-  { cronJob: "collect", schedule: "0 1 * * 2-6", enabled: true, runJob: "collect", graceMinutes: 40 },
+  { cronJob: "collect", schedule: "0 1 * * 1-6", enabled: true, runJob: "collect", graceMinutes: 40, note: "Monday run stores documents only; detect and extract stay Tue-Sat" },
   { cronJob: "collect-alphavantage", schedule: "0 8 * * 6", enabled: true, runJob: null, graceMinutes: 25, note: "shares the job name collect with the nightly collect" },
   { cronJob: "collect-gdelt", schedule: "5 1 * * 2-6", enabled: false, runJob: null, graceMinutes: 35, note: "shares the job name collect" },
   { cronJob: "detect", schedule: "35 1 * * 2-6", enabled: true, runJob: "detect", graceMinutes: 20 },

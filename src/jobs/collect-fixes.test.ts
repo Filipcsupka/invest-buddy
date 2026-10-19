@@ -197,7 +197,7 @@ describe("response size", () => {
 describe("M9 schedules", () => {
   const field = (job: string, name: string) => new RegExp(`${name}: "?([^"\\n]+)"?`).exec(cronjob(job))?.[1];
   it("runs collect after the prices job has finished and detect after collect has finished", () => {
-    expect(field("invest-buddy-collect", "schedule")).toBe("0 1 * * 2-6");
+    expect(field("invest-buddy-collect", "schedule")).toBe("0 1 * * 1-6");
     expect(field("invest-buddy-detect", "schedule")).toBe("35 1 * * 2-6");
     const prices = readFileSync(join(process.cwd(), "deploy/gitops/gitops/apps/invest-buddy/base/cronjobs.yaml"), "utf8").split(/^---$/m).find((doc) => doc.includes("name: invest-buddy-prices")) ?? "";
     expect(/schedule: "([^"]+)"/.exec(prices)?.[1]).toBe("10 0 * * 2-6");

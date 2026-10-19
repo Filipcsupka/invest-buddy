@@ -56,7 +56,7 @@ flowchart LR
 
 ## 3. Scheduled run
 
-These are CronJob start times, not completion guarantees. Tuesday through Saturday jobs process the prior market day. Detect gates extraction, and the judge also uses a change gate; both scanner jobs use the ingest API. The suspended earnings calendar writes snapshots but has no reader in reconcile or daily scoring yet. The diagram covers the requested path, while the table gives the other relevant schedules. Sources are the `*cronjob*.yaml` files and `cronjobs.yaml` in `deploy/gitops/gitops/apps/invest-buddy/base/`, plus `src/jobs/cronjob-order.test.ts`.
+These are CronJob start times, not completion guarantees. Tuesday through Saturday jobs process the prior market day. Collect also runs on Monday at 01:00 and only stores documents, so weekend press releases are saved before the RSS feeds roll over; Tuesday's detect gates them. Detect, extract and judge do not run on Monday: extract reads one pending gate per run (oldest first), so a Monday gate would delay Tuesday's, and a Monday extract would be judged against Friday's scores. Detect gates extraction, and the judge also uses a change gate; both scanner jobs use the ingest API. The suspended earnings calendar writes snapshots but has no reader in reconcile or daily scoring yet. The diagram covers the requested path, while the table gives the other relevant schedules. Sources are the `*cronjob*.yaml` files and `cronjobs.yaml` in `deploy/gitops/gitops/apps/invest-buddy/base/`, plus `src/jobs/cronjob-order.test.ts`.
 
 ```mermaid
 flowchart LR
@@ -81,7 +81,7 @@ flowchart LR
 
 | Job | Manifest schedule | State |
 | --- | --- | --- |
-| prices, watch, collect, detect, extract | Tue–Sat 00:10, 00:45, 01:00, 01:35, 01:50 | active |
+| prices, watch, collect, detect, extract | Tue–Sat 00:10, 00:45, 01:00, 01:35, 01:50; collect also Mon 01:00 | active |
 | GDELT collect, retention | Tue–Sat 01:05; daily 03:00 | suspended |
 | macro, reconcile, daily, judge | Tue–Sat 04:00, 04:10, 04:25, 05:30 | active |
 | portfolio | Tue–Sat 06:00 **UTC** | active |
