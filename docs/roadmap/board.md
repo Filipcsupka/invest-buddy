@@ -49,7 +49,7 @@ Updated 2026-10-16. One table per state. A PR that finishes a task moves it to D
 | RS5 | Research CronJobs, caps and kill switch | #167 | jobs suspended, owner unsuspends after RS8 |
 | RS6 | Private research cards, materiality and owner page | #166 | not run live |
 | RS8 (offline) | Old-sample fixture (6 cards), `research:eval` script, `docs/research-eval.md` template | #170 | live run not done |
-| RS7 (code) | Codex adapter, strict schema, Codex caps | #172 | auth path not set |
+| RS7 (code) | Codex adapter, strict schema, Codex caps | #172 | owner chose `CODEX_ACCESS_TOKEN`; local codex-cli 0.163.0 JSON run reported no rate limit or cost field |
 | Test fix | Research runner test used a fixed date | #171 | |
 | RS5 (infra) | 7 research CronJobs synced to the cluster, all suspended, `RESEARCH_ENABLED=off` | infra #42 | Argo synced |
 | RS8 (override) | Opt-in Claude quota-unknown override (`RESEARCH_QUOTA_UNKNOWN_OVERRIDE=on`, 403 only), hard call caps in the reserve transaction | #175 | not run live |
@@ -93,13 +93,13 @@ Detail: `lane-engine.md` (EN48) and `lane-positions.md` (PM2, PM4).
 
 | ID | What | State |
 | --- | --- | --- |
-| RS7 | Codex adapter and secret | adapter code done (`scanner/research-adapters.mjs`, strict schema, quota and call caps, fake-binary tests); auth path and PVC/secret still waiting for the owner, not done |
+| RS7 | Codex adapter and secret | static workspace token path implemented with temporary `CODEX_HOME`; secret `invest-buddy-codex-token` and cluster run remain open. The local CLI reported no rate limit or cost field; not done. |
 | RS8 | Evaluation on the six old cards | offline harness done (fixture, `scripts/research-eval.ts`, `docs/research-eval.md`); live run tried 2026-10-13 and blocked: weekly discovery `skipped_window` (window 00:00 to 07:00 respected), deep dive INTT `skipped_quota` (403 from the Anthropic usage endpoint, cause unverified). Not bypassed. Manual Jobs `rs8-weekly-20261004` and `rs8-dd-intt` deleted 2026-10-14. The override (#175) now exists in code; owner must set `RESEARCH_QUOTA_UNKNOWN_OVERRIDE=on` for the live run. |
 | TASK-084 | Scanner default liquidity and market-cap floor | PR #208 open |
 
 ## Queued, in order
 
-1. RS8 live run on the six old cards (offline harness is in; RS0 to RS6 are merged). RS7 adapter code is in; its auth path and secret wait for the owner.
+1. RS8 live run on the six old cards (offline harness is in; RS0 to RS6 are merged). RS7 adapter code is in; its token secret and cluster run remain open.
 2. Web: W23 native Slovak review, W32 tier map, W35 CSV export (paid tier, deferred).
 3. Data: D36 roll out 150 names (after D35 criteria).
 3a. Waitlist launch: W12 mailer provider (parked, emails not needed now), W18 operator details and legal check (owner), W26 launch checklist, W8 and W9 (Playwright, staging), W4 second replica, W23 native SK review. PL22 to PL24 backup target, script, restore test. PL2 to PL5 CI and deploy tooling. EN6, EN8 to EN10 (EN9 needs a rethink after DEEP_ADD removal), EN12 to EN20, EN33, EN34.
@@ -111,7 +111,7 @@ Detail: `lane-engine.md` (EN48) and `lane-positions.md` (PM2, PM4).
 - RS8 live run: override is in code (#175, off by default). Owner sets `RESEARCH_QUOTA_UNKNOWN_OVERRIDE=on` for the run, or supplies a token that can read usage.
 - EN48 design (tiers re-based on Setup 72%, no deep add, no take-profit rule).
 - Secret `invest-buddy-telegram-owner` (key `TELEGRAM_OWNER_CHAT_ID`, private chat id) only when the research notify job is enabled; the live digest uses `invest-buddy-telegram` and is unaffected. `invest-buddy-backup-secrets` is also missing (not checked whether it was missing before).
-- RS7: Codex auth path (login on PVC or sealed `OPENAI_API_KEY`), `rate_limits` not checked on the real CLI, `used_usd` stays 0 for Codex so `RESEARCH_MONTHLY_USD` is weakly enforced.
+- RS7: supply `invest-buddy-codex-token` and verify the research job in the cluster. The real CLI JSON run reported no rate limit or cost field; Codex API auth stays disabled because `RESEARCH_MONTHLY_USD` cannot cap unmetered spend.
 
 - `TELEGRAM_CARD_MODE=owner` for the private channel (action word and EUR band).
 - A private research page password (`OWNER_RESEARCH_PASSWORD`) alongside `OWNER_VIEW=on`; the page challenges the owner before showing facts.

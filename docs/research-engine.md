@@ -365,7 +365,7 @@ One interface in `scanner/research-adapters.mjs` (RS1):
 
 Claude comes first. It already runs extract and judge in the cluster on the subscription token (`CLAUDE_CODE_OAUTH_TOKEN`). The research call uses the pattern already in `scanner/run-scan.mjs`: `claude -p --output-format json --no-session-persistence --permission-mode dontAsk --tools WebSearch,WebFetch --allowedTools WebSearch,WebFetch --max-turns <n> --model <model>`, an empty working directory, and the env allow-list from `run-scan.mjs`. No Bash, Read, Write or MCP tool is available. The runner extracts the JSON, fills `run`, validates and posts.
 
-Codex comes second (RS7): `codex --search -a never exec --sandbox read-only --skip-git-repo-check --ephemeral --ignore-user-config --ignore-rules --output-schema <file> -C <empty dir> -o <file>`, as documented in `scanner/README.md`. The adapter code is in `scanner/research-adapters.mjs`; it adds `--json` after `-o` to read token usage, and reads the reply from the `-o` file. The output schema is derived from `$defs.modelOutput` by `deriveStrictSchema` (refs inlined, keywords strict mode rejects removed, every object closed with all properties required), and the validator still runs on the reply. Auth is either a ChatGPT login (`auth.json` in `CODEX_HOME`, which must be writable) or `OPENAI_API_KEY`; the owner has not chosen. With neither, `RESEARCH_ADAPTER=codex` fails at start with a clear message and makes no model call. The PVC `invest-buddy-codex-home` is Pending and token refresh in a container is unsolved; the owner decides both in RS7.
+Codex comes second (RS7): `codex --search -a never exec --sandbox read-only --skip-git-repo-check --ephemeral --ignore-user-config --ignore-rules --output-schema <file> -C <empty dir> -o <file>`, as documented in `scanner/README.md`. The adapter code is in `scanner/research-adapters.mjs`; it adds `--json` after `-o` to read token usage, and reads the reply from the `-o` file. The output schema is derived from `$defs.modelOutput` by `deriveStrictSchema` (refs inlined, keywords strict mode rejects removed, every object closed with all properties required), and the validator still runs on the reply. In the cluster, `CODEX_ACCESS_TOKEN` comes from secret `invest-buddy-codex-token`. The adapter feeds it to `codex login --with-access-token` on stdin, checks `codex login status`, and removes the private temporary `CODEX_HOME` after each call. Local runs can still use a login in `CODEX_HOME`. The API key path is disabled because no Codex token price is documented in this repo, so `RESEARCH_MONTHLY_USD` cannot cap its spend.
 
 Caps and the kill switch (RS5), checked by the runner before every model call in this order:
 
@@ -374,19 +374,19 @@ Caps and the kill switch (RS5), checked by the runner before every model call in
 | `RESEARCH_ENABLED` | `off` | Kill switch. Any value other than `on` ends the run before a model call, with status `killed`. Verify and pipeline jobs still process stored rows. |
 | `RESEARCH_WINDOW` | `00:00-07:00` | Subscription runs only inside this window (Europe/Bratislava). A deep dive outside it needs `--manual` and still passes the quota check. |
 | `RESEARCH_MONTHLY_TOKENS` | 12,000,000 | Hard cap: the sum of `research_runs` tokens this calendar month. |
-| `RESEARCH_MONTHLY_USD` | 0 | Hard cap for API auth. 0 means API auth is refused. |
+| `RESEARCH_MONTHLY_USD` | 0 | Hard cap for metered API auth. Codex API auth is refused at startup with any value because its cost cannot be measured. |
 | `RESEARCH_DAILY_CALLS` | 4 | Model calls per day (Sunday allows the 3 weekly calls on top). |
 | `RESEARCH_DAILY_TOKENS` | 600,000 | Research tokens per day. |
 | `AI_DAILY_TOKEN_CEILING` | existing | The shared ceiling for extract, judge and research. |
 | `RESEARCH_QUOTA_STOP_5H_PCT`, `RESEARCH_QUOTA_STOP_7D_PCT` | 70, 80 | Stop when the live Claude usage (`scanner/claude-usage.mjs`) is at or above these, at start and during the run. |
 | `RESEARCH_MAX_TURNS`, `RESEARCH_MAX_SEARCHES`, `RESEARCH_MAX_FETCHES` | 30, 40, 60 | Per call. Searches and fetches are asked for in the prompt and counted from the CLI envelope. |
 | `RESEARCH_ADAPTER` | `claude` | `claude` or `codex`. |
-| `RESEARCH_CODEX_QUOTA_UNKNOWN` | unset | `allow` lets a Codex login run when no rate limit is reported. |
+| `RESEARCH_CODEX_QUOTA_UNKNOWN` | unset | `allow` lets a Codex access token or local login run when no rate limit is reported. |
 | `RESEARCH_CODEX_MODEL` | CLI default | Passed as `-m` when set. |
 
 The defaults are placeholders for the owner. A skipped call is still logged in `research_runs` with its reason (`skipped_cap`, `skipped_quota`, `skipped_window`), so the cost log has no gaps. Each call reserves and finishes a row in `ai_budget_calls` with kind `research`, so the AI usage report covers it.
 
-The Codex account is shared with the owner's own coding agents. The Codex adapter therefore runs only inside the window, at most 2 calls a day, and skips when the rate limit it can read is at 50% or more. The adapter reads a `rate_limits` object with `used_percent` from the `--json` events if the CLI sends one; whether the installed CLI does is not confirmed. There is no way to read the limit before the first call of a process, so a login run skips unless the owner sets `RESEARCH_CODEX_QUOTA_UNKNOWN=allow`, and later calls in the same process use the last reading. The call count per day comes from `codexDailyCalls` in the research-caps usage report. With `OPENAI_API_KEY` the rate-limit check is not used and `RESEARCH_MONTHLY_USD` governs; Codex reports no cost, so the recorded cost stays null.
+The Codex account is shared with the owner's own coding agents. The Codex adapter runs only inside the window, at most 2 calls a day, and skips at a reported rate limit of 50% or more. A local `codex-cli 0.163.0` run on 2026-10-19 reported `turn.completed.usage.input_tokens`, `cached_input_tokens`, `cache_write_input_tokens`, `output_tokens` and `reasoning_output_tokens`. It reported no rate limit or cost field. The adapter reads `rate_limits.*.used_percent` if a later CLI event supplies it. With no reading before the first call, an access token or local login run skips unless the owner sets `RESEARCH_CODEX_QUOTA_UNKNOWN=allow`; later calls in the same process use the last reading. The call count comes from `codexDailyCalls` in the research-caps usage report. Codex records token counts and `used_usd=0`; zero is not an estimate of actual API spend. API auth remains disabled until a documented price allows `RESEARCH_MONTHLY_USD` to be enforced.
 
 ## Security and licences
 
@@ -420,6 +420,5 @@ RS8 replays the six sample cards of the old automation (MRVL, GMAB, GFS, INTT, M
 - Count `research_verified` like `verified_single` in the engine, or show it without points (RS4).
 - Thresholds: daily watch triggers, review intervals, materiality limits, caps (all placeholders).
 - CSPX ALLOCATION amount rule.
-- Codex: fix the PVC and refresh, or use an API key with a USD cap, or stay on Claude only (RS7).
 - Storing full third-party pages in the raw store.
 - Public research cards after RS8 and G5.

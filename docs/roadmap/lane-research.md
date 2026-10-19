@@ -156,24 +156,23 @@ Risk: `src/notify/format.ts` and `src/i18n/messages.ts` are shared; rebase and m
 
 ## RS7 Codex adapter and secret
 
-Status: adapter code done (steps 3 and 4 in code, tests with a fake `codex` binary). The auth path and the PVC or secret (steps 1 and 2, the `deploy/README.md` note and the refresh proof) are still waiting for the owner. RS7 is not done.
+Status: the owner chose one static workspace access token in secret `invest-buddy-codex-token`, passed as `CODEX_ACCESS_TOKEN`. The adapter logs in through stdin to a private temporary home and removes it after the call. A local `codex-cli 0.163.0` run on 2026-10-19 reported token usage but no rate limit or cost field, so the first call needs `RESEARCH_CODEX_QUOTA_UNKNOWN=allow`. Secret and cluster wiring remain open. RS7 is not done.
 
 Why: a second adapter for when the Claude quota is short, and a later second voice (ADR-005).
 
 Steps:
-1. Investigate the Pending PVC `invest-buddy-codex-home`. It may be waiting for its first consumer (a `WaitForFirstConsumer` storage class) since the scan-codex CronJob was removed; that is not verified. Record the StorageClass binding mode and events.
-2. Choose with the owner: (a) the ChatGPT login with the PVC seeded from the sealed `invest-buddy-codex-auth-seed` (`deploy/README.md`), one writer at a time, and a check that the refreshed `auth.json` persists across two runs a day apart; or (b) `OPENAI_API_KEY` as a sealed secret with `RESEARCH_MONTHLY_USD` above 0.
-3. Codex adapter in `scanner/research-adapters.mjs`: `codex --search -a never exec --sandbox read-only --skip-git-repo-check --ephemeral --ignore-user-config --ignore-rules --output-schema <file> -C <empty dir> -o <file>`. Derive the output schema from `$defs.modelOutput`, inlining refs and removing keywords strict mode does not accept; the validator still runs on the result.
-4. Quota: confirm whether `codex exec --json` reports rate-limit usage in the installed CLI. If it does, skip at 50% or more. If not, skip unless `RESEARCH_CODEX_QUOTA_UNKNOWN=allow`. At most 2 Codex calls a day, inside the window.
+1. Supply `CODEX_ACCESS_TOKEN` through secret `invest-buddy-codex-token`. Log in with the token on stdin to a private temporary `CODEX_HOME`, check `codex login status`, then remove the home after the call. Local runs may use an existing login in `CODEX_HOME`.
+2. Run the adapter in `scanner/research-adapters.mjs` with a strict output schema, read-only sandbox and an empty work directory. The validator still checks the reply.
+3. Quota: the installed `codex exec --json` reported no rate-limit usage on the tested call. Skip unless `RESEARCH_CODEX_QUOTA_UNKNOWN=allow` when no reading exists; skip at 50% or more if a later event reports one. At most 2 Codex calls a day, inside the window.
 
 Acceptance:
 - adapter tests with a fake `codex` binary: flags, schema file, read of the `-o` file, usage mapping;
 - schema derivation test: the derived schema has no `$ref` and every object lists all properties as required;
-- a written note in `deploy/README.md` with the chosen auth path and the refresh proof (two runs, dates);
+- a cluster run using `invest-buddy-codex-token`, with no token in logs;
 - `RESEARCH_ADAPTER=codex` without working auth fails at start with a clear message and no model call.
 
-Approval needed: owner (secret, PVC, infra PR).
-Risk: token refresh in a read-only container is the open problem from `scanner/README.md`.
+Approval needed: owner (secret and infra PR).
+Risk: the access token has not been tried in the research container.
 
 ## RS8 Evaluation against the old automation
 
@@ -215,6 +214,5 @@ Risk: web search cannot be fully rolled back in time; later articles may still a
 | Should `research_verified` count in `confirmed()` like `verified_single`, or show without points? | RS4 |
 | Thresholds: daily triggers, review intervals, materiality, caps (placeholders in the design doc) | RS1, RS3, RS5, RS6 |
 | Rule for the CSPX ALLOCATION amount | RS6 |
-| Codex auth path: login and PVC, API key, or Claude only | RS7 |
 | May the raw store keep full third-party pages for internal checks? | RS2 |
 | Public research cards after RS8 and the lawyer's answer (G5) | after RS8 |

@@ -79,6 +79,8 @@ export async function checkResearchCaps({ env = process.env, now = new Date(), t
   const limits = researchLimits(env, type, now);
   if (usage.monthlyTokens >= limits.monthlyTokens)
     return skipped("skipped_cap", "monthly research token cap reached");
+  if (adapter === "codex" && authSource === "api")
+    return skipped("skipped_cap", "Codex API spend is unmetered; RESEARCH_MONTHLY_USD cannot be enforced");
   if (authSource === "api" && usage.monthlyUsd >= limits.monthlyUsd)
     return skipped("skipped_cap", "monthly research USD cap reached");
   if (usage.dailyCalls >= limits.dailyCalls) return skipped("skipped_cap", "daily research call cap reached");
@@ -89,8 +91,7 @@ export async function checkResearchCaps({ env = process.env, now = new Date(), t
   if (adapter === "codex") {
     if (!Number.isFinite(usage.codexDailyCalls) || usage.codexDailyCalls < 0) return skipped("skipped_cap", "Codex call count is unavailable");
     if (usage.codexDailyCalls >= CODEX_DAILY_CALLS) return skipped("skipped_cap", "daily Codex call cap reached");
-    // With an API key the USD cap above governs spend and there is no plan rate limit to read.
-    return authSource === "api" ? { ok: true, status: "ok", reason: null } : checkCodexQuota({ env, codexQuota });
+    return checkCodexQuota({ env, codexQuota });
   }
   if (authSource === "subscription") return checkLiveResearchQuota({ env, liveUsage, usage, runCalls });
   return { ok: true, status: "ok", reason: null };

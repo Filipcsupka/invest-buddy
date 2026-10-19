@@ -108,9 +108,9 @@ export function agentEnv(source = process.env) {
   return Object.fromEntries(Object.entries(source).filter(([key, value]) => value !== undefined && (allowed.has(key) || /^LC_[A-Z_]+$/.test(key))));
 }
 
-export function runCli(cmd, args, input, { timeoutMs, cwd, monitor, monitorIntervalMs = 180000 }) {
+export function runCli(cmd, args, input, { timeoutMs, cwd, monitor, monitorIntervalMs = 180000, env = process.env }) {
   return new Promise((resolve, reject) => {
-    const child = spawn(cmd, args, { cwd, env: agentEnv(), stdio: ["pipe", "pipe", "pipe"] });
+    const child = spawn(cmd, args, { cwd, env: agentEnv(env), stdio: ["pipe", "pipe", "pipe"] });
     let out = "", err = "", timedOut = false, monitorError = null, checking = false;
     const timer = setTimeout(() => { timedOut = true; child.kill("SIGTERM"); setTimeout(() => child.kill("SIGKILL"), 5000).unref(); }, timeoutMs);
     const monitorTimer = monitor && setInterval(async () => {

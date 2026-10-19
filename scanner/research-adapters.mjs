@@ -1,4 +1,5 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runCli } from "./run-scan.mjs";
@@ -89,6 +90,30 @@ export function deriveStrictSchema(schema, name = "modelOutput") {
 
 export const codexAuthJson = (env = process.env) => join(env.CODEX_HOME || join(env.HOME || "~", ".codex"), "auth.json");
 
+const codexLoginStatus = (env) => {
+  const status = spawnSync("codex", ["login", "status"], {
+    env: { PATH: env.PATH ?? process.env.PATH, HOME: env.HOME ?? process.env.HOME, CODEX_HOME: env.CODEX_HOME },
+    encoding: "utf8", timeout: 5000,
+  });
+  return status.status === 0;
+};
+
+const createCodexHome = () => {
+  const home = mkdtempSync(join(tmpdir(), "invest-codex-home-"));
+  chmodSync(home, 0o700);
+  return home;
+};
+
+const loginAccessToken = (env, home) => {
+  const result = spawnSync("codex", ["-c", 'cli_auth_credentials_store="file"', "login", "--with-access-token"], {
+    env: { PATH: env.PATH ?? process.env.PATH, HOME: env.HOME ?? process.env.HOME, CODEX_HOME: home },
+    input: env.CODEX_ACCESS_TOKEN, encoding: "utf8", timeout: 15000,
+  });
+  return result.status === 0 && codexLoginStatus({ ...env, CODEX_HOME: home });
+};
+
+const redactToken = (value, token) => typeof value === "string" && token ? value.replaceAll(token, "[redacted]") : value;
+
 // Rate-limit percentages are read from any `rate_limits` object in the event stream; the CLI may not report them.
 const rateLimitPcts = (value, inRate = false, found = []) => {
   if (Array.isArray(value)) { value.forEach((item) => rateLimitPcts(item, inRate, found)); return found; }
@@ -127,21 +152,40 @@ export const codexResearchAdapter = {
   authSource(env = process.env) { return env.OPENAI_API_KEY ? "api" : "codex"; },
   defaultModel(env = process.env) { return env.RESEARCH_CODEX_MODEL || "default"; },
   available(env = process.env) {
-    if (env.OPENAI_API_KEY || existsSync(codexAuthJson(env))) return { ok: true, reason: null };
-    return { ok: false, reason: `Codex auth is unavailable: set OPENAI_API_KEY or provide ${codexAuthJson(env)} (a ChatGPT login in CODEX_HOME)` };
+    if (env.OPENAI_API_KEY) return { ok: false, reason: "Codex API spend is unmetered: RESEARCH_MONTHLY_USD cannot be enforced without a documented Codex token price" };
+    if (env.CODEX_ACCESS_TOKEN) {
+      let home;
+      try {
+        home = createCodexHome();
+        return loginAccessToken(env, home)
+          ? { ok: true, reason: null }
+          : { ok: false, reason: "Codex auth is unavailable: CODEX_ACCESS_TOKEN login failed" };
+      } catch { return { ok: false, reason: "Codex auth is unavailable: CODEX_ACCESS_TOKEN login failed" }; }
+      finally { if (home) rmSync(home, { recursive: true, force: true }); }
+    }
+    if (!existsSync(codexAuthJson(env))) return { ok: false, reason: `Codex auth is unavailable: provide ${codexAuthJson(env)} (a ChatGPT login in CODEX_HOME)` };
+    if (!codexLoginStatus(env)) return { ok: false, reason: "Codex auth is unavailable: codex login status did not confirm a local login" };
+    return { ok: true, reason: null };
   },
   async quota() { return lastCodexRateLimit === null ? null : { window: "codex", pct: lastCodexRateLimit, resetAt: null }; },
   async run({ prompt, schemaPath, timeoutMs, workDir, monitor, env = process.env }) {
     const ioDir = mkdtempSync(join(tmpdir(), "invest-codex-io-"));
+    let tokenHome;
     try {
+      if (env.CODEX_ACCESS_TOKEN) {
+        tokenHome = createCodexHome();
+        if (!loginAccessToken(env, tokenHome)) throw new Error("Codex access token login failed");
+      }
       const schemaFile = join(ioDir, "output-schema.json"), replyFile = join(ioDir, "reply.json");
       writeFileSync(schemaFile, JSON.stringify(deriveStrictSchema(JSON.parse(readFileSync(schemaPath, "utf8")))));
       const args = ["--search", "-a", "never", "exec", "--sandbox", "read-only", "--skip-git-repo-check", "--ephemeral", "--ignore-user-config", "--ignore-rules", "--output-schema", schemaFile, "-C", workDir, "-o", replyFile, "--json"];
       if (env.RESEARCH_CODEX_MODEL) args.push("-m", env.RESEARCH_CODEX_MODEL);
       args.push("-");
       let stdout;
-      try { ({ out: stdout } = await runCli("codex", args, prompt, { timeoutMs, cwd: workDir, monitor })); }
+      const execEnv = tokenHome ? { ...env, CODEX_HOME: tokenHome, OPENAI_API_KEY: undefined, CODEX_API_KEY: undefined } : env;
+      try { ({ out: stdout } = await runCli("codex", args, prompt, { timeoutMs, cwd: workDir, monitor, env: execEnv })); }
       catch (error) {
+        for (const key of ["message", "stdout", "stderr"]) error[key] = redactToken(error[key], env.CODEX_ACCESS_TOKEN);
         const parsed = parseCodexEvents(error.stdout);
         if (parsed.rateLimitPct !== null) lastCodexRateLimit = parsed.rateLimitPct;
         if (parsed.usage.inputTokens !== null) error.usage = parsed.usage;
@@ -150,12 +194,15 @@ export const codexResearchAdapter = {
       const parsed = parseCodexEvents(stdout);
       if (parsed.rateLimitPct !== null) lastCodexRateLimit = parsed.rateLimitPct;
       const attach = (error) => Object.assign(error, parsed.usage.inputTokens === null ? {} : { usage: parsed.usage });
-      if (parsed.failure) throw attach(new Error(`codex error: ${parsed.failure.slice(0, 200)}`));
+      if (parsed.failure) throw attach(new Error(`codex error: ${redactToken(parsed.failure, env.CODEX_ACCESS_TOKEN).slice(0, 200)}`));
       let text;
       try { text = readFileSync(replyFile, "utf8"); } catch { throw attach(new Error("codex wrote no reply file")); }
       if (!text.trim()) throw attach(new Error("codex reply file is empty"));
-      return { text, usage: parsed.usage, webSearches: parsed.webSearches, webFetches: null, costUsd: null, cutoff: null, model: env.RESEARCH_CODEX_MODEL || "default", rateLimitPct: parsed.rateLimitPct };
-    } finally { rmSync(ioDir, { recursive: true, force: true }); }
+      return { text, usage: parsed.usage, webSearches: parsed.webSearches, webFetches: null, costUsd: 0, cutoff: null, model: env.RESEARCH_CODEX_MODEL || "default", rateLimitPct: parsed.rateLimitPct };
+    } finally {
+      rmSync(ioDir, { recursive: true, force: true });
+      if (tokenHome) rmSync(tokenHome, { recursive: true, force: true });
+    }
   },
 };
 
