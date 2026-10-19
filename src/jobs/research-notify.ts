@@ -4,7 +4,8 @@ import { PostgresDeliveryLog } from "../db/notifications";
 import { latestBaseline } from "../db/portfolio-baseline";
 import { TelegramNotifier, type Notifier } from "../notify/telegram";
 import { ALERT_TEXT, formatIdeaCard, type AlertLocale, type StateName } from "../notify/format";
-import { formatResearchCard, type ResearchCardInput, type ResearchFact } from "../notify/research-card";
+import { formatResearchCard, ownerContextLines, type ResearchCardInput, type ResearchFact } from "../notify/research-card";
+import { loadOwnerContext } from "../db/owner-context";
 import { fingerprintHash, materialChange, type AlertFingerprint } from "../research/materiality";
 import type { PipelineState, ResearchCandidate } from "../research/types";
 import { allocate } from "../engine/allocation";
@@ -73,17 +74,19 @@ export async function runResearchNotify(pool: pg.Pool, options: { locale: AlertL
     const historyRows = await pool.query<{ at: string; to_state: string | null }>(
       "SELECT at::text,to_state FROM research_events WHERE symbol=$1 AND kind IN ('discovered','state_change') ORDER BY at DESC LIMIT 4", [candidate.symbol]);
     const history = historyRows.rows.reverse().filter(e => e.to_state).map(e => ({ state: e.to_state!, date: e.at.slice(0, 10) }));
+    const context = (await loadOwnerContext(pool, [candidate.symbol], asOf, { now })).get(candidate.symbol) ?? null;
     let content: string | null;
     if (idea && score.rows[0]) {
       content = formatIdeaCard({ ticker: candidate.symbol, locale: options.locale, site, idea, mode: "owner", adviceOutput: false,
         previous: null, current: { state: score.rows[0].state, points: score.rows[0].total },
         research: { coverage: `${verified.length} verified research facts`, history: history.map(h => `${h.state} ${h.date}`).join(" → "),
           unconfirmed: verified.some(f => !f.confirmed), ownerPath: `/owner/research/${encodeURIComponent(candidate.symbol)}`,
-          evidence: facts.filter(f => /^https:\/\//.test(f.url)).slice(0, 4).map(f => ({ url: f.url, label: f.sourceName })) } });
+          evidence: facts.filter(f => /^https:\/\//.test(f.url)).slice(0, 4).map(f => ({ url: f.url, label: f.sourceName })),
+          lines: ownerContextLines(context, options.locale) } });
     } else {
       const input: ResearchCardInput = { symbol: candidate.symbol, locale: options.locale, site, state: candidate.state,
         stateSince: candidate.state_since, history, promotionStatus: candidate.promotion_status, scorable: candidate.scorable,
-        card, facts: cardFacts, upgradeTriggers: candidate.upgrade_triggers, invalidation: candidate.invalidation, cashEur: baseline?.cashEur };
+        card, facts: cardFacts, upgradeTriggers: candidate.upgrade_triggers, invalidation: candidate.invalidation, cashEur: baseline?.cashEur, context };
       content = formatResearchCard(input);
     }
     if (!content) { await pool.query("INSERT INTO research_events(symbol,kind,reason) VALUES ($1,'alert_suppressed','no checked What happened line')", [candidate.symbol]); suppressed++; continue; }

@@ -6,6 +6,9 @@ import { getMessages } from "@/i18n";
 import { pageMetadata } from "@/i18n/metadata";
 import { headers } from "next/headers";
 import { ownerResearchAuthorized } from "../auth";
+import { loadOwnerContext } from "@/db/owner-context";
+import { catalystLine, graduationLine, macroLine, revisionLine } from "@/notify/research-card";
+import { ownerResearchMessages } from "@/i18n/owner-research-messages";
 
 export const dynamic = "force-dynamic";
 type Props = { params: Promise<{ locale: string; symbol: string }> };
@@ -32,6 +35,12 @@ export default async function OwnerResearchPage({ params }: Props) {
   const verified = facts.filter(f => f.verification_status === "verified");
   const leads = facts.filter(f => f.verification_status === "lead_only" || f.verification_status === "fetch_failed");
   const sk = locale === "sk";
+  const context = (await loadOwnerContext(db, [symbol], new Date().toISOString().slice(0, 10))).get(symbol);
+  const m = ownerResearchMessages[locale];
+  const contextLines = [
+    catalystLine(context?.nextCatalyst ?? null, locale) ?? m.noCatalyst, macroLine(context?.macro ?? [], locale) ?? m.noMacro,
+    graduationLine(context?.graduation ?? null, locale) ?? m.noGraduation, revisionLine(context?.revision ?? null, locale, "owner") ?? m.noRevision,
+  ];
   return <article className="frame page">
     <header className="page-head"><h1 className="title">{symbol} · {candidate.company_name}</h1>
       <p className="lede">{sk ? "Stav výskumu" : "Research state"}: {candidate.state}</p>
@@ -39,6 +48,8 @@ export default async function OwnerResearchPage({ params }: Props) {
     <section className="sheet-section"><h2>{sk ? "Pokrytie" : "Coverage"}</h2>
       <p>{candidate.scorable ? (sk ? "V pokrytí skórovania" : "In scoring coverage") : (sk ? "Mimo pokrytia skórovania" : "Outside scoring coverage")}</p>
       <p>{sk ? "Zaradenie" : "Promotion"}: {candidate.promotion_status}</p></section>
+    <section className="sheet-section"><h2>{m.title}</h2>
+      <ul>{contextLines.map(line => <li key={line}>{line}</li>)}</ul></section>
     <section className="sheet-section"><h2>{sk ? "Overené zistenia" : "Verified facts"}</h2>
       {verified.length ? <ul>{verified.map(f => <li key={f.id}>{f.claim} {!f.confirmed && (sk ? "(NEPOTVRDENÉ)" : "(UNCONFIRMED)")}
         {f.evidence.filter(e => e.verify?.status === "verified" && /^https:\/\//.test(e.url)).slice(0, 2).map(e => <span key={e.url}> · <a href={e.url} rel="noopener noreferrer">{e.sourceName}</a></span>)}</li>)}</ul> : <p>{sk ? "Zatiaľ bez overených zistení." : "No verified facts yet."}</p>}</section>

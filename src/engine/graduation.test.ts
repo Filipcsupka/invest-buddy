@@ -62,6 +62,14 @@ describe("graduation (P6)", () => {
     expect(g.line).toBe("STANDARD needs: company Strong (now Good, 4 of 10 points, 2 short; open: EPS beat or guidance raise +3, product catalyst +2, insider or institutional buying +1).");
   });
 
+  it("unmet conditions carry structured values for localised rendering (P7)", () => {
+    const g = graduation(sym(goodCompany));
+    expect(cond(g, "STANDARD", "company").rating).toEqual({ need: "Strong", have: "Good", points: 4, max: 10, narrativeLowers: false });
+    expect(cond(g, "STANDARD", "score").score).toBeUndefined();
+    const rules = { ...SIGNAL_RULES, startTiers: { ...SIGNAL_RULES.startTiers, standard: { minScore: 20, company: "Good" } } } as unknown as typeof SIGNAL_RULES;
+    expect(cond(graduation(sym(goodCompany), rules), "STANDARD", "score").score).toEqual({ needed: 20, evidenced: 25, total: 19 });
+  });
+
   it("FULL step lists catalyst and execution for a STARTER", () => {
     const g = graduation(sym(goodCompany));
     expect(cond(g, "FULL", "company")).toMatchObject({ met: false, pointsShort: 4 });

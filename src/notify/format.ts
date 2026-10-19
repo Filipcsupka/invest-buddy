@@ -193,7 +193,7 @@ export interface IdeaCardInput {
   /** ADVICE_OUTPUT. Off in public mode: the card shows no model text, ratings or plan (docs/wording-gate.md). */
   adviceOutput: boolean;
   site: string;
-  research?: { coverage: string; history: string; unconfirmed?: boolean; ownerPath?: string; evidence?: { url: string; label: string }[] };
+  research?: { coverage: string; history: string; unconfirmed?: boolean; ownerPath?: string; evidence?: { url: string; label: string }[]; lines?: string[] };
 }
 
 interface CardText {
@@ -316,6 +316,7 @@ export function formatIdeaCard(input: IdeaCardInput): string {
   let researchLines = input.research && owner ? [
     escapeHtml(input.research.coverage), escapeHtml(input.research.history),
     ...(input.research.unconfirmed ? [locale === "sk" ? "NEPOTVRDENÉ" : "UNCONFIRMED"] : []),
+    ...(input.research.lines ?? []).map(escapeHtml),
   ] : [];
   const ownerLink = owner && input.research?.ownerPath ? ` · <a href="${escapeHtml(`${site}/${locale}${input.research.ownerPath}`)}">${locale === "sk" ? "Stránka vlastníka" : "Owner page"}</a>` : "";
 
