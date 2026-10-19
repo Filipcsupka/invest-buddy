@@ -2,6 +2,7 @@
 
 - P3 catalyst calendar (no migration): owner-side read model in `src/data/catalyst-calendar.ts` and `src/db/catalyst-calendar.ts` with next earnings and time of day per ticker, future verified research dates, and a pre-earnings flag for held and START_READY names (7-day window, placeholder). Not wired to cards or pages yet (P7).
 - P5 (open; no migration): forward EPS estimate revision over 30, 60 and 90 days for the next report, read from `earnings_calendar_snapshots` (`src/data/estimate-revisions.ts`, `src/db/estimate-revisions.ts`). Report only, 0 points, owner view only (Alpha Vantage is internal_only). The live table had 0 rows on 2026-10-19; scoring needs an owner decision.
+- P7 owner wiring (no migration): the research card, the owner idea card and `/owner/research/[symbol]` show the next catalyst, the next macro event, the EN/SK graduation line and the estimate revision, owner only and read from stored rows.
 - EN46-display (#169): public score shown as a core-rule percentage with a separate catalyst bonus, EN/SK methodology and rule labels. No stored rows rescored.
 - P1 macro calendar (PR pending; migration 090): the `macro-calendar` job stores BLS CPI, PPI and jobs report dates and FOMC decision days in `macro_events`; the buy-signal event note and the macro events card read it, with the static list as fallback. The CronJob is suspended until the owner applies 090 and approves the first run.
 

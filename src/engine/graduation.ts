@@ -38,6 +38,10 @@ export interface GraduationCondition {
   missingRules?: MissingRule[];
   /** freshData: key fields whose confirmed value is carried from an earlier date. */
   carriedFields?: { field: string; carriedFrom: string }[];
+  /** score, unmet: points needed out of the evidenced points, and the total now. */
+  score?: { needed: number; evidenced: number; total: number };
+  /** Rating conditions, unmet: rating needed and now, points now out of the group's rule points, and whether a confirmed narrative change lowers it. */
+  rating?: { need: SignalRating; have: SignalRating; points: number; max: number; narrativeLowers: boolean };
 }
 export interface GraduationStep { tier: GraduationTier; met: boolean; conditions: GraduationCondition[] }
 export interface Graduation {
@@ -79,7 +83,8 @@ function ratingCondition(input: SignalSymbolInput, rules: SignalRules, kind: "co
     ...(parts.length ? [`open: ${parts.join(", ")}`] : []),
     ...(narrative ? ["a confirmed narrative change lowers it one step"] : []),
   ];
-  return { id: kind, met: false, text: `${kind} ${need} (${notes.join("; ")})`, pointsShort, missingRules };
+  return { id: kind, met: false, text: `${kind} ${need} (${notes.join("; ")})`, pointsShort, missingRules,
+    rating: { need, have, points, max, narrativeLowers: Boolean(narrative) } };
 }
 
 function stepFor(input: SignalSymbolInput, rules: SignalRules, tier: GraduationTier, unconfirmed: boolean): GraduationStep {
@@ -91,6 +96,7 @@ function stepFor(input: SignalSymbolInput, rules: SignalRules, tier: GraduationT
   const conditions: GraduationCondition[] = [{
     id: "score", met: scoreMet,
     text: scoreMet ? "" : `score ${needed} of ${evidenced} (now ${input.score.total})`,
+    ...(scoreMet ? {} : { score: { needed, evidenced, total: input.score.total } }),
   }];
   conditions.push(ratingCondition(input, rules, "company", t.company));
   if (tier === "FULL") {
