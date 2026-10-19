@@ -5,6 +5,7 @@
 - P7 owner wiring (no migration): the research card, the owner idea card and `/owner/research/[symbol]` show the next catalyst, the next macro event, the EN/SK graduation line and the estimate revision, owner only and read from stored rows.
 - EN46-display (#169): public score shown as a core-rule percentage with a separate catalyst bonus, EN/SK methodology and rule labels. No stored rows rescored.
 - P1 macro calendar (PR pending; migration 090): the `macro-calendar` job stores BLS CPI, PPI and jobs report dates and FOMC decision days in `macro_events`; the buy-signal event note and the macro events card read it, with the static list as fallback. The CronJob is suspended until the owner applies 090 and approves the first run.
+- P8 (open; no migration): the company page lists upcoming BLS and Fed release dates (`src/components/catalyst-calendar.tsx`); the next earnings date shows only with `PUBLIC_EARNINGS_DATES=on`, off until the owner confirms Alpha Vantage display rights.
 
 State on 2026-10-09. Live state was read from khtz on 2026-10-09; see the open list in section H. A1 to A7 are done (see the notes under each). Each task can be picked up alone or given to one agent. "Approval" means the owner must say yes before the step runs (cluster, push, secrets, money). Pick the lowest open task in a group whose dependencies are done. Tick the box and add one line on what changed.
 
