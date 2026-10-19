@@ -36,6 +36,7 @@ export const EXPECTED_JOBS: ExpectedJob[] = [
   { cronJob: "judge", schedule: "30 5 * * 2-6", enabled: true, runJob: null, graceMinutes: 70, note: "scanner script outside runLoggedJob, not in job_runs" },
   { cronJob: "holder-events", schedule: "45 7 * * 2-6", enabled: false, runJob: null, graceMinutes: 25, note: "shares the job name collect" },
   { cronJob: "macro", schedule: "0 4 * * 2-6", enabled: true, runJob: "macro", graceMinutes: 15 },
+  { cronJob: "macro-calendar", schedule: "20 3 * * 2-6", enabled: false, runJob: "macro-calendar", graceMinutes: 15 },
   { cronJob: "master-refresh", schedule: "0 5 * * 0", enabled: false, runJob: "master-refresh", graceMinutes: 25 },
   { cronJob: "pool-bars", schedule: "30 12 * * 0-6", enabled: true, runJob: null, graceMinutes: 100, note: "not logged to job_runs; writes discovery_price_bars only" },
   { cronJob: "universe-promote", schedule: "0 15 * * 0", enabled: false, runJob: "universe-promote", graceMinutes: 15 },

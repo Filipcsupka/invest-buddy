@@ -59,35 +59,37 @@ export function parseCalendar(text: string): CalendarRow[] {
   return rows;
 }
 
-export interface CalendarResult { skipped?: string; requests: number; rows: number; universeRows: number; inserted: number }
+export interface CalendarResult { skipped?: string; requests: number; rows: number; universeRows: number; coveredRows: number; inserted: number }
 
 /**
- * One request a day: the 12 month forward calendar. The whole CSV goes to the raw store; only universe tickers go to
- * earnings_calendar_snapshots (unique per day, ticker and report date, so a rerun adds nothing and a moved date adds a row).
+ * One request a day: the 12 month forward calendar. The whole CSV goes to the raw store; selected universe,
+ * pool, baseline, and research tickers go to earnings_calendar_snapshots. Each observation is append-only.
  * A second run on the same UTC day sends no request unless `force` is set. The key never leaves this module.
  */
 export async function collectEarningsCalendar(db: Pick<pg.Pool, "query">, http: Pick<SourceHttp, "get">, ledger: UsageLedger,
-  options: { key: string | undefined; universe: string[]; now?: Date; force?: boolean; dryRun?: boolean }): Promise<CalendarResult> {
+  options: { key: string | undefined; universe: string[]; additionalSymbols?: string[]; now?: Date; force?: boolean; dryRun?: boolean }): Promise<CalendarResult> {
   const key = options.key?.trim();
-  if (!key) return { skipped: `${KEY_VARIABLE} is not set`, requests: 0, rows: 0, universeRows: 0, inserted: 0 };
+  if (!key) return { skipped: `${KEY_VARIABLE} is not set`, requests: 0, rows: 0, universeRows: 0, coveredRows: 0, inserted: 0 };
   const now = options.now ?? new Date();
   const observedOn = isoDate(now);
   if (!options.force && !options.dryRun) {
     const done = await db.query("SELECT 1 FROM raw_snapshots WHERE source_id=$1 AND key=$2 AND (fetched_at AT TIME ZONE 'UTC')::date=$3::date LIMIT 1", [SOURCE, CALENDAR_KEY, observedOn]);
-    if (done.rows.length) return { skipped: `calendar already stored for ${observedOn}`, requests: 0, rows: 0, universeRows: 0, inserted: 0 };
+    if (done.rows.length) return { skipped: `calendar already stored for ${observedOn}`, requests: 0, rows: 0, universeRows: 0, coveredRows: 0, inserted: 0 };
   }
   let body: string;
   try {
     if (!options.dryRun) await ledger.reserve(SOURCE, 1, { job: CALENDAR_JOB, credits: 1, now });
     body = await http.get(calendarUrl(key), { timeoutMs: 60_000, maxAttempts: 1, maxBytes: 20 * 1024 * 1024 });
   } catch (error) {
-    if (error instanceof CapReached) return { skipped: error.message, requests: 0, rows: 0, universeRows: 0, inserted: 0 };
+    if (error instanceof CapReached) return { skipped: error.message, requests: 0, rows: 0, universeRows: 0, coveredRows: 0, inserted: 0 };
     throw new Error(redact(error instanceof Error ? error.message : String(error), key));
   }
   const all = parseCalendar(body);
-  const byMarket = new Map(options.universe.map((symbol) => [marketTicker(symbol), symbol]));
+  const universeByMarket = new Map(options.universe.map((symbol) => [marketTicker(symbol), symbol]));
+  const byMarket = new Map([...(options.additionalSymbols ?? []), ...options.universe].map((symbol) => [marketTicker(symbol), symbol]));
+  const universeRows = all.filter((row) => universeByMarket.has(row.symbol)).length;
   const mine = all.flatMap((row) => { const symbol = byMarket.get(row.symbol); return symbol ? [{ ...row, symbol }] : []; });
-  if (options.dryRun) return { requests: 1, rows: all.length, universeRows: mine.length, inserted: 0 };
+  if (options.dryRun) return { requests: 1, rows: all.length, universeRows, coveredRows: mine.length, inserted: 0 };
   const raw = await putSnapshot(db, { sourceId: SOURCE, key: CALENDAR_KEY, body, contentType: "text/csv", fetchedAt: now, meta: { rows: all.length, horizon: "12month" } });
   let inserted = 0;
   for (const row of mine) {
@@ -96,5 +98,5 @@ export async function collectEarningsCalendar(db: Pick<pg.Pool, "query">, http: 
       [now.toISOString(), observedOn, row.symbol, row.reportDate, row.fiscalDateEnding, row.estimate, row.currency, row.timeOfDay, SOURCE, raw.id]);
     inserted += result.rowCount ?? 0;
   }
-  return { requests: 1, rows: all.length, universeRows: mine.length, inserted };
+  return { requests: 1, rows: all.length, universeRows, coveredRows: mine.length, inserted };
 }

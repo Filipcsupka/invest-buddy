@@ -75,7 +75,7 @@ export async function runResearchPipeline(pool:pg.Pool,today:string):Promise<{ch
   const preflight=await pool.query<{symbol:string;company_name:string}>(`SELECT symbol,company_name FROM (
       SELECT DISTINCT ON (f.symbol) f.symbol,f.company_name,c.last_screened_at
       FROM research_findings f LEFT JOIN research_candidates c ON c.symbol=f.symbol
-      WHERE f.verification_status IN ('verified','lead_only')
+      WHERE f.verification_status IN ('verified','lead_only') AND f.kind <> 'macro_release'
         AND (c.symbol IS NULL OR c.state='DISCOVERED' OR (c.state='WATCH' AND c.promotion_status='none'))
       ORDER BY f.symbol,f.id DESC
     ) eligible ORDER BY last_screened_at NULLS FIRST,symbol LIMIT 25`);
@@ -89,7 +89,7 @@ export async function runResearchPipeline(pool:pg.Pool,today:string):Promise<{ch
   const incoming=await db.query<{symbol:string;company_name:string;exchange:string|null;themes:string[];run_id:string;as_of:string;model_output:{candidates:{symbol:string;findingIds:string[];thesis:string;upgradeTriggers:string[];invalidation:string[]}[]};verification_status:string}>(
     `SELECT DISTINCT ON (f.symbol) f.symbol,f.company_name,f.exchange,f.themes,f.run_id,r.as_of::text,r.model_output,f.verification_status
      FROM research_findings f JOIN research_runs r ON r.id=f.run_id
-     WHERE f.verification_status IN ('verified','lead_only')
+     WHERE f.verification_status IN ('verified','lead_only') AND f.kind <> 'macro_release'
      ORDER BY f.symbol,(f.verification_status='verified') DESC,r.as_of DESC,f.id DESC`);
   for(const f of incoming.rows) {
     const model=f.model_output?.candidates?.find(c=>c.symbol===f.symbol);

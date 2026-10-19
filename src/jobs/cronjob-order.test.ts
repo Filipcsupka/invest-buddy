@@ -232,6 +232,21 @@ describe("earnings calendar", () => {
   });
 });
 
+describe("macro calendar", () => {
+  it("is suspended, on weekdays before the judge that reads it, with the contact User-Agent and no metered key", () => {
+    const doc = job("macro-calendar");
+    expect(doc).toMatch(/^\s{2}suspend: true$/m);
+    expect(minutes("macro-calendar").days).toBe("2-6");
+    expect(minutes("macro-calendar").at + startWindow("macro-calendar") + deadline("macro-calendar")).toBeLessThanOrEqual(minutes("judge").at);
+    expect(doc).toContain('command: ["node", "dist/jobs/macro-calendar.js"]');
+    for (const name of ["DATABASE_URL", "SEC_USER_AGENT"]) expect(doc).toContain(`name: ${name}`);
+    for (const key of ["TWELVE_DATA_API_KEY", "ALPHA_VANTAGE_API_KEY", "INGEST_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"]) expect(doc).not.toContain(key);
+    expect(doc).toContain("backoffLimit: 0");
+    for (const text of ["runAsNonRoot: true", "automountServiceAccountToken: false", "allowPrivilegeEscalation: false", "readOnlyRootFilesystem: true", 'drop: ["ALL"]', "type: RuntimeDefault", "concurrencyPolicy: Forbid", "timeZone: Europe/Bratislava"]) expect(doc).toContain(text);
+    expect(readFileSync(join(base, "kustomization.yaml"), "utf8")).toContain("- macro-calendar-cronjob.yaml");
+  });
+});
+
 describe("watch step", () => {
   it("polls SEC before collect and long before detect, with no AI and no source keys", () => {
     const watch = minutes("watch");

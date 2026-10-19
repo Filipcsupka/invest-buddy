@@ -67,5 +67,8 @@ describe("research notification", () => {
     expect(texts).toHaveLength(1);
     expect(texts[0]).toContain("https://example.test/ir");
     expect(texts[0]).not.toContain("https://example.test/failed");
+    // P7: owner context; the unread tables leave the catalyst empty and the macro list falls back to the static calendar.
+    expect(texts[0]).toContain("Next macro event: FOMC decision 2026-10-28");
+    expect(texts[0]).not.toContain("Next catalyst");
   });
 });

@@ -1,6 +1,12 @@
 # Open tasks
 
+- P3 catalyst calendar (no migration): owner-side read model in `src/data/catalyst-calendar.ts` and `src/db/catalyst-calendar.ts` with next earnings and time of day per ticker, future verified research dates, and a pre-earnings flag for held and START_READY names (7-day window, placeholder). Not wired to cards or pages yet (P7).
+- P5 (open; no migration): forward EPS estimate revision over 30, 60 and 90 days for the next report, read from `earnings_calendar_snapshots` (`src/data/estimate-revisions.ts`, `src/db/estimate-revisions.ts`). Report only, 0 points, owner view only (Alpha Vantage is internal_only). The live table had 0 rows on 2026-10-19; scoring needs an owner decision.
+- P7 owner wiring (no migration): the research card, the owner idea card and `/owner/research/[symbol]` show the next catalyst, the next macro event, the EN/SK graduation line and the estimate revision, owner only and read from stored rows.
 - EN46-display (#169): public score shown as a core-rule percentage with a separate catalyst bonus, EN/SK methodology and rule labels. No stored rows rescored.
+- P1 macro calendar (PR pending; migration 090): the `macro-calendar` job stores BLS CPI, PPI and jobs report dates and FOMC decision days in `macro_events`; the buy-signal event note and the macro events card read it, with the static list as fallback. The CronJob is suspended until the owner applies 090 and approves the first run.
+- P8 (open; no migration): the company page lists upcoming BLS and Fed release dates (`src/components/catalyst-calendar.tsx`); the next earnings date shows only with `PUBLIC_EARNINGS_DATES=on`, off until the owner confirms Alpha Vantage display rights.
+- P9 macro consensus: daily research may add a `macro_release` finding (symbol MACRO) with a quoted consensus and actual; owner context only, no extra model call. Open: licence for quoting press consensus.
 
 State on 2026-10-09. Live state was read from khtz on 2026-10-09; see the open list in section H. A1 to A7 are done (see the notes under each). Each task can be picked up alone or given to one agent. "Approval" means the owner must say yes before the step runs (cluster, push, secrets, money). Pick the lowest open task in a group whose dependencies are done. Tick the box and add one line on what changed.
 
@@ -340,6 +346,9 @@ Owner decision 2026-10-09: the weeks to 2026-12-31 go to collecting data so hist
 
 ### Progress log
 - D36 promote (no migration): `universe-promote` moves `extended` names with 10 clean sessions (D16 checks on stored bars) to `core`, at most 10 a week in growth order, to cap AI cost. Suspended CronJob, Sunday 15:00.
+- D35 pool-bars daily (no migration): the pool-bars CronJob runs daily at 12:30 with `--limit 500 --size 3200` and covers the whole SEC growth pool (570 names for CY2026Q2) in two runs, then refreshes about 115 names a day. The mirror keeps it suspended; the infra repo holds the live state.
+- P6 (no migration): `src/engine/graduation.ts` returns the code-written graduation line for a START_POSITION (STARTER to STANDARD to FULL) from `startTiers` and the open rule hits. Owner view only; card wiring is P7. Local tests passed.
+- Discovery growth pool (open PR; no migration): weekly discovery also screens the SEC growth pool (`rankPool`, 300 names) on bars stored by `pool-bars`, with no Twelve Data request for those names; the SEC frames are read once for both growth sources. `preScreenTopK` goes from 60 to 100, which the 30-minute job deadline allows. DS1 filters and the 10 candidates a week stay. Tests written; CI result pending. Open: the newest pool bar is about 7 days old at the Saturday run while pool-bars runs on Sunday.
 - D35 pool-bars daily (no migration): the pool-bars CronJob runs daily at 12:30 with `--limit 500 --size 3200` and covers the whole SEC growth pool (570 names for CY2026Q2) in two runs, then refreshes about 115 names a day. Live and enabled since 2026-10-19 (infra #48).
 - RS5 (#167; no migration): research CronJobs are suspended pending RS8 and owner approval. The caps and kill switch gate model calls; the verifier has a scoped egress policy. Local validation covers the schedule, caps and rendered manifests.
 - DOC1 (#160; docs only): `docs/architecture.md` maps the current system, schedules and suspended jobs, data and status flows, Telegram, planned RS work, CI, pages and key tables from code and manifests.
@@ -416,6 +425,7 @@ Owner decision 2026-10-09: the weeks to 2026-12-31 go to collecting data so hist
 - W33 (#123, merged; no migration): score history per ticker on the company page, read through D43 `scoreHistory` (segment `score-history`, chart plus table, EN and SK). Implemented: tests and CI passed. No free-depth limit until W30 sets N.
 
 - D27 (#117, merged; migration 046): stores the Alpha Vantage earnings calendar for universe names every day. Implemented: tests and CI passed. The CronJob is suspended and the live migration needs owner approval.
+- P4 (migration 090): calendar observations now cover stored pool names, extended names, baseline holdings, and open research candidates from the same daily CSV.
 - D11 (#110, merged; migration 043): dated universe membership and a change script. Implemented: tests and CI passed. The live migration needs owner approval.
 - Fixes (merged, tests and CI passed): #113 and #122 EN40 macro tailwind with inflation and a 75 day window for monthly CPI and PPI; #114 revenue from SEC companyfacts for Q4 and fiscal-year periods; #115 accumulation volume point in the score; #119 catalyst sources (90 day window, stored GDELT headlines, 7.01 and 8.01 triggers, six-symbol nightly review cap, suspended GDELT CronJob in the GitOps mirror).
 

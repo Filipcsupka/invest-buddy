@@ -31,6 +31,9 @@ import { datasetFreshness } from "@/data/data-freshness-store";
 import { coverageOf } from "@/data/data-freshness";
 import { publicHorizons } from "@/data/public-horizons";
 import { ProfileBlock } from "@/components/public-profile";
+import { CatalystCalendar } from "@/components/catalyst-calendar";
+import { storedMacroEvents } from "@/data/macro-calendar-store";
+import { publicEarningsDate } from "@/data/catalyst-calendar-store";
 export const dynamic = "force-dynamic";
 import { fill, formatDate, formatPercent, formatPrice, getMessages, isLocale, type Locale } from "@/i18n";
 import { pageMetadata } from "@/i18n/metadata";
@@ -116,6 +119,8 @@ async function Company({ params }: Params) {
   const interest = await storedInterestFacts(instrument.ticker);
   const flagResults = companyFlags({ bars: result.inputs.bars, shares: await storedShareCounts(instrument.ticker), operatingIncome: interest.operatingIncome, interestExpense: interest.interestExpense, shortInterestPercent: null });
   const horizons = await publicHorizons();
+  const today = new Date().toISOString().slice(0, 10);
+  const [macroSchedule, earningsDate] = await Promise.all([storedMacroEvents(today), publicEarningsDate(instrument.ticker, today)]);
   const index = instruments.findIndex((item) => item.ticker === instrument.ticker);
   const prev = instruments[(index - 1 + instruments.length) % instruments.length];
   const next = instruments[(index + 1) % instruments.length];
@@ -375,6 +380,8 @@ async function Company({ params }: Params) {
               ))}
             </dl>
           </section>
+
+          <CatalystCalendar locale={locale} today={today} macro={macroSchedule} earnings={earningsDate} />
 
           {sources ? (
             <section className="co-card co-sources" aria-labelledby="sources" data-o="10">

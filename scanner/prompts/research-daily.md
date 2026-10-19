@@ -19,4 +19,8 @@ Use a unique `id` for each finding. A lead has `field: null`; if every evidence 
 
 Use unique candidate symbols and chain IDs. Every cited finding ID must exist. Each candidate needs a finding about its own symbol and at least one non-lead finding; each chain link needs at least one non-lead finding.
 
+## Macro releases
+
+If a US CPI, Core CPI, PPI, Core PPI, Nonfarm payrolls, Unemployment rate, Average hourly earnings, FOMC rate decision, PCE, Core PCE, GDP, Retail sales, Initial jobless claims, ISM manufacturing or ISM services release came out on the run date or the trading day before, you may add one `macro_release` finding per release. Use `symbol` `MACRO`, `companyName` the exact release name from that list, `exchange` null, `field` null, `polarity` `neutral` and `eventDate` the release date. Add a `consensus` figure and an `actual` figure (a `prior` figure is optional). Every evidence quote must contain both the consensus number and the actual number, copied from a page that prints them together, such as a wire report. Never assume or compute a value, and never take the consensus from memory. If no page you opened quotes both numbers, add no finding for that release. These findings come out of the same search, fetch and finding limits; they are never cited by a candidate or a chain.
+
 Check filings, earnings, guidance, contracts, product and regulatory news relevant to each trigger. Return only supported new findings, with candidates and chains when supported. Ask for no more than the supplied search, fetch and finding limits. Output JSON only.

@@ -19,9 +19,21 @@ export const RUN_STATUSES = ["ok", "partial", "cutoff", "failed"] as const;
 export type RunStatus = (typeof RUN_STATUSES)[number];
 export const FINDING_KINDS = [
   "earnings", "guidance", "contract", "regulatory", "clinical", "product", "partnership", "capex", "m_and_a", "capital_allocation",
-  "insider", "narrative", "supply_chain", "unusual_move", "risk",
+  "insider", "narrative", "supply_chain", "unusual_move", "risk", "macro_release",
 ] as const;
 export type FindingKind = (typeof FINDING_KINDS)[number];
+/**
+ * P9: a `macro_release` finding states the consensus and the actual value of one named US release. It is owner context only:
+ * it never feeds a score input, a candidate or a chain. `symbol` is the reserved MACRO_SYMBOL and `companyName` the release name.
+ */
+export const MACRO_SYMBOL = "MACRO";
+export const MACRO_RELEASES = [
+  "CPI", "Core CPI", "PPI", "Core PPI", "Nonfarm payrolls", "Unemployment rate", "Average hourly earnings", "FOMC rate decision",
+  "PCE", "Core PCE", "GDP", "Retail sales", "Initial jobless claims", "ISM manufacturing", "ISM services",
+] as const;
+export type MacroRelease = (typeof MACRO_RELEASES)[number];
+/** Figure labels a `macro_release` finding may carry. `consensus` and `actual` are required, once each. */
+export const MACRO_FIGURE_LABELS = ["consensus", "actual", "prior"] as const;
 /** Score inputs a verified research fact may inform. The engine still decides every point. */
 export const SCORE_FIELDS = ["productCatalyst", "guidanceRaised", "guidanceCut", "narrativeChanged"] as const;
 export type ScoreField = (typeof SCORE_FIELDS)[number];
@@ -259,6 +271,35 @@ export function numberTokens(text: string): string[] {
   return (joined.match(/\d+(?:\.\d+)?/g) ?? []).map((t) => t.replace(/^0+(?=\d)/, ""));
 }
 
+/**
+ * Rules for a `macro_release` finding. Every evidence quote must hold both the consensus and the actual number, so a single
+ * quote the verifier finds on its page proves both values. No quote with both numbers means no finding.
+ */
+function macroErrors(f: ResearchFinding, at: string, asOf: string): string[] {
+  const errs: string[] = [];
+  if (f.symbol !== MACRO_SYMBOL) errs.push(`${at}.symbol: a macro_release finding uses ${MACRO_SYMBOL}`);
+  if (!(MACRO_RELEASES as readonly string[]).includes(f.companyName)) errs.push(`${at}.companyName: must name a release: ${MACRO_RELEASES.join(", ")}`);
+  if (f.exchange !== null) errs.push(`${at}.exchange: a macro_release finding has none`);
+  if (f.field !== null) errs.push(`${at}.field: a macro_release finding never feeds a score input`);
+  if (f.polarity !== "neutral") errs.push(`${at}.polarity: a macro_release finding is neutral`);
+  if (f.eventDate === null) errs.push(`${at}.eventDate: the release date is required`);
+  else if (f.eventDate > asOf) errs.push(`${at}.eventDate: release after the run date ${asOf}`);
+  f.figures.forEach((g, j) => {
+    if (!(MACRO_FIGURE_LABELS as readonly string[]).includes(g.label)) errs.push(`${at}.figures[${j}].label: must be one of ${MACRO_FIGURE_LABELS.join(", ")}`);
+  });
+  for (const label of ["consensus", "actual"] as const) {
+    const hits = f.figures.filter((g) => g.label === label);
+    if (hits.length !== 1) { errs.push(`${at}.figures: needs exactly one ${label} figure`); continue; }
+    const wanted = numberTokens(hits[0].value);
+    f.evidence.forEach((e, j) => {
+      const have = new Set(numberTokens(e.quote));
+      const missing = wanted.filter((t) => !have.has(t));
+      if (missing.length) errs.push(`${at}.evidence[${j}].quote: ${label} ${missing.join(", ")} not in this quote`);
+    });
+  }
+  return errs;
+}
+
 function contractErrors(o: ResearchOutput): string[] {
   const errs: string[] = [];
   const { run, output } = o;
@@ -273,6 +314,8 @@ function contractErrors(o: ResearchOutput): string[] {
     const at = `$.output.findings[${i}]`;
     if (findings.has(f.id)) errs.push(`${at}.id: duplicate ${f.id}`);
     findings.set(f.id, f);
+    if (f.kind === "macro_release") errs.push(...macroErrors(f, at, run.asOf));
+    else if (f.symbol === MACRO_SYMBOL) errs.push(`${at}.symbol: ${MACRO_SYMBOL} is reserved for macro_release findings`);
     if (f.evidence.every((e) => e.sourceClassHint === "social") && !f.lead) errs.push(`${at}.lead: a finding with only social sources must be a lead`);
     if (f.lead && f.field !== null) errs.push(`${at}.field: a lead never feeds a score input`);
     if (f.field !== null) {
@@ -294,7 +337,11 @@ function contractErrors(o: ResearchOutput): string[] {
     });
   });
 
-  const known = (id: string, at: string) => { if (!findings.has(id)) errs.push(`${at}: unknown finding ${id}`); };
+  const known = (id: string, at: string) => {
+    const f = findings.get(id);
+    if (!f) errs.push(`${at}: unknown finding ${id}`);
+    else if (f.kind === "macro_release") errs.push(`${at}: macro_release finding ${id} is owner context only and cannot be cited`);
+  };
 
   const symbols = new Set<string>();
   output.candidates.forEach((c, i) => {
