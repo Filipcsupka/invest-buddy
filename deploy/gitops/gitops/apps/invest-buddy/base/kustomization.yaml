@@ -12,6 +12,7 @@ resources:
   - review-calendar-cronjob.yaml
   - macro-cronjob.yaml
   - earnings-calendar-cronjob.yaml
+  - macro-calendar-cronjob.yaml
   - pool-bars-cronjob.yaml
   - universe-promote-cronjob.yaml
   - dq-corporate-actions-cronjob.yaml

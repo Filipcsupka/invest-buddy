@@ -20,6 +20,7 @@ import { statusLabel } from "@/components/status-slider";
 import { flags } from "@/config/flags";
 import { stateOrder, type StateKey } from "@/i18n/rules";
 import { MacroEvents } from "@/components/macro-events";
+import { storedMacroEvents } from "@/data/macro-calendar-store";
 import { DataStatus } from "@/components/data-status";
 import { fill, formatDate, getMessages, plural } from "@/i18n";
 import { pageMetadata } from "@/i18n/metadata";
@@ -37,7 +38,7 @@ export async function generateMetadata({ params }: LocaleParams): Promise<Metada
 async function Dashboard({ params }: LocaleParams) {
   const locale = await resolveLocale(params);
   const m = getMessages(locale);
-  const [data, portfolio, moved, horizons] = await Promise.all([latestScores(), latestPortfolio(), latestStateChanges(), publicHorizons()]);
+  const [data, portfolio, moved, horizons, macroSchedule] = await Promise.all([latestScores(), latestPortfolio(), latestStateChanges(), publicHorizons(), storedMacroEvents(new Date().toISOString().slice(0, 10))]);
   const k = getKitMessages(locale);
   const changes: StateChange[] = moved.map(({ ticker, from, to }) => {
     const [fromLabel, toLabel] = [m.status.labels[from], m.status.labels[to]];
@@ -61,7 +62,7 @@ async function Dashboard({ params }: LocaleParams) {
     </div>
     <HeadDisclosure text={m.common.operatorDisclosure} />
     <StateFilterProvider>
-    <ScannerTable locale={locale} rows={rows} profiles={Object.fromEntries(Object.entries(horizons).map(([ticker, h]) => [ticker, h.profile]))} aside={<MacroEvents locale={locale} />} heldTickers={portfolio?.weights.filter((p) => p.weightPercent > 0).map((p) => p.symbol.toUpperCase()) ?? []} text={{
+    <ScannerTable locale={locale} rows={rows} profiles={Object.fromEntries(Object.entries(horizons).map(([ticker, h]) => [ticker, h.profile]))} aside={<MacroEvents locale={locale} schedule={macroSchedule} />} heldTickers={portfolio?.weights.filter((p) => p.weightPercent > 0).map((p) => p.symbol.toUpperCase()) ?? []} text={{
       profileTags: profileCopy[locale].tags,
       searchLabel: m.scanner.searchLabel, searchPlaceholder: m.scanner.searchPlaceholder,
       filterLabel: m.scanner.filterLabel, allStates: m.scanner.allStates, clear: m.scanner.clear,
