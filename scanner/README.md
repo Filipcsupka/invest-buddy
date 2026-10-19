@@ -74,40 +74,13 @@ The container has no browser. Claude and Codex handle this differently.
 
 Claude. Pass `CLAUDE_CODE_OAUTH_TOKEN`, a one-year token from `claude setup-token` that you generate once on your Mac, or `ANTHROPIC_API_KEY`. In Kubernetes, put it in a Secret and read it as an environment variable. If both are set the API key wins. `--bare` does not read the OAuth token and the runner does not use it. Verified in an earlier session against the Claude Code docs and by running the image: with no variable `claude -p` exits 1 with `Not logged in`, with a bogus token it exits 1 with a 401. A successful in-container Claude scan is not verified, because no real `setup-token` value was available.
 
-Codex. A ChatGPT login cannot be a plain read-only secret, because Codex writes into its home directory while it runs. In the container test it created `auth.json` neighbours (`state_5.sqlite`, `models_cache.json`, `installation_id`, logs and more) in `CODEX_HOME`, and the docs say sessions refresh their tokens in place. So the design is a small PVC mounted at `/home/scanner/.codex`, seeded once from a sealed secret by an init step:
+Codex research jobs use one static workspace access token in secret `invest-buddy-codex-token`, exposed as `CODEX_ACCESS_TOKEN`. The research adapter creates a private temporary `CODEX_HOME` with mode `0700`, feeds the token to `codex -c 'cli_auth_credentials_store="file"' login --with-access-token` on stdin, checks `codex login status`, and removes the home after the call. The token is not passed in the model command's arguments or environment. A missing or rejected token stops the research runner before any model call. A local research run may still use an existing login in `CODEX_HOME`.
 
-1. On the Mac run `codex login` (or `codex login --device-auth` on a machine without a browser) and keep the resulting `~/.codex/auth.json`.
-2. Seal that file as a Secret that holds one key, `auth.json`. Treat it like a password.
-3. An init container with the same image copies it into the PVC only if `auth.json` is not already there: `[ -f /home/scanner/.codex/auth.json ] || cp /seed/auth.json /home/scanner/.codex/auth.json`. The seed is mounted read-only at `/seed`, the PVC read-write at `/home/scanner/.codex`. The PVC must be writable by uid 10001 (`fsGroup: 10001` or an init `chown`).
-4. The scan container mounts the same PVC. Only one scanner pod should use it at a time (`concurrencyPolicy: Forbid`, ReadWriteOnce), since two processes refreshing one `auth.json` could clobber each other.
-5. When the refresh token eventually dies, repeat steps 1 to 3 and replace the file on the PVC by hand. Do not reseed on every run, or you throw away refreshed tokens.
-
-Verified from the official Codex docs (developers.openai.com/codex/auth, now at learn.chatgpt.com/docs/auth):
-
-- Credentials are cached at `~/.codex/auth.json`, and `CODEX_HOME` sets the base directory.
-- `cli_auth_credentials_store` can be `file`, `keyring`, `auto` or `ephemeral`. For a container use `file`.
-- Device code login exists for setups where the browser flow does not work, and copying cached credentials is the documented fallback.
-- ChatGPT sessions refresh tokens automatically during use.
-- `auth.json` holds access tokens and must be treated like a password. For automation the docs recommend API keys as the default.
-
-Verified here by running it (codex-cli 0.160.0, image built from this Dockerfile, Docker on colima):
-
-- A copy of `auth.json` in a new directory mounted at `/home/scanner/.codex` gave `codex login status` = "Logged in using ChatGPT" for the non-root user 10001, and `codex exec` answered a test prompt.
-- A full `run-scan.mjs --dry-run --only NVDA --agent codex` inside the container finished with no failures (macro 72 s, NVDA 96 s).
-- `codex login --device-auth`, `--with-api-key` and `--with-access-token` exist in the local help output.
-- The mount has to be writable. With a root-owned empty mount Codex failed with "Permission denied".
-
-Not verified:
-
-- That the refresh actually rewrites `auth.json` in a long-lived pod. The file hash was unchanged after my short runs, so no refresh happened.
-- How long the ChatGPT refresh token lives when unused, and what happens if it is invalidated when you log in on another machine. Plan for a manual reseed now and then.
-- That device auth works headless inside the cluster. I did not try it. The seed-from-Mac route is the one tested.
-- Whether Codex works with a read-only `auth.json`. I did not test it. Assume it does not.
-- That running on a ChatGPT login from a cluster IP is accepted by OpenAI.
+The earlier `run-scan.mjs --agent codex` container test used a copied ChatGPT login and succeeded. That scan path is separate from the research adapter and has no cluster schedule. The workspace access token path has fake-binary tests but no research-container or cluster run yet.
 
 ### Terms caveat for the subscription tokens
 
-Anthropic's and OpenAI's subscription terms are written for ordinary individual use, and a scheduled job that feeds a product on subscription logins may not count, so use API keys if InvestBuddy is sold to others. Anthropic's legal page says OAuth authentication "is intended exclusively for purchasers of Claude Free, Pro, Max, Team, and Enterprise subscription plans and is designed to support ordinary use of Claude Code" and that developers building products should use API key authentication. I did not look up OpenAI's wording for this task, so check it before relying on it. Switching between subscription and API key needs no code change, only the environment.
+Anthropic's and OpenAI's subscription terms are written for ordinary individual use, and a scheduled job that feeds a product on subscription logins may not count, so use API keys if InvestBuddy is sold to others. Anthropic's legal page says OAuth authentication "is intended exclusively for purchasers of Claude Free, Pro, Max, Team, and Enterprise subscription plans and is designed to support ordinary use of Claude Code" and that developers building products should use API key authentication. I did not look up OpenAI's wording for this task, so check it before relying on it. Codex research API auth is disabled until its token costs can be measured.
 
 ### Mac only: ingest token
 
@@ -150,7 +123,7 @@ docker run --rm \
 
 ## Run in Kubernetes
 
-The CronJob manifest lives under `deploy/`, outside this pack. It needs: the image above, `args` such as `["--concurrency", "3"]`, a weekday schedule, env from a Secret (`INGEST_TOKEN` plus one of `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN`), no `INGEST_URL` (the default is the in-cluster service), and a `restartPolicy` of `Never`. The container writes logs and payload copies to `/app/scanner/out`, so use an `emptyDir` there if the root filesystem is read-only, plus an `emptyDir` on `/tmp` and on `/home/scanner/.claude`. For Codex add the PVC at `/home/scanner/.codex` described above, and run one CronJob per agent (`args: ["--agent", "codex"]`) so each posts its own run. Give the two jobs different start times if both use a ChatGPT or Claude plan, to spread the usage window. Exit code 1 means too many calls failed, 2 means a missing token, 3 means the POST failed.
+The old scan CronJobs were removed. If a scan CronJob is restored, it needs the scanner image, a weekday schedule, `INGEST_TOKEN`, agent auth, the in-cluster ingest URL, and writable temporary output directories. The Codex research job uses `CODEX_ACCESS_TOKEN` from `invest-buddy-codex-token` and a writable `/tmp`; it needs no Codex home volume. Keep its research window and two-call daily cap in force.
 
 ## Usage
 
