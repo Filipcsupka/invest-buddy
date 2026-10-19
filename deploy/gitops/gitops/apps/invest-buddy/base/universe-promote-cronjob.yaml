@@ -1,0 +1,55 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: invest-buddy-universe-promote
+  namespace: invest
+spec:
+  # Proposal (D36). Suspended until the owner approves it. Moves extended names with 10 clean sessions (D16) to core.
+  # At most 10 a week (PROMOTE.weeklyCap): a core name is scored and goes to extract and judge, so each promotion adds AI cost.
+  # Sunday 15:00, after the week's last prices run (Saturday 00:10) and pool-bars (ends by 14:10); the new core names are scored on Tuesday.
+  # Database only, no external API. For a dry run by hand, add --dry-run to the command.
+  suspend: true
+  schedule: "0 15 * * 0"
+  timeZone: Europe/Bratislava
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 600
+      template:
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          nodeSelector:
+            kubernetes.io/hostname: k8s-worker-01
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: universe-promote
+              image: ghcr.io/filipcsupka/invest-buddy:latest
+              command: ["node", "dist/jobs/universe-promote.js"]
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-secrets
+                      key: DATABASE_URL
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 128Mi
+                limits:
+                  cpu: 300m
+                  memory: 512Mi

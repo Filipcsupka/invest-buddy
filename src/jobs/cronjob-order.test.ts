@@ -55,6 +55,18 @@ describe("daily pipeline order", () => {
     expect(pool.to).toBeLessThanOrEqual(24 * 60);
     expect(readFileSync(join(base, "kustomization.yaml"), "utf8")).toContain("- pool-bars-cronjob.yaml");
   });
+  it("keeps the weekly universe promotion suspended, on Sunday after pool-bars, database only", () => {
+    const doc = job("universe-promote");
+    expect(minutes("universe-promote")).toEqual({ at: 15 * 60, days: "0" });
+    expect(doc).toContain("suspend: true");
+    expect(doc).toContain('command: ["node", "dist/jobs/universe-promote.js"]');
+    expect(doc).toContain("name: DATABASE_URL");
+    for (const key of ["TWELVE_DATA_API_KEY", "INGEST_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"]) expect(doc).not.toContain(key);
+    expect(minutes("pool-bars").at + startWindow("pool-bars") + deadline("pool-bars")).toBeLessThanOrEqual(minutes("universe-promote").at);
+    expect(minutes("universe-promote").at + startWindow("universe-promote") + deadline("universe-promote")).toBeLessThanOrEqual(minutes("weekly").at);
+    for (const text of ["runAsNonRoot: true", "automountServiceAccountToken: false", "allowPrivilegeEscalation: false", "readOnlyRootFilesystem: true", 'drop: ["ALL"]', "type: RuntimeDefault", "concurrencyPolicy: Forbid"]) expect(doc).toContain(text);
+    expect(readFileSync(join(base, "kustomization.yaml"), "utf8")).toContain("- universe-promote-cronjob.yaml");
+  });
   it("keeps the weekly Telegram summary suspended, Sunday 18:00 Bratislava, after the Sunday master refresh", () => {
     const doc = job("weekly");
     expect(minutes("weekly")).toEqual({ at: 18 * 60, days: "0" });
