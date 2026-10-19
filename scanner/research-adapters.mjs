@@ -1,4 +1,5 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runCli } from "./run-scan.mjs";
@@ -89,6 +90,14 @@ export function deriveStrictSchema(schema, name = "modelOutput") {
 
 export const codexAuthJson = (env = process.env) => join(env.CODEX_HOME || join(env.HOME || "~", ".codex"), "auth.json");
 
+const codexLoginStatus = (env) => {
+  const status = spawnSync("codex", ["login", "status"], {
+    env: { PATH: env.PATH ?? process.env.PATH, HOME: env.HOME ?? process.env.HOME, CODEX_HOME: env.CODEX_HOME },
+    encoding: "utf8", timeout: 5000,
+  });
+  return status.status === 0;
+};
+
 // Rate-limit percentages are read from any `rate_limits` object in the event stream; the CLI may not report them.
 const rateLimitPcts = (value, inRate = false, found = []) => {
   if (Array.isArray(value)) { value.forEach((item) => rateLimitPcts(item, inRate, found)); return found; }
@@ -127,8 +136,10 @@ export const codexResearchAdapter = {
   authSource(env = process.env) { return env.OPENAI_API_KEY ? "api" : "codex"; },
   defaultModel(env = process.env) { return env.RESEARCH_CODEX_MODEL || "default"; },
   available(env = process.env) {
-    if (env.OPENAI_API_KEY || existsSync(codexAuthJson(env))) return { ok: true, reason: null };
-    return { ok: false, reason: `Codex auth is unavailable: set OPENAI_API_KEY or provide ${codexAuthJson(env)} (a ChatGPT login in CODEX_HOME)` };
+    if (env.OPENAI_API_KEY) return { ok: false, reason: "Codex API spend is unmetered: RESEARCH_MONTHLY_USD cannot be enforced without a documented Codex token price" };
+    if (!existsSync(codexAuthJson(env))) return { ok: false, reason: `Codex auth is unavailable: provide ${codexAuthJson(env)} (a ChatGPT login in CODEX_HOME)` };
+    if (!codexLoginStatus(env)) return { ok: false, reason: "Codex auth is unavailable: codex login status did not confirm a local login" };
+    return { ok: true, reason: null };
   },
   async quota() { return lastCodexRateLimit === null ? null : { window: "codex", pct: lastCodexRateLimit, resetAt: null }; },
   async run({ prompt, schemaPath, timeoutMs, workDir, monitor, env = process.env }) {
@@ -154,7 +165,7 @@ export const codexResearchAdapter = {
       let text;
       try { text = readFileSync(replyFile, "utf8"); } catch { throw attach(new Error("codex wrote no reply file")); }
       if (!text.trim()) throw attach(new Error("codex reply file is empty"));
-      return { text, usage: parsed.usage, webSearches: parsed.webSearches, webFetches: null, costUsd: null, cutoff: null, model: env.RESEARCH_CODEX_MODEL || "default", rateLimitPct: parsed.rateLimitPct };
+      return { text, usage: parsed.usage, webSearches: parsed.webSearches, webFetches: null, costUsd: 0, cutoff: null, model: env.RESEARCH_CODEX_MODEL || "default", rateLimitPct: parsed.rateLimitPct };
     } finally { rmSync(ioDir, { recursive: true, force: true }); }
   },
 };

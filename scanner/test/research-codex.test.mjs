@@ -112,7 +112,7 @@ test("codex adapter: exact flags and order, strict schema file, -o reply, usage,
     assert.deepEqual(JSON.parse(result.text), sample.output);
     assert.deepEqual(result.usage, { inputTokens: 150, outputTokens: 30, cacheReadTokens: 50, cacheCreationTokens: null, turns: null });
     assert.equal(result.webSearches, 1);
-    assert.equal(result.costUsd, null);
+    assert.equal(result.costUsd, 0);
     assert.equal(result.rateLimitPct, null);
     assert.equal(existsSync(c.args[11]), false, "schema file is removed");
     assert.equal((await codexResearchAdapter.quota()), null);
@@ -151,17 +151,20 @@ test("codex adapter: rate limit from events is remembered; failures carry usage;
   });
 });
 
-test("codex auth check: API key or auth.json in CODEX_HOME, nothing else", () => {
+test("codex auth check: a local login must pass codex login status", () => {
   const home = mkdtempSync(join(tmpdir(), "codex-home-"));
+  const bin = join(home, "codex");
+  writeFileSync(bin, `#!/usr/bin/env node\nconst fs=require('fs');const p=process.env.CODEX_HOME+'/auth.json';if(process.argv.slice(2).join(' ')!=='login status')process.exit(2);try{const a=JSON.parse(fs.readFileSync(p,'utf8'));process.exit(a.tokens?.access_token||a.personal_access_token?0:1)}catch{process.exit(1)}\n`);
+  chmodSync(bin, 0o755);
+  const env = { HOME: "/nonexistent", CODEX_HOME: home, PATH: `${home}:${process.env.PATH}` };
   assert.equal(codexResearchAdapter.available({ HOME: home }).ok, false);
-  assert.match(codexResearchAdapter.available({ HOME: home }).reason, /OPENAI_API_KEY/);
+  assert.match(codexResearchAdapter.available({ HOME: home }).reason, /auth.json/);
   assert.equal(codexResearchAdapter.available({ HOME: home, ANTHROPIC_API_KEY: "x", CLAUDE_CODE_OAUTH_TOKEN: "x" }).ok, false);
-  assert.equal(codexResearchAdapter.available({ HOME: home, OPENAI_API_KEY: "k" }).ok, true);
+  assert.match(codexResearchAdapter.available({ HOME: home, OPENAI_API_KEY: "k" }).reason, /RESEARCH_MONTHLY_USD/);
   writeFileSync(join(home, "auth.json"), "{}");
-  assert.equal(codexResearchAdapter.available({ HOME: "/nonexistent", CODEX_HOME: home }).ok, true);
-  mkdirSync(join(home, ".codex"));
-  writeFileSync(join(home, ".codex", "auth.json"), "{}");
-  assert.equal(codexResearchAdapter.available({ HOME: home }).ok, true);
+  assert.match(codexResearchAdapter.available(env).reason, /codex login status/);
+  writeFileSync(join(home, "auth.json"), JSON.stringify({ tokens: { access_token: "stub" } }));
+  assert.equal(codexResearchAdapter.available(env).ok, true);
   assert.equal(codexResearchAdapter.authSource({ OPENAI_API_KEY: "k" }), "api");
   assert.equal(codexResearchAdapter.authSource({}), "codex");
   assert.equal(researchAdapter("codex"), codexResearchAdapter);
@@ -171,7 +174,7 @@ const now = new Date("2026-10-11T01:00:00Z");
 const usage = { day: "2026-10-11", month: "2026-10", monthlyTokens: 10, monthlyUsd: 1, dailyCalls: 0, codexDailyCalls: 0, dailyTokens: 10, sharedDailyTokens: 10 };
 const gate = (env, override = {}) => checkResearchCaps({ env: { RESEARCH_ENABLED: "on", ...env }, now, type: "daily", adapter: "codex", authSource: "codex", usage, liveUsage: async () => { throw new Error("Claude quota must not be read"); }, ...override });
 
-test("codex caps: 2 calls a day, window, 50 percent, unknown quota, USD cap for API key", async () => {
+test("codex caps: 2 calls a day, window, 50 percent, unknown quota, unmetered API spend", async () => {
   assert.equal((await gate({}, { codexQuota: async () => ({ pct: 49 }) })).ok, true);
   assert.equal((await gate({}, { codexQuota: async () => ({ pct: 50 }) })).status, "skipped_quota");
   assert.equal((await gate({}, { codexQuota: async () => null })).status, "skipped_quota");
@@ -184,8 +187,8 @@ test("codex caps: 2 calls a day, window, 50 percent, unknown quota, USD cap for 
   assert.equal((await gate({ RESEARCH_WINDOW: "04:00-07:00" }, { codexQuota: async () => ({ pct: 1 }) })).status, "skipped_window");
   const outside = new Date("2026-10-11T11:00:00Z");
   assert.equal((await gate({}, { now: outside, type: "deepdive", manual: true, codexQuota: async () => ({ pct: 1 }) })).status, "skipped_window");
-  // API key: the existing USD cap governs; the plan rate limit is not consulted
-  assert.equal((await gate({ RESEARCH_MONTHLY_USD: "100" }, { authSource: "api" })).ok, true);
+  // No Codex price source exists in the repo, so a positive USD setting cannot cap API spend.
+  assert.equal((await gate({ RESEARCH_MONTHLY_USD: "100" }, { authSource: "api" })).status, "skipped_cap");
   assert.equal((await gate({ RESEARCH_MONTHLY_USD: "1" }, { authSource: "api" })).status, "skipped_cap");
   assert.equal((await gate({}, { authSource: "api" })).status, "skipped_cap");
 });
@@ -198,7 +201,7 @@ async function runRunner({ adapterEnv = {}, codexDailyCalls = 0, rateLimitPct = 
   writeFileSync(input, JSON.stringify({ symbols: ["SMPL"], triggers: [], knownFacts: [], openCandidates: [] }));
   writeFileSync(join(dir, "reply.json"), JSON.stringify(sample.output));
   writeFileSync(join(dir, "events.jsonl"), JSON.stringify({ type: "turn.completed", usage: { input_tokens: 100, output_tokens: 20 }, ...(rateLimitPct === null ? {} : { rate_limits: { primary: { used_percent: rateLimitPct } } }) }));
-  writeFileSync(bin, `#!/usr/bin/env node\nconst fs=require('fs');const a=process.argv.slice(2);const d=__dirname;fs.appendFileSync(d+'/calls.log',a.join(' ')+'\\n');process.stdin.resume();process.stdin.on('end',()=>{fs.writeFileSync(a[a.indexOf('-o')+1],fs.readFileSync(d+'/reply.json','utf8'));process.stdout.write(fs.readFileSync(d+'/events.jsonl','utf8'))});\n`);
+  writeFileSync(bin, `#!/usr/bin/env node\nconst fs=require('fs');const a=process.argv.slice(2);const d=__dirname;if(a.join(' ')==='login status'){try{const x=JSON.parse(fs.readFileSync(process.env.CODEX_HOME+'/auth.json','utf8'));process.exit(x.tokens?.access_token?0:1)}catch{process.exit(1)}}fs.appendFileSync(d+'/calls.log',a.join(' ')+'\\n');process.stdin.resume();process.stdin.on('end',()=>{fs.writeFileSync(a[a.indexOf('-o')+1],fs.readFileSync(d+'/reply.json','utf8'));process.stdout.write(fs.readFileSync(d+'/events.jsonl','utf8'))});\n`);
   chmodSync(bin, 0o755);
   const posts = [], budgets = [];
   const server = createServer((req, res) => {
@@ -225,25 +228,32 @@ async function runRunner({ adapterEnv = {}, codexDailyCalls = 0, rateLimitPct = 
 test("RESEARCH_ADAPTER=codex without usable auth fails at start with no model call and no network", async () => {
   const r = await runRunner();
   assert.equal(r.code, 1);
-  assert.match(r.stderr, /RESEARCH_ADAPTER=codex: Codex auth is unavailable: set OPENAI_API_KEY/);
+  assert.match(r.stderr, /RESEARCH_ADAPTER=codex: Codex auth is unavailable: provide/);
   assert.deepEqual(r.calls, []);
   assert.equal(r.posts.length + r.budgets.length, 0);
 });
 
-test("codex run with an API key: posts a codex run authSource api, reservation carries api", async () => {
+test("codex API key is rejected before a model call because the USD cap cannot be enforced", async () => {
   const r = await runRunner({ adapterEnv: { OPENAI_API_KEY: "k" } });
-  assert.equal(r.code, 0, r.stderr);
-  assert.equal(r.calls.length, 1);
-  assert.equal(r.posts.length, 1);
-  assert.deepEqual([r.posts[0].run.adapter.name, r.posts[0].run.adapter.authSource, r.posts[0].run.adapter.model], ["codex", "api", "default"]);
-  assert.equal(r.posts[0].run.usage.inputTokens, 100);
-  assert.deepEqual(validateResearchOutput(r.posts[0]), []);
-  assert.deepEqual(r.budgets.map((b) => [b.action, b.agent ?? null, b.authSource ?? null]), [["reserve", "codex", "api"], ["finish", null, null]]);
+  assert.equal(r.code, 1);
+  assert.match(r.stderr, /RESEARCH_ADAPTER=codex: Codex API spend is unmetered/);
+  assert.deepEqual(r.calls, []);
+  assert.equal(r.posts.length + r.budgets.length, 0);
+});
+
+test("codex login rejected by CLI fails at start with no model call or network", async () => {
+  const home = mkdtempSync(join(tmpdir(), "codex-login-"));
+  writeFileSync(join(home, "auth.json"), "{}");
+  const r = await runRunner({ adapterEnv: { CODEX_HOME: home } });
+  assert.equal(r.code, 1);
+  assert.match(r.stderr, /RESEARCH_ADAPTER=codex: Codex auth is unavailable: codex login status/);
+  assert.deepEqual(r.calls, []);
+  assert.equal(r.posts.length + r.budgets.length, 0);
 });
 
 test("codex run with a ChatGPT login: unknown quota skips with no model call, allow runs it", async () => {
   const home = mkdtempSync(join(tmpdir(), "codex-login-"));
-  writeFileSync(join(home, "auth.json"), "{}");
+  writeFileSync(join(home, "auth.json"), JSON.stringify({ tokens: { access_token: "stub" } }));
   const skipped = await runRunner({ adapterEnv: { CODEX_HOME: home } });
   assert.equal(skipped.code, 0, skipped.stderr);
   assert.deepEqual(skipped.calls, []);
@@ -253,12 +263,14 @@ test("codex run with a ChatGPT login: unknown quota skips with no model call, al
   assert.equal(ran.code, 0, ran.stderr);
   assert.equal(ran.calls.length, 1);
   assert.equal(ran.posts[0].run.adapter.authSource, "codex");
+  assert.equal(ran.posts[0].run.usage.costUsd, 0);
+  assert.equal(ran.budgets[1].usd, 0);
   assert.deepEqual(ran.budgets.map((b) => b.authSource ?? null), ["codex", null]);
 });
 
 test("codex daily cap skips a login run before the model call", async () => {
   const home = mkdtempSync(join(tmpdir(), "codex-login-"));
-  writeFileSync(join(home, "auth.json"), "{}");
+  writeFileSync(join(home, "auth.json"), JSON.stringify({ tokens: { access_token: "stub" } }));
   const r = await runRunner({ adapterEnv: { CODEX_HOME: home, RESEARCH_CODEX_QUOTA_UNKNOWN: "allow" }, codexDailyCalls: 2 });
   assert.deepEqual(r.calls, []);
   assert.equal(r.posts.length, 1);

@@ -49,7 +49,7 @@ Updated 2026-10-16. One table per state. A PR that finishes a task moves it to D
 | RS5 | Research CronJobs, caps and kill switch | #167 | jobs suspended, owner unsuspends after RS8 |
 | RS6 | Private research cards, materiality and owner page | #166 | not run live |
 | RS8 (offline) | Old-sample fixture (6 cards), `research:eval` script, `docs/research-eval.md` template | #170 | live run not done |
-| RS7 (code) | Codex adapter, strict schema, Codex caps | #172 | auth path not set |
+| RS7 (code) | Codex adapter, strict schema, Codex caps | #172 | local codex-cli 0.163.0 JSON run reported token usage, no rate limit or cost field; auth path not set |
 | Test fix | Research runner test used a fixed date | #171 | |
 | RS5 (infra) | 7 research CronJobs synced to the cluster, all suspended, `RESEARCH_ENABLED=off` | infra #42 | Argo synced |
 | RS8 (override) | Opt-in Claude quota-unknown override (`RESEARCH_QUOTA_UNKNOWN_OVERRIDE=on`, 403 only), hard call caps in the reserve transaction | #175 | not run live |
@@ -93,7 +93,7 @@ Detail: `lane-engine.md` (EN48) and `lane-positions.md` (PM2, PM4).
 
 | ID | What | State |
 | --- | --- | --- |
-| RS7 | Codex adapter and secret | adapter code done (`scanner/research-adapters.mjs`, strict schema, quota and call caps, fake-binary tests); auth path and PVC/secret still waiting for the owner, not done |
+| RS7 | Codex adapter and secret | adapter code and fake-binary tests done; local codex-cli 0.163.0 JSON run reported token usage but no rate limit or cost field. Auth path and PVC/secret still wait for the owner; not done. |
 | RS8 | Evaluation on the six old cards | offline harness done (fixture, `scripts/research-eval.ts`, `docs/research-eval.md`); live run tried 2026-10-13 and blocked: weekly discovery `skipped_window` (window 00:00 to 07:00 respected), deep dive INTT `skipped_quota` (403 from the Anthropic usage endpoint, cause unverified). Not bypassed. Manual Jobs `rs8-weekly-20261004` and `rs8-dd-intt` deleted 2026-10-14. The override (#175) now exists in code; owner must set `RESEARCH_QUOTA_UNKNOWN_OVERRIDE=on` for the live run. |
 | TASK-084 | Scanner default liquidity and market-cap floor | PR #208 open |
 

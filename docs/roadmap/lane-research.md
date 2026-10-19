@@ -156,15 +156,15 @@ Risk: `src/notify/format.ts` and `src/i18n/messages.ts` are shared; rebase and m
 
 ## RS7 Codex adapter and secret
 
-Status: adapter code done (steps 3 and 4 in code, tests with a fake `codex` binary). The auth path and the PVC or secret (steps 1 and 2, the `deploy/README.md` note and the refresh proof) are still waiting for the owner. RS7 is not done.
+Status: adapter code and fake-binary tests are in. A local `codex-cli 0.163.0` run on 2026-10-19 confirmed the flags and reported token usage in `turn.completed.usage`, but no rate limit or cost field. Login runs therefore need `RESEARCH_CODEX_QUOTA_UNKNOWN=allow` for their first call. The auth path, PVC or secret, and refresh proof still wait for the owner. RS7 is not done.
 
 Why: a second adapter for when the Claude quota is short, and a later second voice (ADR-005).
 
 Steps:
 1. Investigate the Pending PVC `invest-buddy-codex-home`. It may be waiting for its first consumer (a `WaitForFirstConsumer` storage class) since the scan-codex CronJob was removed; that is not verified. Record the StorageClass binding mode and events.
-2. Choose with the owner: (a) the ChatGPT login with the PVC seeded from the sealed `invest-buddy-codex-auth-seed` (`deploy/README.md`), one writer at a time, and a check that the refreshed `auth.json` persists across two runs a day apart; or (b) `OPENAI_API_KEY` as a sealed secret with `RESEARCH_MONTHLY_USD` above 0.
+2. Choose with the owner: (a) the ChatGPT login with the PVC seeded from the sealed `invest-buddy-codex-auth-seed` (`deploy/README.md`), one writer at a time, and a check that the refreshed `auth.json` persists across two runs a day apart; or (b) document Codex token prices and map costs before using `OPENAI_API_KEY` with a sealed secret and `RESEARCH_MONTHLY_USD` above 0.
 3. Codex adapter in `scanner/research-adapters.mjs`: `codex --search -a never exec --sandbox read-only --skip-git-repo-check --ephemeral --ignore-user-config --ignore-rules --output-schema <file> -C <empty dir> -o <file>`. Derive the output schema from `$defs.modelOutput`, inlining refs and removing keywords strict mode does not accept; the validator still runs on the result.
-4. Quota: confirm whether `codex exec --json` reports rate-limit usage in the installed CLI. If it does, skip at 50% or more. If not, skip unless `RESEARCH_CODEX_QUOTA_UNKNOWN=allow`. At most 2 Codex calls a day, inside the window.
+4. Quota: the installed `codex exec --json` reported no rate-limit usage on the tested call. Skip unless `RESEARCH_CODEX_QUOTA_UNKNOWN=allow` when no reading exists; skip at 50% or more if a later event reports one. At most 2 Codex calls a day, inside the window.
 
 Acceptance:
 - adapter tests with a fake `codex` binary: flags, schema file, read of the `-o` file, usage mapping;
