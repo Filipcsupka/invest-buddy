@@ -4,7 +4,7 @@ import type { CollectedDocument } from "../collectors/types";
 import { putSnapshot } from "../data/raw-store";
 import { CapReached, type UsageLedger } from "../data/usage";
 import {
-  BodyTooLarge, decodeBody, guardedGet, HttpFailure, mediaType, RobotsDisallowed, safeUrl, UrlBlocked, type GuardDeps, type GuardedPage,
+  BodyTooLarge, decodeBody, guardedGet, mediaType, RobotsDisallowed, safeUrl, UrlBlocked, type GuardDeps, type GuardedPage,
 } from "./fetch-guard";
 import { findQuoteInSecExhibits, type SecGet } from "./sec-fallback";
 import { extractPageDate, findQuote, htmlToText, normalizeText, toIsoDate } from "./html-text";
