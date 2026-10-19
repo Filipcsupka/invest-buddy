@@ -7,7 +7,8 @@ import { parseFeed, feedUrl } from "../collectors/sources/getcurrent";
 import { getText } from "../collectors/http";
 import { requireSecUserAgent } from "../collectors/sec-user-agent";
 import { isIsoDate } from "../db/iso-date";
-import { collectFrames } from "../collectors/sources/frames";
+import { collectFrames, frameUrl, loadGrowth, label, type GrowthSnapshot, type Quarter } from "../collectors/sources/frames";
+import { rankPool, type PoolRow } from "../universe/pool";
 import { collectClinicalTrials } from "../collectors/sources/clinicaltrials";
 import { defaultHttp } from "../collectors/sources/client";
 import { normalizeIssuer } from "../collectors/sources/thirteenf";
@@ -24,7 +25,7 @@ import { telegramFromEnv } from "../notify/telegram";
 import { deliverNewCandidates, loadWeekCandidates } from "../notify/discovery";
 import { flags } from "../config/flags";
 
-export interface CandidateSource { kind: "edgar" | "price_volume" | "theme" | "frames" | "clinical_trial" | "ownership" | "thirteenf"; url: string; detail: string; growth?: { current: number; prior: number } }
+export interface CandidateSource { kind: "edgar" | "price_volume" | "theme" | "frames" | "pool" | "clinical_trial" | "ownership" | "thirteenf"; url: string; detail: string; growth?: { current: number; prior: number } }
 /** Returns why a name fails the quality floor (market cap, dollar volume), or null. */
 export type QualityCheck = (row: DiscoveryCandidate, bars: OHLCV[]) => string | null | undefined;
 export interface DiscoveryCandidate { symbol: string; name: string; sector: string; theme: string | null; score: number; sources: CandidateSource[];
@@ -92,11 +93,63 @@ export function frameCandidates(items: { ticker?: string | null; name: string; y
 }
 
 /** SEC frames covers US filers outside the tracked universe; its collector already makes a bounded, revenue-qualified ranking. */
-export async function marketwideGrowthCandidates(now: Date, knownCompanies: { symbol: string; name: string }[]): Promise<DiscoveryCandidate[]> {
-  const output = await collectFrames({ http: defaultHttp(), companies: knownCompanies, symbols: [], since: now.toISOString().slice(0, 10), now, env: process.env });
+export async function marketwideGrowthCandidates(now: Date, knownCompanies: { symbol: string; name: string }[], snapshot?: Promise<GrowthSnapshot>): Promise<DiscoveryCandidate[]> {
+  const output = await collectFrames({ http: defaultHttp(), companies: knownCompanies, symbols: [], since: now.toISOString().slice(0, 10), now, env: process.env }, snapshot && await snapshot);
   const doc = output.documents.find((item) => item.meta.kind === "discovery");
   if (!doc) return [];
   return frameCandidates(doc.meta.items as Parameters<typeof frameCandidates>[0], doc.url);
+}
+
+export interface StoredBars { count: number; newest: string | null }
+
+/** Stored bars are enough to screen without a request: at least 200 bars and the newest no more than maxAgeDays before the run date. */
+export function hasStoredBars(bars: StoredBars | undefined, date: string, maxAgeDays: number = DISCOVERY.poolBarMaxAgeDays): boolean {
+  if (!bars || bars.count < 200 || !bars.newest || bars.newest > date) return false;
+  return Date.parse(`${date}T00:00:00Z`) - Date.parse(`${bars.newest}T00:00:00Z`) <= maxAgeDays * 86400000;
+}
+
+/** Pool names with stored bars, in pool rank order. Names without stored bars are left out: screening them would cost a Twelve Data request. */
+export function poolCandidates(ranked: PoolRow[], stored: Map<string, StoredBars>, date: string, quarter: Quarter, maxAgeDays: number = DISCOVERY.poolBarMaxAgeDays): DiscoveryCandidate[] {
+  return ranked.filter((row) => hasStoredBars(stored.get(row.ticker), date, maxAgeDays)).map((row) => {
+    const growth = { current: row.yoyPercent, prior: row.priorYoyPercent };
+    return { symbol: row.ticker, name: row.name, sector: "Growth", theme: null, score: 3, growth,
+      sources: [{ kind: "pool" as const, url: `${frameUrl(row.concept, quarter)}#pool-${row.ticker}`, detail: `SEC growth pool rank ${row.rank}, ${label(quarter)}`, growth }] };
+  });
+}
+
+/** The growth pool ranked as pool-bars ranks it (held names out, same size and growth floor), cut to the names with stored bars. */
+export async function growthPoolCandidates(db: Pick<pg.Pool, "query">, snapshot: Promise<GrowthSnapshot>, date: string): Promise<DiscoveryCandidate[]> {
+  const { quarter, growth, tickers } = await snapshot;
+  const held = new Set((await db.query<{ ticker: string }>("SELECT DISTINCT ticker FROM universe_membership WHERE valid_to IS NULL")).rows.map((r) => r.ticker));
+  const ranked = rankPool(growth, new Map([...tickers.byCik].map(([cik, row]) => [cik, row.ticker])), held, { minYoy: DISCOVERY.poolMinYoyPct, size: DISCOVERY.poolSize });
+  const stored = await db.query<{ symbol: string; count: string; newest: string | null }>(`SELECT symbol, count(*)::text AS count, max(bar_date)::text AS newest
+    FROM discovery_price_bars WHERE symbol = ANY($1) AND bar_date <= $2::date GROUP BY symbol`, [ranked.map((r) => r.ticker), date]);
+  return poolCandidates(ranked, new Map(stored.rows.map((r) => [r.symbol, { count: Number(r.count), newest: r.newest }])), date, quarter);
+}
+
+/**
+ * Splits the growth pool off the feed rows. Feed rows for a pool name are merged into it (score, sources, theme), so the name is screened once on
+ * its stored bars. Known names and non-common securities are skipped; the lane keeps pool rank order and is cut to `limit`.
+ */
+export function poolLane(pool: DiscoveryCandidate[], feed: DiscoveryCandidate[], known: Set<string>, limit: number = DISCOVERY.poolScreenLimit) {
+  const skipped: { symbol: string; reason: string }[] = [];
+  const lane: DiscoveryCandidate[] = [];
+  for (const row of pool) {
+    if (known.has(row.symbol) || lane.length >= limit || lane.some((item) => item.symbol === row.symbol)) continue;
+    const reason = nonCommonStockReason(row.symbol) ?? nameExclusion(row.symbol, row.name);
+    if (reason) { skipped.push({ symbol: row.symbol, reason }); continue; }
+    lane.push({ ...row, sources: [...row.sources] });
+  }
+  const bySymbol = new Map(lane.map((row) => [row.symbol, row]));
+  const rest: DiscoveryCandidate[] = [];
+  for (const row of feed) {
+    const target = bySymbol.get(row.symbol);
+    if (!target) { rest.push(row); continue; }
+    target.score += row.score;
+    target.sources.push(...row.sources);
+    target.theme ??= row.theme;
+  }
+  return { lane, feed: rest, skipped };
 }
 
 /** Recent Phase 2/3 study updates from any sponsor, mapped conservatively to exact SEC issuer names. */
@@ -459,17 +512,25 @@ async function main() {
     const companies = (await pool.query<{ ticker: string; name: string }>(`SELECT i.ticker,i.name FROM instruments i
       JOIN universe_membership m ON m.ticker=i.ticker WHERE m.list <> 'benchmark'
         AND m.valid_from <= CURRENT_DATE AND (m.valid_to IS NULL OR m.valid_to > CURRENT_DATE)`)).rows.map((r) => ({ symbol: r.ticker, name: r.name }));
-    const names = ["growth-frames", "edgar-8k", "ownership", "13f", "biotech", "movers"];
+    const names = ["growth-frames", "edgar-8k", "ownership", "13f", "biotech", "movers", "growth-pool"];
+    const runAt = new Date(`${date}T12:00:00Z`);
+    // One read of the SEC revenue frames serves both the frames ranking and the growth pool.
+    const growth = loadGrowth({ http: defaultHttp(), now: runAt });
+    growth.catch(() => undefined);
     const gathered = await Promise.allSettled([
-      marketwideGrowthCandidates(new Date(`${date}T12:00:00Z`), companies),
+      marketwideGrowthCandidates(runAt, companies, growth),
       edgarCandidates(getText, since), ownershipCandidates(getText, since), manager13fCandidates(getText, date, since),
-      biotechCandidates(since, new Date(`${date}T12:00:00Z`)), moverCandidates(pool, date),
+      biotechCandidates(since, runAt), moverCandidates(pool, date), growthPoolCandidates(pool, growth, date),
     ]);
     const themes = themeCandidates();
     const sources = [...themes];
+    const poolRows: DiscoveryCandidate[] = [];
     const summary = [{ name: "themes", rows: themes.length }];
     gathered.forEach((result, index) => {
-      if (result.status === "fulfilled") { sources.push(...result.value); summary.push(...sourceSummary([{ name: names[index], rows: result.value }])); }
+      if (result.status === "fulfilled") {
+        (names[index] === "growth-pool" ? poolRows : sources).push(...result.value);
+        summary.push(...sourceSummary([{ name: names[index], rows: result.value }]));
+      }
       else {
         const message = result.reason instanceof Error ? result.reason.message : String(result.reason);
         process.stderr.write(`Discovery source failed: ${message}\n`);
@@ -477,11 +538,17 @@ async function main() {
       }
     });
     const preScreen = DISCOVERY.preScreenMa200;
-    const { shortlist: rankedAll, skipped: filtered } = shortlistCandidates(sources, known, preScreen ? Math.max(DISCOVERY.preScreenTopK, DISCOVERY.maxScreenedPerWeek) : DISCOVERY.maxScreenedPerWeek);
-    const profiled = await profileFilter(rankedAll, await tickerCiks(getText), getText);
+    // Pool names are screened on stored bars; only the feed names below spend Twelve Data requests.
+    const lane = poolLane(poolRows, sources, known);
+    const covered = new Set(poolRows.map((row) => row.symbol));
+    const { shortlist: rankedAll, skipped: filtered } = shortlistCandidates(lane.feed, known, preScreen ? Math.max(DISCOVERY.preScreenTopK, DISCOVERY.maxScreenedPerWeek) : DISCOVERY.maxScreenedPerWeek);
+    filtered.push(...lane.skipped);
+    const ciks = await tickerCiks(getText);
+    const profiled = await profileFilter(rankedAll, ciks, getText);
     const ranked = profiled.kept;
     filtered.push(...profiled.excluded);
-    const quality: QualityCheck = (row, bars) => liquidityReason(bars, profiled.profiles.get(row.symbol)?.sharesOutstanding ?? null);
+    const profiles = new Map(profiled.profiles);
+    const quality: QualityCheck = (row, bars) => liquidityReason(bars, profiles.get(row.symbol)?.sharesOutstanding ?? null);
     if (!process.env.TWELVE_DATA_API_KEY) throw new Error("TWELVE_DATA_API_KEY is required to apply the scoring rules to discovery candidates");
     const usage = new PostgresUsageLedger(pool);
     const provider = new TwelveDataProvider({ apiKey: process.env.TWELVE_DATA_API_KEY, reserve: () => usage.reserve("twelvedata", 1, { job: "discovery", credits: 1 }) });
@@ -495,6 +562,7 @@ async function main() {
     };
     const cache = new Map<string, Promise<OHLCV[]>>();
     const fetchBars = async (symbol: string): Promise<OHLCV[]> => {
+      if (covered.has(symbol)) return stored("discovery_price_bars", symbol);
       const live = await stored("daily_bars", symbol);
       if (fresh(live)) return live;
       const discovered = await stored("discovery_price_bars", symbol);
@@ -524,7 +592,15 @@ async function main() {
       preScreened = { preScreened: pre.calls, dropped: pre.dropped, apiRequests: provider.requests - before };
       process.stderr.write(`Discovery pre-screen: ${pre.calls} of ${ranked.length} ranked names checked, ${pre.dropped.length} dropped under MA200, ${shortlist.length} go to the full screen, ${preScreened.apiRequests} Twelve Data requests${pre.stoppedByLimit ? " (daily limit reached, rest passed through)" : ""}\n`);
     }
-    const result = await screenDiscoveryShortlist(shortlist, date, barsFor, macro, benchmarkClose, quality);
+    // Growth pool lane: MA200 on stored bars first, then the SEC profile reads only for the names left. No Twelve Data request.
+    const poolBefore = provider.requests;
+    const poolPre = await preScreenMa200(lane.lane, date, barsFor, lane.lane.length);
+    const poolProfiled = await profileFilter(poolPre.kept, ciks, getText);
+    filtered.push(...poolPre.skipped, ...poolProfiled.excluded);
+    for (const [symbol, profile] of poolProfiled.profiles) profiles.set(symbol, profile);
+    const poolSummary = { withStoredBars: poolRows.length, lane: lane.lane.length, preScreenDropped: poolPre.dropped.length, screened: poolProfiled.kept.length, apiRequests: provider.requests - poolBefore };
+    process.stderr.write(`Discovery growth pool: ${poolRows.length} names with stored bars, ${lane.lane.length} in the lane, ${poolPre.dropped.length} dropped under MA200, ${poolProfiled.excluded.length} excluded by SEC profile, ${poolProfiled.kept.length} go to the full screen, ${poolSummary.apiRequests} Twelve Data requests\n`);
+    const result = await screenDiscoveryShortlist([...shortlist, ...poolProfiled.kept], date, barsFor, macro, benchmarkClose, quality);
     const { screened, failureCount, failures } = result;
     const skipped = [...filtered, ...result.skipped];
     const skippedCount = skipped.length;
@@ -532,7 +608,7 @@ async function main() {
     const selected = screened.sort((a, b) => (b.ruleScore ?? 0) - (a.ruleScore ?? 0) || b.score - a.score || a.symbol.localeCompare(b.symbol)).slice(0, DISCOVERY.maxCandidatesPerWeek);
     const saved = await saveCandidates(pool, week, selected);
     const telegram = await notifyWeek(pool, week);
-    process.stdout.write(`${JSON.stringify({ weekStart: week, sourceRows: summary, uniqueSymbols: new Set(sources.map((row) => row.symbol)).size, ranked: ranked.length, preScreened: preScreened?.preScreened ?? 0, preScreenDropped: preScreened?.dropped.length ?? 0, preScreenDroppedNames: preScreened?.dropped ?? [], telegram, twelveDataRequests: provider.requests, screened: shortlist.length, shortlisted: shortlist.length, candidates: saved, notPassed: result.notPassed, skippedCount, skipped, failureCount, failures })}\n`);
+    process.stdout.write(`${JSON.stringify({ weekStart: week, sourceRows: summary, uniqueSymbols: new Set([...sources, ...poolRows].map((row) => row.symbol)).size, ranked: ranked.length, preScreened: preScreened?.preScreened ?? 0, preScreenDropped: preScreened?.dropped.length ?? 0, preScreenDroppedNames: preScreened?.dropped ?? [], telegram, twelveDataRequests: provider.requests, pool: poolSummary, screened: shortlist.length + poolProfiled.kept.length, shortlisted: shortlist.length, candidates: saved, notPassed: result.notPassed, skippedCount, skipped, failureCount, failures })}\n`);
   } finally { await pool.end(); }
 }
 if (/(?:^|[/\\])discovery\.(?:ts|js)$/.test(process.argv[1] ?? "")) main().catch((error) => { console.error(error instanceof Error ? error.message : error); process.exitCode = 1; });
