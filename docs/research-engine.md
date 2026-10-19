@@ -121,6 +121,8 @@ For each evidence item of each pending finding:
 7. Classify the source from the host, never from the model's hint. A disagreement with the hint is logged.
 8. Check the date: an item published more than 90 days before the run date is `stale`. This matches the window of the catalyst rule (#119) and is a placeholder for every kind.
 
+SEC exhibit fallback (`src/research/sec-fallback.ts`): when step 2 fails with `fetch_failed` (company IR sites often answer 403 to bots) and the finding has a symbol, the verifier looks for the quote in the symbol's 8-K exhibits filed from 5 days before to 10 days after the claimed date (last 90 days when no date is claimed), at most 6 filings. A hit makes the item `verified` as a primary SEC source: canonical URL is the exhibit, the reason names the original failure and the filing date, the stale check uses the filing date. No hit keeps the original `fetch_failed`. It does not run after a readable page that lacks the quote, after `blocked`, or for a PDF.
+
 A finding takes the best status of its items. It is `verified` when at least one item passed; it is `lead_only` when its only passing items are social; otherwise it carries the failure.
 
 ### Source classes and display rights

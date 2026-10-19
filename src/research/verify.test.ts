@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { CollectedDocument } from "../collectors/types";
 import { resetGuardState, type Transport } from "./fetch-guard";
+import { resetSecFallback } from "./sec-fallback";
 import { canonicalUrl, gradeFinding, publisherKey, verifyEvidence, verifyFinding, type VerifyDeps } from "./verify";
 import { READING_LABEL, type ResearchEvidence } from "./types";
 
@@ -34,7 +35,7 @@ function fakeDb() {
 const deps = (extra: Partial<VerifyDeps> = {}): VerifyDeps => ({ transport, resolve: async () => ["93.184.216.34"], wait: async () => {}, now: () => NOW, ...extra });
 const ev = (url: string, over: Partial<ResearchEvidence> = {}): ResearchEvidence => ({ url, quote: QUOTE, publishedAt: "2026-10-08", sourceName: "Example", sourceClassHint: "primary", ...over });
 
-beforeEach(() => { resetGuardState(); for (const k of Object.keys(recorded)) delete recorded[k]; });
+beforeEach(() => { resetSecFallback(); resetGuardState(); for (const k of Object.keys(recorded)) delete recorded[k]; });
 
 describe("verifyEvidence", () => {
   it("verifies an exact quote and labels the reading", async () => {
@@ -116,6 +117,53 @@ describe("verifyEvidence", () => {
     expect(calls).toEqual(["research_web", "research_web"]);
     resetGuardState();
     expect((await verifyEvidence(ev("https://www.reuters.com/a"), deps({ ledger }))).status).toBe("fetch_failed");
+  });
+});
+
+describe("SEC exhibit fallback", () => {
+  const ROUTES = (over: Record<string, string> = {}): Record<string, string> => ({
+    "https://www.sec.gov/files/company_tickers.json": JSON.stringify({ 0: { ticker: "INTT", cik_str: 1036262 } }),
+    "https://data.sec.gov/submissions/CIK0001036262.json": JSON.stringify({ filings: { recent: {
+      form: ["8-K", "10-Q"], accessionNumber: ["0001036262-26-000050", "0001036262-26-000049"], primaryDocument: ["a8k.htm", "q.htm"],
+      filingDate: ["2026-10-08", "2026-10-08"], items: ["2.02,9.01", ""] } } }),
+    "https://www.sec.gov/Archives/edgar/data/1036262/000103626226000050/index.json": JSON.stringify({ directory: { item: [{ name: "a8k.htm" }, { name: "ex991.htm", type: "EX-99.1" }] } }),
+    "https://www.sec.gov/Archives/edgar/data/1036262/000103626226000050/ex991.htm": `<html><body><p>${QUOTE}</p></body></html>`,
+    ...over,
+  });
+  const secGet = (routes: Record<string, string>) => async (url: string) => { if (!(url in routes)) throw new Error(`no route ${url}`); return routes[url]; };
+  const blocked = () => { recorded["ir.intest.com/n"] = html("denied", 403); };
+  const cited = () => ev("https://ir.intest.com/n", { publishedAt: "2026-10-08" });
+
+  it("verifies a blocked IR page from the 8-K exhibit as primary SEC evidence", async () => {
+    blocked();
+    const r = await verifyEvidence(cited(), deps({ symbol: "INTT", secGet: secGet(ROUTES()) }));
+    expect(r).toMatchObject({ status: "verified", sourceClass: "primary", dataSourceId: "sec", displayQuote: true, match: "exact", pageDate: "2026-10-08", readingLabel: READING_LABEL });
+    expect(r.canonicalUrl).toBe("https://www.sec.gov/Archives/edgar/data/1036262/000103626226000050/ex991.htm");
+    expect(r.reason).toContain("HTTP 403");
+    expect(r.reason).toContain("8-K EX-99.1 filed 2026-10-08");
+  });
+  it("keeps fetch_failed when the exhibit does not hold the quote", async () => {
+    blocked();
+    const routes = ROUTES({ "https://www.sec.gov/Archives/edgar/data/1036262/000103626226000050/ex991.htm": "<p>Something else entirely.</p>" });
+    expect((await verifyEvidence(cited(), deps({ symbol: "INTT", secGet: secGet(routes) }))).status).toBe("fetch_failed");
+  });
+  it("keeps fetch_failed when no 8-K is filed near the cited date", async () => {
+    blocked();
+    expect((await verifyEvidence(ev("https://ir.intest.com/n", { publishedAt: "2026-08-01" }), deps({ symbol: "INTT", secGet: secGet(ROUTES()) }))).status).toBe("fetch_failed");
+  });
+  it("keeps fetch_failed when SEC itself fails or the symbol is unknown", async () => {
+    blocked();
+    expect((await verifyEvidence(cited(), deps({ symbol: "INTT", secGet: async () => { throw new Error("HTTP 500"); } }))).status).toBe("fetch_failed");
+    resetSecFallback(); resetGuardState();
+    expect((await verifyEvidence(cited(), deps({ symbol: "ZZZZ", secGet: secGet(ROUTES()) }))).status).toBe("fetch_failed");
+  });
+  it("does not use SEC when the page was readable but lacks the quote", async () => {
+    recorded["ir.intest.com/n"] = html("<p>other</p>");
+    expect((await verifyEvidence(cited(), deps({ symbol: "INTT", secGet: secGet(ROUTES()) }))).status).toBe("quote_not_found");
+  });
+  it("does not use SEC without a symbol", async () => {
+    blocked();
+    expect((await verifyEvidence(cited(), deps({ secGet: secGet(ROUTES()) }))).status).toBe("fetch_failed");
   });
 });
 
