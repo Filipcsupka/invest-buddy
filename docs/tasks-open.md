@@ -340,7 +340,7 @@ Owner decision 2026-10-09: the weeks to 2026-12-31 go to collecting data so hist
 
 ### Progress log
 - D36 promote (no migration): `universe-promote` moves `extended` names with 10 clean sessions (D16 checks on stored bars) to `core`, at most 10 a week in growth order, to cap AI cost. Suspended CronJob, Sunday 15:00.
-- D35 pool-bars daily (no migration): the pool-bars CronJob runs daily at 12:30 with `--limit 500 --size 3200` and covers the whole SEC growth pool (570 names for CY2026Q2) in two runs, then refreshes about 115 names a day. The mirror keeps it suspended; the infra repo holds the live state.
+- D35 pool-bars daily (no migration): the pool-bars CronJob runs daily at 12:30 with `--limit 500 --size 3200` and covers the whole SEC growth pool (570 names for CY2026Q2) in two runs, then refreshes about 115 names a day. Live and enabled since 2026-10-19 (infra #48).
 - RS5 (#167; no migration): research CronJobs are suspended pending RS8 and owner approval. The caps and kill switch gate model calls; the verifier has a scoped egress policy. Local validation covers the schedule, caps and rendered manifests.
 - DOC1 (#160; docs only): `docs/architecture.md` maps the current system, schedules and suspended jobs, data and status flows, Telegram, planned RS work, CI, pages and key tables from code and manifests.
 - RS0 (#161; docs, schema and types only, no migration): research engine design in `docs/research-engine.md`, ADR in `docs/adr-research-engine.md`, tasks RS1 to RS8 in `docs/roadmap/lane-research.md`, output schema `scanner/schema/research-output.schema.json` with types and a validator in `src/research/types.ts`. Tests written; CI result pending. No schedule or cluster change.

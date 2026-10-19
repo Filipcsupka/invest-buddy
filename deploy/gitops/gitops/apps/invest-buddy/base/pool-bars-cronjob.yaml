@@ -4,8 +4,8 @@ metadata:
   name: invest-buddy-pool-bars
   namespace: invest
 spec:
-  # Proposal (D35). Suspended until the owner approves it. Writes discovery_price_bars only; no web page reads that table.
-  suspend: true
+  # D35, approved by the owner 2026-10-18. Writes discovery_price_bars only; no web page reads that table.
+  suspend: false
   # Daily 12:30 Bratislava. Other Twelve Data users: prices Tue-Sat 00:10 (ends by 00:50), discovery Sat 09:30 (ends by 10:10),
   # research pipeline 03:50 and 04:40 (suspended). No overlap, so the 8 a minute limit is never shared.
   # Budget: one request per name, at most 500 a run. Jobs other than prices may use 700 a day (UTC day in the ledger);
