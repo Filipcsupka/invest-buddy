@@ -123,7 +123,7 @@ async function main() {
       JOIN research_findings f ON f.symbol=d.symbol
       JOIN LATERAL jsonb_array_elements(f.evidence) AS item(value) ON (item.value->>'documentId')::bigint=d.id
       WHERE d.doc_type='research_page' AND d.symbol IS NOT NULL AND f.verification_status='verified'
-        AND item.value->>'status'='verified' AND NOT f.lead
+        AND f.kind <> 'macro_release' AND item.value->>'status'='verified' AND NOT f.lead
         AND ($1::date IS NULL OR d.published_at >= $1::date)
         AND NOT EXISTS (SELECT 1 FROM extraction_runs e WHERE e.symbol=d.symbol AND e.status='ok'
           AND e.applied_at IS NOT NULL AND e.applied_at >= d.fetched_at)`, [since]);

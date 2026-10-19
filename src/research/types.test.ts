@@ -2,11 +2,32 @@ import { describe, expect, it } from "vitest";
 import sample from "./fixtures/sample-output.json";
 import {
   ADAPTERS, AUTH_SOURCES, CHAIN_OUTCOMES, CHAIN_RELATIONS, CONFIDENCES, FINDING_KINDS, POLARITIES, RUN_STATUSES, RUN_TYPES, SCORE_FIELDS,
-  SOURCE_CLASSES, SUPPORTED_KEYWORDS, isResearchOutput, numberTokens, researchSchema, schemaErrors, validateResearchOutput,
+  MACRO_RELEASES, MACRO_SYMBOL, SOURCE_CLASSES, SUPPORTED_KEYWORDS, isResearchOutput, numberTokens, researchSchema, schemaErrors, validateResearchOutput,
   type JsonSchema, type ResearchOutput,
 } from "./types";
 
 const fresh = (): ResearchOutput => structuredClone(sample) as unknown as ResearchOutput;
+const macroFinding = () => ({
+  id: "f90", symbol: MACRO_SYMBOL, companyName: "CPI", exchange: null, kind: "macro_release" as const, field: null,
+  polarity: "neutral" as const, claim: "September CPI rose 0.4% against a 0.3% consensus.", eventDate: "2026-10-09", themes: [],
+  evidence: [{
+    url: "https://example.com/news/2026-10-09-cpi", sourceName: "Example Wire (fixture)", sourceClassHint: "press" as const, publishedAt: "2026-10-09",
+    quote: "Consumer prices rose 0.4% in September after 0.2% in August, above the 0.3% increase economists had expected.",
+  }],
+  figures: [
+    { label: "consensus", value: "0.3%", evidenceIndex: 0 },
+    { label: "actual", value: "0.4%", evidenceIndex: 0 },
+    { label: "prior", value: "0.2%", evidenceIndex: 0 },
+  ],
+  confidence: "medium" as const, lead: false,
+});
+const withMacro = (change: (f: ReturnType<typeof macroFinding>, o: ResearchOutput) => void = () => {}): ResearchOutput => {
+  const o = fresh();
+  const f = macroFinding();
+  change(f, o);
+  o.output.findings.push(f as unknown as ResearchOutput["output"]["findings"][number]);
+  return o;
+};
 const defs = researchSchema.$defs as Record<string, JsonSchema>;
 const prop = (def: string, name: string) => (defs[def].properties as Record<string, JsonSchema>)[name];
 
@@ -189,5 +210,55 @@ describe("research output schema", () => {
     o.output.findings = "none";
     expect(schemaErrors(o)).toEqual(["$.output.findings: expected array, got string"]);
     expect(validateResearchOutput(o)).toEqual(["$.output.findings: expected array, got string"]);
+  });
+});
+
+describe("macro_release findings (P9)", () => {
+  it("accepts a release with a quoted consensus and actual", () => {
+    expect(validateResearchOutput(withMacro())).toEqual([]);
+    expect(MACRO_RELEASES).toContain("FOMC rate decision");
+  });
+
+  it("needs exactly one consensus and one actual figure", () => {
+    const errs = validateResearchOutput(withMacro((f) => { f.figures = f.figures.filter((g) => g.label !== "consensus"); }));
+    expect(errs).toContain("$.output.findings[3].figures: needs exactly one consensus figure");
+    const twice = validateResearchOutput(withMacro((f) => { f.figures.push({ label: "actual", value: "0.4%", evidenceIndex: 0 }); }));
+    expect(twice).toContain("$.output.findings[3].figures: needs exactly one actual figure");
+    const label = validateResearchOutput(withMacro((f) => { f.figures[2].label = "forecast"; }));
+    expect(label).toContain("$.output.findings[3].figures[2].label: must be one of consensus, actual, prior");
+  });
+
+  it("rejects a value that is not in every quote", () => {
+    const assumed = validateResearchOutput(withMacro((f) => { f.figures[0].value = "0.5%"; }));
+    expect(assumed).toContain("$.output.findings[3].evidence[0].quote: consensus 0.5 not in this quote");
+    const second = validateResearchOutput(withMacro((f) => {
+      f.evidence.push({ ...f.evidence[0], url: "https://example.org/cpi", quote: "The Labor Department said consumer prices rose 0.4% in September." });
+    }));
+    expect(second).toEqual(["$.output.findings[3].evidence[1].quote: consensus 0.3 not in this quote"]);
+  });
+
+  it("keeps a release out of scoring, candidates and chains", () => {
+    const errs = validateResearchOutput(withMacro((f, o) => {
+      Object.assign(f, { field: "narrativeChanged", polarity: "positive", exchange: "NYSE" });
+      o.output.candidates[0].findingIds.push("f90");
+      o.output.chains[0].links[0].findingIds.push("f90");
+    }));
+    expect(errs).toContain("$.output.findings[3].field: a macro_release finding never feeds a score input");
+    expect(errs).toContain("$.output.findings[3].polarity: a macro_release finding is neutral");
+    expect(errs).toContain("$.output.findings[3].exchange: a macro_release finding has none");
+    expect(errs.some((e) => e.endsWith("macro_release finding f90 is owner context only and cannot be cited"))).toBe(true);
+    expect(errs.filter((e) => e.includes("cannot be cited"))).toHaveLength(2);
+  });
+
+  it("ties the reserved symbol, the release name and the release date to the kind", () => {
+    const errs = validateResearchOutput(withMacro((f) => { Object.assign(f, { symbol: "SMPL", companyName: "Inflation", eventDate: null }); }));
+    expect(errs).toContain("$.output.findings[3].symbol: a macro_release finding uses MACRO");
+    expect(errs.some((e) => e.startsWith("$.output.findings[3].companyName: must name a release"))).toBe(true);
+    expect(errs).toContain("$.output.findings[3].eventDate: the release date is required");
+    expect(validateResearchOutput(withMacro((f) => { f.eventDate = "2026-10-14"; })))
+      .toContain("$.output.findings[3].eventDate: release after the run date 2026-10-11");
+    const o = fresh();
+    o.output.findings[0].symbol = MACRO_SYMBOL;
+    expect(validateResearchOutput(o)).toContain("$.output.findings[0].symbol: MACRO is reserved for macro_release findings");
   });
 });

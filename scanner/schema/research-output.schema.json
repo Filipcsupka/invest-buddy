@@ -98,7 +98,7 @@
         "symbol": { "$ref": "#/$defs/symbol" },
         "companyName": { "type": "string", "minLength": 1, "maxLength": 120 },
         "exchange": { "type": ["string", "null"], "maxLength": 20 },
-        "kind": { "type": "string", "enum": ["earnings", "guidance", "contract", "regulatory", "clinical", "product", "partnership", "capex", "m_and_a", "capital_allocation", "insider", "narrative", "supply_chain", "unusual_move", "risk"] },
+        "kind": { "type": "string", "enum": ["earnings", "guidance", "contract", "regulatory", "clinical", "product", "partnership", "capex", "m_and_a", "capital_allocation", "insider", "narrative", "supply_chain", "unusual_move", "risk", "macro_release"] },
         "field": { "type": ["string", "null"], "enum": ["productCatalyst", "guidanceRaised", "guidanceCut", "narrativeChanged", null] },
         "polarity": { "type": "string", "enum": ["positive", "negative", "neutral"] },
         "claim": { "type": "string", "minLength": 1, "maxLength": 240 },
