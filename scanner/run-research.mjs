@@ -144,7 +144,7 @@ export async function execute(opts, { adapter = researchAdapter(process.env.RESE
     }
     if (adapterFailed) output = emptyOutput();
     const run = {
-      runId, runType: typeNames[opts.type], asOf: opts.asOf, generatedAt: new Date().toISOString(), promptVersion: `research-${opts.type}@2026-10-11.1`,
+      runId, runType: typeNames[opts.type], asOf: opts.asOf, generatedAt: new Date().toISOString(), promptVersion: `research-${opts.type}@2026-10-19.1`,
       adapter: { name: adapter.name, model: result?.model || modelName, authSource },
       scope: { themes: group.themes, symbols: group.symbols, deepDiveSymbol: opts.type === "deepdive" ? opts.symbol : null },
       limits: { ...defaults, timeoutS: opts.timeoutS },
