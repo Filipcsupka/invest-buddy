@@ -415,7 +415,7 @@ Licence classes. The research engine stores third-party pages in `raw_snapshots`
 
 ## Evaluation before any schedule
 
-RS8 replays the six sample cards of the old automation (MRVL, GMAB, GFS, INTT, MEDCL, EOS.AX) in a manual run and compares candidate recall and evidence quality with the old cards. The research CronJobs stay suspended until the owner signs the result. Details and pass levels are in the lane file.
+RS8 replays the six sample cards of the old automation (MRVL, GMAB, GFS, INTT, MEDCL, EOS.AX) in a manual run and compares candidate recall and evidence quality with the old cards. The owner turned the research CronJobs on on 2026-10-19 before RS8 was run; notify stays suspended until the owner Telegram secret exists, and deepdive is manual. Details and pass levels are in the lane file.
 
 ## Open owner decisions
 

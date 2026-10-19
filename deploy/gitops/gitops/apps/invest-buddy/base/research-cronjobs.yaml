@@ -4,7 +4,8 @@ metadata:
   name: invest-buddy-research-config
   namespace: invest
 data:
-  RESEARCH_ENABLED: "off"
+  # Owner decision 2026-10-19: research runs on schedule; notify waits for the owner Telegram secret.
+  RESEARCH_ENABLED: "on"
   AI_DAILY_TOKEN_CEILING: "1200000"
 ---
 apiVersion: batch/v1
@@ -13,7 +14,7 @@ metadata:
   name: invest-buddy-research-weekly
   namespace: invest
 spec:
-  suspend: true
+  suspend: false
   schedule: "0 1 * * 0"
   timeZone: Europe/Bratislava
   concurrencyPolicy: Forbid
@@ -109,7 +110,7 @@ metadata:
   name: invest-buddy-research-daily
   namespace: invest
 spec:
-  suspend: true
+  suspend: false
   schedule: "40 2 * * 2-6"
   timeZone: Europe/Bratislava
   concurrencyPolicy: Forbid
@@ -205,7 +206,7 @@ metadata:
   name: invest-buddy-research-verify
   namespace: invest
 spec:
-  suspend: true
+  suspend: false
   schedule: "30 3 * * 0-6"
   timeZone: Europe/Bratislava
   concurrencyPolicy: Forbid
@@ -278,7 +279,7 @@ metadata:
   name: invest-buddy-research-pipeline-early
   namespace: invest
 spec:
-  suspend: true
+  suspend: false
   schedule: "50 3 * * 0-6"
   timeZone: Europe/Bratislava
   concurrencyPolicy: Forbid
@@ -346,7 +347,7 @@ metadata:
   name: invest-buddy-research-pipeline
   namespace: invest
 spec:
-  suspend: true
+  suspend: false
   schedule: "40 4 * * 2-6"
   timeZone: Europe/Bratislava
   concurrencyPolicy: Forbid

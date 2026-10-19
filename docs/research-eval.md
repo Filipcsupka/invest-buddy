@@ -1,6 +1,6 @@
 # Research evaluation (RS8)
 
-Status: not run. The offline harness is ready. The live run needs the owner's approval, and the RS5 CronJobs stay suspended until the owner signs this page.
+Status: not run. The offline harness is ready. The live run needs the owner's approval. The owner turned the RS5 CronJobs on on 2026-10-19 before this run.
 
 The six old sample cards are in `src/research/fixtures/old-samples.json`: MRVL, GMAB, GFS, INTT, MEDCL, EOS.AX. The MRVL card has no day in the old sample file, so its date is empty. The other dates come from the sample window 2026-10-05 to 2026-10-11.
 
