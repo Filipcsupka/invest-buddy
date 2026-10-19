@@ -33,7 +33,7 @@ List `extended` now means collected and priced, not scored, not shown, no AI cos
 - Hidden for `extended`: scoring input (`DatabaseUniverseProvider.instruments`), pages and sitemap (`store.ts` `latestScores`, `instrumentUniverse`), insiders page, extract (`reviewDueSymbols`, detect gate universe, `/api/ingest/universe`, extraction-runs and bundle ingest) and judge input.
 - Still collected for `extended`: prices, collect, watch, companyfacts, earnings calendar, 13F (`loadUniverse(..., { collect: true })`). Macro fields are written for scored names only; the next macro run covers a name after promotion.
 - The 7 names seeded as `extended` before D36 (AAPL, ASML, MDB, META, NOW, ORCL, UBER) are live scored names. Migration `089_extended_collect_only.sql` moves them to `core` so the gate does not hide them. It runs in the web init container before the new image serves.
-- Promotion (10 clean sessions, D16) is manual for now: remove the `extended` row and add the name as `core` with `universe-change`. No automatic promote check is built; proposal for a later task.
+- Promotion (10 clean sessions, D16): `universe-promote` job, at most 10 a week, CronJob suspended (see `docs/universe-criteria.md`, Promotion to core).
 - `select-universe` treats `extended` names (other than the 7 seeded ones) as candidates again, not as core.
 
 ## Criteria thresholds (`src/universe/select.ts`, `src/universe/pool.ts`)
@@ -227,4 +227,3 @@ Worst day with 150 names: Saturday, 150 + 60 = 210 of 800. Sunday: 300 of the 70
 
 - Alpha Vantage rotation (D28) and the SEC collectors scale with the name count; not checked here.
 - The 7 names with fewer than 200 bars are recent listings; they are fetched on every pool-bars run like the rest.
-- No promote tool for `extended` to `core`; no check of "10 clean sessions" in code.
