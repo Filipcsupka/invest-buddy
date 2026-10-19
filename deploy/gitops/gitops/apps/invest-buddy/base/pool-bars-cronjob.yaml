@@ -6,10 +6,13 @@ metadata:
 spec:
   # Proposal (D35). Suspended until the owner approves it. Writes discovery_price_bars only; no web page reads that table.
   suspend: true
-  # Sunday 10:00: the prices chain (Tue-Sat 00:30) and discovery (Sat 09:30) are done and nothing else uses Twelve Data on Sunday.
-  # Budget: one request per name, pool of 300, 7 requests a minute = about 43 minutes. Bars older than 5 days are refetched, so a weekly run refreshes the whole pool.
-  # Twelve Data cap 800 a day; pool-bars may use 700 (100 are reserved for prices), and the ledger stops the job at that limit.
-  schedule: "0 10 * * 0"
+  # Daily 12:30 Bratislava. Other Twelve Data users: prices Tue-Sat 00:10 (ends by 00:50), discovery Sat 09:30 (ends by 10:10),
+  # research pipeline 03:50 and 04:40 (suspended). No overlap, so the 8 a minute limit is never shared.
+  # Budget: one request per name, at most 500 a run. Jobs other than prices may use 700 a day (UTC day in the ledger);
+  # the worst day is Saturday with discovery's 60, so 500 leaves 140 spare. The ledger stops the job at its limit.
+  # Names with at least 200 bars, the newest at most 5 days old, cost nothing, so each run continues where the last one stopped.
+  # --size 3200 takes the whole growth pool; the size filter is the pool rule (revenue, YoY and prior YoY), not the rank cut.
+  schedule: "30 12 * * 0-6"
   timeZone: Europe/Bratislava
   concurrencyPolicy: Forbid
   startingDeadlineSeconds: 600
@@ -17,9 +20,10 @@ spec:
   failedJobsHistoryLimit: 3
   jobTemplate:
     spec:
-      # A retry would spend the same requests again; the next Sunday, or a manual run, is the retry.
+      # A retry would spend the same requests again; the next day's run is the retry.
       backoffLimit: 0
-      activeDeadlineSeconds: 3600
+      # 500 requests at 7 a minute is about 72 minutes, plus SEC frames and retry backoff. Bars are saved per name, so a stop loses nothing.
+      activeDeadlineSeconds: 5400
       template:
         spec:
           restartPolicy: Never
@@ -35,7 +39,7 @@ spec:
           containers:
             - name: pool-bars
               image: ghcr.io/filipcsupka/invest-buddy:latest
-              command: ["node", "dist/jobs/pool-bars.js", "--limit", "350"]
+              command: ["node", "dist/jobs/pool-bars.js", "--limit", "500", "--size", "3200"]
               env:
                 - name: DATABASE_URL
                   valueFrom:
@@ -57,6 +61,7 @@ spec:
                 readOnlyRootFilesystem: true
                 capabilities:
                   drop: ["ALL"]
+              # SEC frames for the whole pool: about 115 MB peak RSS measured locally (tsx, CY2026Q2, 3181 filers).
               resources:
                 requests:
                   cpu: 50m

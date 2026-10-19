@@ -182,6 +182,12 @@ A ticker is skipped when the fetch has fewer bars than the database already hold
 
 The free tier is for the private beta only. A data licence is required before a paid launch (ADR-002).
 
+### Pool bars (D35)
+
+`node dist/jobs/pool-bars.js --limit 500 --size 3200` fetches 260 daily bars per name of the SEC growth pool into `discovery_price_bars`, which no page reads. The pool is built from the SEC revenue frames on each run (`src/universe/pool.ts`: revenue at least 50M USD, YoY at least 15%, prior quarter YoY at least 10%, current universe left out). For CY2026Q2 the frames hold 3,181 filers with growth data and 570 pass the pool rule, so `--size 3200` takes all of them. A name is skipped while it has at least 200 bars and the newest is at most 5 days old, so each run picks up where the last one stopped and a covered name costs nothing.
+
+CronJob `invest-buddy-pool-bars` runs daily at 12:30 Bratislava, outside the prices (Tue to Sat 00:10) and discovery (Saturday 09:30) windows. 500 requests at 7 a minute take about 72 minutes; the job deadline is 90 minutes. With discovery's 60 on Saturday that is 560 of the 700 a day that jobs other than prices may use. Two runs at most cover the pool; after that a name comes due again every 5 days, about 115 requests a day. Peak memory with the whole pool loaded was about 115 MB in a local run, inside the 512Mi limit.
+
 ## Accumulation score
 
 The +1 fundamentals rule is met when insider buying is confirmed or up-day volume divided by down-day volume over the last 50 sessions is at least 1.25. An up or down day compares its close with the previous session's close; unchanged closes are excluded. The 1.25 ratio is a default for owner review. Price and volume accumulation is unknown with fewer than 51 bars.
