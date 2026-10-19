@@ -70,6 +70,12 @@ spec:
                     secretKeyRef:
                       name: invest-buddy-scanner-secrets
                       key: CLAUDE_CODE_OAUTH_TOKEN
+                - name: CODEX_ACCESS_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-codex-token
+                      key: CODEX_ACCESS_TOKEN
+                      optional: true
                 - name: AI_DAILY_TOKEN_CEILING
                   valueFrom:
                     configMapKeyRef:
@@ -160,6 +166,12 @@ spec:
                     secretKeyRef:
                       name: invest-buddy-scanner-secrets
                       key: CLAUDE_CODE_OAUTH_TOKEN
+                - name: CODEX_ACCESS_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-codex-token
+                      key: CODEX_ACCESS_TOKEN
+                      optional: true
                 - name: AI_DAILY_TOKEN_CEILING
                   valueFrom:
                     configMapKeyRef:
@@ -541,6 +553,12 @@ spec:
                     secretKeyRef:
                       name: invest-buddy-scanner-secrets
                       key: CLAUDE_CODE_OAUTH_TOKEN
+                - name: CODEX_ACCESS_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-codex-token
+                      key: CODEX_ACCESS_TOKEN
+                      optional: true
                 - name: AI_DAILY_TOKEN_CEILING
                   valueFrom:
                     configMapKeyRef:

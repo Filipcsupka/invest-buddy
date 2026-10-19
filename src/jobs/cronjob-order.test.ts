@@ -37,7 +37,7 @@ describe("daily pipeline order", () => {
   it("runs pool-bars daily outside every other Twelve Data job's window, within the ledger share", () => {
     const doc = job("pool-bars");
     expect(minutes("pool-bars").days).toBe("0-6");
-    expect(doc).toContain("suspend: true");
+    expect(doc).toContain("suspend: false");
     expect(doc).toContain('command: ["node", "dist/jobs/pool-bars.js", "--limit", "500", "--size", "3200"]');
     for (const name of ["DATABASE_URL", "SEC_USER_AGENT", "TWELVE_DATA_API_KEY"]) expect(doc).toContain(`name: ${name}`);
     const window = (name: string) => ({ from: minutes(name).at, to: minutes(name).at + startWindow(name) + deadline(name) });
@@ -201,10 +201,11 @@ describe("Monday catch-up", () => {
     const m = /schedule: "\d+ \d+ \* \* ([\d,*-]+)"/.exec(doc);
     return name && m ? [{ name, days: days(m[1]), active: !/^\s{2}suspend: true\b/m.test(doc) }] : [];
   });
-  it("runs only the store-only collect on Monday", () => {
+  it("runs only the store-only collect on Monday, apart from the price-only pool-bars", () => {
     // Detect writes a gate per date and extract reads one pending gate per run, so a Monday gate would push Tuesday's gate to Wednesday.
     // A Monday extract is judged on Tuesday against Friday's scores, and Tuesday's detect skips filings already extracted.
-    expect(scheduled.filter((job) => job.active && job.days.includes(1)).map((job) => job.name)).toEqual(["collect"]);
+    // pool-bars runs daily at 12:30 and writes discovery_price_bars only; it opens no gate and calls no model.
+    expect(scheduled.filter((job) => job.active && job.days.includes(1) && job.name !== "pool-bars").map((job) => job.name)).toEqual(["collect"]);
     for (const name of ["prices", "watch", "detect", "extract", "macro", "reconcile", "daily", "judge", "digest"]) expect(days(minutes(name).days), name).not.toContain(1);
   });
   it("ends Monday's collect before any later Monday job and keeps it free of AI and price keys", () => {
