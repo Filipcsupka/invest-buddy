@@ -55,10 +55,10 @@ describe("daily pipeline order", () => {
     expect(pool.to).toBeLessThanOrEqual(24 * 60);
     expect(readFileSync(join(base, "kustomization.yaml"), "utf8")).toContain("- pool-bars-cronjob.yaml");
   });
-  it("keeps the weekly universe promotion suspended, on Sunday after pool-bars, database only", () => {
+  it("runs the weekly universe promotion on Sunday after pool-bars, database only", () => {
     const doc = job("universe-promote");
     expect(minutes("universe-promote")).toEqual({ at: 15 * 60, days: "0" });
-    expect(doc).toContain("suspend: true");
+    expect(doc).toContain("suspend: false");
     expect(doc).toContain('command: ["node", "dist/jobs/universe-promote.js"]');
     expect(doc).toContain("name: DATABASE_URL");
     for (const key of ["TWELVE_DATA_API_KEY", "INGEST_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"]) expect(doc).not.toContain(key);
@@ -201,11 +201,11 @@ describe("Monday catch-up", () => {
     const m = /schedule: "\d+ \d+ \* \* ([\d,*-]+)"/.exec(doc);
     return name && m ? [{ name, days: days(m[1]), active: !/^\s{2}suspend: true\b/m.test(doc) }] : [];
   });
-  it("runs only the store-only collect on Monday, apart from the price-only pool-bars", () => {
+  it("runs only the store-only collect on Monday, apart from the data-only pool-bars and earnings-calendar", () => {
     // Detect writes a gate per date and extract reads one pending gate per run, so a Monday gate would push Tuesday's gate to Wednesday.
     // A Monday extract is judged on Tuesday against Friday's scores, and Tuesday's detect skips filings already extracted.
-    // pool-bars runs daily at 12:30 and writes discovery_price_bars only; it opens no gate and calls no model.
-    expect(scheduled.filter((job) => job.active && job.days.includes(1) && job.name !== "pool-bars").map((job) => job.name)).toEqual(["collect"]);
+    // pool-bars (12:30, discovery_price_bars) and earnings-calendar (06:45, one Alpha Vantage request) run daily; neither opens a gate or calls a model.
+    expect(scheduled.filter((job) => job.active && job.days.includes(1) && !["pool-bars", "earnings-calendar"].includes(job.name)).map((job) => job.name)).toEqual(["collect"]);
     for (const name of ["prices", "watch", "detect", "extract", "macro", "reconcile", "daily", "judge", "digest"]) expect(days(minutes(name).days), name).not.toContain(1);
   });
   it("ends Monday's collect before any later Monday job and keeps it free of AI and price keys", () => {
@@ -219,9 +219,9 @@ describe("Monday catch-up", () => {
 });
 
 describe("earnings calendar", () => {
-  it("is suspended, daily after the judge and before the digest, hardened like collect", () => {
+  it("runs daily after the judge and before the digest, hardened like collect", () => {
     const doc = job("earnings-calendar");
-    expect(doc).toMatch(/^\s{2}suspend: true$/m);
+    expect(doc).toMatch(/^\s{2}suspend: false$/m);
     expect(minutes("earnings-calendar").days).toBe("0-6");
     expect(minutes("judge").at + startWindow("judge") + deadline("judge")).toBeLessThanOrEqual(minutes("earnings-calendar").at);
     expect(minutes("earnings-calendar").at + startWindow("earnings-calendar") + deadline("earnings-calendar")).toBeLessThanOrEqual(minutes("digest").at);
@@ -233,9 +233,9 @@ describe("earnings calendar", () => {
 });
 
 describe("macro calendar", () => {
-  it("is suspended, on weekdays before the judge that reads it, with the contact User-Agent and no metered key", () => {
+  it("runs on weekdays before the judge that reads it, with the contact User-Agent and no metered key", () => {
     const doc = job("macro-calendar");
-    expect(doc).toMatch(/^\s{2}suspend: true$/m);
+    expect(doc).toMatch(/^\s{2}suspend: false$/m);
     expect(minutes("macro-calendar").days).toBe("2-6");
     expect(minutes("macro-calendar").at + startWindow("macro-calendar") + deadline("macro-calendar")).toBeLessThanOrEqual(minutes("judge").at);
     expect(doc).toContain('command: ["node", "dist/jobs/macro-calendar.js"]');

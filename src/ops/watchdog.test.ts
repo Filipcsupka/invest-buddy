@@ -50,11 +50,13 @@ describe("missed jobs", () => {
     expect(keys).toContain("job-missed:collect");
   });
 
-  it("expects only the Monday collect on a Monday morning", () => {
+  it("expects the Monday collect, the daily earnings calendar and the Sunday promotion on a Monday morning", () => {
     const monday = d("2026-10-12T06:00:00Z");
     const good = new Map([...allGood(monday)].map(([k]) => [k, d("2026-10-10T10:00:00Z")]));
-    expect(missedJobs(monday, good, allKnown()).map((f) => f.key)).toEqual(["job-missed:collect"]);
+    expect(missedJobs(monday, good, allKnown()).map((f) => f.key).sort()).toEqual(["job-missed:collect", "job-missed:earnings-calendar", "job-missed:universe-promote"]);
     good.set("collect", d("2026-10-11T23:20:00Z")); // Monday 01:20 local
+    good.set("earnings-calendar", d("2026-10-12T04:50:00Z")); // Monday 06:50 local
+    good.set("universe-promote", d("2026-10-11T13:05:00Z")); // Sunday 15:05 local
     expect(missedJobs(monday, good, allKnown())).toEqual([]);
   });
 });
