@@ -7,7 +7,7 @@ COPY . .
 RUN npm run build
 RUN npm run build:jobs \
     && test -f dist/jobs/horizon-labels.js && test -f dist/jobs/reconcile.js && test -f dist/jobs/daily.js && test -f dist/jobs/prices.js && test -f dist/jobs/digest.js && test -f dist/jobs/weekly.js && test -f dist/jobs/portfolio.js \
-    && test -f dist/jobs/collect.js && test -f dist/jobs/detect.js && test -f dist/jobs/retention.js && test -f dist/jobs/discovery.js && test -f dist/jobs/backfill.js && test -f dist/jobs/companyfacts.js && test -f dist/jobs/earnings-calendar.js && test -f dist/jobs/master-refresh.js && test -f dist/jobs/thirteenf.js
+    && test -f dist/jobs/collect.js && test -f dist/jobs/detect.js && test -f dist/jobs/retention.js && test -f dist/jobs/discovery.js && test -f dist/jobs/backfill.js && test -f dist/jobs/companyfacts.js && test -f dist/jobs/earnings-calendar.js && test -f dist/jobs/macro-calendar.js && test -f dist/jobs/master-refresh.js && test -f dist/jobs/thirteenf.js
 RUN ./node_modules/.bin/esbuild scripts/migrate.ts --bundle --platform=node --format=cjs --target=node22 --packages=external --outfile=dist/migrate.js \
     && printf '%s\n' \
       'const { migrate } = require("./migrate.js");' \
