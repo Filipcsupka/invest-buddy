@@ -34,13 +34,25 @@ describe("daily pipeline order", () => {
     for (const text of ["runAsNonRoot: true", "automountServiceAccountToken: false", "allowPrivilegeEscalation: false", "readOnlyRootFilesystem: true", 'drop: ["ALL"]', "type: RuntimeDefault", "concurrencyPolicy: Forbid"]) expect(doc).toContain(text);
     expect(readFileSync(join(base, "kustomization.yaml"), "utf8")).toContain("- master-refresh-cronjob.yaml");
   });
-  it("keeps the weekly pool-bars refresh suspended, on Sunday, after the Saturday discovery and before the Sunday summary", () => {
+  it("runs pool-bars daily outside every other Twelve Data job's window, within the ledger share", () => {
     const doc = job("pool-bars");
-    expect(minutes("pool-bars").days).toBe("0");
+    expect(minutes("pool-bars").days).toBe("0-6");
     expect(doc).toContain("suspend: true");
-    expect(doc).toContain('command: ["node", "dist/jobs/pool-bars.js", "--limit", "350"]');
+    expect(doc).toContain('command: ["node", "dist/jobs/pool-bars.js", "--limit", "500", "--size", "3200"]');
     for (const name of ["DATABASE_URL", "SEC_USER_AGENT", "TWELVE_DATA_API_KEY"]) expect(doc).toContain(`name: ${name}`);
-    expect(minutes("pool-bars").at + startWindow("pool-bars") + deadline("pool-bars")).toBeLessThanOrEqual(minutes("weekly").at);
+    const window = (name: string) => ({ from: minutes(name).at, to: minutes(name).at + startWindow(name) + deadline(name) });
+    const pool = window("pool-bars");
+    const others = docs.filter((other) => other.includes("TWELVE_DATA_API_KEY")).map((other) => /name: invest-buddy-([\w-]+)\n/.exec(other)![1]).filter((name) => name !== "pool-bars");
+    expect(others).toEqual(expect.arrayContaining(["prices", "discovery"]));
+    for (const name of others) {
+      const other = window(name);
+      expect(pool.to <= other.from || pool.from >= other.to, `pool-bars overlaps ${name}`).toBe(true);
+    }
+    // The run limit at 7 a minute fits the deadline, and with discovery's 60 on Saturday stays inside the 700 a day jobs other than prices may use.
+    const limit = Number(/"--limit", "(\d+)"/.exec(doc)?.[1]);
+    expect(deadline("pool-bars")).toBeGreaterThanOrEqual(limit / 7);
+    expect(limit + 60).toBeLessThanOrEqual(700);
+    expect(pool.to).toBeLessThanOrEqual(24 * 60);
     expect(readFileSync(join(base, "kustomization.yaml"), "utf8")).toContain("- pool-bars-cronjob.yaml");
   });
   it("keeps the weekly Telegram summary suspended, Sunday 18:00 Bratislava, after the Sunday master refresh", () => {
