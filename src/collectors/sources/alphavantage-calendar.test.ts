@@ -44,9 +44,10 @@ describe("collectEarningsCalendar without a database", () => {
   it("dry run counts universe rows, writes nothing and reserves nothing", async () => {
     const http = stubHttp(() => bigCsv());
     const ledger = new MemoryUsageLedger(limits);
-    const result = await collectEarningsCalendar({ query: async () => { throw new Error("no query"); } }, http, ledger, { key: KEY, universe, dryRun: true });
-    expect(result).toMatchObject({ rows: 236, universeRows: 36, inserted: 0 });
+    const result = await collectEarningsCalendar({ query: async () => { throw new Error("no query"); } }, http, ledger, { key: KEY, universe, additionalSymbols: ["OTH0", "OTH1", "OTH0"], dryRun: true });
+    expect(result).toMatchObject({ rows: 236, universeRows: 36, coveredRows: 38, inserted: 0 });
     expect(ledger.rows).toHaveLength(0);
+    expect(http.calls).toHaveLength(1);
   });
   it("hides the key in a failure and reports a reached cap as a skip", async () => {
     const failing = stubHttp(() => { throw new Error(`HTTP 500 at https://x/query?apikey=${KEY}`); });
@@ -106,5 +107,16 @@ describe("earnings_calendar_snapshots (Postgres)", () => {
     await expect(db.query("UPDATE earnings_calendar_snapshots SET estimate = 9")).rejects.toThrow(/immutable/);
     await db.query("ROLLBACK TO s");
     await expect(db.query("DELETE FROM earnings_calendar_snapshots")).rejects.toThrow(/immutable/);
+  }));
+
+  it.skipIf(!process.env.TEST_DATABASE_URL)("stores an out-of-instruments symbol in the same immutable table", () => inTransaction(async (db, tickers) => {
+    const outside = `ZZ${Date.now()}`;
+    expect((await db.query("SELECT 1 FROM instruments WHERE ticker=$1", [outside])).rowCount).toBe(0);
+    const body = csv([`${marketTicker(tickers[0])},Known,2026-11-12,2026-09-30,1.5,USD,post-market`, `${outside},Outside,2026-12-01,2026-09-30,0.8,USD,pre-market`]);
+    const run = () => collectEarningsCalendar(db, stubHttp(() => body), new MemoryUsageLedger(limits), { key: KEY, universe: [tickers[0]], additionalSymbols: [outside], now: day1, force: true });
+    expect(await run()).toMatchObject({ rows: 2, universeRows: 1, coveredRows: 2, inserted: 2, requests: 1 });
+    expect(await run()).toMatchObject({ inserted: 0 });
+    const row = await db.query<{ report_date: string; estimate: string; time_of_day: string }>("SELECT report_date::text,estimate::text,time_of_day FROM earnings_calendar_snapshots WHERE ticker=$1", [outside]);
+    expect(row.rows).toEqual([{ report_date: "2026-12-01", estimate: "0.8", time_of_day: "pre-market" }]);
   }));
 });

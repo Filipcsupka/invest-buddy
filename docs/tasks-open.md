@@ -414,6 +414,7 @@ Owner decision 2026-10-09: the weeks to 2026-12-31 go to collecting data so hist
 - W33 (#123, merged; no migration): score history per ticker on the company page, read through D43 `scoreHistory` (segment `score-history`, chart plus table, EN and SK). Implemented: tests and CI passed. No free-depth limit until W30 sets N.
 
 - D27 (#117, merged; migration 046): stores the Alpha Vantage earnings calendar for universe names every day. Implemented: tests and CI passed. The CronJob is suspended and the live migration needs owner approval.
+- P4 (migration 090): calendar observations now cover stored pool names, extended names, baseline holdings, and open research candidates from the same daily CSV.
 - D11 (#110, merged; migration 043): dated universe membership and a change script. Implemented: tests and CI passed. The live migration needs owner approval.
 - Fixes (merged, tests and CI passed): #113 and #122 EN40 macro tailwind with inflation and a 75 day window for monthly CPI and PPI; #114 revenue from SEC companyfacts for Q4 and fiscal-year periods; #115 accumulation volume point in the score; #119 catalyst sources (90 day window, stored GDELT headlines, 7.01 and 8.01 triggers, six-symbol nightly review cap, suspended GDELT CronJob in the GitOps mirror).
 
