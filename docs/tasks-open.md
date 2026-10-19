@@ -1,5 +1,6 @@
 # Open tasks
 
+- P5 (open; no migration): forward EPS estimate revision over 30, 60 and 90 days for the next report, read from `earnings_calendar_snapshots` (`src/data/estimate-revisions.ts`, `src/db/estimate-revisions.ts`). Report only, 0 points, owner view only (Alpha Vantage is internal_only). The live table had 0 rows on 2026-10-19; scoring needs an owner decision.
 - EN46-display (#169): public score shown as a core-rule percentage with a separate catalyst bonus, EN/SK methodology and rule labels. No stored rows rescored.
 
 State on 2026-10-09. Live state was read from khtz on 2026-10-09; see the open list in section H. A1 to A7 are done (see the notes under each). Each task can be picked up alone or given to one agent. "Approval" means the owner must say yes before the step runs (cluster, push, secrets, money). Pick the lowest open task in a group whose dependencies are done. Tick the box and add one line on what changed.
