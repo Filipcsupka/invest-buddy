@@ -82,7 +82,8 @@ flowchart LR
 | Job | Manifest schedule | State |
 | --- | --- | --- |
 | prices, watch, collect, detect, extract | Tue–Sat 00:10, 00:45, 01:00, 01:35, 01:50; collect also Mon 01:00 | active |
-| GDELT collect, retention | Tue–Sat 01:05; daily 03:00 | suspended |
+| GDELT collect | Tue–Sat 01:05 | suspended |
+| Retention | daily 03:00 | on since 2026-10-19 |
 | macro, reconcile, daily, judge | Tue–Sat 04:00, 04:10, 04:25, 05:30 | active |
 | portfolio | Tue–Sat 06:00 **UTC** | active |
 | earnings calendar, digest, holder events | daily 06:45; Tue–Sat 07:30, 07:45 | calendar and holder events suspended; digest active |

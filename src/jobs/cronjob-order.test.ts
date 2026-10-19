@@ -201,11 +201,13 @@ describe("Monday catch-up", () => {
     const m = /schedule: "\d+ \d+ \* \* ([\d,*-]+)"/.exec(doc);
     return name && m ? [{ name, days: days(m[1]), active: !/^\s{2}suspend: true\b/m.test(doc) }] : [];
   });
-  it("runs only the store-only collect on Monday, apart from the data-only pool-bars and earnings-calendar", () => {
+  it("runs only the store-only collect on Monday, apart from daily jobs that open no gate", () => {
     // Detect writes a gate per date and extract reads one pending gate per run, so a Monday gate would push Tuesday's gate to Wednesday.
     // A Monday extract is judged on Tuesday against Friday's scores, and Tuesday's detect skips filings already extracted.
-    // pool-bars (12:30, discovery_price_bars) and earnings-calendar (06:45, one Alpha Vantage request) run daily; neither opens a gate or calls a model.
-    expect(scheduled.filter((job) => job.active && job.days.includes(1) && !["pool-bars", "earnings-calendar"].includes(job.name)).map((job) => job.name)).toEqual(["collect"]);
+    // These run daily and open no gate: pool-bars (discovery_price_bars), earnings-calendar (one Alpha Vantage request), retention,
+    // research-verify (checks stored findings) and research-pipeline-early (candidate rows). None of them calls a model.
+    const daily = ["pool-bars", "earnings-calendar", "retention", "research-verify", "research-pipeline-early"];
+    expect(scheduled.filter((job) => job.active && job.days.includes(1) && !daily.includes(job.name)).map((job) => job.name)).toEqual(["collect"]);
     for (const name of ["prices", "watch", "detect", "extract", "macro", "reconcile", "daily", "judge", "digest"]) expect(days(minutes(name).days), name).not.toContain(1);
   });
   it("ends Monday's collect before any later Monday job and keeps it free of AI and price keys", () => {
@@ -279,10 +281,10 @@ describe("GDELT collector proposal", () => {
 
 describe("RS5 research schedule", () => {
   const names = ["weekly", "daily", "verify", "pipeline-early", "pipeline", "notify", "deepdive"];
-  it("keeps every research CronJob suspended with bounded jobs", () => {
+  it("runs the research CronJobs except notify (owner secret) and the manual deepdive, with bounded jobs", () => {
     for (const name of names) {
       const doc = job(`research-${name}`);
-      expect(doc, name).toContain("suspend: true");
+      expect(doc, name).toContain(["notify", "deepdive"].includes(name) ? "suspend: true" : "suspend: false");
       expect(doc, name).toContain("concurrencyPolicy: Forbid");
       expect(doc, name).toContain("backoffLimit: 1");
       expect(deadline(`research-${name}`), name).toBeLessThanOrEqual(["weekly", "daily", "deepdive"].includes(name) ? 40 : 20);

@@ -269,7 +269,8 @@ metadata:
   name: invest-buddy-retention
   namespace: invest
 spec:
-  suspend: true
+  # On since 2026-10-19 (owner). Portfolio, trades and track record tables are not touched; public SEC rows are archived.
+  suspend: false
   schedule: "0 3 * * *"
   timeZone: Europe/Bratislava
   concurrencyPolicy: Forbid
