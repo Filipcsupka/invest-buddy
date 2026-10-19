@@ -71,7 +71,7 @@ The web init container runs `npm run migrate` before each new web pod starts. It
 | `ADVICE_OUTPUT` | off | Action wording on idea cards and sizing. |
 | `IDEAS_PAGE` | off (on when `DATA_MODE=fixture`) | `/ideas` page and nav link. |
 | `OWNER_VIEW` | off | Private owner allocation view. |
-| `PUBLIC_EARNINGS_DATES` | off | Next earnings date in the company page calendar. Alpha Vantage display rights are not verified; macro dates show without it. |
+| `PUBLIC_EARNINGS_DATES` | off (on in production since 2026-10-19) | Next earnings date in the company page calendar. Alpha Vantage display rights are not verified; the owner turned it on. Macro dates show without it. |
 
 Only `IDEAS_PAGE` and `OWNER_VIEW` are read by code today; the others are declared for the tasks that add them.
 

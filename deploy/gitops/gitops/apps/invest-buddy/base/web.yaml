@@ -62,6 +62,9 @@ spec:
           env:
             - name: DATA_MODE
               value: db
+            # Owner decision 2026-10-19: show the next Alpha Vantage earnings date on company pages.
+            - name: PUBLIC_EARNINGS_DATES
+              value: "on"
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
