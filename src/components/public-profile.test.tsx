@@ -21,6 +21,13 @@ describe("public profile", () => {
     expect(html).toContain("No data");
   });
 
+  it("adds the shorter-horizon note for event-driven and mixed profiles only", () => {
+    for (const locale of ["en", "sk"] as const) {
+      for (const profile of ["event_driven", "mixed"] as const) expect(renderToStaticMarkup(<ProfileBlock locale={locale} horizon={{ ticker: "AAA", profile, values: {} }} />)).toContain(profileCopy[locale].shortNote);
+      for (const profile of ["sustained", "no_data"] as const) expect(renderToStaticMarkup(<ProfileBlock locale={locale} horizon={{ ticker: "AAA", profile, values: {} }} />)).not.toContain(profileCopy[locale].shortNote);
+    }
+  });
+
   it("keeps new public copy free of action and return language", () => {
     const banned = /\b(buy|sell|target|urgent|quick gains?|recycl\w*|returns?|picks?)\b|(?:kúp|nákup|predaj|predať|cieľov|naliehav|výnos)/i;
     for (const locale of ["en", "sk"] as const) {

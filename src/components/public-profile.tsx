@@ -28,6 +28,6 @@ export function ProfileBlock({ locale, horizon }: { locale: Locale; horizon?: Pu
   const m = profileCopy[locale];
   return <section className={styles.block} aria-labelledby="public-profile-title" data-profile-block="">
     <h2 id="public-profile-title">{m.title}</h2>
-    {horizon ? <><p className={styles.name}>{profileName(locale, horizon.profile)}</p><ProfileFacts locale={locale} horizon={horizon} /></> : <p>{m.notComputed}</p>}
+    {horizon ? <><p className={styles.name}>{profileName(locale, horizon.profile)}</p><ProfileFacts locale={locale} horizon={horizon} />{horizon.profile === "event_driven" || horizon.profile === "mixed" ? <p className={styles.note} data-short-note="">{m.shortNote}</p> : null}</> : <p>{m.notComputed}</p>}
   </section>;
 }

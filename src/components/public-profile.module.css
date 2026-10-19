@@ -6,3 +6,4 @@
 .facts dt { color: var(--ink-3); font-size: var(--t-sm); }
 .facts dd { margin: 0; font-weight: 700; }
 @media (max-width: 420px) { .facts { grid-template-columns: 1fr 1fr; } }
+.note { margin: var(--s4) 0 0; font-size: 0.875rem; color: var(--muted, inherit); }

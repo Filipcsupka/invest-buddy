@@ -2,6 +2,8 @@ export const profileCopy = {
   en: {
     title: "Company profile", notComputed: "Profiles not computed yet", noData: "No data",
     names: { sustained: "Sustained growth", event_driven: "Higher volatility, event-driven", mixed: "Mixed profile", no_data: "No data" },
+    tags: { event_driven: "Short-term profile", mixed: "Mixed profile", note: "Event-driven profile: bigger price swings tied to company news. A positive rule status here describes a shorter horizon, not a long-term hold. Informational only." },
+    shortNote: "Event-driven profile: a positive rule status on this name describes a shorter horizon, not a long-term hold. Mixed profiles can show both. Informational only, not advice.",
     growers: "Sustained growers", events: "Higher volatility, event-driven",
     description: "These lists group stored company profiles. The event-driven profile can show bigger price swings and results tied to company news. Status uses the same rules in both lists.",
     empty: "No names in this profile today.", ticker: "Company", status: "Status", profile: "Profile", risk: "Risk facts",
@@ -11,6 +13,8 @@ export const profileCopy = {
   sk: {
     title: "Profil spoločnosti", notComputed: "Profily ešte nie sú vypočítané", noData: "Bez údajov",
     names: { sustained: "Stabilný rast", event_driven: "Vyššia volatilita, viazané na udalosti", mixed: "Zmiešaný profil", no_data: "Bez údajov" },
+    tags: { event_driven: "Krátkodobý profil", mixed: "Zmiešaný profil", note: "Profil viazaný na udalosti: väčšie cenové výkyvy spojené so správami o spoločnosti. Kladný stav pravidiel tu opisuje kratší horizont, nie dlhodobé držanie. Len informatívne." },
+    shortNote: "Profil viazaný na udalosti: kladný stav pravidiel pri tejto spoločnosti opisuje kratší horizont, nie dlhodobé držanie. Zmiešaný profil môže mať obe vlastnosti. Len informatívne, nie je to poradenstvo.",
     growers: "Stabilne rastúce spoločnosti", events: "Vyššia volatilita, viazané na udalosti",
     description: "Zoznamy zoskupujú uložené profily spoločností. Profil viazaný na udalosti môže vykazovať väčšie cenové výkyvy a výsledky súvisiace so správami o spoločnosti. Stav sa v oboch zoznamoch riadi rovnakými pravidlami.",
     empty: "Dnes v tomto profile nie je žiadna spoločnosť.", ticker: "Spoločnosť", status: "Stav", profile: "Profil", risk: "Rizikové údaje",

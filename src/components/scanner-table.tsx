@@ -9,6 +9,7 @@ import { ScoreBar } from "./kit/score";
 import { StateChip } from "./kit/state-chip";
 import { kitState } from "./kit/types";
 import { StatusIcon } from "./status-slider";
+import { useStateFilter } from "./state-filter";
 import type { ScreenRow } from "./view-model";
 import styles from "./scanner-table.module.css";
 
@@ -34,16 +35,17 @@ type Text = {
   rulesMetOf: string;
   hint?: string;
   rank?: { short: string; long: string };
+  profileTags?: { event_driven: string; mixed: string; note: string };
   board?: { summaryLabel: string; lowerTitle: string; lowerBody: string; showLower: string; empty: string; stateNotes: Record<"setup" | "watch" | "broken", string> };
 };
 
 const ruleTotal = ruleGroups.reduce((sum, group) => sum + group.rules.length, 0);
 const numeric: SortKey[] = ["total", "fundamentals", "technical", "macro"];
 
-export function ScannerTable({ locale, rows, text, heldTickers = [], aside }: { locale: string; rows: ScreenRow[]; text: Text; heldTickers?: string[]; aside?: ReactNode }) {
+export function ScannerTable({ locale, rows, text, heldTickers = [], aside, profiles = {} }: { locale: string; rows: ScreenRow[]; text: Text; heldTickers?: string[]; aside?: ReactNode; profiles?: Record<string, string> }) {
   const held = new Set(heldTickers);
   const [query, setQuery] = useState("");
-  const [state, setState] = useState<StateKey | "all">("all");
+  const { state, setState } = useStateFilter();
   const [sort, setSort] = useState<{ key: SortKey; dir: "ascending" | "descending" }>({ key: "total", dir: "descending" });
   const disclaimerId = useId();
   const searchId = useId();
@@ -119,6 +121,7 @@ export function ScannerTable({ locale, rows, text, heldTickers = [], aside }: { 
               <Link className="ticker" href={`/${locale}/company/${row.ticker}`}>{row.ticker}</Link>
               <span className="company-name">{row.name}
                 {row.agreementLabel ? <span className="tag">{row.agreementLabel}</span> : null}
+                {text.profileTags && profiles[row.ticker] && profiles[row.ticker] in text.profileTags ? <span className="tag" title={text.profileTags.note}>{text.profileTags[profiles[row.ticker] as "event_driven" | "mixed"]}</span> : null}
                 {row.extension ? <span className="tag">{text.extension}</span> : null}
                 {held.has(row.ticker) ? <span className="tag">{row.state === "setup" || row.state === "watch" ? text.held : text.heldNoSignal}</span> : null}
               </span>
