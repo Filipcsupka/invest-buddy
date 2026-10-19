@@ -6,6 +6,7 @@ import { CapReached, type UsageLedger } from "../data/usage";
 import {
   BodyTooLarge, decodeBody, guardedGet, HttpFailure, mediaType, RobotsDisallowed, safeUrl, UrlBlocked, type GuardDeps, type GuardedPage,
 } from "./fetch-guard";
+import { findQuoteInSecExhibits, type SecGet } from "./sec-fallback";
 import { extractPageDate, findQuote, htmlToText, normalizeText, toIsoDate } from "./html-text";
 import { CLASS_RANK, classifyHost, dataSourceIdFor, displayQuoteAllowed, irDomainsFor, RESEARCH_SOURCE_ID } from "./sources";
 import { READING_LABEL, type ResearchEvidence, type SourceClass, type VerificationStatus } from "./types";
@@ -64,6 +65,8 @@ export interface VerifyDeps extends GuardDeps {
   /** Company IR domains for the finding's symbol. Defaults to the registry. */
   irDomains?: Iterable<string>;
   symbol?: string;
+  /** Reader for SEC pages (JSON and HTML). Defaults to the collector fetcher, which keeps the SEC rate slot and User-Agent. */
+  secGet?: SecGet;
 }
 
 const dayNumber = (iso: string) => Date.parse(`${iso}T00:00:00Z`) / DAY_MS;
@@ -92,6 +95,36 @@ function describeError(error: unknown): string {
 function clip(text: string, maxBytes: number): string {
   const buffer = Buffer.from(text, "utf8");
   return buffer.length <= maxBytes ? text : buffer.subarray(0, maxBytes).toString("utf8").replace(/�+$/, "");
+}
+
+/**
+ * The cited page could not be read (a company site that blocks bots, a timeout). Press releases are also filed with SEC as 8-K
+ * exhibits, so look for the quote there. Returns null when SEC does not hold it; the caller keeps the original failure.
+ */
+async function viaSecExhibit(
+  evidence: ResearchEvidence, deps: VerifyDeps, now: Date, reason: string,
+  make: (status: ItemStatus, reason: string, extra?: Partial<ItemResult>) => ItemResult,
+): Promise<ItemResult | null> {
+  let hit;
+  try {
+    hit = await findQuoteInSecExhibits(deps.symbol!, evidence.quote ?? "", { anchor: toIsoDate(evidence.publishedAt), now, fallbackDays: STALE_DAYS, get: deps.secGet });
+  } catch { return null; }
+  if (!hit) return null;
+  const canonical = canonicalUrl(hit.url);
+  const ageDays = Math.floor(now.getTime() / DAY_MS - dayNumber(hit.filedAt));
+  const via = `cited page not readable (${reason}); quote found in SEC ${hit.docType} filed ${hit.filedAt}`;
+  const extra: Partial<ItemResult> = { canonicalUrl: canonical, match: hit.match, pageDate: hit.filedAt };
+  if (ageDays > STALE_DAYS) return make("stale", `${via}; ${ageDays} days old, limit is ${STALE_DAYS}`, extra);
+  if (deps.db) {
+    try {
+      const stored = await putSnapshot(deps.db, {
+        sourceId: "sec", key: `research:${canonical}`, body: Buffer.from(hit.text, "utf8"), contentType: "text/plain", fetchedAt: now,
+        meta: { url: evidence.url, final_url: safeUrl(canonical), via: "sec_exhibit", source_name: evidence.sourceName },
+      });
+      extra.snapshotId = stored.id;
+    } catch { /* the snapshot is optional; the verdict stands */ }
+  }
+  return make("verified", via, { ...extra, readingLabel: READING_LABEL });
 }
 
 /** Verifies one evidence item. Never throws for a bad source; the status says what happened. */
@@ -129,8 +162,9 @@ export async function verifyEvidence(evidence: ResearchEvidence, deps: VerifyDep
     if (error instanceof RobotsDisallowed) return make("blocked", reason);
     if (error instanceof BodyTooLarge) return make("fetch_failed", `page is over the byte limit`);
     if (error instanceof CapReached) return make("fetch_failed", `usage cap: ${reason}`);
-    if (error instanceof HttpFailure) return make("fetch_failed", reason);
-    return make("fetch_failed", reason);
+    const failed = make("fetch_failed", reason);
+    if (!deps.symbol) return failed;
+    return (await viaSecExhibit(evidence, deps, now, reason, make)) ?? failed;
   }
 
   const canonical = canonicalUrl(page.finalUrl);
