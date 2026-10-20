@@ -53,6 +53,7 @@ export function checkOverrideCaps(env, usage, runCalls) {
 }
 
 export const CODEX_DAILY_CALLS = 2;
+const codexDailyCalls = (env) => number(env, "RESEARCH_CODEX_DAILY_CALLS", CODEX_DAILY_CALLS);
 export const CODEX_QUOTA_STOP_PCT = 50;
 
 const skipped = (status, reason) => ({ ok: false, status, reason });
@@ -90,7 +91,7 @@ export async function checkResearchCaps({ env = process.env, now = new Date(), t
     return skipped("skipped_cap", "shared daily token ceiling reached");
   if (adapter === "codex") {
     if (!Number.isFinite(usage.codexDailyCalls) || usage.codexDailyCalls < 0) return skipped("skipped_cap", "Codex call count is unavailable");
-    if (usage.codexDailyCalls >= CODEX_DAILY_CALLS) return skipped("skipped_cap", "daily Codex call cap reached");
+    if (usage.codexDailyCalls >= codexDailyCalls(env)) return skipped("skipped_cap", "daily Codex call cap reached");
     return checkCodexQuota({ env, codexQuota });
   }
   if (authSource === "subscription") return checkLiveResearchQuota({ env, liveUsage, usage, runCalls });

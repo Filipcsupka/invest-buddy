@@ -81,7 +81,7 @@ export function buildPrompt(opts, input, group, themesConfig) {
 
 const modelOutput = (value) => value?.output && !value?.findings ? value.output : value;
 const statusFrom = (result) => result.cutoff ? "cutoff" : "ok";
-export async function execute(opts, { adapter = researchAdapter(process.env.RESEARCH_ADAPTER || "claude"), log = console.log,
+export async function execute(opts, { adapter = researchAdapter(process.env.RESEARCH_ADAPTER || "claude"), fallbackAdapter = process.env.RESEARCH_FALLBACK_ADAPTER ? researchAdapter(process.env.RESEARCH_FALLBACK_ADAPTER) : null, log = console.log,
   env = process.env, now = () => new Date(), usage = capUsage, liveUsage } = {}) {
   // Fail before any network or model call when the adapter has no usable auth.
   if (adapter.failAtStart) { const auth = adapter.available(env); if (!auth.ok) throw new Error(`RESEARCH_ADAPTER=${adapter.name}: ${auth.reason}`); }
@@ -105,20 +105,32 @@ export async function execute(opts, { adapter = researchAdapter(process.env.RESE
   const live = liveUsage ?? (() => fetchLiveUsage(env.CLAUDE_CODE_OAUTH_TOKEN));
   for (const group of groups) {
     const runId = randomUUID();
-    let gate;
+    let gate, cur = { adapter, authSource, modelName };
+    const gateFor = (c, usageNow) => checkResearchCaps({ env, now: now(), type: opts.type, manual: opts.manual,
+      authSource: c.authSource, adapter: c.adapter.name, codexQuota: () => c.adapter.quota(), usage: usageNow, runCalls: modelCalls, liveUsage: live });
     try {
-      gate = await checkResearchCaps({ env, now: now(), type: opts.type, manual: opts.manual,
-        authSource, adapter: adapter.name, codexQuota: () => adapter.quota(), usage: await usage(opts.baseUrl, token), runCalls: modelCalls, liveUsage: live });
+      const usageNow = await usage(opts.baseUrl, token);
+      gate = await gateFor(cur, usageNow);
+      // Claude quota is often unreadable (429): fall back to the other adapter instead of skipping the whole run.
+      if (!gate.ok && gate.status === "skipped_quota" && fallbackAdapter && fallbackAdapter.name !== adapter.name) {
+        const auth = fallbackAdapter.available(env);
+        if (auth.ok) {
+          const alt = { adapter: fallbackAdapter, authSource: fallbackAdapter.authSource?.(env) ?? (env.ANTHROPIC_API_KEY ? "api" : "subscription"), modelName: fallbackAdapter.defaultModel?.(env) ?? opts.model };
+          const altGate = await gateFor(alt, usageNow);
+          log(`${group.id}: ${adapter.name} ${gate.status} (${gate.reason}); fallback ${fallbackAdapter.name}: ${altGate.ok ? "ok" : `${altGate.status} (${altGate.reason})`}`);
+          if (altGate.ok) { cur = alt; gate = altGate; }
+        } else log(`${group.id}: fallback ${fallbackAdapter.name} unavailable (${auth.reason})`);
+      }
     } catch (error) { gate = { ok: false, status: "skipped_cap", reason: `research cap check unavailable: ${error.message}` }; }
     if (!gate.ok) {
-      await postSkip(opts, token, adapter.name, gate.status, gate.reason, runId);
+      await postSkip(opts, token, cur.adapter.name, gate.status, gate.reason, runId);
       log(`${group.id}: ${gate.status} (${gate.reason})`);
       results.push({ skipped: gate.status, posted: !opts.dryRun, errors: [] });
       continue;
     }
-    const budgetId = opts.dryRun ? null : await reserveBudget(opts.baseUrl, token, "research", modelName, adapter.name, researchLimits(env, opts.type, now()), authSource, gate.overrideCaps);
+    const budgetId = opts.dryRun ? null : await reserveBudget(opts.baseUrl, token, "research", cur.modelName, cur.adapter.name, researchLimits(env, opts.type, now()), cur.authSource, gate.overrideCaps);
     if (!opts.dryRun && !budgetId) {
-      await postSkip(opts, token, adapter.name, "skipped_cap", "research budget reservation unavailable", runId);
+      await postSkip(opts, token, cur.adapter.name, "skipped_cap", "research budget reservation unavailable", runId);
       results.push({ skipped: "skipped_cap", posted: true, errors: [] });
       continue;
     }
@@ -128,8 +140,8 @@ export async function execute(opts, { adapter = researchAdapter(process.env.RESE
     let result, output, error = null, adapterFailed = false;
     try {
       const prompt = buildPrompt(opts, input, group, themesConfig);
-      try { result = await adapter.run({ prompt, schemaPath: join(here, "schema", "research-output.schema.json"), model: opts.model, maxTurns: defaults.maxTurns, timeoutMs: opts.timeoutS * 1000, workDir, env,
-        monitor: adapter.name !== "claude" || env.ANTHROPIC_API_KEY ? undefined : () => checkLiveResearchQuota({ env, liveUsage: live, monitor: true, override: gate.override === true }) }); }
+      try { result = await cur.adapter.run({ prompt, schemaPath: join(here, "schema", "research-output.schema.json"), model: opts.model, maxTurns: defaults.maxTurns, timeoutMs: opts.timeoutS * 1000, workDir, env,
+        monitor: cur.adapter.name !== "claude" || env.ANTHROPIC_API_KEY ? undefined : () => checkLiveResearchQuota({ env, liveUsage: live, monitor: true, override: gate.override === true }) }); }
       catch (caught) { error = caught; adapterFailed = true; }
       if (!adapterFailed) output = result.cutoff ? emptyOutput() : modelOutput(extractJson(result.text));
     } catch (caught) {
@@ -145,7 +157,7 @@ export async function execute(opts, { adapter = researchAdapter(process.env.RESE
     if (adapterFailed) output = emptyOutput();
     const run = {
       runId, runType: typeNames[opts.type], asOf: opts.asOf, generatedAt: new Date().toISOString(), promptVersion: `research-${opts.type}@2026-10-19.2`,
-      adapter: { name: adapter.name, model: result?.model || modelName, authSource },
+      adapter: { name: cur.adapter.name, model: result?.model || cur.modelName, authSource: cur.authSource },
       scope: { themes: group.themes, symbols: group.symbols, deepDiveSymbol: opts.type === "deepdive" ? opts.symbol : null },
       limits: { ...defaults, timeoutS: opts.timeoutS },
       usage: { ...emptyUsage(), inputTokens: result?.usage?.inputTokens ?? error?.usage?.inputTokens ?? null, outputTokens: result?.usage?.outputTokens ?? error?.usage?.outputTokens ?? null, cacheReadTokens: result?.usage?.cacheReadTokens ?? error?.usage?.cacheReadTokens ?? null, cacheCreationTokens: result?.usage?.cacheCreationTokens ?? error?.usage?.cacheCreationTokens ?? null, webSearches: result?.webSearches ?? null, webFetches: result?.webFetches ?? null, costUsd: result?.costUsd ?? error?.costUsd ?? null, durationS: Math.round((performance.now() - started) / 100) / 10 },

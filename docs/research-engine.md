@@ -383,6 +383,8 @@ Caps and the kill switch (RS5), checked by the runner before every model call in
 | `RESEARCH_QUOTA_STOP_5H_PCT`, `RESEARCH_QUOTA_STOP_7D_PCT` | 70, 80 | Stop when the live Claude usage (`scanner/claude-usage.mjs`) is at or above these, at start and during the run. |
 | `RESEARCH_MAX_TURNS`, `RESEARCH_MAX_SEARCHES`, `RESEARCH_MAX_FETCHES` | 30, 40, 60 | Per call. Searches and fetches are asked for in the prompt and counted from the CLI envelope. |
 | `RESEARCH_ADAPTER` | `claude` | `claude` or `codex`. |
+| `RESEARCH_FALLBACK_ADAPTER` | unset | `codex` makes a call that Claude gate-skips as `skipped_quota` (for example live usage 429) run on Codex instead, per group. Codex still needs its own gates: window, caps, token. Set on `research-weekly` and `research-daily`. |
+| `RESEARCH_CODEX_DAILY_CALLS` | 2 | Codex calls per day. 3 on the weekly and daily CronJobs so a Sunday weekly run (3 groups) is not cut to 2. |
 | `RESEARCH_CODEX_QUOTA_UNKNOWN` | unset | `allow` lets a Codex access token or local login run when no rate limit is reported. |
 | `RESEARCH_CODEX_MODEL` | CLI default | Passed as `-m` when set. |
 
