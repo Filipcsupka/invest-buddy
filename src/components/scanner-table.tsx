@@ -201,7 +201,7 @@ export function ScannerTable({ locale, rows, text, heldTickers = [], aside, prof
             <p className="disclaimer is-compact" id={disclaimerId}>{text.disclaimer}</p>
             {board ? groups.map((group) => {
               const list = groupRows(group);
-              if (group === "lower") return <details className={styles.group} key={group} open={filtered || (narrow && group === firstGroup) || undefined} aria-labelledby="lower">
+              if (group === "lower") return <details className={styles.group} key={group} open={!narrow || filtered || group === firstGroup || undefined} aria-labelledby="lower">
                 <summary className={styles.groupHead}>
                   <span className={styles.groupTitle}><h2 id="lower">{board.lowerTitle}</h2><span className={`num ${styles.groupCount}`}>{list.length}</span></span>
                   <span className={styles.groupNote}>{board.lowerBody}</span><span className={styles.chev} aria-hidden="true" />
@@ -209,7 +209,7 @@ export function ScannerTable({ locale, rows, text, heldTickers = [], aside, prof
                 {table(list, group)}
               </details>;
               if (!list.length && filtered) return null;
-              return <details className={styles.group} key={group} open={filtered || (narrow && group === firstGroup) || undefined} aria-labelledby={`state-${group}`}>
+              return <details className={styles.group} key={group} open={!narrow || filtered || group === firstGroup || undefined} aria-labelledby={`state-${group}`}>
                 <summary className={styles.groupHead}>
                   <span className={styles.groupTitle}><h2 id={`state-${group}`} className={styles.fit}><StateChip state={group} label={text.states[group]} size="lg" /></h2><span className={`num ${styles.groupCount}`}>{list.length}</span></span>
                   <span className={styles.groupNote}>{board.stateNotes[group]}</span><span className={styles.chev} aria-hidden="true" />

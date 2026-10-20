@@ -205,7 +205,7 @@ export function StatusPanel({ view, m, locale, adviceOutput, asOf, methodHref, r
           <div className={styles.ruleFigure}><CountUp value={coreMet} locale={locale} motion="load" /><span>{getKitMessages(locale).score.ruleCountJoin} {view.display.coreTotal}</span></div>
           <RulesMet view={view} m={m} coreMet={coreMet} cutoffs={false} />
         </> : <p className={styles.pointsLine}>{broken ? m.status.pointsNotCountedPlain : m.status.headline.insufficient}</p>}
-        <ol className={styles.ruleSegments} aria-label={m.status.rulesMet.replace("{met}", String(coreMet ?? 0)).replace("{total}", String(view.display.coreTotal))}>
+        <ol className={styles.ruleSegments} aria-label={coreMet === undefined ? m.status.noData : m.status.rulesMet.replace("{met}", String(coreMet)).replace("{total}", String(view.display.coreTotal))}>
           {CORE_RULES.map((rule) => {
             const hit = byId.get(rule.id);
             const result = !hit || hit.unknown ? "none" : hit.matched ? "pass" : "fail";

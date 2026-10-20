@@ -572,7 +572,7 @@
     background: var(--navy);
     color: var(--navy-ink);
     cursor: grab;
-    touch-action: none;
+    touch-action: pan-y;
     user-select: none;
   }
   .kit-strip-orbit[data-dragging] { cursor: grabbing; }

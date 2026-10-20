@@ -126,7 +126,7 @@ export function StateStrip({ label, changes, empty, pauseLabel, playLabel, secon
           <span>{paused ? playLabel : pauseLabel}</span>
         </button>
       </div>
-      <div className="kit-strip-orbit" tabIndex={0} role="group" aria-label={`${label}: ${changes.length}`} aria-keyshortcuts="ArrowLeft ArrowRight" onPointerDown={onOrbitDown} onPointerMove={onOrbitMove} onPointerUp={onOrbitEnd} onPointerCancel={onOrbitEnd} onKeyDown={onOrbitKey}>
+      <div className="kit-strip-orbit" role="group" aria-label={`${label}: ${changes.length}`} aria-keyshortcuts="ArrowLeft ArrowRight" onPointerDown={onOrbitDown} onPointerMove={onOrbitMove} onPointerUp={onOrbitEnd} onPointerCancel={onOrbitEnd} onKeyDown={onOrbitKey}>
         <svg ref={wheel} className="kit-strip-orbit-wheel" viewBox="0 0 300 300" aria-hidden="true">
           <defs>{[128, 98, 68].map((radius, index) => <path key={radius} id={`${orbitId}-ring-${index}`} d={`M 150 ${150 - radius} A ${radius} ${radius} 0 1 1 150 ${150 + radius} A ${radius} ${radius} 0 1 1 150 ${150 - radius}`} />)}</defs>
           {Array.from({ length: Math.min(3, Math.max(2, changes.length)) }, (_, index) => {
