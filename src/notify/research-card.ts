@@ -116,6 +116,12 @@ const LABELS = {
 } as const;
 
 /** Returns null unless a checked fact supports at least one What happened line. */
+/** Plain call shown first on a card: [English, Slovak]. START_READY and ADD_READY are the only buy calls; everything else waits, reduces or is out. */
+const VERDICT: Record<ResearchCardInput["state"], [string, string]> = {
+  DISCOVERED: ["WAIT", "ČAKAJ"], WATCH: ["WAIT", "ČAKAJ"], START_READY: ["BUY", "KÚPIŤ"], ADD_READY: ["BUY MORE", "DOKÚPIŤ"],
+  HOLD: ["HOLD", "DRŽAŤ"], REDUCE: ["REDUCE", "ZNÍŽIŤ"], BROKEN: ["OUT", "VON"], DROPPED: ["OUT", "VON"],
+};
+
 export function formatResearchCard(input: ResearchCardInput): string | null {
   const t = LABELS[input.locale];
   const byId = new Map(input.facts.map(f => [f.findingId, f]));
@@ -131,7 +137,8 @@ export function formatResearchCard(input: ResearchCardInput): string | null {
   const symbol = escapeHtml(input.symbol);
   const band = input.state === "BROKEN" || input.state === "REDUCE" || input.state === "DROPPED" ? "red"
     : input.state === "START_READY" || input.state === "ADD_READY" ? "green" : "blue";
-  const head = `${BAND_EMOJI[band]} <b>${symbol}</b> · ${state} · EUR 0`;
+  const call = VERDICT[input.state][input.locale === "sk" ? 1 : 0];
+  const head = `${BAND_EMOJI[band]} <b>${symbol}</b> · <b>${call}</b> · ${state} · EUR 0`;
   const sections: { priority: number; lines: string[] }[] = [
     { priority: 5, lines: [`<b>${t.happened}</b>`, ...happened] },
     ...(why.length ? [{ priority: 4, lines: [`<b>${t.why}</b>`, ...why] }] : []),

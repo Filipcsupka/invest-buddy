@@ -4,12 +4,14 @@ import { appendEvent } from "../db/research";
 import { saveDiscoveryPriceBars, screenCandidates, tickerCiks, weekStart, type DiscoveryCandidate } from "./discovery";
 import { liquidityReason, loadSecProfile, nameExclusion, profileExclusion } from "./discovery-quality";
 import { getText } from "../collectors/http";
+import { requireSecUserAgent } from "../collectors/sec-user-agent";
+import { promoteCandidate } from "../../scripts/discovery-promote";
 import { TwelveDataProvider } from "../data/twelvedata";
 import { PostgresUsageLedger } from "../data/usage";
 import type { OHLCV } from "../engine/types";
 
-export interface PromotionScreen { score:number; ruleScore:number; ruleState:string; signalDate:string; benchmarkClose:number; sector:string }
-/** Insert only a fully screened DS1 row. The owner still runs discovery:promote manually. */
+export interface PromotionScreen { score:number; ruleScore:number; ruleState:string; signalDate:string; benchmarkClose:number|null; sector:string }
+/** Insert the DS1 row for a verified candidate. The pipeline promotes it into the scored universe right after the commit (owner decision 2026-10-20: no manual step, no cap). */
 export async function proposePromotion(db:Pick<pg.Pool,"query">, candidate:{symbol:string;companyName:string;themes:string[]}, findings:{id:number;kind:string;evidence:{url:string;status?:string;verificationStatus?:string;verified?:boolean}[]}[], asOf:string, screen:PromotionScreen):Promise<boolean> {
   const sources=findings.flatMap(f=>f.evidence.filter(e=>/^https:\/\//.test(e.url) && (e.verified===true || ["verified","exact","fuzzy","passed"].includes(e.status??"") || ["verified","exact","fuzzy","passed"].includes(e.verificationStatus??""))).map(e=>({kind:"research",url:e.url,detail:f.kind})));
   if(!sources.length) return false;
@@ -69,7 +71,7 @@ async function storedScreen(db:Pick<pg.Pool,"query">, symbol:string, name:string
   } catch { ciksPromise=null; return {quality:"pending",screen:null}; }
 }
 
-export async function runResearchPipeline(pool:pg.Pool,today:string):Promise<{changed:number;proposed:number}> {
+export async function runResearchPipeline(pool:pg.Pool,today:string):Promise<{changed:number;proposed:number;promoted:string[]}> {
   const provider=process.env.TWELVE_DATA_API_KEY ? new TwelveDataProvider({apiKey:process.env.TWELVE_DATA_API_KEY,
     reserve:()=>new PostgresUsageLedger(pool).reserve("twelvedata",1,{job:"discovery",credits:1})}) : null;
   const preflight=await pool.query<{symbol:string;company_name:string}>(`SELECT symbol,company_name FROM (
@@ -81,6 +83,8 @@ export async function runResearchPipeline(pool:pg.Pool,today:string):Promise<{ch
     ) eligible ORDER BY last_screened_at NULLS FIRST,symbol LIMIT 25`);
   const checks=new Map<string,ScreenCheck>();
   for(const row of preflight.rows) checks.set(row.symbol,await storedScreen(pool,row.symbol,row.company_name,today,provider));
+  let changed=0,proposed=0;
+  const toPromote:string[]=[];
   const client=await pool.connect();
   const db=client as unknown as pg.Pool;
   try {
@@ -109,7 +113,6 @@ export async function runResearchPipeline(pool:pg.Pool,today:string):Promise<{ch
   const rows=await db.query<{symbol:string;company_name:string;themes:string[];state:CandidateInput["state"];exchange:string|null;state_since:string;review_at:string;first_seen_at:string;last_verified_at:string|null;in_universe:boolean;scorable:boolean;promotion_status:string;owner_note:string|null;last_alert_at:string|null}>(
     `SELECT symbol,company_name,exchange,themes,state,state_since::text,review_at::text,first_seen_at::text,last_verified_at::text,
       in_universe,scorable,promotion_status,owner_note,last_alert_at::text FROM research_candidates ORDER BY symbol`);
-  let changed=0,proposed=0;
   for(const c of rows.rows) {
     const fr=await db.query<{id:number;verification_status:string;confirmed:boolean;source_class:string|null;polarity:string;event_date:string|null;verified_at:string|null;kind:string;evidence:{url:string;status?:string;verificationStatus?:string;verified?:boolean}[]}>(
       `SELECT DISTINCT ON (dedupe_key) id,verification_status,confirmed,source_class,polarity,event_date::text,verified_at::text,kind,evidence
@@ -154,16 +157,39 @@ export async function runResearchPipeline(pool:pg.Pool,today:string):Promise<{ch
       if(!already.rowCount) await appendEvent(db,{symbol:c.symbol,kind:"review_due",reason:"scheduled review due"});
     }
     if(decision.proposePromotion) {
-      if(screen && await proposePromotion(db,{symbol:c.symbol,companyName:c.company_name,themes:c.themes},fr.rows.filter(f=>f.verification_status==="verified"),today,screen)) {
+      // The rule screen only ranks the name. A verified primary or press finding is enough to score it, so a missing screen falls back to a neutral row.
+      const useScreen:PromotionScreen=screen??{score:1,ruleScore:0,ruleState:"Wait",signalDate:today,benchmarkClose:null,sector:"Discovery"};
+      const inserted=await proposePromotion(db,{symbol:c.symbol,companyName:c.company_name,themes:c.themes},fr.rows.filter(f=>f.verification_status==="verified"),today,useScreen);
+      // A same-week discovery row (from the discovery job) also counts: it is promoted here instead of waiting for the capped auto-promote.
+      const openRow=inserted || (await db.query("SELECT 1 FROM discovery_candidates WHERE symbol=$1 AND status IN ('pending','approved') LIMIT 1",[c.symbol])).rowCount;
+      if(openRow) {
         await db.query("UPDATE research_candidates SET promotion_status='proposed' WHERE symbol=$1",[c.symbol]);
-        await appendEvent(db,{symbol:c.symbol,kind:"promotion_proposed",reason:"DS1 screen passed",findingIds:fr.rows.filter(f=>f.verification_status==="verified").map(f=>f.id)}); proposed++;
+        await appendEvent(db,{symbol:c.symbol,kind:"promotion_proposed",reason:"verified primary or press finding",findingIds:fr.rows.filter(f=>f.verification_status==="verified").map(f=>f.id)}); proposed++;
+        toPromote.push(c.symbol);
       }
     }
   }
   await client.query("COMMIT");
-  return {changed,proposed};
   } catch(error) {await client.query("ROLLBACK");throw error;}
   finally {client.release();}
+  const promoted=await promoteProposed(pool,toPromote,today);
+  return {changed,proposed,promoted};
+}
+
+/** Adds each proposed name to the scored universe (list discovery) so prices, filings, scoring and the verdict follow in the next chain. A failure leaves the row proposed and is retried on the next run. */
+async function promoteProposed(pool:pg.Pool,symbols:string[],today:string):Promise<string[]> {
+  const promoted:string[]=[];
+  if(!symbols.length) return promoted;
+  requireSecUserAgent(process.env.SEC_USER_AGENT);
+  for(const symbol of symbols) {
+    try {
+      await promoteCandidate(pool,symbol,{dryRun:false,today,get:(url)=>getText(url)});
+      await pool.query("UPDATE research_candidates SET in_universe=true,promotion_status='approved' WHERE symbol=$1",[symbol]);
+      await appendEvent(pool,{symbol,kind:"promoted",reason:"entered the scored universe from a verified research finding"});
+      promoted.push(symbol);
+    } catch(error) { process.stderr.write(`promote ${symbol} failed: ${error instanceof Error?error.message:String(error)}\n`); }
+  }
+  return promoted;
 }
 if (/(?:^|[/\\])research-pipeline\.(?:ts|js)$/.test(process.argv[1]??"")) {
   const pool=new pg.Pool({connectionString:process.env.DATABASE_URL});

@@ -33,7 +33,7 @@ spec:
           containers:
             - name: discovery-auto-promote
               image: ghcr.io/filipcsupka/invest-buddy:latest
-              command: ["node", "dist/jobs/discovery-auto-promote.js"]
+              command: ["node", "dist/jobs/discovery-auto-promote.js", "--cap", "10", "--weekly-cap", "50"]
               env:
                 - name: DATABASE_URL
                   valueFrom:
