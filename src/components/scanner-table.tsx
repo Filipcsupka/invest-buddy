@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useId, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useState, type ReactNode } from "react";
 import { fill, getMessages } from "@/i18n";
 import { ruleGroups, stateOrder, type StateKey } from "@/i18n/rules";
 import { IconReset, IconSearch, IconSort } from "./icons";
@@ -47,6 +47,14 @@ export function ScannerTable({ locale, rows, text, heldTickers = [], aside, prof
   const [query, setQuery] = useState("");
   const { state, setState } = useStateFilter();
   const [sort, setSort] = useState<{ key: SortKey; dir: "ascending" | "descending" }>({ key: "total", dir: "descending" });
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 900px)");
+    const update = () => setNarrow(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
   const disclaimerId = useId();
   const searchId = useId();
 
@@ -127,16 +135,17 @@ export function ScannerTable({ locale, rows, text, heldTickers = [], aside, prof
               </span>
             </span>
           </th>
-          <td className={`col-sector muted ${styles.colSector}`}>{row.sector}</td>
+          <td className={`col-sector muted ${styles.colSector}`}><span className={styles.mobileLabel}>{text.columns.sector}</span>{row.sector}</td>
           <td className={`col-score ${styles.score}`}>
+            <span className={styles.mobileLabel}>{text.columns.score}</span>
             <ScoreBar size="sm" percent={row.percent} state={chipState} stateLabel={row.pullbackLabel ?? row.stateLabel} locale={locale as "en" | "sk"} label={row.ticker} describedBy={disclaimerId} />
             {row.percent === null ? null : <span className={`small muted ${styles.coverage}`}>{fill(getMessages(locale as "en" | "sk").status.coreData, { known: row.pointsKnown, total: row.coreTotal })}</span>}
           </td>
-          <td className={styles.colRules}>{met === null ? <span className="muted">–</span> : <span className={styles.rules}>
+          <td className={styles.colRules}><span className={styles.mobileLabel}>{text.rulesMet}</span>{met === null ? <span className="muted">–</span> : <span className={styles.rules}>
             <span className={styles.pips} aria-hidden="true">{Array.from({ length: ruleTotal }, (_, i) => <i key={i} data-on={i < met ? "" : undefined} />)}</span>
             <span className="num">{fill(text.rulesMetOf, { met, total: ruleTotal })}</span></span>}</td>
-          <td><StateChip state={chipState} label={row.pullbackLabel ?? row.stateLabel} size="sm" describedBy={disclaimerId} /></td>
-          {group === "broken" && <td className="col-reason muted">{row.reasons.length ? row.reasons.join("; ") : text.noRejection}</td>}
+          <td><span className={styles.mobileLabel}>{text.columns.state}</span><StateChip state={chipState} label={row.pullbackLabel ?? row.stateLabel} size="sm" describedBy={disclaimerId} /></td>
+          {group === "broken" && <td className="col-reason muted"><span className={styles.mobileLabel}>{text.columns.criteria}</span>{row.reasons.length ? row.reasons.join("; ") : text.noRejection}</td>}
         </tr>
         );
       })}</tbody>
@@ -145,6 +154,7 @@ export function ScannerTable({ locale, rows, text, heldTickers = [], aside, prof
   };
 
   const board = text.board;
+  const firstGroup = groups.find((group) => groupRows(group).length > 0);
   return (
     <div className={styles.board}>
       <div className={styles.wrap}>
@@ -191,7 +201,7 @@ export function ScannerTable({ locale, rows, text, heldTickers = [], aside, prof
             <p className="disclaimer is-compact" id={disclaimerId}>{text.disclaimer}</p>
             {board ? groups.map((group) => {
               const list = groupRows(group);
-              if (group === "lower") return <details className={styles.group} key={group} open={filtered || undefined} aria-labelledby="lower">
+              if (group === "lower") return <details className={styles.group} key={group} open={filtered || (narrow && group === firstGroup) || undefined} aria-labelledby="lower">
                 <summary className={styles.groupHead}>
                   <span className={styles.groupTitle}><h2 id="lower">{board.lowerTitle}</h2><span className={`num ${styles.groupCount}`}>{list.length}</span></span>
                   <span className={styles.groupNote}>{board.lowerBody}</span><span className={styles.chev} aria-hidden="true" />
@@ -199,7 +209,7 @@ export function ScannerTable({ locale, rows, text, heldTickers = [], aside, prof
                 {table(list, group)}
               </details>;
               if (!list.length && filtered) return null;
-              return <details className={styles.group} key={group} open aria-labelledby={`state-${group}`}>
+              return <details className={styles.group} key={group} open={filtered || (narrow && group === firstGroup) || undefined} aria-labelledby={`state-${group}`}>
                 <summary className={styles.groupHead}>
                   <span className={styles.groupTitle}><h2 id={`state-${group}`} className={styles.fit}><StateChip state={group} label={text.states[group]} size="lg" /></h2><span className={`num ${styles.groupCount}`}>{list.length}</span></span>
                   <span className={styles.groupNote}>{board.stateNotes[group]}</span><span className={styles.chev} aria-hidden="true" />
