@@ -214,6 +214,16 @@ async function Company({ params }: Params) {
         </div>
       </header>
 
+      <section className="co-card co-chart co-chart-top" aria-labelledby="chart" data-o="2">
+        <SectionHead id="chart" title={data.sample ? m.company.chartTitle : m.company.chartTitleLive} lede={data.sample ? m.company.chartNote : undefined} meta={data.sample ? <SampleStamp text={m.common.sample} /> : undefined} rule="quiet" />
+        <Chart
+          bars={result.inputs.bars}
+          locale={locale}
+          zoneTag={c.zoneTag}
+          labels={{ name: instrument.ticker, aria: m.chart.label, close: m.chart.close, ma50: m.chart.ma50, ma200: m.chart.ma200, dip: m.chart.dip, last: m.chart.last }}
+        />
+      </section>
+
       <TabBar label={c.tabsLabel} tabs={tabs} />
 
       <div id="overview">
@@ -237,15 +247,6 @@ async function Company({ params }: Params) {
       <div className="co-layout">
 
         <div className="co-main">
-          <section className="co-card co-chart" aria-labelledby="chart" data-o="2">
-            <SectionHead id="chart" title={data.sample ? m.company.chartTitle : m.company.chartTitleLive} lede={data.sample ? m.company.chartNote : undefined} meta={data.sample ? <SampleStamp text={m.common.sample} /> : undefined} rule="quiet" />
-            <Chart
-              bars={result.inputs.bars}
-              locale={locale}
-              zoneTag={c.zoneTag}
-              labels={{ name: instrument.ticker, aria: m.chart.label, close: m.chart.close, ma50: m.chart.ma50, ma200: m.chart.ma200, dip: m.chart.dip, last: m.chart.last }}
-            />
-          </section>
 
           <section className="co-card co-rules" aria-labelledby="rules" data-o="3">
             <SectionHead
