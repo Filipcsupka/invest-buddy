@@ -65,7 +65,7 @@ test.describe("public profiles", () => {
     await expect(page.getByRole("link", { name: /Sustained growers/ })).toBeVisible();
     await expect(page.getByRole("link", { name: /Higher volatility, event-driven/ })).toBeVisible();
     await page.getByRole("link", { name: /Sustained growers/ }).click();
-    await expect(page.getByRole("table")).toContainText("Profiles not computed yet");
+    await expect(page.getByRole("table").first()).toContainText("Profiles not computed yet");
   });
 
   test("profile empty state has an accessible heading in Slovak", async ({ page }) => {

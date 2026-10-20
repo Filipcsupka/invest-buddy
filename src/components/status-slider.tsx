@@ -2,10 +2,11 @@ import type { ReactNode } from "react";
 import { fill, formatScorePercent, type Locale, type Messages } from "@/i18n";
 import { type StateKey } from "@/i18n/rules";
 import type { StatusView } from "@/engine/status";
-import { CORE_RULES } from "@/engine/display-score";
+import { CORE_RULES, type DisplayHit } from "@/engine/display-score";
+import { getKitMessages } from "@/i18n/kit-messages";
 import { IconBandBroken, IconBandIgnore, IconBandSetup, IconBandWait, IconBandWatch, IconCheck, IconCross, IconNoData } from "./icons";
 import { AdrLine } from "./disclaimer";
-import { ScoreDial, kitState } from "./kit";
+import { CountUp, ScoreDial, kitState } from "./kit";
 import styles from "./status-slider.module.css";
 
 /** Slider order, left to right: step 1 to 5. "insufficient" is not a step. */
@@ -119,10 +120,13 @@ export function RulesMet({ view, m, coreMet, cutoffs = true }: { view: StatusVie
   </>;
 }
 
-export function BonusBlock({ view, m }: { view: StatusView; m: Messages }) {
+export function BonusBlock({ view, m, tiles = false }: { view: StatusView; m: Messages; tiles?: boolean }) {
   if (view.display.state === "insufficient") return null;
   return <div className={styles.coverage} data-bonus=""><strong>{m.status.bonusTitle}</strong><span> {m.status.bonusNote}</span>
-    <ul>{view.display.bonus.map(({ id, hit }) => <li key={id}><a href={`#rule-${id}`}>{m.status.ruleShort[id]}</a>: {hit?.matched ? m.common.met : !hit || hit.unknown ? m.status.noData : m.common.notMet}</li>)}</ul>
+    <ul>{view.display.bonus.map(({ id, hit }) => {
+      const result = !hit || hit.unknown ? "none" : hit.matched ? "pass" : "fail";
+      return <li key={id} data-result={result}>{tiles ? <span className={styles.bonusIcon} aria-hidden="true">{result === "pass" ? <IconCheck /> : result === "fail" ? <IconCross /> : <IconNoData />}</span> : null}<a href={`#rule-${id}`}>{m.status.ruleShort[id]}</a>: {result === "pass" ? m.common.met : result === "fail" ? m.common.notMet : m.status.noData}</li>;
+    })}</ul>
   </div>;
 }
 
@@ -167,38 +171,75 @@ export interface StatusPanelProps {
   describedBy?: string;
   /** Core rules met, for the "Meets n of m rules" line. Omitted: no line. */
   coreMet?: number;
-  /** "rail" drops the dial (the page head shows it) and stacks the track, for a narrow side column. */
+  ruleHits?: readonly DisplayHit[];
+  /** "rail" uses four reading tiles beside the company page's radar. */
   variant?: "panel" | "rail";
   /** Extra global classes for the section, for example the page's card class. */
   className?: string;
 }
 
 /**
- * Header of the company page: the dial settles on the percent, the band label leads the reading column, then the
- * rule count, the five-step track with the cutoffs, the ADR line beside the score, coverage, bonus and chips.
+ * A full panel or a four-tile company rail. Both keep the state, rule coverage, cutoffs and disclaimer together.
  */
-export function StatusPanel({ view, m, locale, adviceOutput, asOf, methodHref, reasons, pullbackLabel, disclaimer, describedBy, coreMet, variant = "panel", className }: StatusPanelProps) {
+export function StatusPanel({ view, m, locale, adviceOutput, asOf, methodHref, reasons, pullbackLabel, disclaimer, describedBy, coreMet, ruleHits, variant = "panel", className }: StatusPanelProps) {
   const label = statusLabel(m, view.display.state, adviceOutput);
   const scored = view.display.state !== "insufficient";
   const broken = view.display.state === "broken";
   const dialState = kitState(view.display.state, Boolean(pullbackLabel));
   const rail = variant === "rail";
-  return (
-    <section className={[styles.panel, rail ? styles.rail : "", className ?? ""].filter(Boolean).join(" ")} data-state={view.display.state} aria-labelledby="status-title">
-      {rail ? null : (
-        <div className={styles.dialCol}>
-          <ScoreDial
-            percent={broken || !scored ? null : view.display.percent ?? null}
-            state={dialState}
-            stateLabel={pullbackLabel ? `${label}, ${pullbackLabel}` : label}
-            locale={locale}
-            size="lg"
-            motion="load"
-            describedBy={describedBy}
-            caption={broken ? m.status.pointsNotCountedPlain : undefined}
-          />
+  if (rail) {
+    const byId = new Map(ruleHits?.map((hit) => [hit.id, hit]) ?? []);
+    return <section className={[styles.panel, styles.rail, className ?? ""].filter(Boolean).join(" ")} data-state={view.display.state} aria-labelledby="status-title">
+      <div className={`${styles.tile} ${styles.stateTile}`}>
+        <div className={styles.railLead}>
+          <h2 id="status-title" className={styles.label} aria-describedby={describedBy}><StatusIcon state={view.display.state} /><span className={styles.labelText}>{label}</span>{pullbackLabel ? <span className={styles.qualifier}>{pullbackLabel}</span> : null}</h2>
+          {asOf ? <p className={styles.sub}>{fill(m.status.asOf, { date: asOf })}</p> : null}
         </div>
-      )}
+        <p className="visually-hidden" id="status-summary">{summarySentence(view, m, adviceOutput, locale)}</p>
+        <StatusTrack view={view} m={m} adviceOutput={adviceOutput} />
+        {scored && !broken && coreMet !== undefined ? <p className={styles.cutoffs} data-cutoffs="">{m.status.cutoffs}</p> : null}
+        {reasons.length > 0 && (broken || !scored) ? <p className={styles.because}>{fill(broken ? m.status.brokenBecause : m.status.insufficientBecause, { reasons: reasons.join("; ") })}</p> : null}
+      </div>
+      <div className={`${styles.tile} ${styles.rulesTile}`}>
+        {coreMet !== undefined && scored ? <>
+          <div className={styles.ruleFigure}><CountUp value={coreMet} locale={locale} motion="load" /><span>{getKitMessages(locale).score.ruleCountJoin} {view.display.coreTotal}</span></div>
+          <RulesMet view={view} m={m} coreMet={coreMet} cutoffs={false} />
+        </> : <p className={styles.pointsLine}>{broken ? m.status.pointsNotCountedPlain : m.status.headline.insufficient}</p>}
+        <ol className={styles.ruleSegments} aria-label={coreMet === undefined ? m.status.noData : m.status.rulesMet.replace("{met}", String(coreMet)).replace("{total}", String(view.display.coreTotal))}>
+          {CORE_RULES.map((rule) => {
+            const hit = byId.get(rule.id);
+            const result = !hit || hit.unknown ? "none" : hit.matched ? "pass" : "fail";
+            const word = result === "pass" ? m.common.met : result === "fail" ? m.common.notMet : m.status.noData;
+            return <li key={rule.id} data-result={result}><a href={`#rule-${rule.id}`} aria-label={`${m.status.ruleShort[rule.id]}: ${word}`} title={`${m.status.ruleShort[rule.id]}: ${word}`}><span aria-hidden="true">{result === "pass" ? "✓" : result === "fail" ? "×" : "–"}</span></a></li>;
+          })}
+        </ol>
+        <StatusCoverage view={view} m={m} />
+      </div>
+      <div className={`${styles.tile} ${styles.bonusTile}`}>
+        {scored ? <BonusBlock view={view} m={m} tiles /> : null}
+        <ConfirmationChips view={view} m={m} />
+      </div>
+      <div className={`${styles.tile} ${styles.noteTile}`}>
+        <a className={styles.methodLink} href={methodHref}>{m.status.methodLink}</a>
+        <AdrLine text={m.common.disclaimer} id="score-disclaimer" />
+        {disclaimer}
+      </div>
+    </section>;
+  }
+  return (
+    <section className={[styles.panel, className ?? ""].filter(Boolean).join(" ")} data-state={view.display.state} aria-labelledby="status-title">
+      <div className={styles.dialCol}>
+        <ScoreDial
+          percent={broken || !scored ? null : view.display.percent ?? null}
+          state={dialState}
+          stateLabel={pullbackLabel ? `${label}, ${pullbackLabel}` : label}
+          locale={locale}
+          size="lg"
+          motion="load"
+          describedBy={describedBy}
+          caption={broken ? m.status.pointsNotCountedPlain : undefined}
+        />
+      </div>
       <div className={styles.main}>
         <div className={styles.lead}>
           <h2 id="status-title" className={styles.label} aria-describedby={describedBy}>

@@ -33,6 +33,7 @@ const en = {
     noScore: "No score",
     valueText: "{percent} of the points with data, {state}",
     ofData: "of the points with data",
+    ruleCountJoin: "of",
   },
   strip: {
     label: "State changes, {date}",
@@ -145,6 +146,7 @@ const sk: typeof en = {
     noScore: "Bez skóre",
     valueText: "{percent} bodov s údajmi, {state}",
     ofData: "z bodov s údajmi",
+    ruleCountJoin: "z",
   },
   strip: {
     label: "Zmeny stavov, {date}",

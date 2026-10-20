@@ -13,6 +13,19 @@ function render(locale: Locale, state: StateKey, missing: string[] = [], bonusMa
 }
 
 describe("public status panel", () => {
+  it.each(["en", "sk"] as const)("keeps the four rail readings and disclaimer in %s", (locale) => {
+    const ruleHits = hits(["earnings", "dip"]);
+    const view = statusView({ state: "setup", points: 18, ruleHits, adviceOutput: false });
+    const m = getMessages(locale);
+    const html = renderToStaticMarkup(<StatusPanel variant="rail" locale={locale} view={view} m={m} adviceOutput={false} asOf="11 Oct 2026" methodHref={`/${locale}/methodology#states`} reasons={[]} coreMet={7} ruleHits={ruleHits} describedBy="score-disclaimer" />);
+    expect(html.match(/class="[^\"]*tile/g)).toHaveLength(4);
+    expect(html.match(/class="[^\"]*ruleSegments/g)).toHaveLength(1);
+    expect(html.match(/class="[^\"]*ruleSegments[^\"]*"[^>]*>[\s\S]*?<\/ol>/)?.[0].match(/href="#rule-/g)).toHaveLength(9);
+    expect(html).toContain(locale === "en" ? "Meets 7 of 9 rules" : "Spĺňa 7 z 9 pravidiel");
+    expect(html).toContain(locale === "en" ? "Conditions met 72%+" : "Podmienky splnené od 72 %");
+    expect(html).toContain('id="score-disclaimer"');
+    expect(html).toContain(`href="/${locale}/methodology#states"`);
+  });
   it.each(["en", "sk"] as const)("shows 100%% for all nine core rules in %s, independent of catalyst", (locale) => {
     const without = render(locale, "setup");
     const withBonus = render(locale, "setup", [], true);

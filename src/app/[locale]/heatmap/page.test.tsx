@@ -7,7 +7,7 @@ const scores = vi.fn();
 vi.mock("@/data/store", () => ({ latestScores: () => scores() }));
 import Heatmap, * as page from "./page";
 
-const props = (locale: string, metric?: string) => ({ params: Promise.resolve({ locale }), searchParams: Promise.resolve(metric ? { metric } : {}) });
+const props = (locale: string, metric?: string, sort?: string) => ({ params: Promise.resolve({ locale }), searchParams: Promise.resolve({ ...(metric ? { metric } : {}), ...(sort ? { sort } : {}) }) });
 afterEach(() => scores.mockReset());
 
 const leaves = (value: unknown): string[] => (typeof value === "string" ? [value] : Object.values(value as object).flatMap(leaves));
@@ -33,6 +33,16 @@ describe("sector heat map page", () => {
     expect(rules).not.toContain("+");
     const bad = renderToStaticMarkup(await Heatmap(props("en", "zzz")));
     expect(bad).toContain(getHeatmapMessages("en").note1m);
+  });
+
+  it("keeps value sorting in metric links and gives sector anchors focus targets", async () => {
+    const rows = await scoredUniverse();
+    scores.mockResolvedValue({ rows, sample: true, lastUpdated: rows[0].result.asOf, stale: false });
+    const html = renderToStaticMarkup(await Heatmap(props("en", "3m", "value")));
+    expect(html).toContain('href="/en/heatmap?metric=1m&amp;sort=value"');
+    expect(html).toContain('aria-current="true"');
+    expect(html).toMatch(/href="#sector-[^"]+"/);
+    expect(html).toMatch(/id="sector-[^"]+" tabindex="-1"/);
   });
 
   it.each(["en", "sk"])("shows an empty state in %s", async (locale) => {
