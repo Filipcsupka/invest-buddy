@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useId, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from "react";
 import { IconArrowRight } from "../icons";
 import { IconPause, IconPlay } from "./kit-icons";
 import { StateChip } from "./state-chip";
@@ -40,12 +40,49 @@ export function StateStrip({ label, changes, empty, pauseLabel, playLabel, secon
   const [paused, setPaused] = useState(false);
   const [offscreen, setOffscreen] = useState(false);
   const ref = useRef<HTMLElement>(null);
+  const wheel = useRef<SVGSVGElement>(null);
+  const orbitId = useId().replace(/:/g, "");
+  const angle = useRef(0);
+  const drag = useRef<{ pointer: number; x: number; time: number; velocity: number } | null>(null);
+  const rotate = (degrees: number) => {
+    angle.current = degrees;
+    wheel.current?.style.setProperty("--orbit-angle", `${degrees}deg`);
+  };
+  const onOrbitDown = (event: PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    event.currentTarget.dataset.dragging = "";
+    drag.current = { pointer: event.pointerId, x: event.clientX, time: event.timeStamp, velocity: 0 };
+  };
+  const onOrbitMove = (event: PointerEvent<HTMLDivElement>) => {
+    const current = drag.current;
+    if (!current || current.pointer !== event.pointerId) return;
+    const elapsed = Math.max(1, event.timeStamp - current.time);
+    const delta = event.clientX - current.x;
+    const degrees = delta / Math.max(1, event.currentTarget.clientWidth) * 360;
+    rotate(angle.current + degrees);
+    drag.current = { pointer: current.pointer, x: event.clientX, time: event.timeStamp, velocity: degrees / elapsed };
+  };
+  const onOrbitEnd = (event: PointerEvent<HTMLDivElement>) => {
+    if (drag.current?.pointer !== event.pointerId) return;
+    const velocity = drag.current.velocity;
+    drag.current = null;
+    delete event.currentTarget.dataset.dragging;
+    if (event.type === "pointerup" && !paused) rotate(angle.current + Math.max(-0.6, Math.min(0.6, velocity)) * 240);
+  };
+  const onOrbitKey = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    rotate(angle.current + (event.key === "ArrowRight" ? 18 : -18));
+  };
   useEffect(() => {
     const el = ref.current;
-    if (!el || typeof IntersectionObserver === "undefined") return;
+    if (!el) return;
+    el.dataset.orbitReady = "";
+    if (typeof IntersectionObserver === "undefined") return;
     const observer = new IntersectionObserver(([entry]) => setOffscreen(!entry.isIntersecting));
     observer.observe(el);
-    return () => observer.disconnect();
+    return () => { observer.disconnect(); delete el.dataset.orbitReady; };
   }, []);
   if (!changes.length) {
     return (
@@ -88,6 +125,21 @@ export function StateStrip({ label, changes, empty, pauseLabel, playLabel, secon
           {paused ? <IconPlay /> : <IconPause />}
           <span>{paused ? playLabel : pauseLabel}</span>
         </button>
+      </div>
+      <div className="kit-strip-orbit" tabIndex={0} role="group" aria-label={`${label}: ${changes.length}`} aria-keyshortcuts="ArrowLeft ArrowRight" onPointerDown={onOrbitDown} onPointerMove={onOrbitMove} onPointerUp={onOrbitEnd} onPointerCancel={onOrbitEnd} onKeyDown={onOrbitKey}>
+        <svg ref={wheel} className="kit-strip-orbit-wheel" viewBox="0 0 300 300" aria-hidden="true">
+          <defs>{[128, 98, 68].map((radius, index) => <path key={radius} id={`${orbitId}-ring-${index}`} d={`M 150 ${150 - radius} A ${radius} ${radius} 0 1 1 150 ${150 + radius} A ${radius} ${radius} 0 1 1 150 ${150 - radius}`} />)}</defs>
+          {Array.from({ length: Math.min(3, Math.max(2, changes.length)) }, (_, index) => {
+            const change = changes[index % changes.length];
+            const radius = [128, 98, 68][index];
+            const phrase = `${change.ticker} · ${change.fromLabel} → ${change.toLabel} ·`;
+            return <g className="kit-strip-orbit-ring" data-ring={index} key={`${change.ticker}-${index}`}>
+              <circle cx="150" cy="150" r={radius} />
+              <text><textPath href={`#${orbitId}-ring-${index}`} startOffset="1%">{Array(index === 2 ? 2 : 3).fill(phrase).join(" ")}</textPath></text>
+            </g>;
+          })}
+        </svg>
+        <span className="kit-strip-orbit-core" aria-hidden="true"><span>{changes.length}</span></span>
       </div>
       <div className="kit-strip-viewport">
         <div className="kit-strip-rail">
