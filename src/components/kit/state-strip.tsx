@@ -4,7 +4,6 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { IconArrowRight } from "../icons";
 import { IconPause, IconPlay } from "./kit-icons";
 import { StateChip } from "./state-chip";
-import { TextGlobe } from "./text-globe";
 import type { KitState } from "./types";
 
 export interface StateChange {
@@ -90,7 +89,6 @@ export function StateStrip({ label, changes, empty, pauseLabel, playLabel, secon
           <span>{paused ? playLabel : pauseLabel}</span>
         </button>
       </div>
-      <TextGlobe lines={changes.map((c) => `${c.ticker} · ${c.fromLabel} → ${c.toLabel}`)} paused={paused || offscreen} />
       <div className="kit-strip-viewport">
         <div className="kit-strip-rail">
           <ul className="kit-strip-list">{items(false)}</ul>

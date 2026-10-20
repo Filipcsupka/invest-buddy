@@ -18,7 +18,7 @@ describe("kit palette", () => {
   it("defines every token the kit stylesheet reads", () => {
     const defined = new Set([...globals.matchAll(/(--[\w-]+):/g)].map((m) => m[1]));
     for (const used of new Set([...kitCss.matchAll(/var\((--[\w-]+)/g)].map((m) => m[1]))) {
-      const local = ["--c", "--w", "--value", "--at", "--i", "--to", "--kit-n", "--dial", "--table-bg", "--frame-bg", "--reveal-delay", "--strip-duration", "--globe", "--spin", "--y"];
+      const local = ["--c", "--w", "--value", "--at", "--i", "--to", "--kit-n", "--dial", "--table-bg", "--frame-bg", "--reveal-delay", "--strip-duration"];
       if (!local.includes(used)) expect(defined.has(used), used).toBe(true);
     }
   });
