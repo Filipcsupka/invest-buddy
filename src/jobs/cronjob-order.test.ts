@@ -205,8 +205,8 @@ describe("Monday catch-up", () => {
     // Detect writes a gate per date and extract reads one pending gate per run, so a Monday gate would push Tuesday's gate to Wednesday.
     // A Monday extract is judged on Tuesday against Friday's scores, and Tuesday's detect skips filings already extracted.
     // These run daily and open no gate: pool-bars (discovery_price_bars), earnings-calendar (one Alpha Vantage request), retention,
-    // research-verify (checks stored findings) and research-pipeline-early (candidate rows). None of them calls a model.
-    const daily = ["pool-bars", "earnings-calendar", "retention", "research-verify", "research-pipeline-early"];
+    // research-verify (checks stored findings), research-pipeline-early (candidate rows) and discovery-auto-promote (universe rows, from 2026-10-20). None of them calls a model.
+    const daily = ["pool-bars", "earnings-calendar", "retention", "research-verify", "research-pipeline-early", "discovery-auto-promote"];
     expect(scheduled.filter((job) => job.active && job.days.includes(1) && !daily.includes(job.name)).map((job) => job.name)).toEqual(["collect"]);
     for (const name of ["prices", "watch", "detect", "extract", "macro", "reconcile", "daily", "judge", "digest"]) expect(days(minutes(name).days), name).not.toContain(1);
   });
@@ -281,10 +281,10 @@ describe("GDELT collector proposal", () => {
 
 describe("RS5 research schedule", () => {
   const names = ["weekly", "daily", "verify", "pipeline-early", "pipeline", "notify", "deepdive"];
-  it("runs the research CronJobs except notify (owner secret) and the manual deepdive, with bounded jobs", () => {
+  it("runs the research CronJobs including notify, except the manual deepdive, with bounded jobs", () => {
     for (const name of names) {
       const doc = job(`research-${name}`);
-      expect(doc, name).toContain(["notify", "deepdive"].includes(name) ? "suspend: true" : "suspend: false");
+      expect(doc, name).toContain(["deepdive"].includes(name) ? "suspend: true" : "suspend: false");
       expect(doc, name).toContain("concurrencyPolicy: Forbid");
       expect(doc, name).toContain("backoffLimit: 1");
       expect(deadline(`research-${name}`), name).toBeLessThanOrEqual(["weekly", "daily", "deepdive"].includes(name) ? 40 : 20);

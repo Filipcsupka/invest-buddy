@@ -264,7 +264,7 @@ npm run discovery:promote -- SYMBOL --dry-run
 npm run discovery:promote -- SYMBOL
 ```
 
-After that the normal chain (collect, prices, daily, detect, extract, judge) scores the name from the next run, and the candidate's `in_universe` turns true. Promotion stays a manual owner step, as in DS1. DS1 (`scripts/discovery-promote.ts`) is on an open branch and must merge before RS3 can rely on it.
+After that the normal chain (collect, prices, daily, detect, extract, judge) scores the name from the next run, and the candidate's `in_universe` turns true. Since 2026-10-20 promotion is automatic: CronJob `invest-buddy-discovery-auto-promote` (daily 14:30, `src/jobs/discovery-auto-promote.ts`) promotes pending `discovery_candidates` of the last 3 weeks with state Watch or better, best rule score first, at most 2 a run and 6 a week, skipping warrants, units and other non-common securities. The `discovery:promote` command stays for a manual override. DS1 (`scripts/discovery-promote.ts`) is on an open branch and must merge before RS3 can rely on it.
 
 A non-US name that the collectors cannot price or read stays in `WATCH` with `scorable = false`. Its card says "outside scoring coverage".
 
@@ -378,7 +378,7 @@ Caps and the kill switch (RS5), checked by the runner before every model call in
 | `RESEARCH_MONTHLY_TOKENS` | 12,000,000 | Hard cap: the sum of `research_runs` tokens this calendar month. |
 | `RESEARCH_MONTHLY_USD` | 0 | Hard cap for metered API auth. Codex API auth is refused at startup with any value because its cost cannot be measured. |
 | `RESEARCH_DAILY_CALLS` | 4 | Model calls per day (Sunday allows the 3 weekly calls on top). |
-| `RESEARCH_DAILY_TOKENS` | 600,000 | Research tokens per day. |
+| `RESEARCH_DAILY_TOKENS` | 600,000 | Research tokens per day. The weekly and daily CronJobs set 1,500,000: a Codex weekly call used 310,000 to 380,000 tokens on 2026-10-20, so three groups need about 1.1 million. `RESEARCH_MONTHLY_TOKENS` is 20,000,000 there and `AI_DAILY_TOKEN_CEILING` 2,400,000. |
 | `AI_DAILY_TOKEN_CEILING` | existing | The shared ceiling for extract, judge and research. |
 | `RESEARCH_QUOTA_STOP_5H_PCT`, `RESEARCH_QUOTA_STOP_7D_PCT` | 70, 80 | Stop when the live Claude usage (`scanner/claude-usage.mjs`) is at or above these, at start and during the run. |
 | `RESEARCH_MAX_TURNS`, `RESEARCH_MAX_SEARCHES`, `RESEARCH_MAX_FETCHES` | 30, 40, 60 | Per call. Searches and fetches are asked for in the prompt and counted from the CLI envelope. |
