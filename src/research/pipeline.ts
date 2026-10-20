@@ -65,6 +65,6 @@ export function decideCandidate(c: CandidateInput, today: string): PipelineDecis
   if (state && !c.inUniverse && verified.some(f=>f.polarity==="negative" && fresh)) reviewAt=today;
   const scorable = c.quality==="pass" && c.scorable;
   return { symbol:c.symbol,state,previousState:entered?c.state:null,stateSince:since,reviewAt,reason,reviewDue:!!reviewAt&&reviewAt<=today,
-    inUniverse:c.inUniverse,scorable,proposePromotion:state==="WATCH" && scorable && !c.inUniverse && c.promotionStatus==="none" && verified.length>=2 && verified.some(f=>f.confirmed),lastVerifiedAt:latest };
+    inUniverse:c.inUniverse,scorable,proposePromotion:state==="WATCH" && scorable && !c.inUniverse && c.promotionStatus==="none" && hasQualified,lastVerifiedAt:latest };
 }
 export function decidePipeline(candidates: CandidateInput[], today: string): PipelineDecision[] { return candidates.map(c=>decideCandidate(c,today)); }

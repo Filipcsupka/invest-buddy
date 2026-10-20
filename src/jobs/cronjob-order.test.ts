@@ -206,7 +206,7 @@ describe("Monday catch-up", () => {
     // A Monday extract is judged on Tuesday against Friday's scores, and Tuesday's detect skips filings already extracted.
     // These run daily and open no gate: pool-bars (discovery_price_bars), earnings-calendar (one Alpha Vantage request), retention,
     // research-verify (checks stored findings), research-pipeline-early (candidate rows) and discovery-auto-promote (universe rows, from 2026-10-20). None of them calls a model.
-    const daily = ["pool-bars", "earnings-calendar", "retention", "research-verify", "research-pipeline-early", "discovery-auto-promote", "discovery", "research-weekly"];
+    const daily = ["pool-bars", "earnings-calendar", "retention", "research-verify", "research-pipeline-early", "discovery-auto-promote", "discovery", "research-weekly", "research-scout", "research-verify-pm", "research-pipeline-pm"];
     expect(scheduled.filter((job) => job.active && job.days.includes(1) && !daily.includes(job.name)).map((job) => job.name)).toEqual(["collect"]);
     for (const name of ["prices", "watch", "detect", "extract", "macro", "reconcile", "daily", "judge", "digest"]) expect(days(minutes(name).days), name).not.toContain(1);
   });

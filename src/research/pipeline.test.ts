@@ -4,6 +4,13 @@ const today="2026-10-11";
 const fact={id:1,verified:true,confirmed:true,sourceClass:"primary",polarity:"positive",eventDate:"2026-10-10",verifiedAt:"2026-10-11"};
 const base=(state:CandidateInput["state"]):CandidateInput=>({symbol:"SMPL",companyName:"Sample",state,stateSince:"2026-10-01",reviewAt:"2026-10-31",scorable:true,inUniverse:true,firstSeenAt:"2026-10-01",quality:"pass",held:false,engineAction:null,engineState:null,findings:[fact],promotionStatus:"none",lastVerifiedAt:null});
 describe("research pipeline",()=>{
+  it("proposes promotion from one verified primary finding, but not from an aggregator or a name already in the universe",()=>{
+    const watch={...base("WATCH"),inUniverse:false};
+    expect(decideCandidate({...watch,findings:[{...fact,confirmed:false}]},today).proposePromotion).toBe(true);
+    expect(decideCandidate({...watch,findings:[{...fact,sourceClass:"aggregator"}]},today).proposePromotion).toBe(false);
+    expect(decideCandidate({...watch,inUniverse:true},today).proposePromotion).toBe(false);
+    expect(decideCandidate({...watch,quality:"pending",scorable:false},today).proposePromotion).toBe(false);
+  });
   it("covers every transition row",()=>{
     const cases:{from:CandidateInput["state"];to:CandidateInput["state"];patch:Partial<CandidateInput>}[]=[
       {from:null,to:"DISCOVERED",patch:{findings:[{...fact,verified:false}]}},

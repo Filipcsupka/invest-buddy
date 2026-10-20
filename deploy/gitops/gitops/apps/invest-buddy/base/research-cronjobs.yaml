@@ -617,3 +617,256 @@ spec:
               emptyDir: {}
             - name: scan-out
               emptyDir: {}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: invest-buddy-research-scout
+  namespace: invest
+spec:
+  suspend: false
+  schedule: "0 13 * * 0-6"
+  timeZone: Europe/Bratislava
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 2400
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: invest-buddy
+            app.kubernetes.io/component: research-scout
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          nodeSelector:
+            kubernetes.io/hostname: k8s-worker-01
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            fsGroup: 10001
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: research-scout
+              image: ghcr.io/filipcsupka/invest-buddy-scanner:latest
+              command: ["/bin/sh", "-ec"]
+              args:
+                - 'exec node /app/scanner/run-research.mjs --type weekly --timeout-s 700'
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              env:
+                - name: RESEARCH_ENABLED
+                  valueFrom:
+                    configMapKeyRef:
+                      name: invest-buddy-research-config
+                      key: RESEARCH_ENABLED
+                - name: INGEST_BASE_URL
+                  value: http://web.invest.svc.cluster.local:3000
+                - name: INGEST_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-secrets
+                      key: INGEST_TOKEN
+                - name: CLAUDE_CODE_OAUTH_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-scanner-secrets
+                      key: CLAUDE_CODE_OAUTH_TOKEN
+                - name: CODEX_ACCESS_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-codex-token
+                      key: CODEX_ACCESS_TOKEN
+                      optional: true
+                - name: RESEARCH_ADAPTER
+                  value: codex
+                - name: RESEARCH_FALLBACK_ADAPTER
+                  value: claude
+                - name: RESEARCH_CODEX_QUOTA_UNKNOWN
+                  value: allow
+                - name: AI_DAILY_TOKEN_CEILING
+                  valueFrom:
+                    configMapKeyRef:
+                      name: invest-buddy-research-config
+                      key: AI_DAILY_TOKEN_CEILING
+              volumeMounts:
+                - name: tmp
+                  mountPath: /tmp
+                - name: scanner-home
+                  mountPath: /home/scanner
+                - name: scan-out
+                  mountPath: /app/scanner/out
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+                limits:
+                  cpu: "2"
+                  memory: 1Gi
+          volumes:
+            - name: tmp
+              emptyDir: {}
+            - name: scanner-home
+              emptyDir: {}
+            - name: scan-out
+              emptyDir: {}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: invest-buddy-research-verify-pm
+  namespace: invest
+spec:
+  suspend: false
+  schedule: "40 13 * * 0-6"
+  timeZone: Europe/Bratislava
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 900
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: invest-buddy
+            app.kubernetes.io/component: research-verify-pm
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          nodeSelector:
+            kubernetes.io/hostname: k8s-worker-01
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            fsGroup: 10001
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: research-verify-pm
+              image: ghcr.io/filipcsupka/invest-buddy:latest
+              command: ["node", "dist/jobs/research-verify.js"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              env:
+                - name: RESEARCH_ENABLED
+                  valueFrom:
+                    configMapKeyRef:
+                      name: invest-buddy-research-config
+                      key: RESEARCH_ENABLED
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-secrets
+                      key: DATABASE_URL
+                - name: SEC_USER_AGENT
+                  valueFrom:
+                    configMapKeyRef:
+                      name: invest-buddy-reconcile-config
+                      key: SEC_USER_AGENT
+              volumeMounts:
+                - name: tmp
+                  mountPath: /tmp
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+                limits:
+                  cpu: "2"
+                  memory: 1Gi
+          volumes:
+            - name: tmp
+              emptyDir: {}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: invest-buddy-research-pipeline-pm
+  namespace: invest
+spec:
+  suspend: false
+  schedule: "10 14 * * 0-6"
+  timeZone: Europe/Bratislava
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 1200
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: invest-buddy
+            app.kubernetes.io/component: research-pipeline-pm
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          nodeSelector:
+            kubernetes.io/hostname: k8s-worker-01
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            fsGroup: 10001
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: research-pipeline-pm
+              image: ghcr.io/filipcsupka/invest-buddy:latest
+              command: ["node", "dist/jobs/research-pipeline.js"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              env:
+                - name: RESEARCH_ENABLED
+                  valueFrom:
+                    configMapKeyRef:
+                      name: invest-buddy-research-config
+                      key: RESEARCH_ENABLED
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-secrets
+                      key: DATABASE_URL
+                - name: SEC_USER_AGENT
+                  valueFrom:
+                    configMapKeyRef:
+                      name: invest-buddy-reconcile-config
+                      key: SEC_USER_AGENT
+                - name: TWELVE_DATA_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-market-secrets
+                      key: TWELVE_DATA_API_KEY
+              volumeMounts:
+                - name: tmp
+                  mountPath: /tmp
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+                limits:
+                  cpu: "2"
+                  memory: 1Gi
+          volumes:
+            - name: tmp
+              emptyDir: {}
