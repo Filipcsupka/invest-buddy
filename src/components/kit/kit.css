@@ -558,6 +558,47 @@
   width: 0.875rem;
   height: 0.875rem;
 }
+/* The orbit is an optional visual control. The readable list stays below it. */
+.kit-strip-orbit { display: none; }
+@media (min-width: 481px) and (prefers-reduced-motion: no-preference) {
+  .kit-strip[data-orbit-ready] .kit-strip-orbit {
+    position: relative;
+    display: grid;
+    place-items: center;
+    justify-self: center;
+    width: 15rem;
+    height: 15rem;
+    border-radius: 50%;
+    background: var(--navy);
+    color: var(--navy-ink);
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+  }
+  .kit-strip-orbit[data-dragging] { cursor: grabbing; }
+  .kit-strip-orbit:focus-visible { outline: 2px solid var(--signal); outline-offset: 3px; }
+  .kit-strip-orbit-wheel { width: 100%; height: 100%; transform: rotate(var(--orbit-angle, 0deg)); transition: transform 950ms var(--ease-expo); }
+  .kit-strip-orbit[data-dragging] .kit-strip-orbit-wheel { transition: none; }
+  .kit-strip-orbit-ring { transform-origin: 150px 150px; animation: kit-orbit-turn calc(var(--strip-duration) * 5) linear infinite; }
+  .kit-strip-orbit-ring[data-ring="1"] { animation-duration: calc(var(--strip-duration) * 4); animation-direction: reverse; animation-delay: -17s; }
+  .kit-strip-orbit-ring[data-ring="2"] { animation-duration: calc(var(--strip-duration) * 3); animation-delay: -31s; }
+  .kit-strip-orbit-ring circle { fill: none; stroke: var(--navy-ink-2); stroke-width: 1; opacity: 0.6; }
+  .kit-strip-orbit-ring text { fill: var(--navy-ink); font-family: var(--display); font-size: 17px; font-weight: 750; letter-spacing: 0.025em; }
+  .kit-strip-orbit-ring[data-ring="1"] text { font-size: 15px; fill: var(--navy-ink-2); }
+  .kit-strip-orbit-ring[data-ring="2"] text { font-size: 13px; }
+  .kit-strip-orbit-core { position: absolute; display: grid; place-items: center; width: 3.75rem; height: 3.75rem; border: 1px solid var(--navy-ink-2); border-radius: 50%; background: var(--navy-2); color: var(--navy-ink); pointer-events: none; }
+  .kit-strip-orbit-core span { font-family: var(--display); font-size: 1.75rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .kit-strip:hover .kit-strip-orbit-ring,
+  .kit-strip:focus-within .kit-strip-orbit-ring,
+  .kit-strip[data-paused] .kit-strip-orbit-ring,
+  .kit-strip-orbit[data-dragging] .kit-strip-orbit-ring { animation-play-state: paused; }
+}
+@keyframes kit-orbit-turn {
+  from { rotate: -360deg; }
+}
+@media print {
+  .kit-strip-orbit { display: none !important; }
+}
 /* Positioned, so visually hidden text inside the moving rail is clipped with it instead of widening the page. */
 .kit-strip-viewport {
   position: relative;
@@ -569,6 +610,10 @@
   width: max-content;
   animation: kit-marquee var(--strip-duration, 40s) linear infinite;
 }
+.kit-strip:not([data-orbit-ready]) .kit-strip-rail { animation: none; }
+.kit-strip:not([data-orbit-ready]) .kit-strip-copy,
+.kit-strip:not([data-orbit-ready]) .kit-strip-toggle { display: none; }
+.kit-strip:not([data-orbit-ready]) .kit-strip-viewport { overflow-x: auto; mask-image: none; }
 .kit-strip:hover .kit-strip-rail,
 .kit-strip:focus-within .kit-strip-rail,
 .kit-strip[data-paused] .kit-strip-rail {
@@ -633,6 +678,12 @@ a.kit-strip-link:hover .kit-strip-ticker {
     overflow-x: auto;
     mask-image: none;
   }
+  .kit-strip-rail { animation: none; }
+}
+@media print {
+  .kit-strip-rail { animation: none; }
+  .kit-strip-copy, .kit-strip-toggle { display: none; }
+  .kit-strip-viewport { overflow-x: visible; mask-image: none; }
 }
 
 /* ── Tiers ─────────────────────────────────────────────────── */
@@ -1052,4 +1103,55 @@ a.kit-card:hover,
 .kit-tabs [aria-selected="true"] {
   background: var(--navy);
   color: var(--navy-ink);
+}
+/* Rule radar: fixed bearings, one scan on load, all findings remain links. */
+.kit-radar {
+  --radar-state: var(--st-none);
+  --radar-on: var(--st-none-on);
+  width: 19rem;
+  max-width: 100%;
+  aspect-ratio: 1;
+  padding: 0.625rem;
+  border-radius: var(--radius-lg);
+  background: var(--navy);
+  color: var(--navy-ink);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--navy-ink) 20%, transparent);
+}
+.kit-radar[data-state="setup"] { --radar-state: var(--st-setup); --radar-on: var(--st-setup-on); }
+.kit-radar[data-state="watch"] { --radar-state: var(--st-watch); --radar-on: var(--st-watch-on); }
+.kit-radar[data-state="wait"] { --radar-state: var(--st-wait); --radar-on: var(--st-wait-on); }
+.kit-radar[data-state="ignore"] { --radar-state: var(--st-ignore); --radar-on: var(--st-ignore-on); }
+.kit-radar[data-state="broken"] { --radar-state: var(--st-broken); --radar-on: var(--st-broken-on); }
+.kit-radar-plate { position: relative; width: 100%; height: 100%; overflow: hidden; border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, var(--signal) 15%, var(--navy)) 0%, var(--navy) 68%); }
+.kit-radar-ring { position: absolute; inset: 50%; border: 1px solid color-mix(in srgb, var(--navy-ink) 29%, transparent); border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; }
+.kit-radar-ring-a { width: 40%; height: 40%; }
+.kit-radar-ring-b { width: 67%; height: 67%; }
+.kit-radar-ring-c { width: 92%; height: 92%; }
+.kit-radar-axis { position: absolute; background: color-mix(in srgb, var(--navy-ink) 15%, transparent); pointer-events: none; }
+.kit-radar-axis-x { top: 50%; width: 100%; height: 1px; }
+.kit-radar-axis-y { left: 50%; height: 100%; width: 1px; }
+.kit-radar-sweep { position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(from -130deg, transparent 0deg, transparent 316deg, color-mix(in srgb, var(--signal) 38%, transparent) 359deg, transparent 360deg); opacity: 0; transform: rotate(220deg); pointer-events: none; }
+.kit-radar-ping { position: absolute; z-index: 2; left: var(--x); top: var(--y); display: grid; place-items: center; width: 2.25rem; height: 2.25rem; transform: translate(-50%, -50%); border: 1.5px solid var(--navy-ink-2); border-radius: 50%; background: var(--navy); color: var(--navy-ink); text-decoration: none; font-size: 0.875rem; font-weight: 800; line-height: 1; }
+.kit-radar-ping[data-result="pass"] { border-color: var(--radar-state); background: var(--radar-state); color: var(--radar-on); }
+.kit-radar-ping[data-result="fail"] { border-color: var(--navy-ink-2); color: var(--navy-ink-2); }
+.kit-radar-ping[data-result="none"] { border-style: dashed; color: var(--navy-ink-2); }
+.kit-radar-ping:hover, .kit-radar-ping:focus-visible { z-index: 5; outline: 2px solid var(--navy-ink); outline-offset: 3px; }
+.kit-radar-ping-core { display: block; }
+.kit-radar-centre { position: absolute; z-index: 3; top: 50%; left: 50%; display: grid; place-content: center; gap: 0.1rem; width: 41%; height: 41%; transform: translate(-50%, -50%); border: 1px solid var(--navy-ink-2); border-radius: 50%; background: var(--navy); text-align: center; }
+.kit-radar-value { font-family: var(--display); font-size: clamp(1.45rem, 3vw, 2.25rem); font-weight: 800; line-height: 1; }
+.kit-radar-caption { max-width: 8ch; margin: auto; color: var(--navy-ink-2); font-size: 0.625rem; line-height: 1.25; }
+@keyframes kit-radar-scan {
+  from { opacity: 1; transform: rotate(-140deg); }
+}
+@keyframes kit-radar-ping-in {
+  from { opacity: 0; scale: 0.6; }
+}
+@keyframes kit-radar-pulse {
+  from { box-shadow: 0 0 0 0.55rem color-mix(in srgb, var(--radar-state) 60%, transparent); }
+}
+.kit-radar[data-motion="run"] .kit-radar-sweep { animation: kit-radar-scan 1600ms ease-out both; }
+.kit-radar[data-motion="run"] .kit-radar-ping { animation: kit-radar-ping-in 360ms ease-out calc(180ms + var(--i) * 90ms) both; }
+.kit-radar[data-motion="run"] .kit-radar-ping[data-result="pass"] { animation: kit-radar-ping-in 360ms ease-out calc(180ms + var(--i) * 90ms) both, kit-radar-pulse 500ms ease-out calc(450ms + var(--i) * 90ms) both; }
+@media (prefers-reduced-motion: reduce), print {
+  .kit-radar[data-motion="run"] .kit-radar-sweep, .kit-radar[data-motion="run"] .kit-radar-ping { animation: none; }
 }

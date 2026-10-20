@@ -1,8 +1,7 @@
 /* Company page. Loaded by page.tsx only. Every colour is a token from globals.css; band hues (--st-*) mark state only.
-   Structure: a hero card (identity, last close, state, score dial), a sticky tab bar, then a main column of cards
+   Structure: a hero card (identity, last close, state, rule radar), a sticky tab bar, then a main column of cards
    (chart, rules, rejection checks, evidence, history) beside a rail (summary, key facts, sources, flags). One column
-   below 1320px. The authored moment is the reading settling: the dial on first paint, the rule marks checking in once
-   when the rule table scrolls into view. Everything else is still. */
+   below 1320px. The authored moment is the radar scan on first paint. */
 
 .company [id] {
   scroll-margin-top: calc(var(--header-h) + 4.5rem);
@@ -12,7 +11,7 @@
 .company .company-head.co-hero {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas: "id dial" "foot foot";
+  grid-template-areas: "id radar" "foot foot";
   gap: var(--s5) var(--s7);
   align-items: center;
   padding: var(--s6);
@@ -27,8 +26,8 @@
   gap: var(--s3);
   min-width: 0;
 }
-.co-hero-dial {
-  grid-area: dial;
+.co-hero-radar {
+  grid-area: radar;
   justify-self: end;
 }
 .co-hero-foot {
@@ -615,15 +614,12 @@
 @media (max-width: 640px) {
   .company .company-head.co-hero {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: "id" "dial" "foot";
+    grid-template-areas: "id" "radar" "foot";
     gap: var(--s4);
     padding: var(--s4);
   }
-  .co-hero-dial {
+  .co-hero-radar {
     justify-self: start;
-  }
-  .co-hero-dial .kit-dial {
-    --dial: 7.5rem;
   }
   .co-card,
   .co-card.co-summary,
