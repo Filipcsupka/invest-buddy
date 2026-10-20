@@ -33,7 +33,10 @@ const en = {
     noScore: "No score",
     valueText: "{percent} of the points with data, {state}",
     ofData: "of the points with data",
-    ruleCountJoin: "of",
+  },
+  scan: {
+    title: "Rule scan",
+    caption: "of the points with data",
   },
   strip: {
     label: "State changes, {date}",
@@ -146,7 +149,10 @@ const sk: typeof en = {
     noScore: "Bez skóre",
     valueText: "{percent} bodov s údajmi, {state}",
     ofData: "z bodov s údajmi",
-    ruleCountJoin: "z",
+  },
+  scan: {
+    title: "Sken pravidiel",
+    caption: "z bodov s údajmi",
   },
   strip: {
     label: "Zmeny stavov, {date}",
