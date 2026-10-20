@@ -15,7 +15,7 @@ metadata:
   namespace: invest
 spec:
   suspend: false
-  schedule: "0 1 * * *"
+  schedule: "0 1 * * 0-6"
   timeZone: Europe/Bratislava
   concurrencyPolicy: Forbid
   startingDeadlineSeconds: 300

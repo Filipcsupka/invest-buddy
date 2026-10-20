@@ -324,7 +324,7 @@ metadata:
 spec:
   suspend: false
   # Daily at 09:30; results are keyed by ISO week, so reruns add new names to the current week. Finds new tickers outside the universe, scores them with the same rules and stores candidates; promoted ones enter the universe for the next weekday chain.
-  schedule: "30 9 * * *"
+  schedule: "30 9 * * 0-6"
   timeZone: Europe/Bratislava
   concurrencyPolicy: Forbid
   startingDeadlineSeconds: 600

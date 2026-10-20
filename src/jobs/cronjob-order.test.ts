@@ -168,7 +168,7 @@ describe("daily pipeline order", () => {
   });
   it("keeps Saturday's weekly jobs after the weekday chain without overlap", () => {
     expect(minutes("collect-alphavantage")).toEqual({ at: 8 * 60, days: "6" });
-    expect(minutes("discovery")).toEqual({ at: 9 * 60 + 30, days: "6" });
+    expect(minutes("discovery")).toEqual({ at: 9 * 60 + 30, days: "0-6" });
     expect(minutes("collect-alphavantage").at + startWindow("collect-alphavantage") + deadline("collect-alphavantage")).toBeLessThanOrEqual(minutes("discovery").at);
     expect(minutes("judge").at + startWindow("judge") + deadline("judge")).toBeLessThanOrEqual(minutes("collect-alphavantage").at);
   });
@@ -206,7 +206,7 @@ describe("Monday catch-up", () => {
     // A Monday extract is judged on Tuesday against Friday's scores, and Tuesday's detect skips filings already extracted.
     // These run daily and open no gate: pool-bars (discovery_price_bars), earnings-calendar (one Alpha Vantage request), retention,
     // research-verify (checks stored findings), research-pipeline-early (candidate rows) and discovery-auto-promote (universe rows, from 2026-10-20). None of them calls a model.
-    const daily = ["pool-bars", "earnings-calendar", "retention", "research-verify", "research-pipeline-early", "discovery-auto-promote"];
+    const daily = ["pool-bars", "earnings-calendar", "retention", "research-verify", "research-pipeline-early", "discovery-auto-promote", "discovery", "research-weekly"];
     expect(scheduled.filter((job) => job.active && job.days.includes(1) && !daily.includes(job.name)).map((job) => job.name)).toEqual(["collect"]);
     for (const name of ["prices", "watch", "detect", "extract", "macro", "reconcile", "daily", "judge", "digest"]) expect(days(minutes(name).days), name).not.toContain(1);
   });
@@ -304,7 +304,7 @@ describe("RS5 research schedule", () => {
   it("orders the research work around daily score, judge and digest", () => {
     const order = ["research-daily", "research-verify", "research-pipeline-early", "daily", "research-pipeline", "judge", "research-notify", "digest"];
     for (let i = 1; i < order.length; i++) expect(minutes(order[i]).at, order[i]).toBeGreaterThan(minutes(order[i - 1]).at);
-    expect(minutes("research-weekly")).toEqual({ at: 60, days: "0" });
+    expect(minutes("research-weekly")).toEqual({ at: 60, days: "0-6" });
     expect(minutes("research-daily")).toEqual({ at: 160, days: "2-6" });
     expect(minutes("research-verify").days).toBe("0-6");
     expect(job("research-deepdive")).toContain('schedule: "0 0 1 1 *"');
