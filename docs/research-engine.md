@@ -57,7 +57,7 @@ The scanner image never gets database credentials. It reads its input from a pro
 
 | Run | When (Europe/Bratislava) | Scope | Model calls | Output |
 | --- | --- | --- | --- | --- |
-| `weekly_discovery` | Sunday 01:00, inside the 00:00 to 07:00 subscription window | All themes in `scanner/prompts/research-themes.json`, beyond the universe | 3 calls: AI and infrastructure themes; the robotics track alone; the other themes | New candidates, chains, findings on known names |
+| `weekly_discovery` | Daily 01:00 | All themes in `scanner/prompts/research-themes.json`, beyond the universe | 3 calls: AI and infrastructure themes; the robotics track alone; the other themes | New candidates, chains, findings on known names |
 | `daily_watch` | Tuesday to Saturday 02:40, after extract starts and before the 04:10 daily score | Up to 25 symbols chosen by script (below) | 1 call | Findings on watched names |
 | `deep_dive` | On demand, one manual Job per ticker | One ticker and its beneficiary chain | 1 call | Findings, chains and one candidate |
 
@@ -369,26 +369,20 @@ Claude comes first. It already runs extract and judge in the cluster on the subs
 
 Codex comes second (RS7): `codex --search -a never exec --sandbox read-only --skip-git-repo-check --ephemeral --ignore-user-config --ignore-rules --output-schema <file> -C <empty dir> -o <file>`, as documented in `scanner/README.md`. The adapter code is in `scanner/research-adapters.mjs`; it adds `--json` after `-o` to read token usage, and reads the reply from the `-o` file. The output schema is derived from `$defs.modelOutput` by `deriveStrictSchema` (refs inlined, keywords strict mode rejects removed, every object closed with all properties required), and the validator still runs on the reply. In the cluster, `CODEX_ACCESS_TOKEN` comes from secret `invest-buddy-codex-token`. The adapter feeds it to `codex login --with-access-token` on stdin, checks `codex login status`, and removes the private temporary `CODEX_HOME` after each call. Local runs can still use a login in `CODEX_HOME`. The API key path is disabled because no Codex token price is documented in this repo, so `RESEARCH_MONTHLY_USD` cannot cap its spend.
 
-Caps and the kill switch (RS5), checked by the runner before every model call in this order:
+Kill switch and quota stops (RS5), checked by the runner before every model call. Owner decision 2026-10-20: there are no token, call, USD or time-window caps. The Claude and Codex subscriptions have their own five-hour limits, and those are the only usage stops.
 
 | Env | Default | Effect |
 | --- | --- | --- |
 | `RESEARCH_ENABLED` | `off` | Kill switch. Any value other than `on` ends the run before a model call, with status `killed`. Verify and pipeline jobs still process stored rows. |
-| `RESEARCH_WINDOW` | `00:00-07:00` | Subscription runs only inside this window (Europe/Bratislava). A deep dive outside it needs `--manual` and still passes the quota check. |
-| `RESEARCH_MONTHLY_TOKENS` | 12,000,000 | Hard cap: the sum of `research_runs` tokens this calendar month. |
-| `RESEARCH_MONTHLY_USD` | 0 | Hard cap for metered API auth. Codex API auth is refused at startup with any value because its cost cannot be measured. |
-| `RESEARCH_DAILY_CALLS` | 4 | Model calls per day (Sunday allows the 3 weekly calls on top). |
-| `RESEARCH_DAILY_TOKENS` | 600,000 | Research tokens per day. The weekly and daily CronJobs set 1,500,000: a Codex weekly call used 310,000 to 380,000 tokens on 2026-10-20, so three groups need about 1.1 million. `RESEARCH_MONTHLY_TOKENS` is 20,000,000 there and `AI_DAILY_TOKEN_CEILING` 2,400,000. |
-| `AI_DAILY_TOKEN_CEILING` | existing | The shared ceiling for extract, judge and research. |
-| `RESEARCH_QUOTA_STOP_5H_PCT`, `RESEARCH_QUOTA_STOP_7D_PCT` | 70, 80 | Stop when the live Claude usage (`scanner/claude-usage.mjs`) is at or above these, at start and during the run. |
+| `AI_DAILY_TOKEN_CEILING` | 0 | Off. Nothing enforces a shared token ceiling. |
+| `RESEARCH_QUOTA_STOP_5H_PCT`, `RESEARCH_QUOTA_STOP_7D_PCT` | 90, 90 | Stop when the live Claude usage (`scanner/claude-usage.mjs`) is at or above these, at start and during the run. An unreadable reading (403, 429) does not stop the run. Codex stops at a reported 90 percent. |
 | `RESEARCH_MAX_TURNS`, `RESEARCH_MAX_SEARCHES`, `RESEARCH_MAX_FETCHES` | 30, 40, 60 | Per call. Searches and fetches are asked for in the prompt and counted from the CLI envelope. |
 | `RESEARCH_ADAPTER` | `claude` | `claude` or `codex`. |
 | `RESEARCH_FALLBACK_ADAPTER` | unset | `codex` makes a call that Claude gate-skips as `skipped_quota` (for example live usage 429) run on Codex instead, per group. Codex still needs its own gates: window, caps, token. Set on `research-weekly` and `research-daily`. |
-| `RESEARCH_CODEX_DAILY_CALLS` | 2 | Codex calls per day. 3 on the weekly and daily CronJobs so a Sunday weekly run (3 groups) is not cut to 2. |
 | `RESEARCH_CODEX_QUOTA_UNKNOWN` | unset | `allow` lets a Codex access token or local login run when no rate limit is reported. |
 | `RESEARCH_CODEX_MODEL` | CLI default | Passed as `-m` when set. |
 
-The defaults are placeholders for the owner. A skipped call is still logged in `research_runs` with its reason (`skipped_cap`, `skipped_quota`, `skipped_window`), so the cost log has no gaps. Each call reserves and finishes a row in `ai_budget_calls` with kind `research`, so the AI usage report covers it.
+A skipped call is still logged in `research_runs` with its reason (`killed`, `skipped_quota`), so the cost log has no gaps. Only one research call runs at a time. Tokens are still recorded in `ai_budget_calls` for reporting.
 
 The Codex account is shared with the owner's own coding agents. The Codex adapter runs only inside the window, at most 2 calls a day, and skips at a reported rate limit of 50% or more. A local `codex-cli 0.163.0` run on 2026-10-19 reported `turn.completed.usage.input_tokens`, `cached_input_tokens`, `cache_write_input_tokens`, `output_tokens` and `reasoning_output_tokens`. It reported no rate limit or cost field. The adapter reads `rate_limits.*.used_percent` if a later CLI event supplies it. With no reading before the first call, an access token or local login run skips unless the owner sets `RESEARCH_CODEX_QUOTA_UNKNOWN=allow`; later calls in the same process use the last reading. The call count comes from `codexDailyCalls` in the research-caps usage report. Codex records token counts and `used_usd=0`; zero is not an estimate of actual API spend. API auth remains disabled until a documented price allows `RESEARCH_MONTHLY_USD` to be enforced.
 
