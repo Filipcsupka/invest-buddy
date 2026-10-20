@@ -335,6 +335,16 @@ spec:
                     secretKeyRef:
                       name: invest-buddy-secrets
                       key: DATABASE_URL
+                - name: SEC_USER_AGENT
+                  valueFrom:
+                    configMapKeyRef:
+                      name: invest-buddy-reconcile-config
+                      key: SEC_USER_AGENT
+                - name: TWELVE_DATA_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-market-secrets
+                      key: TWELVE_DATA_API_KEY
               volumeMounts:
                 - name: tmp
                   mountPath: /tmp
@@ -403,6 +413,16 @@ spec:
                     secretKeyRef:
                       name: invest-buddy-secrets
                       key: DATABASE_URL
+                - name: SEC_USER_AGENT
+                  valueFrom:
+                    configMapKeyRef:
+                      name: invest-buddy-reconcile-config
+                      key: SEC_USER_AGENT
+                - name: TWELVE_DATA_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-market-secrets
+                      key: TWELVE_DATA_API_KEY
               volumeMounts:
                 - name: tmp
                   mountPath: /tmp
