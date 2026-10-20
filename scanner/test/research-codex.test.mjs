@@ -170,7 +170,6 @@ test("codex auth check: a local login must pass codex login status", () => {
   assert.equal(researchAdapter("codex"), codexResearchAdapter);
 });
 
-const now = new Date("2026-10-11T01:00:00Z");
 const usage = { day: "2026-10-11", month: "2026-10", monthlyTokens: 10, monthlyUsd: 1, dailyCalls: 0, codexDailyCalls: 0, dailyTokens: 10, sharedDailyTokens: 10 };
 const gate = (env, override = {}) => checkResearchCaps({ env: { RESEARCH_ENABLED: "on", ...env }, adapter: "codex", authSource: "codex", usage, liveUsage: async () => { throw new Error("Claude quota must not be read"); }, ...override });
 

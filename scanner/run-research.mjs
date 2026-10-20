@@ -76,7 +76,7 @@ export function buildPrompt(opts, input, group, themesConfig) {
 const modelOutput = (value) => value?.output && !value?.findings ? value.output : value;
 const statusFrom = (result) => result.cutoff ? "cutoff" : "ok";
 export async function execute(opts, { adapter = researchAdapter(process.env.RESEARCH_ADAPTER || "claude"), fallbackAdapter = process.env.RESEARCH_FALLBACK_ADAPTER ? researchAdapter(process.env.RESEARCH_FALLBACK_ADAPTER) : null, log = console.log,
-  env = process.env, now = () => new Date(), liveUsage } = {}) {
+  env = process.env, liveUsage } = {}) {
   // Fail before any network or model call when the adapter has no usable auth.
   if (adapter.failAtStart) { const auth = adapter.available(env); if (!auth.ok) throw new Error(`RESEARCH_ADAPTER=${adapter.name}: ${auth.reason}`); }
   const authSource = adapter.authSource?.(env) ?? (env.ANTHROPIC_API_KEY ? "api" : "subscription");
@@ -95,7 +95,6 @@ export async function execute(opts, { adapter = researchAdapter(process.env.RESE
   mkdirSync(outDir, { recursive: true });
   const groups = callGroups(opts, input, themesConfig);
   const results = [];
-  let modelCalls = 0;
   const live = liveUsage ?? (() => fetchLiveUsage(env.CLAUDE_CODE_OAUTH_TOKEN));
   for (const group of groups) {
     const runId = randomUUID();
@@ -126,7 +125,6 @@ export async function execute(opts, { adapter = researchAdapter(process.env.RESE
       results.push({ skipped: "skipped_cap", posted: true, errors: [] });
       continue;
     }
-    modelCalls += 1;
     const workDir = mkdtempSync(join(tmpdir(), "invest-research-"));
     const started = performance.now();
     let result, output, error = null, adapterFailed = false;

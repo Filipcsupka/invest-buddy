@@ -34,7 +34,7 @@ export async function checkLiveResearchQuota({ env = process.env, liveUsage = ()
 }
 
 /** `codexQuota` returns { pct } when `codex exec --json` has reported a rate limit, otherwise null. An unknown reading does not stop the run. */
-export async function checkCodexQuota({ env = process.env, codexQuota }) {
+export async function checkCodexQuota({ codexQuota }) {
   const reading = await codexQuota?.();
   if (reading && Number.isFinite(reading.pct) && reading.pct >= 0 && reading.pct <= 100 && reading.pct >= CODEX_QUOTA_STOP_PCT)
     return skipped("skipped_quota", `Codex rate limit at ${reading.pct}%`);

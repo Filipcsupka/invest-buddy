@@ -43,17 +43,6 @@ it("serializes research reservations and rejects an overlapping call", async () 
 
 const caps = { monthlyTokens: 1000, monthlyUsd: 0, dailyCalls: 9, dailyTokens: 500, sharedDailyTokens: 0 };
 const research = (id: string, overrideCaps?: { dailyCalls: number; monthlyCalls: number }) => ({ id, kind: "research" as const, agent: "claude" as const, authSource: "subscription" as const, model: "sonnet", caps, overrideCaps });
-const usageRow = (daily: number, monthly: number) => ({ day: "2026-10-11", month: "2026-10", monthly_tokens: "0", monthly_usd: "0", daily_calls: String(daily), monthly_calls: String(monthly), codex_daily_calls: "0", daily_tokens: "0", shared_daily_tokens: "0" });
-const fakeDb = (daily: number, monthly: number) => {
-  const sql: string[] = [];
-  const client = { query: async (statement: string) => {
-    sql.push(statement);
-    if (statement.includes("count(*)::text")) return { rows: [{ count: "0" }] };
-    if (statement.includes("WITH clock")) return { rows: [usageRow(daily, monthly)] };
-    return { rows: [] };
-  }, release: () => {} };
-  return { sql, db: { query: client.query, connect: async () => client } };
-};
 
 it("research reservation has no token or call cap and only refuses while another research call is active", async () => {
   for (const [active, recorded] of [["0", true], ["1", false]] as const) {
