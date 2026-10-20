@@ -1,0 +1,25 @@
+.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s2); margin-bottom: var(--s5); }
+.tile { composes: tile from "./scanner-bento.module.css"; grid-template-rows: auto auto 1fr auto; min-height: 10.5rem; }
+.tile:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+.kicker { color: var(--ink-2); font-size: var(--t-xs); font-weight: 700; }
+.name { align-self: end; min-width: 0; font-family: var(--display); font-size: var(--t-base); line-height: 1.2; overflow-wrap: anywhere; }
+.big { align-self: end; font-family: var(--display); font-size: clamp(1.5rem, 2.8vw, 2.25rem); font-weight: 800; font-variant-numeric: tabular-nums lining-nums; line-height: 1.05; }
+.big[data-direction="up"] { color: var(--signal-strong); }
+.big[data-direction="down"] { color: var(--st-ignore); }
+.big[data-direction="none"] { font-size: var(--t-base); color: var(--ink-3); }
+.of { color: var(--ink-2); font-size: 0.65em; }
+.distribution { display: flex; align-items: stretch; gap: 2px; height: 0.5rem; }
+.distribution > span { flex: 1; min-width: 2px; border-radius: 2px; }
+.up, .rules { background: var(--signal); }
+.down { background: var(--st-ignore); }
+.flat { background: var(--rule-strong); }
+.missing { border: 1px dashed var(--rule-strong); }
+.split, .coverageBar { display: flex; overflow: hidden; height: 0.5rem; border-radius: var(--radius-pill); background: var(--sheet-hover); }
+.split > span:first-child, .coverageBar > span { background: var(--signal); }
+.split > span:nth-child(2) { background: var(--st-ignore); }
+.coverageBar { border: 1px dashed var(--rule-strong); }
+.detail { color: var(--ink-2); font-size: var(--t-xs); line-height: 1.35; }
+.srOnly { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+@media (min-width: 960px) { .grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 420px) { .grid { grid-template-columns: 1fr; } }
+@media print { .tile { box-shadow: none; break-inside: avoid; } }

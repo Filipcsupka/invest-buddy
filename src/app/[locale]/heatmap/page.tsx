@@ -2,8 +2,9 @@ import { withPageLog } from "@/app/page-log";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { AppPageHead, HeadDisclosure, MetaChip, appPageClass } from "@/components/app-page-head";
+import { HeatmapBento } from "@/components/heatmap-bento";
 import { latestScores } from "@/data/store";
-import { aggregateSectors, intensity, metrics, parseMetric, type HeatMetric } from "@/heatmap/aggregate";
+import { aggregateSectors, intensity, metrics, parseHeatSort, parseMetric, sectorId, sortHeatCells, summarizeHeatmap, type HeatMetric } from "@/heatmap/aggregate";
 import { fill, formatDate, getMessages, intlTag, type Locale } from "@/i18n";
 import { getHeatmapMessages } from "@/i18n/heatmap-messages";
 import { pageMetadata } from "@/i18n/metadata";
@@ -13,7 +14,7 @@ import styles from "./heatmap.module.css";
 
 export const dynamic = "force-dynamic";
 
-type Props = LocaleParams & { searchParams?: Promise<{ metric?: string | string[] }> };
+type Props = LocaleParams & { searchParams?: Promise<{ metric?: string | string[]; sort?: string | string[] }> };
 
 export async function generateMetadata({ params }: LocaleParams): Promise<Metadata> {
   const locale = await resolveLocale(params);
@@ -37,9 +38,12 @@ async function Heatmap({ params, searchParams }: Props) {
   const locale = await resolveLocale(params);
   const m = getMessages(locale);
   const h = getHeatmapMessages(locale);
-  const metric = parseMetric((await searchParams)?.metric);
+  const query = await searchParams;
+  const metric = parseMetric(query?.metric);
+  const sort = parseHeatSort(query?.sort);
   const data = await latestScores();
   const sectors = aggregateSectors(data.rows, metric);
+  const summary = summarizeHeatmap(sectors, data.rows);
   const session = data.rows.map((row) => row.result.asOf).sort().at(-1) ?? "";
   const note = metric === "1m" ? h.note1m : metric === "3m" ? h.note3m : h.noteRules;
   const swatchSteps = metric === "rules" ? ["seq0", "seq1", "seq2", "seq3", "seq4"] : ["down4", "down3", "down2", "down1", "flat", "up1", "up2", "up3", "up4"];
@@ -51,7 +55,11 @@ async function Heatmap({ params, searchParams }: Props) {
     <div className={styles.toolbar}>
       <nav aria-label={h.metricLabel} className={styles.toggle}>
         <span className={styles.toggleLabel}>{h.metricLabel}</span>
-        <span className={styles.options}>{metrics.map((key) => <Link key={key} href={`/${locale}/heatmap?metric=${key}`} aria-current={key === metric ? "true" : undefined} className={styles.option}>{h.metrics[key]}</Link>)}</span>
+        <span className={styles.options}>{metrics.map((key) => <Link key={key} href={`/${locale}/heatmap?metric=${key}${sort === "value" ? "&sort=value" : ""}`} aria-current={key === metric ? "true" : undefined} className={styles.option}>{h.metrics[key]}</Link>)}</span>
+      </nav>
+      <nav aria-label={h.sortLabel} className={styles.toggle}>
+        <span className={styles.toggleLabel}>{h.sortLabel}</span>
+        <span className={styles.options}><Link href={`/${locale}/heatmap?metric=${metric}&sort=value`} aria-current={sort === "value" ? "true" : undefined} className={styles.option}>{h.sortValue}</Link><Link href={`/${locale}/heatmap?metric=${metric}&sort=alpha`} aria-current={sort === "alpha" ? "true" : undefined} className={styles.option}>{h.sortAlpha}</Link></span>
       </nav>
       <div className={styles.scale} aria-hidden="true">
         <span className={styles.scaleEnd}>{metric === "rules" ? h.scale.low : h.scale.down}</span>
@@ -62,27 +70,28 @@ async function Heatmap({ params, searchParams }: Props) {
       </div>
       <p className={styles.note}>{note}</p>
     </div>
-    {sectors.length === 0 ? <p className={styles.emptyCard}>{h.empty}</p> : <div className={styles.wrap}><ul className={styles.grid}>
-      {sectors.map((sector) => <li key={sector.sector} className={`${styles.sector} ${sector.cells.length >= 7 ? styles.wide : ""}`}>
+    {sectors.length === 0 ? <p className={styles.emptyCard}>{h.empty}</p> : <><HeatmapBento locale={locale} metric={metric} summary={summary} /><div className={styles.wrap}><ul className={styles.grid}>
+      {sectors.map((sector) => <li key={sector.sector} id={sectorId(sector.sector)} tabIndex={-1} className={`${styles.sector} ${sector.cells.length >= 7 ? styles.wide : ""}`}>
         <div className={styles.sectorHead}>
           <h2 className={styles.sectorName}>{sectorLabel(locale, sector.sector)}</h2>
           <p className={`${styles.average} ${tone(metric, sector.average)}`}>
             <span className={styles.averageLabel}>{h.average}</span>
-            <strong>{sector.average === null ? h.noValue : label(locale, metric, sector.average)}</strong>
+            <strong>{sector.average === null ? h.noValue : <><span aria-hidden="true">{metric === "rules" ? "" : sector.average > 0 ? "↑ " : sector.average < 0 ? "↓ " : "• "}</span>{label(locale, metric, sector.average)}</>}</strong>
           </p>
+          <span className={styles.distribution} aria-hidden="true">{sector.cells.map((cell) => <span key={cell.ticker} className={cell.value === null ? styles.distributionNone : metric === "rules" ? styles.distributionRules : cell.value > 0 ? styles.distributionUp : cell.value < 0 ? styles.distributionDown : styles.distributionFlat} />)}</span>
         </div>
         <p className={styles.meta}>{fill(h.tickers, { n: sector.counted, total: sector.cells.length })}</p>
         {sector.counted === 0 && <p className={styles.meta}>{h.sectorEmpty}</p>}
         <ul className={styles.tiles}>
-          {sector.cells.map((cell) => <li key={cell.ticker}>
+          {sortHeatCells(sector.cells, sort).map((cell) => <li key={cell.ticker}>
             <Link href={`/${locale}/company/${cell.ticker}`} className={`${styles.tile} ${tone(metric, cell.value)}`} title={cell.name}>
               <span className={styles.ticker}>{cell.ticker}</span>
-              <span className={styles.value}>{cell.value === null ? h.noValue : label(locale, metric, cell.value)}</span>
+              <span className={styles.value}>{cell.value === null ? h.noValue : <><span aria-hidden="true">{metric === "rules" ? "" : cell.value > 0 ? "↑ " : cell.value < 0 ? "↓ " : "• "}</span>{label(locale, metric, cell.value)}</>}</span>
             </Link>
           </li>)}
         </ul>
       </li>)}
-    </ul></div>}
+    </ul></div></>}
     <section className={styles.legend} aria-labelledby="heatmap-legend">
       <h2 id="heatmap-legend" className={styles.legendTitle}>{h.legendTitle}</h2>
       <p>{metric === "rules" ? h.legendRules : h.legendPrice}</p>
