@@ -1,5 +1,14 @@
 # Open tasks
 
+- Scout follow-up S1: non-US names (3687, HEXA-B, SIE) have no SEC ID, so `storedScreen` returns pending quality and the pipeline never promotes them. Needs a non-SEC quality and bars path (Twelve Data profile and bars by exchange) before they can be scored.
+- Scout follow-up S2: names with only aggregator-sourced findings (COHR, NOVT, ROK on 2026-10-20) stay DISCOVERED and drop after 30 days with no primary or press finding. Decide whether the verifier should resolve an aggregator claim to the company IR or SEC source, or whether to promote on aggregator evidence with an unconfirmed label.
+- Scout follow-up S3: confirm the 13:00 Codex scout, 13:40 verify and 14:10 pipeline ran on 2026-10-21, that new names reached `universe_membership` (list discovery) and `score_results`, and that Telegram cards show BUY or WAIT. Report any gap here.
+- Scout follow-up S4: the Claude live-quota endpoint answered 403 on 2026-10-20 (`live Claude quota unavailable: 403`). The gate now runs anyway, but the reading is blind. Fix the token scope so the 90% five-hour stop works, or drop the check.
+- Scout follow-up S5: promotion adds collect, extract and judge work per name with no cap (auto-promote 10 a day, 50 a week; pipeline promotion unbounded). Watch the daily chain duration and the Twelve Data ledger (800 a day on the free plan) after the first week and set a limit only if they run out.
+- Scout follow-up S6: the stored discovery `week_start` key means a name found twice in one week keeps its first score row. Decide whether the daily discovery run should refresh `rule_score` and `rule_state` for pending rows.
+- Scout follow-up S7: the `discovery-manual-20261020` job result was never read; read its output and check discovery candidates for the week of 2026-10-19.
+- Scout follow-up S8: the scheduled `invest-buddy-judge-29874450` job failed on 2026-10-19 with `timed out waiting for the condition` (a manual judge run later passed). Find why the scheduled run timed out.
+
 - P3 catalyst calendar (no migration): owner-side read model in `src/data/catalyst-calendar.ts` and `src/db/catalyst-calendar.ts` with next earnings and time of day per ticker, future verified research dates, and a pre-earnings flag for held and START_READY names (7-day window, placeholder). Not wired to cards or pages yet (P7).
 - P5 (open; no migration): forward EPS estimate revision over 30, 60 and 90 days for the next report, read from `earnings_calendar_snapshots` (`src/data/estimate-revisions.ts`, `src/db/estimate-revisions.ts`). Report only, 0 points, owner view only (Alpha Vantage is internal_only). The live table had 0 rows on 2026-10-19; scoring needs an owner decision.
 - P7 owner wiring (no migration): the research card, the owner idea card and `/owner/research/[symbol]` show the next catalyst, the next macro event, the EN/SK graduation line and the estimate revision, owner only and read from stored rows.
