@@ -4,9 +4,9 @@ metadata:
   name: invest-buddy-research-config
   namespace: invest
 data:
-  # Owner decision 2026-10-19: research runs on schedule; notify waits for the owner Telegram secret.
+  # Owner decision 2026-10-19: research runs on schedule. Notify runs daily; it sends nothing until the owner Telegram secret exists (optional ref).
   RESEARCH_ENABLED: "on"
-  AI_DAILY_TOKEN_CEILING: "1200000"
+  AI_DAILY_TOKEN_CEILING: "2400000"
 ---
 apiVersion: batch/v1
 kind: CronJob
@@ -83,6 +83,10 @@ spec:
                   value: allow
                 - name: RESEARCH_CODEX_DAILY_CALLS
                   value: "3"
+                - name: RESEARCH_DAILY_TOKENS
+                  value: "1500000"
+                - name: RESEARCH_MONTHLY_TOKENS
+                  value: "20000000"
                 - name: AI_DAILY_TOKEN_CEILING
                   valueFrom:
                     configMapKeyRef:
@@ -185,6 +189,10 @@ spec:
                   value: allow
                 - name: RESEARCH_CODEX_DAILY_CALLS
                   value: "3"
+                - name: RESEARCH_DAILY_TOKENS
+                  value: "1500000"
+                - name: RESEARCH_MONTHLY_TOKENS
+                  value: "20000000"
                 - name: AI_DAILY_TOKEN_CEILING
                   valueFrom:
                     configMapKeyRef:
@@ -427,7 +435,7 @@ metadata:
   name: invest-buddy-research-notify
   namespace: invest
 spec:
-  suspend: true
+  suspend: false
   schedule: "20 7 * * 2-6"
   timeZone: Europe/Bratislava
   concurrencyPolicy: Forbid
@@ -485,6 +493,7 @@ spec:
                     secretKeyRef:
                       name: invest-buddy-telegram-owner
                       key: TELEGRAM_OWNER_CHAT_ID
+                      optional: true
                 - name: TELEGRAM_CARD_MODE
                   value: owner
                 - name: RESEARCH_PUBLIC_CARDS

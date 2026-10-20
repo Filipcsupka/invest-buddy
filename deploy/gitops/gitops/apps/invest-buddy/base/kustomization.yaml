@@ -15,6 +15,7 @@ resources:
   - macro-calendar-cronjob.yaml
   - pool-bars-cronjob.yaml
   - universe-promote-cronjob.yaml
+  - discovery-auto-promote-cronjob.yaml
   - dq-corporate-actions-cronjob.yaml
   - holder-events-cronjob.yaml
   - thirteenf-cronjob.yaml

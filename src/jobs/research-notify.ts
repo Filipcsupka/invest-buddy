@@ -1,4 +1,5 @@
 import pg from "pg";
+import { runLoggedJob } from "./job-log";
 import { latestIdeaPerSymbol } from "../db/ideas";
 import { PostgresDeliveryLog } from "../db/notifications";
 import { latestBaseline } from "../db/portfolio-baseline";
@@ -121,9 +122,10 @@ export async function runResearchNotify(pool: pg.Pool, options: { locale: AlertL
 if (/(?:^|[/\\])research-notify\.(?:ts|js)$/.test(process.argv[1] ?? "")) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_OWNER_CHAT_ID;
-  if (process.env.TELEGRAM_CARD_MODE === "owner" && token && chatId && process.env.DATABASE_URL) {
+  void runLoggedJob("research-notify", async () => {
+    if (!(process.env.TELEGRAM_CARD_MODE === "owner" && token && chatId && process.env.DATABASE_URL)) return { configured: false, sent: 0 };
     const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
-    runResearchNotify(pool, { locale: process.env.DIGEST_LOCALE === "sk" ? "sk" : "en", notifier: new TelegramNotifier({ token, chatId }), target: chatId })
-      .then(r => process.stdout.write(JSON.stringify(r) + "\n")).catch(e => { console.error(e); process.exitCode = 1; }).finally(() => pool.end());
-  }
+    try { return { configured: true, ...await runResearchNotify(pool, { locale: process.env.DIGEST_LOCALE === "sk" ? "sk" : "en", notifier: new TelegramNotifier({ token, chatId }), target: chatId }) }; }
+    finally { await pool.end(); }
+  });
 }
