@@ -77,6 +77,12 @@ spec:
                       name: invest-buddy-codex-token
                       key: CODEX_ACCESS_TOKEN
                       optional: true
+                - name: RESEARCH_FALLBACK_ADAPTER
+                  value: codex
+                - name: RESEARCH_CODEX_QUOTA_UNKNOWN
+                  value: allow
+                - name: RESEARCH_CODEX_DAILY_CALLS
+                  value: "3"
                 - name: AI_DAILY_TOKEN_CEILING
                   valueFrom:
                     configMapKeyRef:
@@ -173,6 +179,12 @@ spec:
                       name: invest-buddy-codex-token
                       key: CODEX_ACCESS_TOKEN
                       optional: true
+                - name: RESEARCH_FALLBACK_ADAPTER
+                  value: codex
+                - name: RESEARCH_CODEX_QUOTA_UNKNOWN
+                  value: allow
+                - name: RESEARCH_CODEX_DAILY_CALLS
+                  value: "3"
                 - name: AI_DAILY_TOKEN_CEILING
                   valueFrom:
                     configMapKeyRef:

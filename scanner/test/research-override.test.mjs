@@ -57,3 +57,21 @@ test("a non-403 failure skips the run even with the override on", async () => {
   assert.equal(runs.length, 0);
   assert.equal(results[0].skipped, "skipped_quota");
 });
+
+test("claude quota 429 falls back to the codex adapter for the whole weekly run", async () => {
+  const claudeRuns = [], codexRuns = [];
+  const codex = { ...adapterWith(codexRuns), name: "codex", authSource: () => "subscription", available: () => ({ ok: true, reason: null }), defaultModel: () => "gpt-codex" };
+  const usage = async () => ({ ...(await capUsage()), codexDailyCalls: 0 });
+  const env = baseEnv({ RESEARCH_CODEX_QUOTA_UNKNOWN: "allow", RESEARCH_CODEX_DAILY_CALLS: "3", RESEARCH_QUOTA_UNKNOWN_OVERRIDE: "off" });
+  const results = await execute(setup(), { adapter: adapterWith(claudeRuns), fallbackAdapter: codex, env, usage, liveUsage: async () => ({ unavailable: "429" }) });
+  assert.equal(claudeRuns.length, 0);
+  assert.equal(codexRuns.length, 3);
+  assert.equal(results.filter((r) => r.skipped).length, 0);
+});
+
+test("no fallback adapter keeps the 429 skip", async () => {
+  const runs = [];
+  const results = await execute(setup("daily"), { adapter: adapterWith(runs), fallbackAdapter: null, env: baseEnv({ RESEARCH_QUOTA_UNKNOWN_OVERRIDE: "off" }), usage: capUsage, liveUsage: async () => ({ unavailable: "429" }) });
+  assert.equal(runs.length, 0);
+  assert.equal(results[0].skipped, "skipped_quota");
+});
