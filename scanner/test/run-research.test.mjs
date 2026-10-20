@@ -174,8 +174,8 @@ test("dry run with input file makes no ingest post", async () => {
   assert.equal(r.files.length, 1);
 });
 
-test("kill switch and daily cap log skips without a model call", async () => {
-  for (const [options, status] of [[{ enabled: false }, "killed"], [{ dailyCalls: 4 }, "skipped_cap"]]) {
+test("kill switch logs a skip without a model call", async () => {
+  for (const [options, status] of [[{ enabled: false }, "killed"]]) {
     const r = await runFake(options);
     assert.equal(r.code, 0, r.stderr);
     assert.equal(r.capture, null);

@@ -6,7 +6,7 @@ metadata:
 data:
   # Owner decision 2026-10-19: research runs on schedule. Notify runs daily; it sends nothing until the owner Telegram secret exists (optional ref).
   RESEARCH_ENABLED: "on"
-  AI_DAILY_TOKEN_CEILING: "2400000"
+  AI_DAILY_TOKEN_CEILING: "0"
 ---
 apiVersion: batch/v1
 kind: CronJob
@@ -15,7 +15,7 @@ metadata:
   namespace: invest
 spec:
   suspend: false
-  schedule: "0 1 * * 0"
+  schedule: "0 1 * * 0-6"
   timeZone: Europe/Bratislava
   concurrencyPolicy: Forbid
   startingDeadlineSeconds: 300
@@ -81,12 +81,6 @@ spec:
                   value: codex
                 - name: RESEARCH_CODEX_QUOTA_UNKNOWN
                   value: allow
-                - name: RESEARCH_CODEX_DAILY_CALLS
-                  value: "3"
-                - name: RESEARCH_DAILY_TOKENS
-                  value: "1500000"
-                - name: RESEARCH_MONTHLY_TOKENS
-                  value: "20000000"
                 - name: AI_DAILY_TOKEN_CEILING
                   valueFrom:
                     configMapKeyRef:
@@ -187,12 +181,6 @@ spec:
                   value: codex
                 - name: RESEARCH_CODEX_QUOTA_UNKNOWN
                   value: allow
-                - name: RESEARCH_CODEX_DAILY_CALLS
-                  value: "3"
-                - name: RESEARCH_DAILY_TOKENS
-                  value: "1500000"
-                - name: RESEARCH_MONTHLY_TOKENS
-                  value: "20000000"
                 - name: AI_DAILY_TOKEN_CEILING
                   valueFrom:
                     configMapKeyRef:
@@ -347,6 +335,16 @@ spec:
                     secretKeyRef:
                       name: invest-buddy-secrets
                       key: DATABASE_URL
+                - name: SEC_USER_AGENT
+                  valueFrom:
+                    configMapKeyRef:
+                      name: invest-buddy-reconcile-config
+                      key: SEC_USER_AGENT
+                - name: TWELVE_DATA_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-market-secrets
+                      key: TWELVE_DATA_API_KEY
               volumeMounts:
                 - name: tmp
                   mountPath: /tmp
@@ -415,6 +413,16 @@ spec:
                     secretKeyRef:
                       name: invest-buddy-secrets
                       key: DATABASE_URL
+                - name: SEC_USER_AGENT
+                  valueFrom:
+                    configMapKeyRef:
+                      name: invest-buddy-reconcile-config
+                      key: SEC_USER_AGENT
+                - name: TWELVE_DATA_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-market-secrets
+                      key: TWELVE_DATA_API_KEY
               volumeMounts:
                 - name: tmp
                   mountPath: /tmp

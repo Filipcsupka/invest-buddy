@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { codexResearchAdapter, deriveStrictSchema, parseCodexEvents, researchAdapter, resetCodexRateLimit } from "../research-adapters.mjs";
-import { bratislavaClock, checkResearchCaps } from "../research-caps.mjs";
+import { checkResearchCaps } from "../research-caps.mjs";
 import { validateResearchOutput } from "../research-validate.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -170,27 +170,17 @@ test("codex auth check: a local login must pass codex login status", () => {
   assert.equal(researchAdapter("codex"), codexResearchAdapter);
 });
 
-const now = new Date("2026-10-11T01:00:00Z");
 const usage = { day: "2026-10-11", month: "2026-10", monthlyTokens: 10, monthlyUsd: 1, dailyCalls: 0, codexDailyCalls: 0, dailyTokens: 10, sharedDailyTokens: 10 };
-const gate = (env, override = {}) => checkResearchCaps({ env: { RESEARCH_ENABLED: "on", ...env }, now, type: "daily", adapter: "codex", authSource: "codex", usage, liveUsage: async () => { throw new Error("Claude quota must not be read"); }, ...override });
+const gate = (env, override = {}) => checkResearchCaps({ env: { RESEARCH_ENABLED: "on", ...env }, adapter: "codex", authSource: "codex", usage, liveUsage: async () => { throw new Error("Claude quota must not be read"); }, ...override });
 
-test("codex caps: 2 calls a day, window, 50 percent, unknown quota, unmetered API spend", async () => {
-  assert.equal((await gate({}, { codexQuota: async () => ({ pct: 49 }) })).ok, true);
-  assert.equal((await gate({}, { codexQuota: async () => ({ pct: 50 }) })).status, "skipped_quota");
-  assert.equal((await gate({}, { codexQuota: async () => null })).status, "skipped_quota");
-  assert.equal((await gate({}, {})).status, "skipped_quota");
-  assert.equal((await gate({ RESEARCH_CODEX_QUOTA_UNKNOWN: "allow" }, { codexQuota: async () => null })).ok, true);
-  assert.equal((await gate({ RESEARCH_CODEX_QUOTA_UNKNOWN: "allow" }, { codexQuota: async () => ({ pct: 80 }) })).status, "skipped_quota");
-  assert.equal((await gate({}, { usage: { ...usage, codexDailyCalls: 2 }, codexQuota: async () => ({ pct: 1 }) })).status, "skipped_cap");
-  assert.equal((await gate({}, { usage: { ...usage, codexDailyCalls: 1 }, codexQuota: async () => ({ pct: 1 }) })).ok, true);
-  assert.equal((await gate({}, { usage: { ...usage, codexDailyCalls: undefined }, codexQuota: async () => ({ pct: 1 }) })).status, "skipped_cap");
-  assert.equal((await gate({ RESEARCH_WINDOW: "04:00-07:00" }, { codexQuota: async () => ({ pct: 1 }) })).status, "skipped_window");
-  const outside = new Date("2026-10-11T11:00:00Z");
-  assert.equal((await gate({}, { now: outside, type: "deepdive", manual: true, codexQuota: async () => ({ pct: 1 }) })).status, "skipped_window");
-  // No Codex price source exists in the repo, so a positive USD setting cannot cap API spend.
-  assert.equal((await gate({ RESEARCH_MONTHLY_USD: "100" }, { authSource: "api" })).status, "skipped_cap");
-  assert.equal((await gate({ RESEARCH_MONTHLY_USD: "1" }, { authSource: "api" })).status, "skipped_cap");
-  assert.equal((await gate({}, { authSource: "api" })).status, "skipped_cap");
+test("codex gate: only the kill switch and a 90 percent rate limit stop a run; no call, token, USD or window caps", async () => {
+  assert.equal((await gate({}, { codexQuota: async () => ({ pct: 89 }) })).ok, true);
+  assert.equal((await gate({}, { codexQuota: async () => ({ pct: 90 }) })).status, "skipped_quota");
+  assert.equal((await gate({}, { codexQuota: async () => null })).ok, true);
+  assert.equal((await gate({}, {})).ok, true);
+  assert.equal((await gate({ RESEARCH_ENABLED: "off" }, {})).status, "killed");
+  assert.equal((await gate({ RESEARCH_WINDOW: "04:00-07:00" }, { now: new Date("2026-10-11T11:00:00Z"), codexQuota: async () => ({ pct: 1 }) })).ok, true);
+  assert.equal((await gate({}, { authSource: "api", codexQuota: async () => ({ pct: 1 }) })).ok, true);
 });
 
 async function runRunner({ adapterEnv = {}, codexDailyCalls = 0, rateLimitPct = null, execFailureEchoToken = false } = {}) {
@@ -226,7 +216,7 @@ if(a.includes('--with-access-token')){
   const posts = [], budgets = [];
   const server = createServer((req, res) => {
     if (req.method === "POST") { let body = ""; req.on("data", (d) => { body += d; }); req.on("end", () => { (req.url === "/api/ingest/research" ? posts : budgets).push(JSON.parse(body)); res.writeHead(200, { "Content-Type": "application/json" }); res.end("{}"); }); }
-    else if (req.url === "/api/ingest/ai-budget?report=research-caps") { res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ day: bratislavaClock().day, month: bratislavaClock().day.slice(0, 7), monthlyTokens: 0, monthlyUsd: 0, dailyCalls: 0, codexDailyCalls, dailyTokens: 0, sharedDailyTokens: 0 })); }
+    else if (req.url === "/api/ingest/ai-budget?report=research-caps") { res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ day: new Date().toISOString().slice(0, 10), month: new Date().toISOString().slice(0, 7), monthlyTokens: 0, monthlyUsd: 0, dailyCalls: 0, codexDailyCalls, dailyTokens: 0, sharedDailyTokens: 0 })); }
     else { res.writeHead(500); res.end(); }
   });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -276,13 +266,6 @@ test("codex login rejected by CLI fails at start with no model call or network",
 
 test("workspace token is passed on stdin, checked at start and removed with its private home", async () => {
   const token = "test-workspace-token";
-  const skipped = await runRunner({ adapterEnv: { CODEX_ACCESS_TOKEN: token } });
-  assert.equal(skipped.code, 0, skipped.stderr);
-  assert.deepEqual(skipped.calls, []);
-  assert.equal(skipped.posts[0].skip.status, "skipped_quota");
-  assert.equal(skipped.authEvents.length, 1);
-  assert.equal(existsSync(skipped.authEvents[0].home), false);
-
   const ran = await runRunner({ adapterEnv: { CODEX_ACCESS_TOKEN: token, CODEX_API_KEY: "unused-api-key", RESEARCH_CODEX_QUOTA_UNKNOWN: "allow" } });
   assert.equal(ran.code, 0, ran.stderr);
   assert.equal(ran.authEvents.length, 2);
@@ -329,29 +312,14 @@ test("Codex errors redact the workspace token and remove its temporary home", as
   assert.match(r.posts[0].run.stopReason, /\[redacted\]/);
 });
 
-test("codex run with a ChatGPT login: unknown quota skips with no model call, allow runs it", async () => {
+test("codex run with a ChatGPT login runs with an unreported quota", async () => {
   const home = mkdtempSync(join(tmpdir(), "codex-login-"));
   writeFileSync(join(home, "auth.json"), JSON.stringify({ tokens: { access_token: "stub" } }));
-  const skipped = await runRunner({ adapterEnv: { CODEX_HOME: home } });
-  assert.equal(skipped.code, 0, skipped.stderr);
-  assert.deepEqual(skipped.calls, []);
-  assert.deepEqual([skipped.posts.length, skipped.budgets.length], [1, 0]);
-  assert.equal(skipped.posts[0].skip.status, "skipped_quota");
-  const ran = await runRunner({ adapterEnv: { CODEX_HOME: home, RESEARCH_CODEX_QUOTA_UNKNOWN: "allow" } });
+  const ran = await runRunner({ adapterEnv: { CODEX_HOME: home } });
   assert.equal(ran.code, 0, ran.stderr);
   assert.equal(ran.calls.length, 1);
   assert.equal(ran.posts[0].run.adapter.authSource, "codex");
   assert.equal(ran.posts[0].run.usage.costUsd, 0);
   assert.equal(ran.budgets[1].usd, 0);
   assert.deepEqual(ran.budgets.map((b) => b.authSource ?? null), ["codex", null]);
-});
-
-test("codex daily cap skips a login run before the model call", async () => {
-  const home = mkdtempSync(join(tmpdir(), "codex-login-"));
-  writeFileSync(join(home, "auth.json"), JSON.stringify({ tokens: { access_token: "stub" } }));
-  const r = await runRunner({ adapterEnv: { CODEX_HOME: home, RESEARCH_CODEX_QUOTA_UNKNOWN: "allow" }, codexDailyCalls: 2 });
-  assert.deepEqual(r.calls, []);
-  assert.equal(r.posts.length, 1);
-  assert.equal(r.posts[0].skip.status, "skipped_cap");
-  assert.equal(r.posts[0].skip.adapter, "codex");
 });
