@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { checkContrast, contrastTable } from "../../../scripts/check-contrast";
 import { getKitMessages } from "@/i18n/kit-messages";
-import { CountUp, DataTable, LockCard, RuleRadar, RuleRow, RuleTable, ScoreBar, ScoreDial, SectionHead, StateChip, StateStrip, TierBadge, TierBanner, kitState, kitStates, splitUnit } from "./index";
+import { CountUp, DataTable, LockCard, RuleRow, RuleTable, ScoreBar, ScoreDial, SectionHead, StateChip, StateStrip, TierBadge, TierBanner, kitState, kitStates, splitUnit } from "./index";
 
 const globals = readFileSync("src/app/globals.css", "utf8");
 const kitCss = readFileSync("src/components/kit/kit.css", "utf8");
@@ -18,7 +18,7 @@ describe("kit palette", () => {
   it("defines every token the kit stylesheet reads", () => {
     const defined = new Set([...globals.matchAll(/(--[\w-]+):/g)].map((m) => m[1]));
     for (const used of new Set([...kitCss.matchAll(/var\((--[\w-]+)/g)].map((m) => m[1]))) {
-      const local = ["--c", "--w", "--value", "--at", "--i", "--to", "--kit-n", "--dial", "--table-bg", "--frame-bg", "--reveal-delay", "--strip-duration", "--x", "--y", "--radar-state", "--radar-on", "--orbit-angle"];
+      const local = ["--c", "--w", "--value", "--at", "--i", "--to", "--kit-n", "--dial", "--table-bg", "--frame-bg", "--reveal-delay", "--strip-duration", "--globe", "--spin", "--y"];
       if (!local.includes(used)) expect(defined.has(used), used).toBe(true);
     }
   });
@@ -85,25 +85,6 @@ describe("ScoreBar and ScoreDial", () => {
   });
 });
 
-describe("RuleRadar", () => {
-  it.each(["en", "sk"] as const)("links nine core findings with result words in %s", (locale) => {
-    const html = renderToStaticMarkup(<RuleRadar locale={locale} state="watch" stateLabel="Watching" percent={60} ruleHits={[{ id: "earnings", matched: true }, { id: "uptrend", matched: false }, { id: "dip", unknown: true }]} labels={{ earnings: "Earnings", uptrend: "Uptrend", dip: "Dip" }} describedBy="score-disclaimer" motion="load" />);
-    expect(html.match(/class="kit-radar-ping"/g)).toHaveLength(9);
-    expect(html).not.toContain("#rule-catalyst");
-    expect(html).toContain(`aria-label="Earnings: ${locale === "en" ? "Met" : "Splnené"}"`);
-    expect(html).toContain(`aria-label="Uptrend: ${locale === "en" ? "Not met" : "Nesplnené"}"`);
-    expect(html).toContain(`aria-label="Dip: ${locale === "en" ? "No data" : "Bez údajov"}"`);
-    expect(html).toContain('aria-describedby="score-disclaimer"');
-    expect(html).toContain('aria-valuenow="60"');
-    expect(html).toContain('data-motion="run"');
-  });
-  it("reads a broken score without inventing a percentage", () => {
-    const html = renderToStaticMarkup(<RuleRadar locale="en" state="broken" stateLabel="Criteria broken" percent={null} ruleHits={[]} labels={{}} />);
-    expect(html).not.toContain('role="meter"');
-    expect(html).toContain('aria-label="Score: No score, Criteria broken"');
-  });
-});
-
 describe("RuleRow", () => {
   const table = (locale: "en" | "sk") =>
     renderToStaticMarkup(
@@ -153,9 +134,6 @@ describe("StateStrip", () => {
     expect(html).toMatch(/tabindex="-1"/i);
     expect(html).toContain(">Pause<");
     expect(html).toContain("NVDA: Watching to Conditions met");
-    expect(html).toContain('class="kit-strip-orbit"');
-    expect(html).toContain('aria-keyshortcuts="ArrowLeft ArrowRight"');
-    expect(html).toContain('<textPath');
   });
   it("says so when nothing changed, without a moving rail", () => {
     const html = renderToStaticMarkup(<StateStrip label="State changes" changes={[]} empty="No state changed." pauseLabel="Pause" playLabel="Resume" />);

@@ -4,9 +4,11 @@ import type { ReactNode } from "react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Chart } from "@/components/chart";
-import { ResultMark, RuleRadar, RuleRow, RuleTable, SectionHead, StateChip, kitState } from "@/components/kit";
+import { ResultMark, RuleRow, RuleScan, RuleTable, SectionHead, StateChip, kitState } from "@/components/kit";
 import { OperatorDisclosure, SampleStamp } from "@/components/operator-disclosure";
 import { getCompanyMessages } from "@/i18n/company-messages";
+import { getKitMessages } from "@/i18n/kit-messages";
+import { CORE_RULES } from "@/engine/display-score";
 import { PaidPart } from "./paid-part";
 import { TabBar } from "./tab-bar";
 import "./company.css";
@@ -190,17 +192,21 @@ async function Company({ params }: Params) {
           ) : null}
           <TickerSeoSummary locale={locale} ticker={instrument.ticker} name={instrument.name} result={result} />
         </div>
-        <div className="co-hero-radar">
-          <RuleRadar
-            ruleHits={result.ruleHits}
+        <div className="co-hero-dial">
+          <RuleScan
+            title={getKitMessages(locale).scan.title}
+            rows={CORE_RULES.map((rule) => {
+              const hit = hits.get(rule.id);
+              const res = !hit || hit.unknown ? "none" : hit.matched ? "pass" : "fail";
+              return { id: rule.id, name: m.status.ruleShort[rule.id] ?? rule.id, max: rule.points, result: res, word: res === "pass" ? m.common.met : res === "fail" ? m.common.notMet : m.status.noData } as const;
+            })}
             percent={view.display.state === "broken" || !scored ? null : view.display.percent ?? null}
-            state={kitState(state, pullback)}
-            stateLabel={dialLabel}
             locale={locale}
-            labels={m.status.ruleShort}
-            motion="load"
+            stateLabel={dialLabel}
+            caption={view.display.state === "broken" ? m.status.pointsNotCountedPlain : getKitMessages(locale).scan.caption}
+            noDataLabel={m.status.noData}
             describedBy="score-disclaimer"
-            caption={view.display.state === "broken" ? m.status.pointsNotCountedPlain : undefined}
+            state={kitState(state, pullback)}
           />
         </div>
         <div className="co-hero-foot">
@@ -210,10 +216,10 @@ async function Company({ params }: Params) {
 
       <TabBar label={c.tabsLabel} tabs={tabs} />
 
-      <div className="co-layout" id="overview">
+      <div id="overview">
         <StatusPanel
-          className="co-card co-summary"
-          variant="rail"
+          className="co-bento"
+          variant="bento"
           locale={locale}
           view={view}
           m={m}
@@ -224,9 +230,11 @@ async function Company({ params }: Params) {
           pullbackLabel={pullback ? m.states.pullback : null}
           describedBy="score-disclaimer"
           coreMet={coreRulesMet(result.ruleHits)}
-          ruleHits={result.ruleHits}
           disclaimer={<OperatorDisclosure text={m.common.operatorDisclosure} />}
         />
+      </div>
+
+      <div className="co-layout">
 
         <div className="co-main">
           <section className="co-card co-chart" aria-labelledby="chart" data-o="2">
@@ -248,7 +256,7 @@ async function Company({ params }: Params) {
               rule="quiet"
             />
             {scored ? (
-              <RuleTable locale={locale} label={fill(c.rulesTable, { ticker: instrument.ticker })} describedBy="score-disclaimer">
+              <RuleTable locale={locale} label={fill(c.rulesTable, { ticker: instrument.ticker })} motion="view" describedBy="score-disclaimer">
                 {ruleGroups.map((group) => [
                   <tr key={group.group} className="kit-rule-group">
                     <th colSpan={5} scope="colgroup">{m.groups[group.group]}</th>
