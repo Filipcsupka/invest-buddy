@@ -29,6 +29,12 @@ describe("research card", () => {
   it("marks facts that are verified but unconfirmed", () => {
     expect(formatResearchCard({ ...input, facts: [{ ...input.facts[0], confirmed: false }] })).toContain("(UNCONFIRMED)");
   });
+  it("renders an unscored foreign WATCH without a trading call", () => {
+    const output = formatResearchCard({ ...input, symbol: "SIE", scorable: false, promotionStatus: "none" })!;
+    expect(output).toContain("WATCH");
+    expect(output).toContain("outside scoring coverage");
+    expect(output).not.toMatch(/<b>(BUY|WAIT|ČAKAJ|KÚPIŤ)<\/b>/);
+  });
   it("keeps complete links under Telegram's limit", () => {
     const facts = Array.from({ length: 4 }, (_, n) => ({ ...input.facts[0], key: `key${n}`, findingId: `f${n + 1}`,
       url: `https://example.test/${n}/${"x".repeat(470)}`, figures: Array.from({ length: 5 }, (_, k) => ({ label: `Figure ${k}`, value: "9".repeat(75) })) }));

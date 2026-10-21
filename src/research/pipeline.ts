@@ -25,6 +25,7 @@ export function decideCandidate(c: CandidateInput, today: string): PipelineDecis
   const fresh = verified.some(f=>!c.lastVerifiedAt || (f.verifiedAt??"")>c.lastVerifiedAt);
   const positiveAfterBreak = verified.some(f=>f.polarity==="positive" && !!f.eventDate && !!c.stateSince && f.eventDate>c.stateSince);
   const hasQualified = verified.some(f=>f.sourceClass==="primary"||f.sourceClass==="press");
+  const scorable = c.quality==="pass" && c.scorable;
   const buy = ["START_POSITION","ADD","HIGH_CONVICTION_ADD"].includes(c.engineAction??"");
   const broken = c.ownerBroken || c.engineAction==="THESIS_BROKEN" || c.engineState==="Criteria broken";
   let state = c.state;
@@ -39,8 +40,8 @@ export function decideCandidate(c: CandidateInput, today: string): PipelineDecis
     else if (hasQualified && c.quality!=="pending") move("WATCH","verified primary or press finding");
     else if (!verified.length && c.stateSince && day(today).getTime()-day(c.stateSince).getTime()>=30*86400000) move("DROPPED","no verified finding in 30 days");
   } else if (state==="WATCH") {
-    if (c.inUniverse && !c.held && c.engineAction==="START_POSITION") move("START_READY","start signal without position");
-    else if (c.held && buy) move("ADD_READY","buy signal with position");
+    if (scorable && c.inUniverse && !c.held && c.engineAction==="START_POSITION") move("START_READY","start signal without position");
+    else if (scorable && c.held && buy) move("ADD_READY","buy signal with position");
     else if (!c.held && (c.engineAction==="ADD"||c.engineAction==="HIGH_CONVICTION_ADD")) reason="add-level signal, no position";
   } else if (state==="START_READY") {
     if (c.held && buy) move("ADD_READY","position opened with buy signal");
@@ -63,7 +64,6 @@ export function decideCandidate(c: CandidateInput, today: string): PipelineDecis
   const since = state ? (entered ? today : c.stateSince??today) : null;
   let reviewAt = state ? (entered || !c.reviewAt ? reviewDate(state,since!,c.nextEarningsDate) : c.reviewAt) : null;
   if (state && !c.inUniverse && verified.some(f=>f.polarity==="negative" && fresh)) reviewAt=today;
-  const scorable = c.quality==="pass" && c.scorable;
   return { symbol:c.symbol,state,previousState:entered?c.state:null,stateSince:since,reviewAt,reason,reviewDue:!!reviewAt&&reviewAt<=today,
     inUniverse:c.inUniverse,scorable,proposePromotion:state==="WATCH" && scorable && !c.inUniverse && c.promotionStatus==="none" && hasQualified,lastVerifiedAt:latest };
 }

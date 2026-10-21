@@ -138,7 +138,7 @@ export function formatResearchCard(input: ResearchCardInput): string | null {
   const band = input.state === "BROKEN" || input.state === "REDUCE" || input.state === "DROPPED" ? "red"
     : input.state === "START_READY" || input.state === "ADD_READY" ? "green" : "blue";
   const call = VERDICT[input.state][input.locale === "sk" ? 1 : 0];
-  const head = `${BAND_EMOJI[band]} <b>${symbol}</b> · <b>${call}</b> · ${state} · EUR 0`;
+  const head = `${BAND_EMOJI[band]} <b>${symbol}</b>${input.scorable ? ` · <b>${call}</b>` : ""} · ${state} · EUR 0`;
   const sections: { priority: number; lines: string[] }[] = [
     { priority: 5, lines: [`<b>${t.happened}</b>`, ...happened] },
     ...(why.length ? [{ priority: 4, lines: [`<b>${t.why}</b>`, ...why] }] : []),
