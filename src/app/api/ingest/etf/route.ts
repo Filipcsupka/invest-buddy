@@ -36,7 +36,7 @@ export function validatePayload(value: unknown): string[] {
     if (!object(value.output)) errors.push("$.output: required for ok run");
     else {
       errors.push(...schemaErrors(value.output, schema));
-      const output = value.output as { asOf?: string; candidates?: { symbol: string; price: { last: number | null; asOf: string | null } }[] };
+      const output = value.output as { asOf?: string; candidates?: { symbol: string; isin: string | null; price: { last: number | null; asOf: string | null } }[] };
       if (output.asOf !== run.asOf) errors.push("$.output.asOf: must match run date");
       if (Array.isArray(output.candidates)) {
         const seen = new Set<string>();

@@ -44,29 +44,39 @@ export async function insertEtfResearch(db: EtfDb, payload: EtfPayload, verify =
       JSON.stringify(run.usage), payload.output ? JSON.stringify(payload.output) : null, cards.length, verifiedCount]);
     if (!inserted.rowCount) { await client.query("COMMIT"); return { replayed: true, picks: 0, verified: 0 }; }
     for (const { card, evidence } of checked) {
+      const catalog = await client.query(`SELECT listing_key,isin FROM etf_catalog
+        WHERE (exchange=$1 AND mnemonic=$2) OR (isin=$3 AND $3 IS NOT NULL)
+        ORDER BY CASE WHEN exchange=$1 AND mnemonic=$2 THEN 0 ELSE 1 END LIMIT 1`, [card.exchange,card.symbol,card.isin]);
+      if (!catalog.rowCount) throw new Error(`ETF pick ${card.symbol} is outside the catalog`);
+      const listingKey = catalog.rows[0].listing_key as string;
+      const isin = card.isin ?? (catalog.rows[0].isin as string | null);
+      const priorPick = await client.query("SELECT symbol FROM etf_picks WHERE listing_key=$1 LIMIT 1", [listingKey]);
+      const symbol = priorPick.rows[0]?.symbol ?? card.symbol;
+      const symbolOwner = await client.query("SELECT listing_key FROM etf_picks WHERE symbol=$1", [symbol]);
+      if (symbolOwner.rowCount && symbolOwner.rows[0].listing_key && symbolOwner.rows[0].listing_key !== listingKey) throw new Error(`ETF symbol ${symbol} belongs to another catalog listing`);
       const entryPrice = card.call === "BUY_ZONE" && card.price.last !== null ? card.price.last : null;
       const entryDate = entryPrice !== null ? (card.price.asOf ?? run.asOf) : null;
       await client.query(`INSERT INTO etf_picks
         (symbol,exchange,name,isin,asset_class,region,call,conviction,thesis,what_happened,why_it_matters,plan,risks,
          ter_pct,aum_usd_m,tracked_index,domicile,replication,price,price_currency,price_as_of,evidence,verification_status,
-         first_seen_at,last_seen_at,first_run_id,last_run_id,entry_price,entry_date)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,$12::jsonb,$13::jsonb,$14,$15,$16,$17,$18,$19,$20,$21,$22::jsonb,$23,$24,$25,$26,$27,$28,$29)
+         first_seen_at,last_seen_at,first_run_id,last_run_id,entry_price,entry_date,listing_key)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,$12::jsonb,$13::jsonb,$14,$15,$16,$17,$18,$19,$20,$21,$22::jsonb,$23,$24,$25,$26,$27,$28,$29,$30)
         ON CONFLICT (symbol) DO UPDATE SET
-        exchange=EXCLUDED.exchange,name=EXCLUDED.name,isin=EXCLUDED.isin,asset_class=EXCLUDED.asset_class,region=EXCLUDED.region,
+        exchange=EXCLUDED.exchange,name=EXCLUDED.name,isin=EXCLUDED.isin,listing_key=EXCLUDED.listing_key,asset_class=EXCLUDED.asset_class,region=EXCLUDED.region,
         call=EXCLUDED.call,conviction=EXCLUDED.conviction,thesis=EXCLUDED.thesis,what_happened=EXCLUDED.what_happened,
         why_it_matters=EXCLUDED.why_it_matters,plan=EXCLUDED.plan,risks=EXCLUDED.risks,ter_pct=EXCLUDED.ter_pct,
         aum_usd_m=EXCLUDED.aum_usd_m,tracked_index=EXCLUDED.tracked_index,domicile=EXCLUDED.domicile,replication=EXCLUDED.replication,
         price=EXCLUDED.price,price_currency=EXCLUDED.price_currency,price_as_of=EXCLUDED.price_as_of,evidence=EXCLUDED.evidence,
         verification_status=EXCLUDED.verification_status,last_seen_at=EXCLUDED.last_seen_at,last_run_id=EXCLUDED.last_run_id,
         entry_price=COALESCE(etf_picks.entry_price,EXCLUDED.entry_price),entry_date=COALESCE(etf_picks.entry_date,EXCLUDED.entry_date),updated_at=now()`,
-      [card.symbol, card.exchange, card.name, card.isin, card.assetClass, card.region, card.call, card.conviction, card.thesis,
+      [symbol, card.exchange, card.name, isin, card.assetClass, card.region, card.call, card.conviction, card.thesis,
         JSON.stringify(card.whatHappened), card.whyItMatters, JSON.stringify(card.plan), JSON.stringify(card.risks),
         card.cost.terPct, card.cost.aumUsdM, card.cost.trackedIndex, card.cost.domicile, card.cost.replication,
         card.price.last, card.price.currency, card.price.asOf, JSON.stringify(evidence), verificationStatus(evidence),
-        run.asOf, run.asOf, run.id, run.id, entryPrice, entryDate]);
+        run.asOf, run.asOf, run.id, run.id, entryPrice, entryDate, listingKey]);
       await client.query(`INSERT INTO etf_pick_history (symbol,run_id,as_of,call,conviction,price,price_currency)
         VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (symbol,run_id) DO NOTHING`,
-      [card.symbol, run.id, run.asOf, card.call, card.conviction, card.price.last, card.price.currency]);
+      [symbol, run.id, run.asOf, card.call, card.conviction, card.price.last, card.price.currency]);
     }
     await client.query("COMMIT");
     return { replayed: false, picks: cards.length, verified: verifiedCount };

@@ -329,6 +329,21 @@ describe("RS5 research schedule", () => {
 });
 
 describe("ETF research and outcomes", () => {
+  it("syncs global listings before enrichment and keeps separate model settings", () => {
+    expect(minutes("etf-catalog-sync")).toEqual({ at: 5 * 60 + 10, days: "0" });
+    expect(minutes("etf-enrich")).toEqual({ at: 5 * 60 + 40, days: "0" });
+    expect(minutes("etf-catalog-sync").at + startWindow("etf-catalog-sync") + deadline("etf-catalog-sync")).toBeLessThanOrEqual(minutes("etf-enrich").at);
+    expect(job("etf-catalog-sync")).toContain('command: ["node", "dist/jobs/etf-catalog.js"]');
+    expect(job("etf-catalog-sync")).not.toContain("CODEX_ACCESS_TOKEN");
+    expect(job("etf-enrich")).toContain("run-etf-enrich.mjs");
+    expect(deadline("etf-enrich")).toBeGreaterThanOrEqual(24 * 60);
+    for (const name of ["etf-enrich", "etf-research"]) {
+      expect(job(name)).toContain("name: RESEARCH_CODEX_MODEL");
+      expect(job(name)).toContain('value: ""');
+      expect(job(name)).toContain("name: RESEARCH_ENABLED");
+    }
+    expect(deadline("etf-research")).toBeGreaterThanOrEqual(6 * 30);
+  });
   it("runs ETF research weekly after the daily price outcome pass", () => {
     expect(minutes("etf-research")).toEqual({ at: 7 * 60 + 40, days: "1" });
     expect(minutes("etf-outcomes")).toEqual({ at: 6 * 60 + 50, days: "*" });
