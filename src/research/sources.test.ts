@@ -8,6 +8,9 @@ describe("sources", () => {
     expect(classifyHost("www.reuters.com")).toBe("press");
     expect(classifyHost("finance.yahoo.com")).toBe("aggregator");
     expect(classifyHost("some-blog.example")).toBe("aggregator");
+    expect(classifyHost("press.siemens.com", irDomainsFor("SIE"))).toBe("primary");
+    expect(classifyHost("news.fixstars.com", irDomainsFor("3687"))).toBe("primary");
+    expect(classifyHost("siemens.com.evil.example", irDomainsFor("SIE"))).toBe("aggregator");
     expect(classifyHost("x.com")).toBe("social");
     expect(classifyHost("user.substack.com")).toBe("social");
   });
