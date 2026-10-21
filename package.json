@@ -54,6 +54,7 @@
     "etf:catalog-sync": "tsx src/jobs/etf-catalog.ts",
     "symbols:sync": "tsx src/jobs/symbols-sync.ts",
     "etf:enrich": "node scanner/run-etf-enrich.mjs",
+    "etf:enrich:eodhd": "ETF_ENRICH_SOURCE=eodhd node scanner/run-etf-enrich.mjs",
     "etf:research": "node scanner/run-etf-research.mjs"
   },
   "dependencies": {

@@ -24,7 +24,9 @@
           "replication": { "type": ["string", "null"], "maxLength": 80 },
           "distribution": { "type": ["string", "null"], "enum": ["acc", "dist", null] },
           "ucits": { "type": ["boolean", "null"] },
-          "sourceUrl": { "type": ["string", "null"], "pattern": "^https://[^\\s]+$", "maxLength": 500 }
+          "sourceUrl": { "type": ["string", "null"], "pattern": "^https://[^\\s]+$", "maxLength": 500 },
+          "source": { "type": "string", "enum": ["eodhd", "codex"] },
+          "holdingsCount": { "type": ["integer", "null"], "minimum": 0 }
         }
       }
     }

@@ -7,6 +7,7 @@ export interface Enrichment {
   region: string | null; theme: string | null; trackedIndex: string | null; terPct: number | null;
   aumUsdM: number | null; domicile: string | null; replication: string | null;
   distribution: "acc" | "dist" | null; ucits: boolean | null; sourceUrl: string | null;
+  source?: "eodhd" | "codex"; holdingsCount?: number | null;
 }
 export interface ShortlistRow { listing_key: string; mnemonic: string | null; asset_class: string | null; region: string | null; tracked_index: string | null; aum_usd_m: number | null; ter_pct: number | null; distribution: string | null; instrument_type: string; enrichment_status: string; last_seen: string }
 
@@ -35,11 +36,14 @@ export async function ingestEnrichment(db: CatalogDb, rows: Enrichment[]): Promi
     for (const row of rows) {
       const ok = enrichmentComplete(row);
       const result = await client.query(`UPDATE etf_catalog SET issuer=$2,asset_class=$3,region=$4,theme=$5,tracked_index=$6,ter_pct=$7,
-        aum_usd_m=$8,domicile=$9,replication=$10,distribution=$11,ucits=COALESCE($12,ucits),source_url=$13,
-        enrichment_status=$14,enrich_attempts=enrich_attempts+CASE WHEN $14='failed' THEN 1 ELSE 0 END,
+        aum_usd_m=$8,domicile=$9,replication=$10,distribution=$11,
+        ucits=COALESCE($12,ucits),source_url=$13,
+        enrichment_status=$14,enrichment_source=$15,holdings_count=$16,
+        enrich_attempts=enrich_attempts+CASE WHEN $14 IN ('failed','eodhd_unmapped','eodhd_incomplete') THEN 1 ELSE 0 END,
         enriched_at=CASE WHEN $14='ok' THEN now() ELSE enriched_at END,updated_at=now()
         WHERE listing_key=$1 AND enrichment_status<>'ok' AND enrich_attempts<3 RETURNING listing_key`,
-      [row.listingKey,row.issuer,row.assetClass,row.region,row.theme,row.trackedIndex,row.terPct,row.aumUsdM,row.domicile,row.replication,row.distribution,row.ucits,row.sourceUrl,ok ? "ok" : "failed"]);
+      [row.listingKey,row.issuer,row.assetClass,row.region,row.theme,row.trackedIndex,row.terPct,row.aumUsdM,row.domicile,row.replication,row.distribution,row.ucits,row.sourceUrl,
+        ok ? "ok" : row.source === "eodhd" ? row.sourceUrl ? "eodhd_incomplete" : "eodhd_unmapped" : "failed",row.source ?? "codex",row.holdingsCount ?? null]);
       if (!result.rowCount) throw new Error(`ETF catalog row not pending: ${row.listingKey}`);
       if (row.isin) await client.query("UPDATE etf_catalog SET isin=COALESCE(isin,$2) WHERE listing_key=$1", [row.listingKey,row.isin]);
     }
@@ -86,14 +90,16 @@ export async function refreshShortlist(db: CatalogDb, today: string): Promise<nu
 }
 
 export async function pendingCatalog(db: CatalogDb, limit: number) {
-  const result = await db.query(`SELECT listing_key AS "listingKey",isin,name,mnemonic AS symbol,exchange,trading_currency AS "tradingCurrency" FROM etf_catalog
-    WHERE enrichment_status <> 'ok' AND enrich_attempts < 3 AND last_seen >= CURRENT_DATE - 30
-    ORDER BY (CASE WHEN name ~* '(\\m[23]x\\M|-1x|leverag|inverse|ultra|short|bear|bull|daily|\\mlev\\M)' THEN -100 ELSE 0 END
-      + CASE instrument_type WHEN 'ETF' THEN 20 ELSE 0 END
-      + CASE WHEN name ~* '^(ishares|ishs|vanguard|vang|xtrackers|xtr|spdr|state street|amundi|amu|am-|ais-|invesco|i7-|ubs|lyxor|mul|wisdomtree|witr|vaneck|jpmorgan|jpm|fidelity|schwab|bnp|dws)' THEN 20 ELSE 0 END
-      + CASE WHEN name ~* '(s&p ?500|s\\+p ?500|msci|world|acwi|nasdaq.?100|n100|stoxx|ftse|total market|emerging|\\mem\\M|europe|dividend|treasury|bond|gold|core)' THEN 15 ELSE 0 END
-      + CASE WHEN exchange IN ('XETR','NYSEARCA','NASDAQ','NYSE','BATS') THEN 5 ELSE 0 END) DESC,
-      first_seen,listing_key LIMIT $1`, [limit]); return result.rows;
+  const result = await db.query(`SELECT c.listing_key AS "listingKey",c.isin,c.name,c.mnemonic AS symbol,c.exchange,c.trading_currency AS "tradingCurrency",s.vendor_symbol AS "vendorSymbol" FROM etf_catalog c
+    LEFT JOIN LATERAL (SELECT vendor_symbol FROM symbols WHERE c.isin IS NOT NULL AND isin=c.isin AND NOT delisted
+      ORDER BY CASE WHEN exchange='XETRA' THEN 0 WHEN exchange='US' THEN 1 ELSE 2 END, vendor_symbol LIMIT 1) s ON true
+    WHERE c.enrichment_status <> 'ok' AND c.enrich_attempts < 3 AND c.last_seen >= CURRENT_DATE - 30
+    ORDER BY (CASE WHEN c.name ~* '(\\m[23]x\\M|-1x|leverag|inverse|ultra|short|bear|bull|daily|\\mlev\\M)' THEN -100 ELSE 0 END
+      + CASE c.instrument_type WHEN 'ETF' THEN 20 ELSE 0 END
+      + CASE WHEN c.name ~* '^(ishares|ishs|vanguard|vang|xtrackers|xtr|spdr|state street|amundi|amu|am-|ais-|invesco|i7-|ubs|lyxor|mul|wisdomtree|witr|vaneck|jpmorgan|jpm|fidelity|schwab|bnp|dws)' THEN 20 ELSE 0 END
+      + CASE WHEN c.name ~* '(s&p ?500|s\\+p ?500|msci|world|acwi|nasdaq.?100|n100|stoxx|ftse|total market|emerging|\\mem\\M|europe|dividend|treasury|bond|gold|core)' THEN 15 ELSE 0 END
+      + CASE WHEN c.exchange IN ('XETR','NYSEARCA','NASDAQ','NYSE','BATS') THEN 5 ELSE 0 END) DESC,
+      c.first_seen,c.listing_key LIMIT $1`, [limit]); return result.rows;
 }
 export async function shortlistedCatalog(db: CatalogDb) {
   const result = await db.query(`SELECT listing_key AS "listingKey",isin,name,mnemonic AS symbol,exchange,listing_region AS "listingRegion",trading_currency AS "tradingCurrency",issuer,
