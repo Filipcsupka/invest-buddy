@@ -30,3 +30,26 @@ export const sampleEtfOutcomes: EtfOutcome[] = [
   { symbol: "AGGH", horizonDays: 30, entryDate: "2026-08-14", exitDate: "2026-09-13", returnPct: 0.6, benchmarkSymbol: "SPY", benchmarkReturnPct: 2.1, excessPct: -1.5 },
   { symbol: "VWRA", horizonDays: 60, entryDate: "2026-07-15", exitDate: "2026-09-13", returnPct: 4.2, benchmarkSymbol: "SPY", benchmarkReturnPct: 3.8, excessPct: 0.4 },
 ];
+
+// Illustrative catalog records. Names, identifiers, costs and sizes are invented.
+export const sampleEtfCatalog: import("@/db/etf-catalog").CatalogFund[] = Array.from({ length: 40 }, (_, index) => {
+  const pick = sampleEtfPicks[index] ?? null;
+  const groups = ["equity", "bond", "commodity", "multi_asset", "other"] as const;
+  const regions = ["Global", "Europe", "United States", "Emerging markets"];
+  return {
+    listingKey: index < 20 ? `DE${String(index + 1).padStart(10, "0")}` : `NASDAQ:S${String(index + 1).padStart(3, "0")}`,
+    isin: index < 20 ? `DE${String(index + 1).padStart(10, "0")}` : null, listingRegion: index < 20 ? "EU" : "US", wkn: `S${String(index + 1).padStart(5, "0")}`,
+    mnemonic: pick?.symbol ?? `S${String(index + 1).padStart(3, "0")}`,
+    name: pick?.name ?? `Sample ${regions[index % regions.length]} ${groups[index % groups.length]} fund ${index + 1}`,
+    instrumentType: index === 15 ? "ETC" : index === 17 ? "ETN" : index % 8 === 0 ? "ACTIVE_ETF" : "ETF", exchange: index < 20 ? "XETR" : "NASDAQ", tradingCurrency: index % 3 === 0 ? "USD" : "EUR",
+    ucits: index % 7 === 0 ? null : true, issuer: ["Sample Asset Management", "Example Index Funds", "Demo Capital"][index % 3],
+    assetClass: pick?.assetClass ?? groups[index % groups.length], region: pick?.region ?? regions[index % regions.length],
+    theme: null, trackedIndex: pick?.trackedIndex ?? `Sample ${regions[index % regions.length]} index`,
+    terPct: index % 9 === 0 ? null : Number((0.08 + (index % 8) * 0.05).toFixed(2)),
+    aumUsdM: index % 11 === 0 ? null : 250 + index * 125, domicile: index % 2 ? "Ireland" : "Luxembourg",
+    replication: index % 4 ? "Physical" : "Synthetic", distribution: index % 5 === 0 ? "dist" : "acc",
+    sourceUrl: index < 20 ? "https://www.cashmarket.deutsche-boerse.com/cash-en/trading/Tradable-Instruments-Xetra" : "https://www.nasdaqtrader.com/dynamic/SymDir/nasdaqlisted.txt",
+    enrichmentStatus: index % 10 === 0 ? "pending" : "ok", enrichedAt: index % 10 === 0 ? null : "2026-10-20",
+    firstSeen: "2026-10-20", lastSeen: "2026-10-21", shortlist: index < 9, pickSymbol: pick?.symbol ?? null,
+  };
+});
