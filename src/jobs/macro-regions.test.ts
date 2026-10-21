@@ -2,7 +2,7 @@ import pg from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import golden from "./fixtures/macro-us-golden.json";
 import { DEFAULT_MACRO_CONFIG, REGIONAL_MACRO_RULES_VERSION } from "../data/macro-rules";
-import { REGION_BENCHMARKS } from "../universe/region";
+import { loadRegions, REGION_BENCHMARKS } from "../universe/region";
 import { migrate } from "../../scripts/migrate";
 import { evaluateMacro, runMacro, VIX_DOC_URL, writeMacro, type MacroInputs } from "./macro";
 import { withBenchmarks } from "./eodhd-prices";
@@ -74,6 +74,10 @@ describe("price benchmarks", () => {
     expect(withBenchmarks(["NVDA", "BRK.B"])).toEqual(["NVDA", "BRK.B", "SPY"]);
     expect(withBenchmarks(["NVDA", "SAP.XETRA"])).toEqual(["NVDA", "SAP.XETRA", "SPY", "EXSA.XETRA"]);
   });
+  it("uses the shared region resolver, so a bare-key European member pulls the European benchmark", () => {
+    expect(withBenchmarks(["NVDA", "ASML"], new Map([["NVDA", "US"], ["ASML", "Europe"]]))).toEqual(["NVDA", "ASML", "SPY", "EXSA.XETRA"]);
+    expect(withBenchmarks(["NVDA"], new Map([["NVDA", "US"]]))).toEqual(["NVDA", "SPY"]);
+  });
 });
 
 const url = process.env.TEST_DATABASE_URL;
@@ -132,6 +136,20 @@ describe.skipIf(!url)("regional macro job on postgres", () => {
     const macro = await pool.query<{ data: { sectorRotationIntoGrowth: boolean; regions: { Europe: { benchmark: string; sectorRotationIntoGrowth: boolean } } } }>("SELECT data FROM macro_findings WHERE as_of=$1", [ASOF]);
     expect(macro.rows[0].data.sectorRotationIntoGrowth).toBe(true);
     expect(macro.rows[0].data.regions.Europe).toMatchObject({ benchmark: "EXSA.XETRA", sectorRotationIntoGrowth: false });
+  });
+
+  it("resolves regions with the key suffix over a default 'US' membership", async () => {
+    const stale = "P7EUUS.XETRA", bare = "P7BAREAS";
+    try {
+      await pool.query("INSERT INTO instruments (ticker,name,sector,tier,source) VALUES ($1,'P7 stale','Unclassified',NULL,'discovery'),($2,'P7 bare','Unclassified',NULL,'discovery') ON CONFLICT (ticker) DO NOTHING", [stale, bare]);
+      await pool.query(`INSERT INTO universe_membership (ticker,list,tier,valid_from,reason,criteria_version,added_by,exchange)
+        VALUES ($1,'discovery',NULL,DATE '2026-01-01','p7 test','test','test','US'),($2,'discovery',NULL,DATE '2026-01-01','p7 test','test','test','AS')`, [stale, bare]);
+      const regions = await loadRegions(pool, ASOF, [stale, bare, eu, "NVDA"]);
+      expect(Object.fromEntries(regions)).toEqual({ [stale]: "Europe", [bare]: "Europe", [eu]: "Europe", NVDA: "US" });
+    } finally {
+      await pool.query("DELETE FROM universe_membership WHERE ticker = ANY($1::text[])", [[stale, bare]]);
+      await pool.query("DELETE FROM instruments WHERE ticker = ANY($1::text[])", [[stale, bare]]);
+    }
   });
 
   it("refuses to write a European row without a regional outcome", async () => {

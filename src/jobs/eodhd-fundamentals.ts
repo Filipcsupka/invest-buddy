@@ -57,13 +57,15 @@ async function states(db: Pick<pg.Pool, "query">): Promise<Map<string, RefreshSt
 
 /**
  * Stores General.Sector and General.Industry on the listing's symbols row. `sector_observed_on` keeps the day the current pair was
- * first stored, so a score date before that day does not read it. A payload without either field (a narrow filter) changes nothing.
+ * first stored, so a score date before that day does not read it. Only a non-null field overwrites; a missing one keeps the stored
+ * value, so a payload without either field (a narrow filter) changes nothing.
  */
 export async function storeClassification(db: Pick<pg.Pool, "query">, vendorSymbol: string, value: { sector: string | null; industry: string | null }, today: string) {
   if (!value.sector && !value.industry) return;
-  await db.query(`UPDATE symbols SET sector=$2,industry=$3,
-    sector_observed_on=CASE WHEN sector IS NOT DISTINCT FROM $2 AND industry IS NOT DISTINCT FROM $3 AND sector_observed_on IS NOT NULL THEN sector_observed_on ELSE $4::date END
-    WHERE vendor_symbol=$1`, [vendorSymbol, value.sector, value.industry, today]);
+  await db.query(`UPDATE symbols SET sector=COALESCE($2,sector),industry=COALESCE($3,industry),
+    sector_observed_on=CASE WHEN sector IS NOT DISTINCT FROM COALESCE($2,sector) AND industry IS NOT DISTINCT FROM COALESCE($3,industry) AND sector_observed_on IS NOT NULL
+      THEN sector_observed_on ELSE $4::date END
+    WHERE vendor_symbol=$1`, [vendorSymbol, value.sector || null, value.industry || null, today]);
 }
 
 export async function runEodhdFundamentals(db: pg.Pool | null, api: FundamentalsClient, options: RunOptions = {}) {

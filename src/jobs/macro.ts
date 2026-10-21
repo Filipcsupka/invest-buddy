@@ -13,7 +13,7 @@ import { loadUniverse } from "../db/universe";
 import { storedMacroSeries } from "../db/macro-observations";
 import { storeDailyEcbFx, storeDailyMacroObservations } from "./macro-observations";
 import { evaluateBenchmarkTrend, evaluateDataTailwind, evaluateSectorRotation, macroConfig, MACRO_RULES_VERSION, REGIONAL_MACRO_RULES_VERSION, type Bar, type MacroConfig, type MacroResult, type VixPoint, type YieldPoint } from "../data/macro-rules";
-import { instrumentRegion, REGION_BENCHMARKS, type Region } from "../universe/region";
+import { instrumentRegion, loadRegions, REGION_BENCHMARKS, type Region } from "../universe/region";
 
 export const BENCHMARK = REGION_BENCHMARKS.US;
 /** Evidence url for the VIX document. The page url is the stored document url, not the CSV link. */
@@ -61,13 +61,6 @@ export function evaluateMacro(inputs: MacroInputs, asOf: string, config: MacroCo
   return outcome;
 }
 
-/** Region per ticker from its membership exchange on asOf, else its key suffix. */
-export async function loadRegions(pool: Pick<pg.Pool, "query">, asOf: string, tickers: string[]): Promise<Map<string, Region>> {
-  const rows = await pool.query<{ ticker: string; exchange: string }>(`SELECT DISTINCT ON (ticker) ticker,exchange FROM universe_membership
-    WHERE ticker = ANY($1::text[]) AND valid_from <= $2::date AND (valid_to IS NULL OR valid_to > $2::date) ORDER BY ticker,valid_from DESC`, [tickers, asOf]);
-  const exchange = new Map(rows.rows.map((row) => [row.ticker, row.exchange]));
-  return new Map(tickers.map((ticker) => [ticker, instrumentRegion(ticker, exchange.get(ticker))]));
-}
 const regionOf = (regions: Map<string, Region> | undefined, ticker: string): Region => regions?.get(ticker) ?? instrumentRegion(ticker);
 
 interface DocRow { url: string; meta: { observations?: YieldPoint[]; close?: number; date?: string; recent?: { date: string; close: number }[] } }

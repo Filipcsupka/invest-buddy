@@ -173,6 +173,11 @@ describe("EODHD sector and industry", () => {
       expect(await read()).toEqual({ sector: "Technology", industry: "Semiconductors", observed: "2026-10-01" });
       await storeClassification(pool, "ZZC.XETRA", { sector: "Technology", industry: "Software - Application" }, "2026-10-15");
       expect(await read()).toEqual({ sector: "Technology", industry: "Software - Application", observed: "2026-10-15" });
+      // Sector without Industry keeps the stored industry and the observed day.
+      await storeClassification(pool, "ZZC.XETRA", { sector: "Technology", industry: null }, "2026-10-20");
+      expect(await read()).toEqual({ sector: "Technology", industry: "Software - Application", observed: "2026-10-15" });
+      await storeClassification(pool, "ZZC.XETRA", { sector: "Industrials", industry: null }, "2026-10-21");
+      expect(await read()).toEqual({ sector: "Industrials", industry: "Software - Application", observed: "2026-10-21" });
     } finally { await pool.query("ROLLBACK"); await pool.end(); }
   });
 });

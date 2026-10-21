@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import pg from "pg";
 import { describe, expect, it } from "vitest";
-import { edgarCandidates, frameCandidates, managerHoldingChanges, moverCandidates, nonCommonStockReason, ownershipCandidates, parse13fHoldings, preScreenMa200, rankCandidates, reviewCandidate, saveCandidates, saveDiscoveryPriceBars, screenCandidates, shortlistCandidates, sourceSummary, screenDiscoveryShortlist, themeCandidates, weekStart, type DiscoveryCandidate } from "./discovery";
+import { candidateMacro, edgarCandidates, frameCandidates, managerHoldingChanges, moverCandidates, nonCommonStockReason, ownershipCandidates, parse13fHoldings, preScreenMa200, rankCandidates, reviewCandidate, saveCandidates, saveDiscoveryPriceBars, screenCandidates, shortlistCandidates, sourceSummary, screenDiscoveryShortlist, themeCandidates, weekStart, type DiscoveryCandidate } from "./discovery";
 import { DailyLimitError, SymbolNotFoundError } from "../data/twelvedata";
 import type { OHLCV } from "../engine/types";
 import { loadUniverse } from "../db/universe";
@@ -122,6 +122,28 @@ describe("weekly discovery", () => {
     expect(notPassed).toHaveLength(1);
     expect(notPassed[0].symbol).toBe(row.symbol);
     expect(notPassed[0].reason).toMatch(/^(rejected|invalid data|score \d+ below 12)/);
+  });
+
+  it("scores European candidates with the regional macro outcome and US candidates with the US one", async () => {
+    const stored = { dataTailwind: true, sectorRotationIntoGrowth: true, regions: { Europe: { dataTailwind: false, sectorRotationIntoGrowth: null } } };
+    const macro = candidateMacro(stored);
+    const us = { symbol: "NEW", name: "New", sector: "Tech", theme: null, score: 1, sources: [] };
+    expect(macro(us)).toEqual({ dataTailwind: true, growthSectorRotation: true });
+    expect(macro({ ...us, symbol: "BRK.B", exchange: "US" })).toEqual({ dataTailwind: true, growthSectorRotation: true });
+    expect(macro({ ...us, symbol: "SAP.XETRA", exchange: "XETRA" })).toEqual({ dataTailwind: false, growthSectorRotation: null });
+    expect(macro({ ...us, symbol: "ASML", exchange: "AS" })).toEqual({ dataTailwind: false, growthSectorRotation: null });
+    // Without a regional outcome a European name is unknown; it never borrows the US values.
+    expect(candidateMacro({ dataTailwind: true, sectorRotationIntoGrowth: true })({ ...us, symbol: "SAP.XETRA", exchange: "XETRA" })).toEqual({ dataTailwind: null, growthSectorRotation: null });
+    expect(candidateMacro(undefined)(us)).toEqual({ dataTailwind: null, growthSectorRotation: null });
+
+    const bars = Array.from({ length: 220 }, (_, i) => ({ date: new Date(Date.UTC(2026, 0, 1 + i)).toISOString().slice(0, 10), open: 100 + i, high: 101 + i, low: 99 + i, close: 100 + i, volume: i % 2 ? 100 : 200 }));
+    const row = frameCandidates([{ ticker: "NEW", name: "New Corp", yoyPercent: 40, priorYoyPercent: 20, accelerationPp: 20, revenue: 90_000_000 }], "https://data.sec.gov/x")[0];
+    const notPassed: { symbol: string; reason: string }[] = [];
+    const both = await screenCandidates([row, { ...row, symbol: "NEW.XETRA", exchange: "XETRA" }], "2026-08-08", async () => bars, macro, 500, notPassed);
+    const usScore = (await screenCandidates([row], "2026-08-08", async () => bars, { growthSectorRotation: true, dataTailwind: true }, 500))[0].ruleScore!;
+    expect(both.map((item) => [item.symbol, item.ruleScore])).toEqual([["NEW", usScore]]);
+    // The European name loses both US macro points (rotation 2, data 3) that it would have borrowed before.
+    expect(notPassed).toEqual([{ symbol: "NEW.XETRA", reason: `score ${usScore - 5} below 12` }]);
   });
 
   it.skipIf(!process.env.TEST_DATABASE_URL)("promotes a reviewed name outside the original universe into the same runtime universe", async () => {
