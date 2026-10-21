@@ -15,18 +15,72 @@ Done:
 - The research CronJobs removal and the new EODHD CronJobs (suspended) are on local infra branch `feat/invest-eodhd-cronjobs`, not pushed.
 - Nothing runs against EODHD yet. There is no key and all tests use recorded fixtures.
 
-Next, in order:
-1. Owner: buy EODHD ALL-IN-ONE and create secret `invest-buddy-eodhd` key `api-key` in namespace `invest` (`KUBECONFIG=~/.kube/khtz kubectl -n invest create secret generic invest-buddy-eodhd --from-literal=api-key=<KEY>`).
-2. Verify against real responses (listed as UNVERIFIED in `docs/eodhd.md` and `docs/eodhd-universe.md`): exchange codes PA, AS, SW, PR; the quarterly income statement filter path; ETF field names and UCITS coverage; LSE price unit (GBX or GBP, LSE listings are excluded until confirmed); `EXSA.XETRA` availability; news call cost; plan limits. Fix the code where the response differs.
-3. Symbols sync with `--dry-run`, then for real. Check the exchange list.
-4. Price backfill (`prices:eodhd --mode backfill --only ...`) on a few tickers, compare with the old price source, then the whole universe (MA200 needs 200 bars).
-5. Fundamentals and catalyst on a few names, compare with SEC and Alpha Vantage, then widen.
-6. Push and merge infra branch `feat/invest-eodhd-cronjobs` (needs owner approval), then un-suspend the EODHD CronJobs one at a time: symbols, prices, fundamentals, catalyst, insider.
-7. ETF enrichment live run after step 2: `etf:enrich --limit 100` first (relevance order, call cap), then un-suspend `etf-enrich` (weekly). Un-suspend `etf-research` only after the AI role decision.
-8. Owner decision on the AI role. Judge, ETF picks and extract are all suspended. Decide which AI runs go on top of EODHD data (for example judge on structured data only, no web search) and which provider. Extract can stay off once fundamentals and catalyst feed the rules.
-9. Owner sign-off on scoring: European macro points use a STOXX 600 ETF price trend (placeholder, no ECB series is collected). US rotation averages US names only. EU primary-venue volume biases the traded-value floor. Thresholds in `docs/eodhd-universe.md` are provisional.
-10. Cleanup once the key works: drop tables `research_runs`, `research_findings`, `research_candidates`, `research_events` and `ai_cards` (migration, needs owner OK); remove the SEC and Alpha Vantage collectors that EODHD replaces; remove `scanner/run-scan.mjs` (old scan, no CronJob).
-11. Forward-return comparison of the old ChatGPT picks against the pipeline is not built. It needs 20 picks per side and the `ai_cards` rows, so back them up before step 10.
+Next tasks (follow in this order). Each has depends-on, steps and a definition of done (DoD). "Approval" means the owner says yes first. Commands run with `KUBECONFIG=~/.kube/khtz`, namespace `invest`. Production is read-only unless the step says otherwise.
+
+E1. EODHD key and plan (owner, approval)
+- Depends on: nothing.
+- Do: buy EODHD ALL-IN-ONE (about 100 USD a month). Create the secret: `kubectl -n invest create secret generic invest-buddy-eodhd --from-literal=api-key=<KEY>`. Export the key in the local shell only for the dry runs (`export EODHD_API_KEY=...`), never in a file or commit.
+- DoD: `kubectl -n invest get secret invest-buddy-eodhd` exists. `curl "https://eodhd.com/api/user?api_token=$EODHD_API_KEY"` returns the plan and the daily call limit. Write plan name and limit into `docs/eodhd.md`.
+
+E2. Verify vendor behaviour with real responses
+- Depends on: E1.
+- Do: run each UNVERIFIED item once with one real call and save a trimmed fixture: exchange codes PA, AS, SW, PR, MI, MC, ST, OL, CO, HE, VI, BR, LS in `/exchanges-list`; the quarterly income statement filter path (`Financials::Income_Statement::quarterly`); ETF fields (`NetExpenseRatio`, `TotalAssets`, `Holdings_Count`, UCITS funds on XETRA); LSE price unit (GBX or GBP) for 3 names; `EXSA.XETRA` price history; news call cost (check the usage counter before and after); bulk endpoint cost; All-In-One call limit.
+- DoD: every UNVERIFIED line in `docs/eodhd.md` and `docs/eodhd-universe.md` is replaced by a verified fact or a stated failure. Parsers and fixtures match the real responses. One PR with the fixes, tests green, merged.
+
+E3. Symbols sync
+- Depends on: E2.
+- Do: `npm run symbols:sync -- --dry-run`, check the exchange list and counts, then run it for real (manual Job from the image, or locally against a port-forward only if the owner approves a DB write).
+- DoD: `symbols` table holds rows for US, XETRA, LSE, PA, AS, SW and the other verified exchanges. A query by exchange shows counts. `job_runs` shows a successful run. Approval: first real DB write.
+
+E4. Price bars
+- Depends on: E3.
+- Do: `npm run prices:eodhd -- --mode backfill --only AAPL,MSFT,SAP.XETRA,ASML.AS,NESN.SW --dry-run`, then for real. Compare closes with the old price source for the same days (US names). Then backfill the whole universe and run daily mode once.
+- DoD: each tracked name has at least 200 bars with currency set. For the 5 comparison names the close matches the old source within rounding on at least 20 sessions (splits aside). Universe backfill reports zero unresolved symbols or lists them. Estimated calls are below the daily limit from E1.
+
+E5. Fundamentals and earnings
+- Depends on: E3.
+- Do: `npm run fundamentals:eodhd -- --dry-run --only AAPL.US,SAP.XETRA`, then for real on 10 names, then the universe in batches (`--max-symbols`).
+- DoD: `fundamentals_pit` has eodhd rows with report dates for the batch. Revenue acceleration and EPS beat match SEC and Alpha Vantage for 5 US names (document any difference). `earnings_calendar_snapshots` has eodhd rows. No row has a first-seen date after its report date by mistake.
+
+E6. Catalyst and insider
+- Depends on: E4 and E5.
+- Do: run `catalyst:eodhd` and the insider job on 10 names with `--dry-run`, then for real.
+- DoD: catalyst facts exist with the `catalyst_8k_eodhd` name for names with an event in the window and none for the rest. Insider rows for US names do not double count against EDGAR (same accession counted once). News call count per run is written in the job log and stays inside the daily limit.
+
+E7. Infra CronJobs
+- Depends on: E2 and E3.
+- Do: push local infra branch `feat/invest-eodhd-cronjobs` (it adds the EODHD CronJobs suspended and removes the old research CronJobs, keeps `invest-buddy-research-config`), open PR, merge. Un-suspend one CronJob at a time in this order: symbols-sync, prices, fundamentals, catalyst, insider. Edit `suspend` in the manifest, never `kubectl patch`.
+- DoD: all five CronJobs exist in the cluster and run once on schedule with a successful Job each. `kubectl get cronjob -n invest` shows the old research CronJobs gone. Approval: infra push and merge, each un-suspend.
+
+E8. Stock screen on EODHD data
+- Depends on: E4, E5, E6.
+- Do: run `daily` and `reconcile` manually once and compare the scores for the 36 current names with the previous run. Run the universe selection for US plus Europe in dry run.
+- DoD: scores for US names match the previous run except where an input changed on purpose (list those). A dry-run universe lists names per exchange, none selected from LSE until the pence unit is confirmed in E2. Selected set size is written down against the 500, 2,000 and 5,000 targets.
+
+E9. ETF enrichment live run
+- Depends on: E2 (ETF fields).
+- Do: `npm run etf:enrich -- --limit 100 --dry-run`, then for real, then un-suspend `invest-buddy-etf-enrich` (weekly, Sunday).
+- DoD: at least 90 of 100 top-scored funds have status `ok` with TER and AUM filled or a stated reason. The shortlist holds 150 funds. Calls used are below the call cap and the daily limit. Weekly job completes one run.
+
+E10. Decide the AI role (owner)
+- Depends on: E8.
+- Do: pick what AI runs on top of EODHD data and with which provider (for example judge on structured data only, no web search; ETF picks judge on enriched rows). Extract stays off unless a rule still needs it.
+- DoD: decision written in this file and in `~/Documents/ops-brain/projects/investing-platform/`. Then one task per run to re-enable `judge` and `etf-research`, each with an expected tokens per run and a monthly cap.
+
+E11. Scoring sign-off (owner)
+- Depends on: E8.
+- Do: review three open choices: European macro uses a STOXX 600 ETF price trend (no ECB series collected); US rotation averages US names only; the traded-value floor counts primary-venue volume for European names. Thresholds in `docs/eodhd-universe.md` are provisional.
+- DoD: each choice is accepted or a change task is created. Accepted choices are noted in `docs/data.md`.
+
+E12. Cleanup
+- Depends on: E8 and E10.
+- Do: back up `ai_cards` and the `research_*` tables (`pg_dump` of those tables to a file outside the repo). Then one migration dropping `research_runs`, `research_findings`, `research_candidates`, `research_events` and `ai_cards`. Remove the SEC and Alpha Vantage collectors that EODHD replaced and `scanner/run-scan.mjs`.
+- DoD: backup file exists and restores in a scratch database. Migration applied, app and jobs run, no references left (`grep` clean), tests green. Approval: the drop.
+
+E13. Forward-return comparison against the old ChatGPT picks
+- Depends on: E12 backup of `ai_cards`, at least 20 picks per side.
+- Do: build the comparison (30, 60, 90 day horizons, benchmark) per `~/Documents/ops-brain/projects/investing-platform/research/old-automation-vs-pipeline.md`.
+- DoD: report with picks, entry price, return per horizon and benchmark, and the verdict rule applied as written before the results.
 
 ### Done today
 - Promotion fix (#264): the pipeline read `e.status` but evidence stores `verify.status`, so nothing was proposed. CGNX, COF, ROK, SYM, VRT, COHR, NOVT now in the scored universe (6 of 7 score Criteria broken, ROK Ignore; real rule results).
