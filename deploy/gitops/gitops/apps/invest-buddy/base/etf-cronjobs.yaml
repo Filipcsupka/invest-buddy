@@ -1,4 +1,147 @@
-# ETF cost, index and holdings facts change monthly or yearly. The daily outcomes job measures price moves without a model.
+# Xetra catalog sync precedes enrichment on Sunday; picks run Monday after outcomes.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: invest-buddy-etf-catalog-sync
+  namespace: invest
+spec:
+  suspend: false
+  schedule: "10 5 * * 0"
+  timeZone: Europe/Bratislava
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 1200
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: invest-buddy
+            app.kubernetes.io/component: etf-catalog-sync
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          nodeSelector:
+            kubernetes.io/hostname: k8s-worker-01
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            fsGroup: 10001
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: etf-catalog-sync
+              image: ghcr.io/filipcsupka/invest-buddy:latest
+              command: ["node", "dist/jobs/etf-catalog.js"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-secrets
+                      key: DATABASE_URL
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+                limits:
+                  cpu: "2"
+                  memory: 1Gi
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: invest-buddy-etf-enrich
+  namespace: invest
+spec:
+  suspend: false
+  schedule: "40 5 * * 0"
+  timeZone: Europe/Bratislava
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 86400
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: invest-buddy
+            app.kubernetes.io/component: etf-enrich
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          nodeSelector:
+            kubernetes.io/hostname: k8s-worker-01
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            fsGroup: 10001
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: etf-enrich
+              image: ghcr.io/filipcsupka/invest-buddy-scanner:latest
+              command: ["node", "/app/scanner/run-etf-enrich.mjs", "--timeout-s", "1200"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              env:
+                - name: RESEARCH_ENABLED
+                  valueFrom:
+                    configMapKeyRef:
+                      name: invest-buddy-research-config
+                      key: RESEARCH_ENABLED
+                # Empty uses the Codex default; set a cheap model for catalog enrichment.
+                - name: RESEARCH_CODEX_MODEL
+                  value: ""
+                - name: INGEST_BASE_URL
+                  value: http://web.invest.svc.cluster.local:3000
+                - name: INGEST_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-secrets
+                      key: INGEST_TOKEN
+                - name: CODEX_ACCESS_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-codex-token
+                      key: CODEX_ACCESS_TOKEN
+              volumeMounts:
+                - name: tmp
+                  mountPath: /tmp
+                - name: scanner-home
+                  mountPath: /home/scanner
+                - name: scan-out
+                  mountPath: /app/scanner/out
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+                limits:
+                  cpu: "2"
+                  memory: 1Gi
+          volumes:
+            - name: tmp
+              emptyDir: {}
+            - name: scanner-home
+              emptyDir: {}
+            - name: scan-out
+              emptyDir: {}
+---
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -15,7 +158,7 @@ spec:
   jobTemplate:
     spec:
       backoffLimit: 1
-      activeDeadlineSeconds: 2400
+      activeDeadlineSeconds: 12000
       template:
         metadata:
           labels:
@@ -48,6 +191,9 @@ spec:
                     configMapKeyRef:
                       name: invest-buddy-research-config
                       key: RESEARCH_ENABLED
+                # Empty uses the Codex default; set a stronger model for weekly picks.
+                - name: RESEARCH_CODEX_MODEL
+                  value: ""
                 - name: INGEST_BASE_URL
                   value: http://web.invest.svc.cluster.local:3000
                 - name: INGEST_TOKEN

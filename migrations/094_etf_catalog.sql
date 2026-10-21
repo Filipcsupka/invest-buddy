@@ -1,13 +1,15 @@
--- ETF catalog (owner decision 2026-10-21): every ETF tradable on Xetra (official free list, UCITS funds carry a KID so EEA retail clients such as IBKR customers can buy them),
--- enriched once by a cheap model, refreshed weekly for new listings. A weekly smarter run evaluates a shortlist of this catalog and writes etf_picks.
--- Additive: new table only.
+-- Global ETF catalog (owner decision 2026-10-21): Xetra and Nasdaq Trader listings,
+-- enriched once and refreshed weekly for new listings. A weekly model evaluates a shortlist.
+-- Additive: catalog table and a link from existing picks.
 CREATE TABLE IF NOT EXISTS etf_catalog (
-  isin text PRIMARY KEY CHECK (isin ~ '^[A-Z]{2}[A-Z0-9]{9}[0-9]$'),
+  listing_key text PRIMARY KEY,
+  isin text CHECK (isin IS NULL OR isin ~ '^[A-Z]{2}[A-Z0-9]{9}[0-9]$'),
   wkn text,
   mnemonic text,
   name text NOT NULL,
   instrument_type text NOT NULL CHECK (instrument_type IN ('ETF', 'ACTIVE_ETF', 'ETC', 'ETN')),
   exchange text NOT NULL DEFAULT 'XETR',
+  listing_region text,
   trading_currency text,
   ucits boolean,
   issuer text,
@@ -34,3 +36,7 @@ CREATE INDEX IF NOT EXISTS etf_catalog_class_idx ON etf_catalog (asset_class, re
 CREATE INDEX IF NOT EXISTS etf_catalog_status_idx ON etf_catalog (enrichment_status, enrich_attempts);
 CREATE INDEX IF NOT EXISTS etf_catalog_shortlist_idx ON etf_catalog (shortlist, shortlist_rank);
 CREATE INDEX IF NOT EXISTS etf_catalog_name_idx ON etf_catalog (lower(name));
+CREATE INDEX IF NOT EXISTS etf_catalog_exchange_idx ON etf_catalog (exchange);
+
+ALTER TABLE etf_picks ADD COLUMN IF NOT EXISTS listing_key text REFERENCES etf_catalog(listing_key);
+CREATE INDEX IF NOT EXISTS etf_picks_listing_key_idx ON etf_picks (listing_key);

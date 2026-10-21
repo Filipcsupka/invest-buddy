@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { authorized, validatePayload } from "./route";
 
 const candidate = {
-  symbol: "ETF1", exchange: "NYSE ARCA", name: "Test ETF", isin: null, assetClass: "equity", region: "US", call: "BUY_ZONE", conviction: 3,
+  symbol: "ETF1", exchange: "NYSEARCA", name: "Test ETF", isin: null, assetClass: "equity", region: "US", call: "BUY_ZONE", conviction: 3,
   thesis: "A broad index fund", whatHappened: [], whyItMatters: "Low cost", plan: { entryZone: null, addWhen: null, stopAddingWhen: null }, risks: [],
   cost: { terPct: 0.1, aumUsdM: 100, trackedIndex: "Test Index", domicile: "US", replication: "physical" },
   price: { last: 100, currency: "USD", asOf: "2026-10-20" },

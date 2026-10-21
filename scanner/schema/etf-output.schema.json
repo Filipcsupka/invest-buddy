@@ -8,7 +8,7 @@
     "asOf": { "type": "string", "format": "date" },
     "candidates": {
       "type": "array",
-      "maxItems": 20,
+      "maxItems": 28,
       "items": {
         "type": "object",
         "additionalProperties": false,
