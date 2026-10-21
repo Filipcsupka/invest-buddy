@@ -1,7 +1,7 @@
 import type { SourceClass } from "./types";
 import registry from "./sources.json";
 
-/** Source classes and data_sources ids for the research verifier (RS2). Host lists live in sources.json. */
+/** Source classes and data_sources ids for the evidence verifier. Host lists live in sources.json. */
 export const RESEARCH_SOURCE_ID = "research_web";
 
 interface Registry {

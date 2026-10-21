@@ -5,7 +5,7 @@ import { flags } from "@/config/flags";
 import { getPool } from "@/db/pool";
 import { latestHorizonLabels } from "@/db/horizon-labels";
 import { pageMetadata } from "@/i18n/metadata";
-import { ownerResearchAuthorized } from "../research/auth";
+import { ownerAuthorized } from "../auth";
 
 export const dynamic = "force-dynamic";
 type Props = { params: Promise<{ locale: string }> };
@@ -15,7 +15,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return { ...pageMetadata(locale, "/owner/horizons", "Horizon labels", "Private horizon profile facts."), robots: { index: false, follow: false } };
 }
 export default async function OwnerHorizonsPage({ params }: Props) {
-  if (!flags().OWNER_VIEW || !ownerResearchAuthorized((await headers()).get("authorization"), process.env.OWNER_RESEARCH_PASSWORD)) notFound();
+  if (!flags().OWNER_VIEW || !ownerAuthorized((await headers()).get("authorization"), process.env.OWNER_RESEARCH_PASSWORD)) notFound();
   const { locale } = await params;
   if (locale !== "en" && locale !== "sk") notFound();
   const db = getPool();

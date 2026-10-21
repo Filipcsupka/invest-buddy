@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: invest-buddy-research-config
+  namespace: invest
+data:
+  # Read by the ETF CronJobs (etf-cronjobs.yaml). The stock research CronJobs were removed on 2026-10-21.
+  RESEARCH_ENABLED: "on"
+  AI_DAILY_TOKEN_CEILING: "0"

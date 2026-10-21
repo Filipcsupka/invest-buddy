@@ -13,10 +13,10 @@ afterEach(() => {
   }
 });
 
-it("challenges for private research and accepts only the owner password", async () => {
+it("challenges for private owner pages and accepts only the owner password", async () => {
   process.env.OWNER_VIEW = "on";
   process.env.OWNER_RESEARCH_PASSWORD = "private-test-password";
-  const url = "https://example.com/en/owner/research/SMPL";
+  const url = "https://example.com/en/owner/horizons";
   const missing = await proxy(new NextRequest(url));
   expect(missing.status).toBe(401);
   expect(missing.headers.get("www-authenticate")).toContain("Basic");
@@ -87,7 +87,7 @@ it("does not forward the preview for a non-admin viewer", async () => {
 it.each(["en", "sk"])("keeps legal and owner gates shut for an admin viewer on %s, preview or not", async (locale) => {
   delete process.env.AUTH; delete process.env.IDEAS_PAGE; delete process.env.OWNER_VIEW; delete process.env.ADVICE_OUTPUT; delete process.env.DATA_MODE;
   for (const query of ["", "?view=free"]) {
-    for (const path of ["sizing", "ideas", "owner-allocation", "owner/research/SMPL"]) {
+    for (const path of ["sizing", "ideas", "owner-allocation", "owner/horizons"]) {
       const response = await proxy(new NextRequest(`https://example.com/${locale}/${path}${query}`));
       expect(response.status, `${path}${query}`).toBe(404);
     }

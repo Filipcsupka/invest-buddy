@@ -179,7 +179,7 @@ sequenceDiagram
 
 ## 7. Discovery and research
 
-Current discovery ranks candidates using stored and fetched evidence and posts a weekly candidate list. Promotion into the universe is a separate script. The proposed RS research engine adds a researcher, source verifier, pipeline state, judge integration and research cards; the board still lists RS0 and RS2 as in progress and RS1, RS3–RS8 as queued. No research path below should be read as a running CronJob (`src/jobs/discovery.ts`, `src/notify/discovery.ts`, `scripts/discovery-promote.ts`, `docs/roadmap/board.md`).
+Current discovery ranks candidates using stored and fetched evidence and posts a weekly candidate list. Promotion into the universe is a separate script (`src/jobs/discovery.ts`, `src/notify/discovery.ts`, `scripts/discovery-promote.ts`). The RS research engine (web research model, verifier, pipeline, research cards) was removed on 2026-10-21 by owner decision: EODHD supplies the inputs and AI only judges. Stored `research_*` rows are still read by the judge input, reconcile, detect and the catalyst calendar.
 
 ```mermaid
 flowchart LR
@@ -187,21 +187,10 @@ flowchart LR
   candidates --> post[Weekly candidate post: exists]
   candidates --> promote[Promotion script: exists]
   promote --> universe[(Universe)]
-  universe -.-> researcher[RS1 researcher: planned]
-  researcher -.-> verifier[RS2 verifier: in progress]
-  verifier -.-> pipeline[RS3 pipeline: planned]
-  pipeline -.-> judge[RS4 judge integration: planned]
-  judge -.-> cards[RS6 research cards: planned]
-  schedule[RS5 schedules and caps: planned] -.-> pipeline
-  adapter[RS7 Codex adapter: planned] -.-> researcher
-  eval[RS8 card evaluation: planned] -.-> cards
-  spec[RS0 spec and schema: in progress] -.-> pipeline
   classDef app fill:#dbeafe,stroke:#2563eb,color:#111827
   classDef data fill:#dcfce7,stroke:#16a34a,color:#111827
-  classDef planned fill:#fef3c7,stroke:#d97706,color:#111827
   class discover,post,promote app
   class candidates,universe data
-  class researcher,verifier,pipeline,judge,cards,schedule,adapter,eval,spec planned
 ```
 
 ## 8. CI, images and GitOps
@@ -287,4 +276,4 @@ Other tables group by purpose: `data_sources`, `raw_snapshots`, `collector_runs`
 
 ## What is not built yet
 
-The [task board](roadmap/board.md) is authoritative for status. It lists the RS research runner, pipeline, judge integration, schedules, research cards, Codex adapter and evaluation as queued; RS0 and RS2 are in progress. Account, billing and paid-tier delivery remain deferred. Several data jobs have manifests but are suspended, as shown above; their presence is not proof of live operation. The board also tracks the remaining web and data work.
+The [task board](roadmap/board.md) is authoritative for status. Account, billing and paid-tier delivery remain deferred. Several data jobs have manifests but are suspended, as shown above; their presence is not proof of live operation. The board also tracks the remaining web and data work.

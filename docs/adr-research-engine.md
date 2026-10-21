@@ -1,6 +1,6 @@
 # ADR: research engine (RS0)
 
-Date: 2026-10-11. Status: proposed, owner to confirm. Design: `docs/research-engine.md`. Tasks: `docs/roadmap/lane-research.md`.
+Date: 2026-10-11. Status: superseded on 2026-10-21. The owner decided there is no AI scraping or collection: EODHD supplies the inputs and AI only judges. P8 removed the research runner, verifier jobs, pipeline, notify job and owner research pages; the design doc `docs/research-engine.md` was removed with them. The `research_*` tables and their rows stay. Tasks: `docs/roadmap/lane-research.md`.
 
 ## Context
 
