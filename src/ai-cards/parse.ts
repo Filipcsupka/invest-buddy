@@ -24,6 +24,7 @@ const sectionNames: Record<string, string> = { "what happened": "whatHappened", 
 export function normalizeCall(value: string): CardCall {
   const upper = value.toUpperCase();
   if (/REDUCE/.test(upper)) return "REDUCE";
+  if (/\bHOLD\b/.test(upper) && /NO ADD/.test(upper)) return "HOLD";
   if (/STOP ADDING|NO ADD/.test(upper)) return "STOP_ADD";
   if (/\bSTART\b/.test(upper)) return "START";
   if (/\bADD\b/.test(upper)) return "ADD";

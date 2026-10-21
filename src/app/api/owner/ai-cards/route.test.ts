@@ -1,12 +1,17 @@
 import { NextRequest } from "next/server";
 import { expect, it, vi } from "vitest";
 const authorized = vi.fn();
-vi.mock("@/config/flags", () => ({ flags: () => ({ OWNER_VIEW: true }) }));
+const enabled = vi.fn();
+vi.mock("@/config/flags", () => ({ flags: () => ({ OWNER_VIEW: enabled() }) }));
 vi.mock("@/app/[locale]/owner/research/auth", () => ({ ownerResearchAuthorized: () => authorized() }));
 import { POST } from "./route";
 
 it("rejects unauthorized imports and previews without writing", async () => {
   const makeRequest = (suffix = "") => new NextRequest(`http://localhost/api/owner/ai-cards${suffix}`, { method: "POST", body: "ABC — WATCH €0\n1 January 2026\nSummary.\n" });
+  enabled.mockReturnValue(false);
+  authorized.mockReturnValue(true);
+  expect((await POST(makeRequest())).status).toBe(401);
+  enabled.mockReturnValue(true);
   authorized.mockReturnValue(false);
   expect((await POST(makeRequest())).status).toBe(401);
   authorized.mockReturnValue(true);

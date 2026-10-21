@@ -18,6 +18,10 @@ it.each(["en", "sk"] as const)("hides sizing navigation while advice is off (%s)
 
 it.each(["en", "sk"] as const)("links the scanner and keeps the heat map link (%s)", (locale) => {
   const html = renderToStaticMarkup(<Nav locale={locale} />);
+  expect(html).toContain(`href="/${locale}/dashboard"`);
+  expect(html).toContain(`href="/${locale}/ai-screen"`);
+  expect(html).toContain(locale === "en" ? "Stock screen (data jobs + judge)" : "Akciový skríning (dátové úlohy + posúdenie)");
+  expect(html).toContain(locale === "en" ? "AI screen (automation cards)" : "AI skríning (karty automatizácie)");
   expect(html).toContain(`href="/${locale}/scanner"`);
   expect(html).toContain(`href="/${locale}/heatmap"`);
   expect(html).toContain(`href="/${locale}/etf"`);
