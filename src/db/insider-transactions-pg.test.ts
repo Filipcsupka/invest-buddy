@@ -20,8 +20,12 @@ dbDescribe("insider transactions (Postgres)", () => {
       await repo.upsertInsiderTransactions(accession, "NVDA", "2026-10-02", rows);
       const count = await client.query<{ n: number }>("SELECT count(*)::int AS n FROM insider_transactions WHERE accession=$1", [accession]);
       expect(count.rows[0].n).toBe(3);
-      const net = await client.query<{ net_shares: string; net_dollars: string; dollars_complete: boolean }>("SELECT * FROM insider_net_buy($1,$2,$3)", ["NVDA", "2026-10-05", 90]);
-      expect(net.rows[0]).toEqual({ net_shares: "60", net_dollars: "520", dollars_complete: true });
+      const netBuy = (asOf: string) => client.query<{ net_shares: string; net_dollars: string; dollars_complete: boolean }>("SELECT * FROM insider_net_buy($1,$2,$3)", ["NVDA", asOf, 90]);
+      // Rows are first observed now; a replay at an earlier score date must not see them.
+      expect((await netBuy("2026-10-05")).rows[0].net_shares).toBe("0");
+      // Backdate the observation to the filing day, as a replay of that day would have seen it.
+      await client.query("UPDATE insider_transactions SET first_observed_at='2026-10-02T12:00:00Z' WHERE accession=$1", [accession]);
+      expect((await netBuy("2026-10-05")).rows[0]).toEqual({ net_shares: "60", net_dollars: "520", dollars_complete: true });
     } finally { await client.query("ROLLBACK"); client.release(); await pool.end(); }
   });
 
@@ -47,8 +51,11 @@ dbDescribe("insider transactions (Postgres)", () => {
       // EODHD again: SEC holds the accession, so the vendor line is skipped
       await runEodhdInsider(client as never, api, { subjects: [subject], today: "2026-05-16" });
       expect(await count("eodhd")).toBe(0);
-      const net = await client.query<{ net_shares: string }>("SELECT * FROM insider_net_buy('ZZDUP','2026-05-16',90)");
-      expect(net.rows[0].net_shares).toBe("-3000");
+      const netShares = async () => (await client.query<{ net_shares: string }>("SELECT * FROM insider_net_buy('ZZDUP','2026-05-16',90)")).rows[0].net_shares;
+      // Observed now, so invisible at the historical score date until backdated.
+      expect(await netShares()).toBe("0");
+      await client.query("UPDATE insider_transactions SET first_observed_at='2026-05-15T12:00:00Z' WHERE ticker='ZZDUP'");
+      expect(await netShares()).toBe("-3000");
     } finally { await client.query("ROLLBACK"); client.release(); await pool.end(); }
   });
 });
