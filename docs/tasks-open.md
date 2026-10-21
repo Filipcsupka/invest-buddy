@@ -4,6 +4,18 @@
 
 Owner decision 2026-10-21: remove the AI screen and AI data gathering. Use EODHD ALL-IN-ONE for stock inputs, with AI only as judge. The ETF catalog and weekly ETF picks remain separate.
 
+### EODHD data layer (2026-10-21)
+Merged: AI screen removed (#278), EODHD client and symbols table (#279), price bars (#280), ETF enrichment from EODHD (#281), fundamentals and earnings (#282), Form 4 insider fallback (#283), earnings and news catalyst (#284), market-aware US plus Europe universe (#285), suspended AI research stack removed (#286). In progress: regional macro and sector (P7), CronJobs and secret in the infra repo (P11, prepared locally, not pushed).
+
+Nothing runs against EODHD yet. No API key exists, so every job is tested on recorded fixtures only. UNVERIFIED until a real response is checked: exchange codes PA, AS, SW, PR, the quarterly income statement filter path, ETF field names and UCITS coverage, LSE price unit (GBX or GBP), news call cost, All-In-One plan limits. Details in `docs/eodhd.md` and `docs/eodhd-universe.md`.
+
+Owner steps, in order:
+1. Buy EODHD ALL-IN-ONE for one month (about 100 USD) and create secret `invest-buddy-eodhd` key `api-key` in namespace `invest`.
+2. Run `npm run symbols:sync -- --dry-run`, then the real sync; check which exchange codes come back.
+3. Run price backfill and fundamentals for a few names (`--only`), compare with the old sources, then un-suspend the infra CronJobs one by one.
+4. Set `ETF_ENRICH_SOURCE=eodhd` on the ETF enrich CronJob once ETF fields are confirmed; this replaces the Codex enrichment that burned the usage limit.
+5. Remaining LLM call sites: extract (`scanner/run-extract.mjs`) and judge. Extract can be switched off once EODHD fundamentals and catalyst feed the rules; owner decision.
+
 ### Done today
 - Promotion fix (#264): the pipeline read `e.status` but evidence stores `verify.status`, so nothing was proposed. CGNX, COF, ROK, SYM, VRT, COHR, NOVT now in the scored universe (6 of 7 score Criteria broken, ROK Ignore; real rule results).
 - Own-domain sources (#265): `sources.json` `ir` now covers SIE, 3687, HEXA-B, COHR, NOVT, ROK, ABBN. `npm run research:reclassify` (dry-run default, `-- --apply` writes) regraded 7 findings. Foreign-exchange names stay research-only (WATCH, never scored or promoted).
