@@ -10,7 +10,8 @@ CREATE INDEX IF NOT EXISTS insider_transactions_source_observed_idx
 
 CREATE TABLE IF NOT EXISTS eodhd_insider_refresh (
   ticker text PRIMARY KEY REFERENCES instruments(ticker),
-  attempted_at timestamptz NOT NULL
+  attempted_at timestamptz NOT NULL,
+  empty boolean NOT NULL DEFAULT false
 );
 
 CREATE TABLE IF NOT EXISTS sec_insider_refresh (
