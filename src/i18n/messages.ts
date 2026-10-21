@@ -119,6 +119,10 @@ const en = {
   },
   nav: {
     label: "Main",
+    stocks: "Stocks",
+    etfs: "ETFs",
+    etfResearch: "ETF research",
+    etfTrackRecord: "ETF track record",
     home: "InvestBuddy home",
     dashboard: "Stock screen",
     scanner: "Scanner",
@@ -926,6 +930,10 @@ const sk: Messages = {
   },
   nav: {
     label: "Hlavná navigácia",
+    stocks: "Akcie",
+    etfs: "ETF",
+    etfResearch: "Výskum ETF",
+    etfTrackRecord: "Výsledky ETF",
     home: "InvestBuddy, úvod",
     dashboard: "Prehľad akcií",
     scanner: "Skener",

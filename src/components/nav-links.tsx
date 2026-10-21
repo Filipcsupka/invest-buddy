@@ -5,13 +5,14 @@ import { useEffect, useState } from "react";
 import { SideIcon } from "./nav-icons";
 import { sideStorageKey as sideKey } from "./pre-paint";
 
-export function NavLinks({ locale, label, items }: { locale: string; label: string; items: { href: string; text: string; icon?: string }[] }) {
+export function NavLinks({ locale, label, items, sectionLabel }: { locale: string; label: string; sectionLabel?: string; items: { href: string; text: string; icon?: string }[] }) {
   const pathname = usePathname();
   return (
-    <nav aria-label={label} className="nav-links">
+    <nav aria-label={label} className="nav-links" style={sectionLabel ? { flex: "none" } : undefined}>
+      {sectionLabel && <span className="nav-text" style={{ color: "var(--navy-ink-2)", fontSize: "0.75rem", fontWeight: 700, padding: "0.75rem 0.75rem 0.25rem" }}>{sectionLabel}</span>}
       {items.map((item) => {
         const href = `/${locale}${item.href}`;
-        const current = pathname === href || pathname.startsWith(`${href}/`) || (item.href === "/dashboard" && pathname.startsWith(`/${locale}/company/`));
+        const current = pathname === href || (pathname.startsWith(`${href}/`) && !(item.href === "/etf" && pathname.startsWith(`${href}/track-record`))) || (item.href === "/dashboard" && pathname.startsWith(`/${locale}/company/`));
         return (
           <Link key={item.href} href={href} aria-current={current ? "page" : undefined} title={item.text}>
             <SideIcon name={item.icon ?? item.href.slice(1)} />
