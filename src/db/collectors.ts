@@ -150,7 +150,7 @@ export class PostgresCollectorRepository implements CollectorRepository {
     const result = await this.pool.query<{ accession: string; transaction_date: string; filed_at: string; code: string; shares: string; price: string | null; derivative: boolean; source_id: string }>(
       `SELECT accession,transaction_date::text,filed_at::text,code,shares::text,price::text,derivative,source_id FROM insider_transactions
        WHERE ticker=$1 AND transaction_date BETWEEN $2::date AND $3::date AND filed_at BETWEEN $2::date AND $3::date
-         AND (source_id <> 'eodhd' OR (first_observed_at AT TIME ZONE 'UTC')::date <= $3::date)`, [symbol, from, asOf]);
+         AND (first_observed_at IS NULL OR (first_observed_at AT TIME ZONE 'UTC')::date <= $3::date)`, [symbol, from, asOf]);
     const net = netBuyFromTransactions(result.rows.map((row) => ({ accession: row.accession, ticker: symbol, transactionDate: row.transaction_date, filedAt: row.filed_at, code: row.code,
       shares: Number(row.shares), price: row.price === null ? null : Number(row.price), derivative: row.derivative })), asOf);
     if (!net) return null;
