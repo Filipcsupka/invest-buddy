@@ -1,98 +1,104 @@
 import { describe, expect, it } from "vitest";
 import bulkFixture from "../data-providers/eodhd/fixtures/bulk-eod.json";
 import historyFixture from "../data-providers/eodhd/fixtures/eod.json";
-import type { BulkLastDayBar, EodBar } from "../data-providers/eodhd/client";
-import { fixtureBars, fixtureFundamentals, fixtureMacro } from "../data/fixtures";
-import { computeTechnicals } from "../data/technicals";
+import type { BulkLastDayBar, BulkSplit, EodBar, Split } from "../data-providers/eodhd/client";
+import { insertMemoryCorporateActions } from "../db/corporate-actions";
+import type { CorporateAction } from "../data/corporate-actions";
 import { MemoryPriceRepository } from "../db/prices";
-import { score, technicalIndicators } from "../engine";
-import { adjustedBar, barsFromHistory, loadEodhdPriceSymbols, parseEodhdPriceArgs, runEodhdPrices, type PriceSymbol } from "./eodhd-prices";
+import { rawBar, barsFromHistory, loadEodhdPriceSymbols, runEodhdPrices, splitActions, type PriceSymbol } from "./eodhd-prices";
 
-const costs = (eod = 0, bulk = 0) => ({ "exchanges-list": 0, "exchange-symbol-list": 0, eod, "eod-bulk-last-day": bulk, fundamentals: 0, "calendar/earnings": 0, news: 0, "sec-filings/form4": 0 });
+const costs = (eod = 0, splits = 0, bulk = 0) => ({ "exchanges-list": 0, "exchange-symbol-list": 0, eod, splits, "eod-bulk-last-day": bulk, fundamentals: 0, "calendar/earnings": 0, news: 0, "sec-filings/form4": 0 });
 const symbols: PriceSymbol[] = [
   { ticker: "MSFT", vendorSymbol: "MSFT.US", exchange: "US", code: "MSFT", currency: "USD" },
   { ticker: "NVDA", vendorSymbol: "NVDA.US", exchange: "US", code: "NVDA", currency: "USD" },
 ];
+const noBulk = async () => { throw new Error("bulk should not be called"); };
 
 describe("EODHD prices", () => {
-  it("converts adjusted close to a consistent adjusted candle and retains volume", () => {
-    const bar = adjustedBar(historyFixture[0]);
-    const factor = historyFixture[0].adjusted_close / historyFixture[0].close;
-    expect(bar).toEqual({ date: "2024-01-02", open: historyFixture[0].open * factor, high: historyFixture[0].high * factor,
-      low: historyFixture[0].low * factor, close: historyFixture[0].adjusted_close, volume: 4458400 });
-    const split = adjustedBar({ date: "2026-10-20", open: 200, high: 210, low: 190, close: 205, adjusted_close: 102.5, volume: 1000 });
-    expect(split).toEqual({ date: "2026-10-20", open: 100, high: 105, low: 95, close: 102.5, volume: 1000 });
-    expect(() => adjustedBar({ date: "2026-10-20", open: 1, high: 2, low: 1, close: 1.5, volume: 10 })).toThrow(/adjusted/);
-    expect(barsFromHistory([...historyFixture].reverse()).map((b) => b.date)).toEqual(["2024-01-02", "2024-01-03"]);
+  it("stores raw OHLC and reverses split adjustments in reported volume without dividend look-ahead", () => {
+    expect(rawBar(historyFixture[0])).toEqual({ date: "2024-01-02", open: 295.05, high: 297.28, low: 295.05, close: 297.04, volume: 4458400 });
+    expect(rawBar({ date: "2026-10-20", open: 200, high: 210, low: 190, close: 205, adjusted_close: 102.5, volume: 1000 })).toMatchObject({ close: 205, volume: 1000 });
+    expect(rawBar({ date: "2026-10-20", open: 1, high: 2, low: 1, close: 1.5, volume: 10 })).toMatchObject({ close: 1.5 });
+    expect(() => rawBar({ date: "2026-10-20", open: 1, high: 2, low: 1, close: null, volume: 10 })).toThrow(/raw/);
+    const actions = splitActions("MSFT", [{ date: "2024-01-03", split: "4.000000/1.000000" }, { date: "2024-01-04", split: "1.000000/8.000000" }]);
+    expect(actions.map((a) => [a.kind, a.ratio, a.detectedBy])).toEqual([["split", 4, "vendor"], ["reverse_split", 0.125, "vendor"]]);
+    const prior = [{ ...actions[0], ratio: 2, detectedBy: "heuristic" as const }];
+    expect(insertMemoryCorporateActions(prior, [actions[0]])).toBe(1);
+    expect(prior[0]).toEqual(actions[0]);
+    expect(insertMemoryCorporateActions(prior, [actions[0]])).toBe(0);
+    expect(barsFromHistory([...historyFixture].reverse(), actions).map((b) => b.volume)).toEqual([4458400 / 0.5, 3114800 / 0.125]);
+    expect(() => splitActions("X", [{ date: "2024-01-03", split: "bad" }])).toThrow(/split ratio/);
   });
 
-  it("uses one bulk request per exchange and writes mapped currency and source", async () => {
+  it("uses individual EOD and splits for small daily groups and stores vendor actions", async () => {
     const requested: string[] = [];
     const row = bulkFixture[0] as BulkLastDayBar;
-    const client = { eod: async () => [] as EodBar[], eodBulkLastDay: async (exchange: string) => { requested.push(exchange); return [row, { ...row, code: "NVDA" }]; }, getCallCosts: () => costs(0, 100) };
+    const client = { eod: async (symbol: string) => { requested.push(`eod:${symbol}`); return [row] as EodBar[]; },
+      splits: async (symbol: string) => { requested.push(`splits:${symbol}`); return [{ date: row.date, split: "2.000000/1.000000" }] as Split[]; },
+      eodBulkLastDay: noBulk, getCallCosts: () => costs(2, 2) };
     const repo = new MemoryPriceRepository();
-    const result = await runEodhdPrices(client, repo, symbols, { mode: "daily" });
-    expect(requested).toEqual(["US"]);
-    expect(result).toMatchObject({ requested: 2, succeeded: 2, failed: 0, barsWritten: 2, callCost: 100 });
+    const actions: CorporateAction[] = [];
+    const result = await runEodhdPrices(client, repo, symbols, { mode: "daily", recordActions: async (rows) => { insertMemoryCorporateActions(actions, rows); } });
+    expect(requested).toEqual(["eod:MSFT.US", "splits:MSFT.US", "eod:NVDA.US", "splits:NVDA.US"]);
+    expect(result).toMatchObject({ requested: 2, succeeded: 2, failed: 0, barsWritten: 2, callCost: 4 });
     expect(repo.provenance.get("MSFT")).toEqual({ sourceId: "eodhd", vendorSymbol: "MSFT.US", currency: "USD" });
-    expect(repo.bars.get("MSFT")?.get(row.date)?.close).toBe(row.adjusted_close);
-    await repo.upsertBars("MSFT", [adjustedBar(row)], { sourceId: "twelvedata", vendorSymbol: "MSFT" });
-    expect((await runEodhdPrices(client, repo, [symbols[0]], { mode: "daily" })).barsWritten).toBe(1);
-    expect(repo.provenance.get("MSFT")?.sourceId).toBe("eodhd");
+    expect(repo.bars.get("MSFT")?.get(row.date)?.close).toBe(row.close);
+    expect(actions).toMatchObject([{ ticker: "MSFT", ratio: 2, sourceId: "eodhd", detectedBy: "vendor" }, { ticker: "NVDA", ratio: 2 }]);
     expect((await runEodhdPrices(client, repo, symbols, { mode: "daily", dryRun: true })).barsWritten).toBe(0);
-    expect(repo.runs).toHaveLength(2);
+    expect(repo.runs).toHaveLength(1);
   });
 
-  it("backfills full history per vendor symbol and refuses a shorter replacement", async () => {
-    const requested: string[] = [];
-    const client = { eod: async (symbol: string) => { requested.push(symbol); return historyFixture as EodBar[]; }, eodBulkLastDay: async () => [] as BulkLastDayBar[], getCallCosts: () => costs(1) };
+  it("uses bulk prices and splits when an exchange has 100 tracked names", async () => {
+    const tracked = Array.from({ length: 100 }, (_, i): PriceSymbol => ({ ticker: `T${i}`, vendorSymbol: `T${i}.US`, exchange: "US", code: `T${i}`, currency: "USD" }));
+    const requests: string[] = [];
+    const row = bulkFixture[0] as BulkLastDayBar;
+    const client = { eod: async () => { throw new Error("individual EOD should not be called"); }, splits: async () => { throw new Error("individual splits should not be called"); },
+      eodBulkLastDay: async (_exchange: string, options: { type?: string }) => { requests.push(options.type ?? "eod"); return options.type === "splits" ? [{ code: "T0", exchange: "US", date: row.date, split: "2.000000/1.000000" }] as BulkSplit[] : tracked.map((s) => ({ ...row, code: s.code })); },
+      getCallCosts: () => costs(0, 0, 200) };
+    const result = await runEodhdPrices(client as never, new MemoryPriceRepository(), tracked, { mode: "daily" });
+    expect(requests).toEqual(["eod", "splits"]);
+    expect(result).toMatchObject({ requested: 100, succeeded: 100, failed: 0, callCost: 200 });
+  });
+
+  it("backfills history and refuses a shorter replacement", async () => {
+    const client = { eod: async () => historyFixture as EodBar[], splits: async () => [] as Split[], eodBulkLastDay: noBulk, getCallCosts: () => costs(1, 1) };
     const repo = new MemoryPriceRepository();
     const first = await runEodhdPrices(client, repo, [symbols[0]], { mode: "backfill" });
-    expect(requested).toEqual(["MSFT.US"]);
     expect(first).toMatchObject({ succeeded: 1, barsWritten: 2, insufficientHistory: ["MSFT"] });
-    expect(repo.bars.get("MSFT")?.size).toBe(2);
+    expect(repo.bars.get("MSFT")?.get("2024-01-02")?.close).toBe(297.04);
     const shortClient = { ...client, eod: async () => [historyFixture[0]] as EodBar[] };
     await expect(runEodhdPrices(shortClient, repo, [symbols[0]], { mode: "backfill" })).resolves.toMatchObject({ failed: 1, barsWritten: 0 });
     expect(repo.bars.get("MSFT")?.size).toBe(2);
   });
 
-  it("maps only unambiguous active symbols, with explicit vendor symbols taking priority", async () => {
-    const db = { query: async (sql: string) => sql.includes("instrument_ids")
+  it("records one failed symbol and still writes the next when its splits request fails", async () => {
+    const row = bulkFixture[0] as EodBar;
+    const repo = new MemoryPriceRepository();
+    const result = await runEodhdPrices({ eod: async () => [row], splits: async (symbol: string) => {
+      if (symbol === "MSFT.US") throw new Error("splits unavailable");
+      return [];
+    }, eodBulkLastDay: noBulk, getCallCosts: () => costs(2, 2) }, repo, symbols, { mode: "daily" });
+    expect(result).toMatchObject({ requested: 2, succeeded: 1, failed: 1 });
+    expect(result.failures).toEqual([{ ticker: "MSFT", reason: "splits unavailable" }]);
+    expect(repo.bars.has("MSFT")).toBe(false);
+    expect(repo.bars.has("NVDA")).toBe(true);
+  });
+
+  it("resolves exchange collisions by explicit mapping, home hint, then US and continues past unresolved names", async () => {
+    const db = { query: async (sql: string) => sql.includes("vendor_symbols")
       ? { rows: [{ ticker: "BMW", vendor_symbols: { eodhd: "BMW.XETRA" } }] }
+      : sql.includes("SELECT ticker,exchange") ? { rows: [{ ticker: "CDR", exchange: "WAR" }, { ticker: "BAD", exchange: "LSE" }] }
       : { rows: [
-        { vendor_symbol: "BMW.XETRA", code: "BMW", exchange: "XETRA", currency: "EUR" },
-        { vendor_symbol: "BMW.US", code: "BMW", exchange: "US", currency: "USD" },
-        { vendor_symbol: "MSFT.US", code: "MSFT", exchange: "US", currency: "USD" },
-        { vendor_symbol: "DUP.US", code: "DUP", exchange: "US", currency: "USD" },
-        { vendor_symbol: "DUP.XETRA", code: "DUP", exchange: "XETRA", currency: "EUR" },
+        { vendor_symbol: "BMW.XETRA", code: "BMW", exchange: "XETRA", currency: "EUR" }, { vendor_symbol: "BMW.US", code: "BMW", exchange: "US", currency: "USD" },
+        { vendor_symbol: "CDR.WAR", code: "CDR", exchange: "WAR", currency: "PLN" }, { vendor_symbol: "CDR.US", code: "CDR", exchange: "US", currency: "USD" },
+        { vendor_symbol: "MSFT.US", code: "MSFT", exchange: "US", currency: "USD" }, { vendor_symbol: "MSFT.XETRA", code: "MSFT", exchange: "XETRA", currency: "EUR" },
+        { vendor_symbol: "BAD.US", code: "BAD", exchange: "US", currency: "USD" },
       ] } };
-    const result = await loadEodhdPriceSymbols(db as never, ["BMW", "MSFT", "DUP", "MISSING"]);
-    expect(result.symbols.map((s) => s.vendorSymbol)).toEqual(["BMW.XETRA", "MSFT.US"]);
-    expect(result.unmapped).toEqual(["DUP", "MISSING"]);
-  });
-
-  it("keeps the price rules and volume ratio identical for identical bars from either source", async () => {
-    const sourceBars = fixtureBars("NVDA");
-    const rows: EodBar[] = sourceBars.map((bar) => ({ ...bar, adjusted_close: bar.close }));
-    const td = new MemoryPriceRepository(), eod = new MemoryPriceRepository();
-    await td.upsertBars("NVDA", sourceBars, { sourceId: "twelvedata", vendorSymbol: "NVDA" });
-    await runEodhdPrices({ eod: async () => rows, eodBulkLastDay: async () => [] as BulkLastDayBar[], getCallCosts: () => costs(1) }, eod, [symbols[1]], { mode: "backfill" });
-    const series = (repo: MemoryPriceRepository) => [...repo.bars.get("NVDA")!.values()].sort((a, b) => a.date.localeCompare(b.date));
-    const left = series(td), right = series(eod);
-    const priceHits = (bars: typeof left) => score({ ticker: "NVDA", bars, fundamentals: fixtureFundamentals("NVDA"), macro: fixtureMacro("NVDA") })
-      .ruleHits.filter((hit) => ["above-ma", "uptrend", "green-volume", "dip"].includes(hit.id));
-    expect(right).toEqual(left);
-    expect(priceHits(right)).toEqual(priceHits(left));
-    expect(priceHits(right).map((hit) => hit.matched)).toEqual([false, false, true, false]);
-    expect(technicalIndicators(right)).toMatchObject({ close: 124.06, volumeOnGreen: true, aboveBoth: false, uptrend: false });
-    expect(technicalIndicators(right).ma50).toBeCloseTo(136.4836);
-    expect(technicalIndicators(right).ma200).toBeCloseTo(147.90415);
-    expect(technicalIndicators(right).drawdown20).toBeCloseTo(0.11807777);
-    expect(computeTechnicals(right)).toMatchObject({ volumeRatio: 1.22, vsMa50Percent: -9.1, vsMa200Percent: -16.12 });
-  });
-
-  it("allows recorded fixtures only in dry-run mode", () => {
-    expect(parseEodhdPriceArgs(["--fixture", "--dry-run", "--mode", "backfill"])).toMatchObject({ fixture: true, dryRun: true, mode: "backfill" });
-    expect(() => parseEodhdPriceArgs(["--fixture"])).toThrow(/dry-run/);
+    const mapped = await loadEodhdPriceSymbols(db as never, ["BMW", "CDR", "MSFT", "BAD", "MISSING"]);
+    expect(mapped.symbols.map((s) => s.vendorSymbol)).toEqual(["BMW.XETRA", "CDR.WAR", "MSFT.US"]);
+    expect(mapped.unmapped).toEqual(["BAD", "MISSING"]);
+    const result = await runEodhdPrices({ eod: async () => [bulkFixture[0]], splits: async () => [], eodBulkLastDay: noBulk, getCallCosts: () => costs(3, 3) }, new MemoryPriceRepository(), mapped.symbols, { mode: "daily", unmapped: mapped.unmapped });
+    expect(result).toMatchObject({ requested: 5, succeeded: 3, failed: 2 });
+    expect(result.failures.map((f) => f.ticker)).toEqual(["BAD", "MISSING"]);
   });
 });

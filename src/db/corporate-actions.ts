@@ -2,12 +2,14 @@ import type pg from "pg";
 import type { CorporateAction } from "../data/corporate-actions";
 import type { RevisedBar } from "../data/corporate-actions";
 
-/** Inserts actions. A row that already exists for (ticker, action_date, kind) is left alone, so a rerun adds nothing. Returns the rows written. */
+/** Inserts actions and lets a vendor-confirmed split replace an earlier heuristic for the same event. */
 export async function insertCorporateActions(db: Pick<pg.Pool, "query">, rows: CorporateAction[]): Promise<number> {
   if (!rows.length) return 0;
   const result = await db.query(`INSERT INTO corporate_actions (ticker,action_date,kind,ratio,amount,source_id,detected_by,detail)
     SELECT t,d,k,r,a,s,b,x::jsonb FROM unnest($1::text[],$2::date[],$3::text[],$4::numeric[],$5::numeric[],$6::text[],$7::text[],$8::text[]) AS v(t,d,k,r,a,s,b,x)
-    ON CONFLICT (ticker,action_date,kind) DO NOTHING`,
+    ON CONFLICT (ticker,action_date,kind) DO UPDATE SET ratio=EXCLUDED.ratio,amount=EXCLUDED.amount,source_id=EXCLUDED.source_id,
+      detected_by=EXCLUDED.detected_by,detail=EXCLUDED.detail,observed_at=now()
+    WHERE EXCLUDED.detected_by='vendor' AND corporate_actions.detected_by='heuristic'`,
     [rows.map((r) => r.ticker), rows.map((r) => r.actionDate), rows.map((r) => r.kind), rows.map((r) => r.ratio), rows.map((r) => r.amount),
       rows.map((r) => r.sourceId), rows.map((r) => r.detectedBy), rows.map((r) => JSON.stringify(r.detail))]);
   return result.rowCount ?? 0;
@@ -17,7 +19,11 @@ export async function insertCorporateActions(db: Pick<pg.Pool, "query">, rows: C
 export function insertMemoryCorporateActions(store: CorporateAction[], rows: CorporateAction[]): number {
   let written = 0;
   for (const row of rows) {
-    if (store.some((s) => s.ticker === row.ticker && s.actionDate === row.actionDate && s.kind === row.kind)) continue;
+    const existing = store.findIndex((s) => s.ticker === row.ticker && s.actionDate === row.actionDate && s.kind === row.kind);
+    if (existing >= 0) {
+      if (row.detectedBy === "vendor" && store[existing].detectedBy === "heuristic") { store[existing] = { ...row }; written++; }
+      continue;
+    }
     store.push({ ...row }); written++;
   }
   return written;
