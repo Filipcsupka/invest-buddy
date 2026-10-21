@@ -20,7 +20,7 @@ it.each(["en", "sk"] as const)("links the scanner and keeps the heat map link (%
   const html = renderToStaticMarkup(<Nav locale={locale} />);
   expect(html).toContain(`href="/${locale}/dashboard"`);
   expect(html).toContain(`href="/${locale}/ai-screen"`);
-  expect(html).toContain(locale === "en" ? "Stock screen (data jobs + judge)" : "Akciový skríning (dátové úlohy + posúdenie)");
+  expect(html).toContain(locale === "en" ? "Stock screen (data jobs and judge)" : "Akciový skríning (dátové úlohy a posúdenie)");
   expect(html).toContain(locale === "en" ? "AI screen (automation cards)" : "AI skríning (karty automatizácie)");
   expect(html).toContain(`href="/${locale}/scanner"`);
   expect(html).toContain(`href="/${locale}/heatmap"`);
