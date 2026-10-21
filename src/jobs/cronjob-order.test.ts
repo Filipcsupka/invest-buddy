@@ -8,7 +8,7 @@ const files = kustomized;
 const docs = files.flatMap((file) => readFileSync(join(base, file), "utf8").split(/^---$/m)).filter((doc) => /kind: CronJob/.test(doc));
 const job = (name: string) => docs.find((doc) => new RegExp(`name: invest-buddy-${name}\\n`).test(doc)) ?? "";
 const minutes = (name: string) => {
-  const m = /schedule: "(\d+) (\d+) \* \* ([\d,-]+)"/.exec(job(name));
+  const m = /schedule: "(\d+) (\d+) \* \* ([\d,*-]+)"/.exec(job(name));
   if (!m) throw new Error(`no schedule for ${name}`);
   return { at: Number(m[2]) * 60 + Number(m[1]), days: m[3] };
 };
@@ -201,12 +201,11 @@ describe("Monday catch-up", () => {
     const m = /schedule: "\d+ \d+ \* \* ([\d,*-]+)"/.exec(doc);
     return name && m ? [{ name, days: days(m[1]), active: !/^\s{2}suspend: true\b/m.test(doc) }] : [];
   });
-  it("runs only the store-only collect on Monday, apart from daily jobs that open no gate", () => {
+  it("runs the store-only collect on Monday alongside independent jobs", () => {
     // Detect writes a gate per date and extract reads one pending gate per run, so a Monday gate would push Tuesday's gate to Wednesday.
     // A Monday extract is judged on Tuesday against Friday's scores, and Tuesday's detect skips filings already extracted.
-    // These run daily and open no gate: pool-bars (discovery_price_bars), earnings-calendar (one Alpha Vantage request), retention,
-    // research-verify (checks stored findings), research-pipeline-early (candidate rows) and discovery-auto-promote (universe rows, from 2026-10-20). None of them calls a model.
-    const daily = ["pool-bars", "earnings-calendar", "retention", "research-verify", "research-pipeline-early", "discovery-auto-promote", "discovery", "research-weekly", "research-scout", "research-verify-pm", "research-pipeline-pm"];
+    // These jobs do not open a stock gate. ETF research runs its own weekly model pass; ETF outcomes reads price bars.
+    const daily = ["pool-bars", "earnings-calendar", "retention", "research-verify", "research-pipeline-early", "discovery-auto-promote", "discovery", "research-weekly", "research-scout", "research-verify-pm", "research-pipeline-pm", "etf-research", "etf-outcomes"];
     expect(scheduled.filter((job) => job.active && job.days.includes(1) && !daily.includes(job.name)).map((job) => job.name)).toEqual(["collect"]);
     for (const name of ["prices", "watch", "detect", "extract", "macro", "reconcile", "daily", "judge", "digest"]) expect(days(minutes(name).days), name).not.toContain(1);
   });
@@ -326,6 +325,23 @@ describe("RS5 research schedule", () => {
     expect(doc).toContain("value: owner");
     expect(doc).toContain("name: RESEARCH_PUBLIC_CARDS");
     expect(doc).not.toContain("name: TELEGRAM_CHAT_ID");
+  });
+});
+
+describe("ETF research and outcomes", () => {
+  it("runs ETF research weekly after the daily price outcome pass", () => {
+    expect(minutes("etf-research")).toEqual({ at: 7 * 60 + 40, days: "1" });
+    expect(minutes("etf-outcomes")).toEqual({ at: 6 * 60 + 50, days: "*" });
+    expect(job("etf-research")).toContain("run-etf-research.mjs");
+    expect(job("etf-research")).toContain("name: CODEX_ACCESS_TOKEN");
+    expect(job("etf-research")).toContain("name: RESEARCH_ENABLED");
+    expect(job("etf-research")).not.toContain("AI_DAILY_TOKEN_CEILING");
+    expect(job("etf-outcomes")).toContain('command: ["node", "dist/jobs/etf-outcomes.js"]');
+    expect(job("etf-outcomes")).not.toContain("CODEX_ACCESS_TOKEN");
+    for (const name of ["etf-research", "etf-outcomes"]) {
+      const doc = job(name);
+      for (const item of ["concurrencyPolicy: Forbid", "timeZone: Europe/Bratislava", "runAsNonRoot: true", "automountServiceAccountToken: false", "readOnlyRootFilesystem: true", 'drop: ["ALL"]']) expect(doc).toContain(item);
+    }
   });
 });
 

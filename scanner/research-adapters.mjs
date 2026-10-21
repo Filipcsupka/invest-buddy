@@ -60,7 +60,7 @@ const STRICT_DROP = new Set(["$schema", "$id", "$defs", "minLength", "maxLength"
 /** Strict output schema for `$defs.modelOutput`: refs inlined, unsupported keywords removed, every object closed with all properties required. */
 export function deriveStrictSchema(schema, name = "modelOutput") {
   const defs = schema?.$defs ?? {};
-  if (!defs[name]) throw new Error(`schema has no $defs.${name}`);
+  if (name !== "root" && !defs[name]) throw new Error(`schema has no $defs.${name}`);
   const walk = (node, stack) => {
     if (Array.isArray(node)) return node.map((item) => walk(item, stack));
     if (!node || typeof node !== "object") return node;
@@ -85,7 +85,7 @@ export function deriveStrictSchema(schema, name = "modelOutput") {
     }
     return out;
   };
-  return walk(defs[name], [name]);
+  return walk(name === "root" ? schema : defs[name], [name]);
 }
 
 export const codexAuthJson = (env = process.env) => join(env.CODEX_HOME || join(env.HOME || "~", ".codex"), "auth.json");
@@ -168,7 +168,7 @@ export const codexResearchAdapter = {
     return { ok: true, reason: null };
   },
   async quota() { return lastCodexRateLimit === null ? null : { window: "codex", pct: lastCodexRateLimit, resetAt: null }; },
-  async run({ prompt, schemaPath, timeoutMs, workDir, monitor, env = process.env }) {
+  async run({ prompt, schemaPath, schemaName = "modelOutput", timeoutMs, workDir, monitor, env = process.env }) {
     const ioDir = mkdtempSync(join(tmpdir(), "invest-codex-io-"));
     let tokenHome;
     try {
@@ -177,7 +177,7 @@ export const codexResearchAdapter = {
         if (!loginAccessToken(env, tokenHome)) throw new Error("Codex access token login failed");
       }
       const schemaFile = join(ioDir, "output-schema.json"), replyFile = join(ioDir, "reply.json");
-      writeFileSync(schemaFile, JSON.stringify(deriveStrictSchema(JSON.parse(readFileSync(schemaPath, "utf8")))));
+      writeFileSync(schemaFile, JSON.stringify(deriveStrictSchema(JSON.parse(readFileSync(schemaPath, "utf8")), schemaName)));
       const args = ["--search", "-a", "never", "exec", "--sandbox", "read-only", "--skip-git-repo-check", "--ephemeral", "--ignore-user-config", "--ignore-rules", "--output-schema", schemaFile, "-C", workDir, "-o", replyFile, "--json"];
       if (env.RESEARCH_CODEX_MODEL) args.push("-m", env.RESEARCH_CODEX_MODEL);
       args.push("-");
