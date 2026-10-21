@@ -1,5 +1,5 @@
 import type pg from "pg";
-import { verifyEvidence, type ItemResult } from "../research/verify";
+import { verifyEvidence, type ItemResult } from "../evidence/verify";
 
 export interface EtfEvidence { url: string; quote: string; claim: string }
 export interface EtfCandidate {

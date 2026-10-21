@@ -1,19 +1,26 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
-import { createServer } from "node:http";
 import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-import { codexResearchAdapter, deriveStrictSchema, parseCodexEvents, researchAdapter, resetCodexRateLimit } from "../research-adapters.mjs";
-import { checkResearchCaps } from "../research-caps.mjs";
-import { validateResearchOutput } from "../research-validate.mjs";
+import { join } from "node:path";
+import { codexResearchAdapter, deriveStrictSchema, parseCodexEvents, resetCodexRateLimit } from "../research-adapters.mjs";
 
-const here = dirname(fileURLToPath(import.meta.url));
-const root = join(here, "..", "..");
-const schemaPath = join(root, "scanner/schema/research-output.schema.json");
-const sample = JSON.parse(readFileSync(join(root, "src/research/fixtures/sample-output.json"), "utf8"));
+const fixtureDir = mkdtempSync(join(tmpdir(), "codex-adapter-schema-"));
+const schemaPath = join(fixtureDir, "schema.json");
+const item = { type: "object", properties: { url: { type: "string", format: "uri", minLength: 1 }, quote: { type: "string", maxLength: 600 }, n: { type: "integer", minimum: 0, maximum: 5 } }, required: ["url"] };
+writeFileSync(schemaPath, JSON.stringify({
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  $defs: {
+    item,
+    modelOutput: { type: "object", required: ["findings"], properties: {
+      findings: { type: "array", minItems: 0, maxItems: 5, items: { $ref: "#/$defs/item" } },
+      candidates: { type: "array", items: { type: "object", properties: { symbol: { type: "string", pattern: "^[A-Z]+$" }, kind: { const: "x" } } } },
+      chains: { type: "array", items: { type: "object", properties: { links: { type: "array", items: { $ref: "#/$defs/item" } } } } },
+      notes: { type: ["string", "null"], default: null },
+    } },
+  },
+}));
+const sampleOutput = { findings: [{ url: "https://example.com/a", quote: "q", n: 1 }], candidates: [], chains: [], notes: null };
 
 const collect = (node, visit, path = "$") => {
   if (Array.isArray(node)) return node.forEach((v, i) => collect(v, visit, `${path}[${i}]`));
@@ -35,7 +42,7 @@ test("strict schema: no refs, closed objects, all properties required, no unsupp
       assert.deepEqual([...node.required].sort(), Object.keys(node.properties).sort(), path);
     }
   });
-  assert.ok(objects > 8);
+  assert.ok(objects >= 5);
   assert.deepEqual(strict.required, ["findings", "candidates", "chains", "notes"]);
   assert.deepEqual(strict.properties.notes.type, ["string", "null"]);
 });
@@ -46,13 +53,6 @@ test("strict schema: const becomes enum, refs merge siblings, bad input throws",
   assert.throws(() => deriveStrictSchema({ $defs: { modelOutput: { type: "object", properties: { v: { $ref: "#/$defs/nope" } } } } }), /unresolvable/);
   assert.throws(() => deriveStrictSchema({ $defs: { modelOutput: { type: "object", properties: { v: { $ref: "#/$defs/modelOutput" } } } } }), /recursive/);
   assert.throws(() => deriveStrictSchema({}), /modelOutput/);
-});
-
-test("the existing validator still runs on a reply that matches the strict shape", () => {
-  const payload = structuredClone(sample);
-  assert.deepEqual(validateResearchOutput(payload), []);
-  payload.output.findings[0].evidence[0].quote = "short";
-  assert.ok(validateResearchOutput(payload).length > 0);
 });
 
 test("event parser maps usage, counts searches and reads a rate limit when present", () => {
@@ -68,7 +68,7 @@ test("event parser maps usage, counts searches and reads a rate limit when prese
   assert.equal(parseCodexEvents(JSON.stringify({ type: "turn.failed", error: { message: "boom" } })).failure, "boom");
 });
 
-const withFake = async (events, fn, { reply = JSON.stringify(sample.output), exit = 0, writeReply = true } = {}) => {
+const withFake = async (events, fn, { reply = JSON.stringify(sampleOutput), exit = 0, writeReply = true } = {}) => {
   const dir = mkdtempSync(join(tmpdir(), "codex-fake-"));
   const bin = join(dir, "codex");
   writeFileSync(join(dir, "events.jsonl"), events.map((e) => JSON.stringify(e)).join("\n"));
@@ -109,7 +109,7 @@ test("codex adapter: exact flags and order, strict schema file, -o reply, usage,
     assert.deepEqual(c.cDirEntries, []);
     assert.equal(JSON.stringify(c.schema).includes("$ref"), false);
     assert.deepEqual(c.schema.required, ["findings", "candidates", "chains", "notes"]);
-    assert.deepEqual(JSON.parse(result.text), sample.output);
+    assert.deepEqual(JSON.parse(result.text), sampleOutput);
     assert.deepEqual(result.usage, { inputTokens: 150, outputTokens: 30, cacheReadTokens: 50, cacheCreationTokens: null, turns: null });
     assert.equal(result.webSearches, 1);
     assert.equal(result.costUsd, 0);
@@ -167,30 +167,19 @@ test("codex auth check: a local login must pass codex login status", () => {
   assert.equal(codexResearchAdapter.available(env).ok, true);
   assert.equal(codexResearchAdapter.authSource({ OPENAI_API_KEY: "k" }), "api");
   assert.equal(codexResearchAdapter.authSource({}), "codex");
-  assert.equal(researchAdapter("codex"), codexResearchAdapter);
 });
 
-const gate = (env, override = {}) => checkResearchCaps({ env: { RESEARCH_ENABLED: "on", ...env }, adapter: "codex", authSource: "codex", ...override });
-
-test("codex gate: only the kill switch stops a run", async () => {
-  assert.equal((await gate({}, { codexQuota: async () => { throw new Error("quota must not be read"); } })).ok, true);
-  assert.equal((await gate({}, {})).ok, true);
-  assert.equal((await gate({ RESEARCH_ENABLED: "off" }, {})).status, "killed");
-});
-
-async function runRunner({ adapterEnv = {}, codexDailyCalls = 0, rateLimitPct = null, execFailureEchoToken = false } = {}) {
-  const dir = mkdtempSync(join(tmpdir(), "research-codex-run-"));
+function fakeTokenCodex({ echoToken = false } = {}) {
+  const dir = mkdtempSync(join(tmpdir(), "codex-token-"));
   const home = join(dir, "home"); mkdirSync(home);
+  writeFileSync(join(dir, "reply.json"), JSON.stringify(sampleOutput));
+  writeFileSync(join(dir, "events.jsonl"), JSON.stringify({ type: "turn.completed", usage: { input_tokens: 100, output_tokens: 20 } }));
+  if (echoToken) writeFileSync(join(dir, "echo-token"), "1");
   const bin = join(dir, "codex");
-  const input = join(dir, "input.json");
-  writeFileSync(input, JSON.stringify({ symbols: ["SMPL"], triggers: [], knownFacts: [], openCandidates: [] }));
-  writeFileSync(join(dir, "reply.json"), JSON.stringify(sample.output));
-  writeFileSync(join(dir, "events.jsonl"), JSON.stringify({ type: "turn.completed", usage: { input_tokens: 100, output_tokens: 20 }, ...(rateLimitPct === null ? {} : { rate_limits: { primary: { used_percent: rateLimitPct } } }) }));
-  if (execFailureEchoToken) writeFileSync(join(dir, "echo-token"), "1");
   writeFileSync(bin, `#!/usr/bin/env node
 const fs=require('fs');const a=process.argv.slice(2);const d=__dirname;
 if(a.join(' ')==='login status'){
-  try{const x=JSON.parse(fs.readFileSync(process.env.CODEX_HOME+'/auth.json','utf8'));process.exit(x.tokens?.access_token||x.personal_access_token==='test-workspace-token'?0:1)}catch{process.exit(1)}
+  try{const x=JSON.parse(fs.readFileSync(process.env.CODEX_HOME+'/auth.json','utf8'));process.exit(x.personal_access_token==='test-workspace-token'?0:1)}catch{process.exit(1)}
 }
 if(a.includes('--with-access-token')){
   let input='';process.stdin.on('data',c=>input+=c);process.stdin.on('end',()=>{
@@ -199,8 +188,7 @@ if(a.includes('--with-access-token')){
     fs.writeFileSync(process.env.CODEX_HOME+'/auth.json',JSON.stringify({personal_access_token:input}));
   });
 }else{
-  fs.appendFileSync(d+'/calls.log',a.join(' ')+'\\n');
-  fs.appendFileSync(d+'/exec-events.log',JSON.stringify({home:process.env.CODEX_HOME,args:a,envKeys:Object.keys(process.env),envHasToken:Object.values(process.env).includes('test-workspace-token')})+'\\n');
+  fs.appendFileSync(d+'/exec-events.log',JSON.stringify({home:process.env.CODEX_HOME,envKeys:Object.keys(process.env),envHasToken:Object.values(process.env).includes('test-workspace-token')})+'\\n');
   process.stdin.resume();process.stdin.on('end',()=>{
     if(fs.existsSync(d+'/echo-token')){const x=JSON.parse(fs.readFileSync(process.env.CODEX_HOME+'/auth.json','utf8'));process.stdout.write(JSON.stringify({type:'turn.failed',error:{message:x.personal_access_token}}));return}
     fs.writeFileSync(a[a.indexOf('-o')+1],fs.readFileSync(d+'/reply.json','utf8'));process.stdout.write(fs.readFileSync(d+'/events.jsonl','utf8'))
@@ -208,112 +196,55 @@ if(a.includes('--with-access-token')){
 }
 `);
   chmodSync(bin, 0o755);
-  const posts = [], budgets = [];
-  const server = createServer((req, res) => {
-    if (req.method === "POST") { let body = ""; req.on("data", (d) => { body += d; }); req.on("end", () => { (req.url === "/api/ingest/research" ? posts : budgets).push(JSON.parse(body)); res.writeHead(200, { "Content-Type": "application/json" }); res.end("{}"); }); }
-    else if (req.url === "/api/ingest/ai-budget?report=research-caps") { res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ day: new Date().toISOString().slice(0, 10), month: new Date().toISOString().slice(0, 7), monthlyTokens: 0, monthlyUsd: 0, dailyCalls: 0, codexDailyCalls, dailyTokens: 0, sharedDailyTokens: 0 })); }
-    else { res.writeHead(500); res.end(); }
-  });
-  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-  const baseUrl = `http://127.0.0.1:${server.address().port}`;
-  const env = { ...process.env, PATH: `${dir}:${process.env.PATH}`, HOME: home, FAKE_DIR: dir, RESEARCH_OUT_DIR: join(dir, "out"), RESEARCH_ADAPTER: "codex", RESEARCH_ENABLED: "on", RESEARCH_WINDOW: "00:00-23:59", INGEST_TOKEN: "test-token", RESEARCH_MONTHLY_USD: "100", ...adapterEnv };
-  delete env.OPENAI_API_KEY; delete env.CODEX_API_KEY; delete env.CODEX_HOME; delete env.CODEX_ACCESS_TOKEN; Object.assign(env, adapterEnv);
-  const args = [join(root, "scanner/run-research.mjs"), "--type", "daily", "--as-of", "2026-10-11", "--input-file", input, "--base-url", baseUrl];
-  const result = await new Promise((resolve) => {
-    const child = spawn(process.execPath, args, { env });
-    let stdout = "", stderr = "";
-    child.stdout.on("data", (d) => { stdout += d; }); child.stderr.on("data", (d) => { stderr += d; });
-    child.on("close", (code) => resolve({ code, stdout, stderr }));
-  });
-  server.close();
-  const calls = existsSync(join(dir, "calls.log")) ? readFileSync(join(dir, "calls.log"), "utf8").trim().split("\n") : [];
-  const authEvents = existsSync(join(dir, "auth-events.log")) ? readFileSync(join(dir, "auth-events.log"), "utf8").trim().split("\n").map(JSON.parse) : [];
-  const execEvents = existsSync(join(dir, "exec-events.log")) ? readFileSync(join(dir, "exec-events.log"), "utf8").trim().split("\n").map(JSON.parse) : [];
-  const logs = ["calls.log", "auth-events.log", "exec-events.log"].filter((name) => existsSync(join(dir, name))).map((name) => readFileSync(join(dir, name), "utf8")).join("\n");
-  return { ...result, posts, budgets, calls, authEvents, execEvents, logs, home };
+  const read = (name) => existsSync(join(dir, name)) ? readFileSync(join(dir, name), "utf8").trim().split("\n").map((line) => JSON.parse(line)) : [];
+  return { env: { PATH: `${dir}:${process.env.PATH}`, HOME: home }, authEvents: () => read("auth-events.log"), execEvents: () => read("exec-events.log"), logs: () => ["auth-events.log", "exec-events.log"].filter((n) => existsSync(join(dir, n))).map((n) => readFileSync(join(dir, n), "utf8")).join("\n") };
 }
-
-test("RESEARCH_ADAPTER=codex without usable auth fails at start with no model call and no network", async () => {
-  const r = await runRunner();
-  assert.equal(r.code, 1);
-  assert.match(r.stderr, /RESEARCH_ADAPTER=codex: Codex auth is unavailable: provide/);
-  assert.deepEqual(r.calls, []);
-  assert.equal(r.posts.length + r.budgets.length, 0);
-});
-
-test("codex API key can run without a USD cap", async () => {
-  const r = await runRunner({ adapterEnv: { OPENAI_API_KEY: "k" } });
-  assert.equal(r.code, 0, r.stderr);
-  assert.equal(r.calls.length, 1);
-  assert.equal(r.posts[0].run.adapter.authSource, "api");
-});
-
-test("codex login rejected by CLI fails at start with no model call or network", async () => {
-  const home = mkdtempSync(join(tmpdir(), "codex-login-"));
-  writeFileSync(join(home, "auth.json"), "{}");
-  const r = await runRunner({ adapterEnv: { CODEX_HOME: home } });
-  assert.equal(r.code, 1);
-  assert.match(r.stderr, /RESEARCH_ADAPTER=codex: Codex auth is unavailable: codex login status/);
-  assert.deepEqual(r.calls, []);
-  assert.equal(r.posts.length + r.budgets.length, 0);
-});
 
 test("workspace token is passed on stdin, checked at start and removed with its private home", async () => {
   const token = "test-workspace-token";
-  const ran = await runRunner({ adapterEnv: { CODEX_ACCESS_TOKEN: token, CODEX_API_KEY: "unused-api-key", RESEARCH_CODEX_QUOTA_UNKNOWN: "allow" } });
-  assert.equal(ran.code, 0, ran.stderr);
-  assert.equal(ran.authEvents.length, 2);
-  assert.equal(ran.execEvents.length, 1);
-  assert.equal(ran.calls.length, 1);
-  assert.equal(ran.execEvents[0].home, ran.authEvents[1].home);
-  assert.notEqual(ran.authEvents[0].home, ran.authEvents[1].home);
-  for (const event of ran.authEvents) {
+  const fake = fakeTokenCodex();
+  const env = { ...fake.env, CODEX_ACCESS_TOKEN: token, CODEX_API_KEY: "unused-api-key" };
+  assert.deepEqual(codexResearchAdapter.available(env), { ok: true, reason: null });
+  const work = mkdtempSync(join(tmpdir(), "invest-research-"));
+  const result = await codexResearchAdapter.run({ prompt: "p", schemaPath, timeoutMs: 20000, workDir: work, env });
+  assert.deepEqual(JSON.parse(result.text), sampleOutput);
+  assert.equal(result.costUsd, 0);
+  const auth = fake.authEvents(), exec = fake.execEvents();
+  assert.equal(auth.length, 2);
+  assert.equal(exec.length, 1);
+  assert.equal(exec[0].home, auth[1].home);
+  assert.notEqual(auth[0].home, auth[1].home);
+  for (const event of auth) {
     assert.equal(event.mode, 0o700);
     assert.equal(event.stdinMatches, true);
     assert.equal(event.envHasToken, false);
     assert.deepEqual(event.args, ["-c", 'cli_auth_credentials_store="file"', "login", "--with-access-token"]);
     assert.equal(existsSync(event.home), false);
   }
-  assert.equal(ran.execEvents[0].envHasToken, false);
-  assert.equal(ran.execEvents[0].envKeys.includes("CODEX_ACCESS_TOKEN"), false);
-  assert.equal(ran.execEvents[0].envKeys.includes("CODEX_API_KEY"), false);
-  assert.equal(ran.logs.includes(token) || ran.stderr.includes(token) || ran.stdout.includes(token), false);
-  assert.equal(ran.posts[0].run.adapter.authSource, "codex");
-  assert.equal(ran.posts[0].run.usage.costUsd, 0);
-  assert.equal(ran.budgets[1].usd, 0);
+  assert.equal(exec[0].envHasToken, false);
+  assert.equal(exec[0].envKeys.includes("CODEX_ACCESS_TOKEN"), false);
+  assert.equal(exec[0].envKeys.includes("CODEX_API_KEY"), false);
+  assert.equal(fake.logs().includes(token), false);
 });
 
-test("invalid workspace token fails at start without a model call or network", async () => {
+test("invalid workspace token fails the auth check and the run without a model call", async () => {
   const token = "invalid-workspace-token";
-  const r = await runRunner({ adapterEnv: { CODEX_ACCESS_TOKEN: token, RESEARCH_CODEX_QUOTA_UNKNOWN: "allow" } });
-  assert.equal(r.code, 1);
-  assert.match(r.stderr, /RESEARCH_ADAPTER=codex: Codex auth is unavailable: CODEX_ACCESS_TOKEN login failed/);
-  assert.deepEqual(r.calls, []);
-  assert.equal(r.posts.length + r.budgets.length, 0);
-  assert.equal(r.authEvents.length, 1);
-  assert.equal(existsSync(r.authEvents[0].home), false);
-  assert.equal(r.logs.includes(token) || r.stderr.includes(token) || r.stdout.includes(token), false);
+  const fake = fakeTokenCodex();
+  const env = { ...fake.env, CODEX_ACCESS_TOKEN: token };
+  assert.match(codexResearchAdapter.available(env).reason, /CODEX_ACCESS_TOKEN login failed/);
+  const work = mkdtempSync(join(tmpdir(), "invest-research-"));
+  await assert.rejects(codexResearchAdapter.run({ prompt: "p", schemaPath, timeoutMs: 20000, workDir: work, env }), /access token login failed/);
+  assert.deepEqual(fake.execEvents(), []);
+  for (const event of fake.authEvents()) assert.equal(existsSync(event.home), false);
+  assert.equal(fake.logs().includes(token), false);
 });
 
 test("Codex errors redact the workspace token and remove its temporary home", async () => {
   const token = "test-workspace-token";
-  const r = await runRunner({ adapterEnv: { CODEX_ACCESS_TOKEN: token, RESEARCH_CODEX_QUOTA_UNKNOWN: "allow" }, execFailureEchoToken: true });
-  assert.equal(r.calls.length, 1);
-  assert.equal(r.posts[0].run.status, "failed");
-  assert.equal(r.authEvents.length, 2);
-  for (const event of r.authEvents) assert.equal(existsSync(event.home), false);
-  assert.equal([r.logs, r.stderr, r.stdout, JSON.stringify(r.posts)].some((value) => value.includes(token)), false);
-  assert.match(r.posts[0].run.stopReason, /\[redacted\]/);
-});
-
-test("codex run with a ChatGPT login runs with an unreported quota", async () => {
-  const home = mkdtempSync(join(tmpdir(), "codex-login-"));
-  writeFileSync(join(home, "auth.json"), JSON.stringify({ tokens: { access_token: "stub" } }));
-  const ran = await runRunner({ adapterEnv: { CODEX_HOME: home } });
-  assert.equal(ran.code, 0, ran.stderr);
-  assert.equal(ran.calls.length, 1);
-  assert.equal(ran.posts[0].run.adapter.authSource, "codex");
-  assert.equal(ran.posts[0].run.usage.costUsd, 0);
-  assert.equal(ran.budgets[1].usd, 0);
-  assert.deepEqual(ran.budgets.map((b) => b.authSource ?? null), ["codex", null]);
+  const fake = fakeTokenCodex({ echoToken: true });
+  const env = { ...fake.env, CODEX_ACCESS_TOKEN: token };
+  const work = mkdtempSync(join(tmpdir(), "invest-research-"));
+  await assert.rejects(codexResearchAdapter.run({ prompt: "p", schemaPath, timeoutMs: 20000, workDir: work, env }), (e) => /\[redacted\]/.test(e.message) && !e.message.includes(token));
+  assert.equal(fake.execEvents().length, 1);
+  for (const event of fake.authEvents()) assert.equal(existsSync(event.home), false);
 });

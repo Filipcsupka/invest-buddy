@@ -9,7 +9,7 @@ import { rateLimit, rateLimitRetryAfter } from "@/security/rate-limit";
 import { writeHttpLog } from "@/app/api/ingest/request-log";
 import { resolveRequestId } from "@/app/request-id";
 import { statusPage } from "@/app/status-page";
-import { ownerResearchAuthorized } from "@/app/[locale]/owner/research/auth";
+import { ownerAuthorized } from "@/app/[locale]/owner/auth";
 
 /** Resolve unavailable pages before a streamed layout can commit a 200 response. */
 export async function proxy(request: NextRequest) {
@@ -34,9 +34,9 @@ async function handle(request: NextRequest) {
   if (previewParam === "free" && resolveViewer(flags(), "free").preview) incoming.set(PREVIEW_HEADER, "free");
   const [, locale, section, ticker] = request.nextUrl.pathname.split("/");
   const featureFlags = flags();
-  if (section === "owner" && ticker === "research" && featureFlags.OWNER_VIEW &&
-    !ownerResearchAuthorized(request.headers.get("authorization"), process.env.OWNER_RESEARCH_PASSWORD)) {
-    return new NextResponse("Authentication required", { status: 401, headers: { "WWW-Authenticate": 'Basic realm="Research"', "Cache-Control": "no-store" } });
+  if (section === "owner" && featureFlags.OWNER_VIEW &&
+    !ownerAuthorized(request.headers.get("authorization"), process.env.OWNER_RESEARCH_PASSWORD)) {
+    return new NextResponse("Authentication required", { status: 401, headers: { "WWW-Authenticate": 'Basic realm="Owner"', "Cache-Control": "no-store" } });
   }
   // Legal and owner gates come first and never read the viewer: admin does not bypass them. PAYWALL no longer hides /scanner.
   const unavailable = (section === "sizing" && !featureFlags.ADVICE_OUTPUT)
@@ -44,11 +44,11 @@ async function handle(request: NextRequest) {
     || (section === "design" && !designViewEnabled())
     || (section === "ideas" && (!ideasEnabled() || !featureFlags.ADVICE_OUTPUT))
     || (section === "owner-allocation" && !ownerViewEnabled())
-    || (section === "owner" && ticker === "research" && !featureFlags.OWNER_VIEW)
+    || (section === "owner" && !featureFlags.OWNER_VIEW)
     || (section === "company" && (!ticker || !(await instrumentUniverse()).some((item) => item.ticker === ticker.toUpperCase())));
   if (!unavailable) {
     const response = NextResponse.next({ request: { headers: incoming } });
-    if (section === "owner" && ticker === "research") response.headers.set("Cache-Control", "private, no-store");
+    if (section === "owner") response.headers.set("Cache-Control", "private, no-store");
     if (request.nextUrl.searchParams.has("view")) response.headers.set("X-Robots-Tag", "noindex");
     response.headers.set("x-request-id", requestId);
     response.headers.set("server-timing", `rid;desc="${requestId}"`);
