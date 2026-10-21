@@ -79,7 +79,7 @@ describe("macro inputs", () => {
     expect(await fetchMacroInputs(repository, { http, env: { FRED_API_KEY: "k", ECB_FX_ENABLED: "on" }, get: async () => fredJson(0.01), now: new Date(`${ASOF}T10:00:00Z`) })).toEqual([]);
     expect([...repository.documents.keys()].sort()).toEqual(["https://fred.stlouisfed.org/series/DGS10", "https://fred.stlouisfed.org/series/CPIAUCSL", "https://fred.stlouisfed.org/series/PPIACO", VIX_DOC_URL].sort());
     expect(repository.documents.get(VIX_DOC_URL)?.meta.display_allowed).toBe(false);
-    expect(new Set(repository.macroObservations.map((row) => row.seriesId))).toEqual(new Set(["DGS2", "DGS10", "DGS3MO", "T10Y2Y", "FEDFUNDS", "CPIAUCSL", "PPIACO", "TSY_3M", "TSY_2Y", "TSY_10Y", "ECB_EURUSD", "ECB_EURCZK", "ECB_EURGBP"]));
+    expect(new Set(repository.macroObservations.map((row) => row.seriesId))).toEqual(new Set(["DGS2", "DGS10", "DGS3MO", "T10Y2Y", "FEDFUNDS", "CPIAUCSL", "PPIACO", "TSY_3M", "TSY_2Y", "TSY_10Y", "ECB_EURUSD", "ECB_EURCZK", "ECB_EURGBP", "ECB_EURCHF", "ECB_EURPLN", "ECB_EURSEK", "ECB_EURNOK", "ECB_EURDKK"]));
     const missing = await fetchMacroInputs(new MemoryCollectorRepository(), { http: stubHttp(() => { throw new Error("down"); }), env: { ECB_FX_ENABLED: "on" }, now: new Date(`${ASOF}T10:00:00Z`) });
     expect(missing).toEqual(["fred: FRED_API_KEY absent", "treasury curve: down", "ecb fx: down", "vix: down"]);
   });

@@ -92,13 +92,15 @@ describe("EODHD prices", () => {
         { vendor_symbol: "BMW.XETRA", code: "BMW", exchange: "XETRA", currency: "EUR" }, { vendor_symbol: "BMW.US", code: "BMW", exchange: "US", currency: "USD" },
         { vendor_symbol: "CDR.WAR", code: "CDR", exchange: "WAR", currency: "PLN" }, { vendor_symbol: "CDR.US", code: "CDR", exchange: "US", currency: "USD" },
         { vendor_symbol: "MSFT.US", code: "MSFT", exchange: "US", currency: "USD" }, { vendor_symbol: "MSFT.XETRA", code: "MSFT", exchange: "XETRA", currency: "EUR" },
+        { vendor_symbol: "SAP.XETRA", code: "SAP", exchange: "XETRA", currency: "EUR" },
+        { vendor_symbol: "ABC.US", code: "ABC", exchange: "US", currency: "USD" }, { vendor_symbol: "ABC.LSE", code: "ABC", exchange: "LSE", currency: "GBP" },
         { vendor_symbol: "BAD.US", code: "BAD", exchange: "US", currency: "USD" },
       ] } };
-    const mapped = await loadEodhdPriceSymbols(db as never, ["BMW", "CDR", "MSFT", "BAD", "MISSING"]);
-    expect(mapped.symbols.map((s) => s.vendorSymbol)).toEqual(["BMW.XETRA", "CDR.WAR", "MSFT.US"]);
+    const mapped = await loadEodhdPriceSymbols(db as never, ["BMW", "CDR", "MSFT", "SAP.XETRA", "ABC.US", "ABC.LSE", "BAD", "MISSING"]);
+    expect(mapped.symbols.map((s) => s.vendorSymbol)).toEqual(["BMW.XETRA", "CDR.WAR", "MSFT.US", "SAP.XETRA", "ABC.US", "ABC.LSE"]);
     expect(mapped.unmapped).toEqual(["BAD", "MISSING"]);
     const result = await runEodhdPrices({ eod: async () => [bulkFixture[0]], splits: async () => [], eodBulkLastDay: noBulk, getCallCosts: () => costs(3, 3) }, new MemoryPriceRepository(), mapped.symbols, { mode: "daily", unmapped: mapped.unmapped });
-    expect(result).toMatchObject({ requested: 5, succeeded: 3, failed: 2 });
+    expect(result).toMatchObject({ requested: 8, succeeded: 6, failed: 2 });
     expect(result.failures.map((f) => f.ticker)).toEqual(["BAD", "MISSING"]);
   });
 });

@@ -14,6 +14,7 @@ describe("select-universe script", () => {
     expect(() => parseArgs(["--as-of", "2026-11-16", "--target", "10"])).toThrow();
     expect(() => parseArgs(["--as-of", "2026-11-16", "--write", "1"])).toThrow();
     expect(parseArgs(["--as-of", "2026-11-16"])).toMatchObject({ target: 150, out: "tmp/universe" });
+    expect(parseArgs(["--dry-run", "--as-of", "2026-11-16"]).dryRun).toBe(true);
   });
   it("writes the same files twice", () => {
     const input = [row("AAA", 1), row("BBB", 30), row("CCC", 20)];
