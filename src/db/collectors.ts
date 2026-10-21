@@ -34,6 +34,7 @@ export interface SourceState {
 export interface CollectorRepository extends SourceState {
   upsertDocument(doc: CollectedDocument): Promise<{ id: number; written: boolean }>;
   upsertInsiderTransactions?(accession: string, ticker: string, filedAt: string, rows: Form4Transaction[]): Promise<void>;
+  markSecInsiderChecked?(ticker: string, checkedAt: string): Promise<void>;
   /** Archives the full filing text (D19). Absent on stores that do not keep it. */
   archiveFiling?(file: FilingFile): Promise<unknown>;
   upsertHolderEvent?(event: HolderEvent): Promise<boolean>;
@@ -42,7 +43,7 @@ export interface CollectorRepository extends SourceState {
   /** Stores the raw EARNINGS answer and every quarter that is new or changed (D28). Returns the rows written. */
   upsertEpsHistory?(batch: EpsHistoryBatch): Promise<number>;
   /** 90-day net open-market buying from stored Form 4 lines, with the ids of the stored Form 4 filings behind it. null when the ticker has no line in the window. */
-  insiderNetBuy?(symbol: string, asOf: string): Promise<(InsiderNetBuy & { documentIds: number[] }) | null>;
+  insiderNetBuy?(symbol: string, asOf: string): Promise<(InsiderNetBuy & { documentIds: number[]; sourceId?: string }) | null>;
   upsertFact(fact: Fact): Promise<boolean>;
   bars(symbol: string, limit: number): Promise<{ date: string; close: number; volume: number }[]>;
   recordRun(run: CollectorRun): Promise<void>;
@@ -112,7 +113,8 @@ export async function loadEpsSurprise(pool: pg.Pool, symbol: string, asOf: strin
 /** Reads the newest fresh insider_net_buy_90d fact and the display-allowed Form 4 documents behind it. null when there is no usable fact. */
 export async function loadInsider(pool: pg.Pool, symbol: string, asOf: string, minNetBuy = DEFAULT_INSIDER_MIN_NET_BUY_USD): Promise<InsiderResult | null> {
   const fact = await pool.query<{ as_of: string; value: unknown; document_ids: string[] }>(`SELECT as_of::text,value,document_ids FROM collected_facts
-    WHERE symbol=$1 AND fact_key='insider_net_buy_90d' AND as_of <= $2::date + $4::int AND as_of > $2::date - $3::int ORDER BY as_of DESC LIMIT 1`, [symbol, asOf, INSIDER_FACT_DAYS, INSIDER_FACT_LEAD_DAYS]);
+    WHERE symbol=$1 AND fact_key='insider_net_buy_90d' AND source_id <> 'eodhd'
+      AND as_of <= $2::date + $4::int AND as_of > $2::date - $3::int ORDER BY as_of DESC LIMIT 1`, [symbol, asOf, INSIDER_FACT_DAYS, INSIDER_FACT_LEAD_DAYS]);
   const row = fact.rows[0];
   if (!row) return null;
   const docs = await pool.query<{ url: string; published: string; meta: { trades?: InsiderDocument["trades"] } }>(`SELECT url,to_char(published_at AT TIME ZONE 'UTC','YYYY-MM-DD') AS published,meta FROM source_documents
@@ -121,6 +123,10 @@ export async function loadInsider(pool: pg.Pool, symbol: string, asOf: string, m
 }
 export class PostgresCollectorRepository implements CollectorRepository {
   constructor(private readonly pool: pg.Pool) {}
+  async markSecInsiderChecked(ticker: string, checkedAt: string) {
+    await this.pool.query(`INSERT INTO sec_insider_refresh (ticker,checked_at) VALUES ($1,$2)
+      ON CONFLICT (ticker) DO UPDATE SET checked_at=GREATEST(sec_insider_refresh.checked_at,EXCLUDED.checked_at)`, [ticker, checkedAt]);
+  }
   async upsertMacroObservations(rows: MacroObservation[]) { return insertMacroObservations(this.pool, rows); }
   async upsertEpsHistory(batch: EpsHistoryBatch) { return insertEpsHistory(this.pool, batch); }
   async upsertHolderEvent(event: HolderEvent) {
@@ -130,6 +136,7 @@ export class PostgresCollectorRepository implements CollectorRepository {
     return (result.rowCount ?? 0) > 0;
   }
   async upsertInsiderTransactions(accession: string, ticker: string, filedAt: string, rows: Form4Transaction[]) {
+    await this.pool.query("DELETE FROM insider_transactions WHERE accession=$1 AND source_id='eodhd'", [accession]);
     for (const row of rows) await this.pool.query(`INSERT INTO insider_transactions
       (accession,line_no,ticker,owner_cik,owner_name,reporting_owners,is_director,is_officer,is_ten_percent_owner,is_other,
        transaction_date,code,shares,price,acquired_disposed,derivative,shares_after,filed_at,plan_10b5_1)
@@ -140,14 +147,15 @@ export class PostgresCollectorRepository implements CollectorRepository {
   }
   async insiderNetBuy(symbol: string, asOf: string) {
     const from = new Date(Date.parse(`${asOf}T00:00:00Z`) - INSIDER_WINDOW_DAYS * 86_400_000).toISOString().slice(0, 10);
-    const result = await this.pool.query<{ accession: string; transaction_date: string; filed_at: string; code: string; shares: string; price: string | null; derivative: boolean }>(
-      `SELECT accession,transaction_date::text,filed_at::text,code,shares::text,price::text,derivative FROM insider_transactions
-       WHERE ticker=$1 AND transaction_date BETWEEN $2::date AND $3::date AND filed_at BETWEEN $2::date AND $3::date`, [symbol, from, asOf]);
+    const result = await this.pool.query<{ accession: string; transaction_date: string; filed_at: string; code: string; shares: string; price: string | null; derivative: boolean; source_id: string }>(
+      `SELECT accession,transaction_date::text,filed_at::text,code,shares::text,price::text,derivative,source_id FROM insider_transactions
+       WHERE ticker=$1 AND transaction_date BETWEEN $2::date AND $3::date AND filed_at BETWEEN $2::date AND $3::date
+         AND (source_id <> 'eodhd' OR (first_observed_at AT TIME ZONE 'UTC')::date <= $3::date)`, [symbol, from, asOf]);
     const net = netBuyFromTransactions(result.rows.map((row) => ({ accession: row.accession, ticker: symbol, transactionDate: row.transaction_date, filedAt: row.filed_at, code: row.code,
       shares: Number(row.shares), price: row.price === null ? null : Number(row.price), derivative: row.derivative })), asOf);
     if (!net) return null;
     const docs = net.accessions.length ? await this.pool.query<{ id: string }>("SELECT id FROM source_documents WHERE symbol=$1 AND doc_type='4' AND meta->>'accession' = ANY($2::text[]) ORDER BY id", [symbol, net.accessions]) : { rows: [] };
-    return { ...net, documentIds: docs.rows.map((row) => Number(row.id)) };
+    return { ...net, documentIds: docs.rows.map((row) => Number(row.id)), sourceId: result.rows.some((row) => row.source_id === "eodhd") ? "eodhd" : "sec" };
   }
   archiveFiling(file: FilingFile) { return archiveFiling(this.pool, file); }
   async upsertDocument(doc: CollectedDocument) {
@@ -170,7 +178,8 @@ export class PostgresCollectorRepository implements CollectorRepository {
       ON CONFLICT (symbol,fact_key,as_of) DO UPDATE SET value=EXCLUDED.value,document_ids=EXCLUDED.document_ids,
         computed_at=now(),expires_at=EXCLUDED.expires_at,source_id=EXCLUDED.source_id,licence_class=EXCLUDED.licence_class
       WHERE (collected_facts.value,collected_facts.document_ids,collected_facts.source_id) IS DISTINCT FROM (EXCLUDED.value,EXCLUDED.document_ids,EXCLUDED.source_id)
-        AND NOT (collected_facts.fact_key='eps_surprise_latest' AND collected_facts.source_id='eodhd' AND EXCLUDED.source_id <> 'eodhd')`,
+        AND NOT (collected_facts.fact_key='eps_surprise_latest' AND collected_facts.source_id='eodhd' AND EXCLUDED.source_id <> 'eodhd')
+        AND NOT (collected_facts.fact_key='insider_net_buy_90d' AND collected_facts.source_id='sec' AND EXCLUDED.source_id='eodhd')`,
       [fact.symbol, fact.key, fact.asOf, JSON.stringify(fact.value), fact.documentIds, fact.expiresAt ?? null, fact.sourceId ?? FACT_SOURCE_IDS[fact.key] ?? null]);
     return (result.rowCount ?? 0) > 0;
   }
