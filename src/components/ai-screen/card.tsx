@@ -4,7 +4,7 @@ import type { Locale } from "@/i18n";
 import { getMessages, formatDate } from "@/i18n";
 import styles from "./screen.module.css";
 
-export function AiCardView({ card, locale, expanded = false }: { card: StoredAiCard; locale: Locale; expanded?: boolean }) {
+export function AiCardView({ card, locale, expanded = false, earlierCount = 0 }: { card: StoredAiCard; locale: Locale; expanded?: boolean; earlierCount?: number }) {
   const m = getMessages(locale).aiScreen;
   const s = card.sections;
   const setup = Object.entries(s.setup).filter(([, value]) => value);
@@ -23,6 +23,7 @@ export function AiCardView({ card, locale, expanded = false }: { card: StoredAiC
       {s.whyItMatters.length > 0 && <section><h4>{m.why}</h4><ul>{s.whyItMatters.map((line, index) => <li key={index}>{line}</li>)}</ul></section>}
       {s.risk.length > 0 && <section><h4>{m.risk}</h4><ul>{s.risk.map((line, index) => <li key={index}>{line}</li>)}</ul></section>}
     </details>}
+    {earlierCount > 0 && <Link className={styles.historyLink} href={`/${locale}/ai-screen/${encodeURIComponent(card.symbol)}#history`}>{earlierCount === 1 ? m.earlierCall : m.earlierCalls.replace("{count}", String(earlierCount))}</Link>}
     {expanded && <details className={styles.details}><summary>{m.raw}</summary><pre className={styles.raw}>{card.rawText}</pre></details>}
   </article>;
 }

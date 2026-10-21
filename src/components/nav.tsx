@@ -44,6 +44,7 @@ export function Nav({ locale }: { locale: Locale }) {
           sectionLabel={m.nav.stocks}
           items={[
             { href: "/dashboard", text: m.nav.dashboard, icon: "dashboard" },
+            { href: "/ai-screen", text: m.nav.aiScreen, icon: "scanner" },
             { href: "/scanner", text: m.nav.scanner, icon: "scanner" },
             { href: "/heatmap", text: getHeatmapMessages(locale).navLabel, icon: "heatmap" },
             ...(ideasEnabled() && flags().ADVICE_OUTPUT ? [{ href: "/ideas", text: m.nav.ideas, icon: "ideas" }] : []),

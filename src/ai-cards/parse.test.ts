@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { parseAiCards } from "./parse";
+import { normalizeCall, parseAiCards } from "./parse";
 
 const sample = readFileSync(join(process.cwd(), "src/ai-cards/__fixtures__/sample.txt"), "utf8");
 describe("AI card parser", () => {
@@ -10,6 +10,8 @@ describe("AI card parser", () => {
     expect(cards.map((c) => c.rawText).join("")).toBe(sample);
     expect(cards.map((c) => c.symbol)).toEqual(["VLX", "ABBN", "NFLX"]);
     expect(cards[2].children.map((c) => c.symbol)).toEqual(["SPCX", "SMCI"]);
+    expect(cards[2].children[0].call).toBe("HOLD");
+    expect(cards[2].children[0].callText).toBe("HOLD / NO ADD");
     expect(cards[0].amountMinEur).toBe(40);
     expect(cards[0].amountMaxEur).toBe(60);
     expect(cards[0].priceValue).toBe(563);
@@ -35,5 +37,10 @@ describe("AI card parser", () => {
     expect(cards).toHaveLength(2);
     expect(cards.map((c) => c.rawText).join("")).toBe(card + card);
     expect(cards[0].dedupeKey).toBe(cards[1].dedupeKey);
+  });
+  it("keeps stop adding and reduce calls separate from hold", () => {
+    expect(normalizeCall("NO ADD")).toBe("STOP_ADD");
+    expect(normalizeCall("STOP ADDING")).toBe("STOP_ADD");
+    expect(normalizeCall("REDUCE / NO ADD")).toBe("REDUCE");
   });
 });

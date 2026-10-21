@@ -2,9 +2,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
 import { parseAiCards } from "@/ai-cards/parse";
 
-vi.mock("@/config/flags", () => ({ flags: () => ({ OWNER_VIEW: true }) }));
-vi.mock("next/headers", () => ({ headers: async () => ({ get: () => "Basic test" }) }));
-vi.mock("../../owner/research/auth", () => ({ ownerResearchAuthorized: () => true }));
 const data = vi.fn();
 vi.mock("@/data/ai-cards", () => ({ aiCardsData: () => data() }));
 import Page from "./page";
@@ -17,4 +14,5 @@ it("shows the full latest card and older calls for one symbol", async () => {
   expect(html).toContain("Later summary");
   expect(html).toContain("Earlier summary");
   expect(html).toContain("Original card");
+  expect(html).toContain('id="history"');
 });
