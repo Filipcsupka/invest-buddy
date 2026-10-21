@@ -656,6 +656,12 @@ const en = {
       F: "F: shares used to pay tax or exercise price",
     },
   },
+  aiScreen: {
+    title: "AI card screen", intro: "Cards pasted from the owner's web research automation. These calls are shown as written and are not matched to InvestBuddy prices, filings or rules.",
+    active: "Active buy ideas", watch: "Watching and holding", reduce: "Reduce or stop adding", history: "Card history", bySymbol: "By symbol", compare: "Compare with InvestBuddy",
+    uncovered: "Not covered by our data", noScore: "Covered; no score yet", glossary: "Call and rating guide", glossaryText: "START opens a small position; ADD increases it; WATCH waits for a setup; HOLD keeps an existing position; REDUCE or STOP ADDING limits further exposure. Company, Entry and Catalyst ratings are the automation's own judgments.",
+    what: "What happened", why: "Why it matters", risk: "Risk", setup: "Setup", numbers: "Numbers", plan: "Plan", evidence: "Evidence names", raw: "Original card", all: "All cards", noCards: "No cards imported yet.", sample: "Sample cards", detail: "View card", latest: "Latest call", past: "Earlier cards", import: "Paste cards", password: "Owner password", preview: "Preview", save: "Save cards", imported: "Cards saved", importError: "Import failed", unverified: "Evidence names are copied from the card; no quote or URL was verified here.",
+  },
   ideas: {
     title: "Trade ideas",
     lede: "Only changes are listed, newest first. Each idea rests on reconciled facts and rule scores. Cash stays uninvested when nothing qualifies.",
@@ -1466,6 +1472,12 @@ const sk: Messages = {
       M: "M: uplatnenie opcie alebo konverzia",
       F: "F: akcie použité na úhradu dane alebo realizačnej ceny",
     },
+  },
+  aiScreen: {
+    title: "AI karty", intro: "Karty vložené z vlastného automatického webového prieskumu. Výzvy sú zobrazené podľa pôvodného textu a nie sú porovnané s cenami, podaniami ani pravidlami InvestBuddy.",
+    active: "Aktívne nápady na nákup", watch: "Sledovanie a držanie", reduce: "Znížiť alebo neprikupovať", history: "História kariet", bySymbol: "Podľa symbolu", compare: "Porovnanie s InvestBuddy",
+    uncovered: "Nemáme údaje o tomto symbole", noScore: "Symbol je pokrytý; skóre ešte nie je dostupné", glossary: "Význam výziev a hodnotení", glossaryText: "START otvára malú pozíciu; ADD ju zväčšuje; WATCH čaká na vhodné podmienky; HOLD ponecháva existujúcu pozíciu; REDUCE alebo STOP ADDING obmedzuje ďalšiu expozíciu. Hodnotenia Company, Entry a Catalyst sú úsudkom automatizácie.",
+    what: "Čo sa stalo", why: "Prečo na tom záleží", risk: "Riziko", setup: "Hodnotenie", numbers: "Čísla", plan: "Plán", evidence: "Názvy zdrojov", raw: "Pôvodná karta", all: "Všetky karty", noCards: "Zatiaľ neboli vložené žiadne karty.", sample: "Ukážkové karty", detail: "Zobraziť kartu", latest: "Posledná výzva", past: "Staršie karty", import: "Vložiť karty", password: "Heslo vlastníka", preview: "Náhľad", save: "Uložiť karty", imported: "Karty boli uložené", importError: "Vloženie zlyhalo", unverified: "Názvy zdrojov pochádzajú z karty; citácia ani URL tu neboli overené.",
   },
   ideas: {
     title: "Investičné nápady",
