@@ -57,17 +57,19 @@ export async function loadEodhdPriceSymbols(db: pg.Pool, tickers: string[]): Pro
   const explicit = await loadVendorSymbols(db, "eodhd");
   const hints = await db.query<{ ticker: string; exchange: string | null }>("SELECT ticker,exchange FROM instrument_ids WHERE valid_to IS NULL AND ticker = ANY($1::text[])", [tickers]);
   const exchangeHints = new Map(hints.rows.map((row) => [row.ticker, row.exchange]));
-  const wanted = tickers.map((ticker) => explicit[ticker]).filter((value): value is string => Boolean(value));
+  const wanted = [...tickers, ...tickers.map((ticker) => explicit[ticker]).filter((value): value is string => Boolean(value))];
   const rows = await db.query<{ vendor_symbol: string; code: string; exchange: string; currency: string | null }>(
     "SELECT vendor_symbol,code,exchange,currency FROM symbols WHERE delisted=false AND (code = ANY($1::text[]) OR vendor_symbol = ANY($2::text[]))", [tickers, wanted]);
   const symbols: PriceSymbol[] = [], unmapped: string[] = [];
   for (const ticker of tickers) {
-    const candidates = rows.rows.filter((row) => explicit[ticker] ? row.vendor_symbol === explicit[ticker] : row.code === ticker);
+    const candidates = rows.rows.filter((row) => explicit[ticker] ? row.vendor_symbol === explicit[ticker] : row.vendor_symbol === ticker || row.code === ticker);
+    const exact = candidates.find((row) => row.vendor_symbol === ticker);
     const hint = exchangeHints.get(ticker)?.toUpperCase();
     const preferred = hint && ["NASDAQ", "NYSE", "AMEX", "BATS", "NYSEARCA", "NYSE ARCA"].includes(hint) ? "US" : hint === "XETR" ? "XETRA" : hint;
     const matching = preferred ? candidates.filter((row) => row.exchange === preferred) : candidates.filter((row) => row.exchange === "US");
     const row = explicit[ticker] ? candidates.length === 1 ? candidates[0] : undefined
-      : matching.length === 1 ? matching[0] : !preferred && candidates.length === 1 ? candidates[0] : undefined;
+      : exact ?? (
+        matching.length === 1 ? matching[0] : !preferred && candidates.length === 1 ? candidates[0] : undefined);
     if (!row?.currency) { unmapped.push(ticker); continue; }
     symbols.push({ ticker, vendorSymbol: row.vendor_symbol, exchange: row.exchange, code: row.code, currency: row.currency! });
   }

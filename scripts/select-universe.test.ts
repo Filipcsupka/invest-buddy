@@ -6,7 +6,7 @@ import { loadCandidates, parseArgs, writeReport } from "./select-universe";
 import type { Candidate } from "../src/universe/select";
 
 const row = (ticker: string, growth: number): Candidate => ({ ticker, name: `${ticker} Corp`, sector: "Tech", cik: 1, forms: ["10-K"], core: ticker === "AAA",
-  revenueQuarters: 6, yoyGrowthPct: growth, lastClose: 20, avgDollarVolume50: 20_000_000, barDays: 50 });
+  revenueQuarters: 6, yoyGrowthPct: growth, lastClose: 20, avgDollarVolume50: 20_000_000, barDays: 50, marketCapUsd: 1_000_000_000 });
 
 describe("select-universe script", () => {
   it("validates arguments", () => {
@@ -14,6 +14,7 @@ describe("select-universe script", () => {
     expect(() => parseArgs(["--as-of", "2026-11-16", "--target", "10"])).toThrow();
     expect(() => parseArgs(["--as-of", "2026-11-16", "--write", "1"])).toThrow();
     expect(parseArgs(["--as-of", "2026-11-16"])).toMatchObject({ target: 150, out: "tmp/universe" });
+    expect(parseArgs(["--dry-run", "--as-of", "2026-11-16"]).dryRun).toBe(true);
   });
   it("writes the same files twice", () => {
     const input = [row("AAA", 1), row("BBB", 30), row("CCC", 20)];

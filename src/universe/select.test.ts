@@ -1,9 +1,42 @@
 import { describe, expect, it } from "vitest";
 import { barMetrics, excludedCsv, filerType, reviewMarkdown, revenueGrowth, selectedCsv, selectUniverse, sha256, type Candidate } from "./select";
+import marketRows from "./fixtures/market-candidates.json";
+import { usdPerUnit } from "./market";
 
 const base = (ticker: string, over: Partial<Candidate> = {}): Candidate => ({
   ticker, name: `${ticker} Corp`, sector: "Tech", cik: 1, forms: ["10-Q"], core: false, revenueQuarters: 8, yoyGrowthPct: 20,
-  lastClose: 50, avgDollarVolume50: 50_000_000, barDays: 50, ...over,
+  lastClose: 50, avgDollarVolume50: 50_000_000, barDays: 50, marketCapUsd: 1_000_000_000, ...over,
+});
+
+describe("exchange-aware selection", () => {
+  it("keeps US and European listings and separate ticker collisions", () => {
+    const result = selectUniverse(marketRows as Candidate[], { target: 20, sectorCapPct: 100 });
+    expect(result.selected.map((row) => row.ticker).sort()).toEqual(marketRows.filter((row) => row.ticker !== "VOD.LSE").map((row) => row.ticker).sort());
+    expect(result.excluded).toContainEqual(expect.objectContaining({ ticker: "VOD.LSE", reason: "price_below_min" }));
+    expect(result.selected.find((row) => row.ticker === "SAP.XETRA")?.exchange).toBe("XETRA");
+    expect(result.selected.filter((row) => row.ticker.startsWith("ABC."))).toHaveLength(2);
+  });
+  it("keeps AI (US) and AI.PA apart and applies the SEC filer gate to the US listing only", () => {
+    const rows = marketRows as Candidate[];
+    const ai = rows.find((row) => row.ticker === "AI")!, airLiquide = rows.find((row) => row.ticker === "AI.PA")!;
+    expect(selectUniverse([ai, airLiquide], { target: 36, sectorCapPct: 100 }).selected.map((row) => [row.ticker, row.exchange])).toEqual([["AI", "US"], ["AI.PA", "PA"]]);
+    const foreign = selectUniverse([{ ...ai, forms: ["20-F"] }, airLiquide], { target: 36, sectorCapPct: 100 });
+    expect(foreign.selected.map((row) => row.ticker)).toEqual(["AI.PA"]);
+    expect(foreign.excluded).toContainEqual(expect.objectContaining({ ticker: "AI", reason: "foreign_filer" }));
+    expect(selectUniverse([{ ...ai, forms: [] }], { target: 36 }).excluded[0].reason).toBe("filer_unknown");
+  });
+  it("converts price, liquidity and market cap into USD and fails closed without FX", () => {
+    const rows = marketRows as Candidate[];
+    const failed = selectUniverse([rows[0], { ...rows[0], ticker: "LOW.XETRA", avgDollarVolume50: 8_000_000 },
+      { ...rows[2], ticker: "NOFX.SW", usdPerUnit: null }, { ...rows[1], ticker: "SMALL.AS", marketCapUsd: 100_000_000 }], { target: 20, sectorCapPct: 100 });
+    expect(failed.excluded.map((row) => [row.ticker, row.reason])).toEqual([
+      ["LOW.XETRA", "volume_below_floor"], ["NOFX.SW", "fx_unavailable"], ["SMALL.AS", "market_cap_below_floor"],
+    ]);
+    const rates = new Map([["ECB_EURUSD", 1.16], ["ECB_EURGBP", 0.87], ["ECB_EURCHF", 0.93]]);
+    expect(usdPerUnit("EUR", rates)).toBe(1.16);
+    expect(usdPerUnit("GBX", rates)).toBeCloseTo(1.16 / 0.87 / 100);
+    expect(usdPerUnit("CHF", new Map())).toBeNull();
+  });
 });
 
 function fixture(): Candidate[] {

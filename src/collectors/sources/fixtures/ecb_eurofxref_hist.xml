@@ -8,12 +8,22 @@
 			<Cube currency='JPY' rate='175.20'/>
 			<Cube currency='GBP' rate='0.8710'/>
 			<Cube currency='CZK' rate='24.300'/>
+			<Cube currency='CHF' rate='0.9320'/>
+			<Cube currency='PLN' rate='4.2500'/>
+			<Cube currency='SEK' rate='10.9000'/>
+			<Cube currency='NOK' rate='11.6000'/>
+			<Cube currency='DKK' rate='7.4600'/>
 		</Cube>
 		<Cube time='2026-10-08'>
 			<Cube currency='USD' rate='1.1620'/>
 			<Cube currency='JPY' rate='174.90'/>
 			<Cube currency='GBP' rate='0.8695'/>
 			<Cube currency='CZK' rate='24.310'/>
+			<Cube currency='CHF' rate='0.9310'/>
+			<Cube currency='PLN' rate='4.2600'/>
+			<Cube currency='SEK' rate='10.9100'/>
+			<Cube currency='NOK' rate='11.6100'/>
+			<Cube currency='DKK' rate='7.4610'/>
 		</Cube>
 	</Cube>
 </gesmes:Envelope>

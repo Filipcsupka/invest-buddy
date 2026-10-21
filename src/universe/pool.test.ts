@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { poolCsv, rankPool } from "./pool";
+import { poolCsv, rankPool, rankStoredPool } from "./pool";
 import type { Growth } from "../collectors/sources/frames";
+import type { Candidate } from "./select";
+import marketRows from "./fixtures/market-candidates.json";
 
 const g = (cik: number, yoy: number, prior: number, revenue = 100_000_000): Growth => ({ cik, name: `Co ${cik}`, concept: "Revenues", end: "2026-06-30", revenue, yoyPercent: yoy, qoqPercent: 5, priorYoyPercent: prior, accelerationPp: yoy - prior });
 const tickers = new Map([[1, "AAA"], [2, "BBB"], [3, "CCC"], [4, "DDD"], [5, "EEE"]]);
@@ -17,6 +19,19 @@ describe("rankPool", () => {
   });
   it("caps the pool at size", () => {
     expect(rankPool([g(1, 50, 50), g(2, 40, 40), g(3, 30, 30)], tickers, new Set(), { minYoy: 15, size: 2 })).toHaveLength(2);
+  });
+});
+
+describe("stored EODHD pool", () => {
+  it("keeps two exchanges with the same code and excludes a held US alias", () => {
+    const ranked = rankStoredPool(marketRows as Candidate[], new Set(["AAPL"]), 10);
+    expect(ranked.map((row) => row.ticker)).toContain("ABC.US");
+    expect(ranked.map((row) => row.ticker)).toContain("ABC.LSE");
+    expect(ranked.map((row) => row.ticker)).not.toContain("AAPL.US");
+  });
+  it("requires a mapped vendor listing and safe FX", () => {
+    const [sap, , nesn] = marketRows as Candidate[];
+    expect(rankStoredPool([{ ...sap, vendorSymbol: null }, { ...nesn, usdPerUnit: null }], new Set(), 10)).toEqual([]);
   });
 });
 

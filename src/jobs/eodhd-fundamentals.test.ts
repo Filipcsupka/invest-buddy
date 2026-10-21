@@ -4,11 +4,25 @@ import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { parseEodhdCalendar, parseEodhdFundamentals } from "../data-providers/eodhd/fundamentals";
 import type { EarningsCalendar, Fundamentals } from "../data-providers/eodhd/client";
-import { dueForRefresh, parseArgs, runEodhdFundamentals } from "./eodhd-fundamentals";
+import { dueForRefresh, loadSubjects, parseArgs, runEodhdFundamentals } from "./eodhd-fundamentals";
 
 const fixture = (name: string) => JSON.parse(readFileSync(join(process.cwd(), "src/data-providers/eodhd/fixtures/offline", name), "utf8"));
 const fundamentals = fixture("AAPL.US.json") as Fundamentals;
 const calendar = fixture("earnings.json") as EarningsCalendar;
+
+describe("EODHD subject mapping", () => {
+  it("maps exchange-qualified instruments to the same vendor symbol", async () => {
+    const sql: string[] = [];
+    const db = { query: async (statement: string) => {
+      sql.push(statement);
+      return statement.includes("FROM universe_membership")
+        ? { rows: [{ ticker: "SAP.XETRA", name: "SAP", sector: "Tech", tier: null }] }
+        : { rows: [{ ticker: "SAP.XETRA", vendor_symbol: "SAP.XETRA" }] };
+    } } as never;
+    expect(await loadSubjects(db)).toEqual([{ ticker: "SAP.XETRA", vendorSymbol: "SAP.XETRA" }]);
+    expect(sql[1]).toContain("vendor_symbol=i.ticker");
+  });
+});
 
 describe("EODHD fundamentals parsing", () => {
   it("uses report dates for revenue, EPS and shares; ignores future and undated rows", () => {

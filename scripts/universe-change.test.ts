@@ -17,6 +17,8 @@ describe("universe change", () => {
     expect(() => parseChange(["add", "ABC", "--date", "2026-02-30", "--reason", "Review", "--actor", "owner"])).toThrow();
     expect(() => parseChange(["remove", "ABC", "--date", "2026-10-12", "--reason", " ", "--actor", "owner"])).toThrow();
     expect(parseChange(["remove", "abc", "--date", "2026-10-12", "--reason", "No longer tracked", "--actor", "owner"]).ticker).toBe("ABC");
+    expect(() => parseChange(["add", "SAP", "--exchange", "XETRA", "--date", "2026-10-12", "--name", "SAP", "--sector", "Tech", "--list", "extended", "--criteria-version", "v1", "--reason", "Review", "--actor", "owner"])).toThrow(/exchange suffix/);
+    expect(parseChange(["add", "SAP.XETRA", "--exchange", "XETRA", "--date", "2026-10-12", "--name", "SAP", "--sector", "Tech", "--list", "extended", "--criteria-version", "v1", "--reason", "Review", "--actor", "owner"]).exchange).toBe("XETRA");
   });
 });
 

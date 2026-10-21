@@ -72,14 +72,14 @@ export async function promoteToCore(db: Pick<pg.Pool, "connect">, change: { tick
   try {
     await client.query("BEGIN");
     await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`universe:${change.ticker}`]);
-    const current = await client.query<{ id: string; list: string; tier: number | null; valid_from: string }>(
-      "SELECT id,list,tier,valid_from::text FROM universe_membership WHERE ticker=$1 AND valid_to IS NULL FOR UPDATE", [change.ticker]);
+    const current = await client.query<{ id: string; list: string; tier: number | null; valid_from: string; exchange: string }>(
+      "SELECT id,list,tier,valid_from::text,exchange FROM universe_membership WHERE ticker=$1 AND valid_to IS NULL FOR UPDATE", [change.ticker]);
     const row = current.rows[0];
     if (current.rows.length !== 1 || row.list !== COLLECT_ONLY_LIST || change.date <= row.valid_from) { await client.query("ROLLBACK"); return false; }
     await client.query("UPDATE universe_membership SET valid_to=$2,removed_reason=$3,removed_by=$4 WHERE id=$1", [row.id, change.date, "promoted to core", PROMOTE.actor]);
     await client.query("UPDATE instruments SET source='guide' WHERE ticker=$1", [change.ticker]);
-    await client.query(`INSERT INTO universe_membership(ticker,list,tier,valid_from,reason,criteria_version,added_by)
-      VALUES ($1,'core',$2,$3,$4,$5,$6)`, [change.ticker, row.tier, change.date, change.reason, CRITERIA_VERSION, PROMOTE.actor]);
+    await client.query(`INSERT INTO universe_membership(ticker,list,tier,valid_from,reason,criteria_version,added_by,exchange)
+      VALUES ($1,'core',$2,$3,$4,$5,$6,$7)`, [change.ticker, row.tier, change.date, change.reason, CRITERIA_VERSION, PROMOTE.actor, row.exchange]);
     await client.query("COMMIT");
     return true;
   } catch (error) { await client.query("ROLLBACK").catch(() => undefined); throw error; }

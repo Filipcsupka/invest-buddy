@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { liquidityReason, loadSecProfile, nameExclusion, profileExclusion, type SecProfile } from "./discovery-quality";
 import { DISCOVERY } from "./discovery-config";
-import { preScreenMa200, profileFilter, screenDiscoveryShortlist, shortlistCandidates, type DiscoveryCandidate, type QualityCheck } from "./discovery";
+import { nonCommonStockReason, preScreenMa200, profileFilter, screenDiscoveryShortlist, shortlistCandidates, type DiscoveryCandidate, type QualityCheck } from "./discovery";
 import type { OHLCV } from "../engine/types";
 
 /** Fixtures for the weak names the 2026-10-09 manual run stored (TXO, SDSYA, BDCO) and a mid-cap growth name. */
@@ -44,6 +44,10 @@ describe("name exclusions", () => {
   ])("excludes %s %s", (symbol, name, reason) => { expect(nameExclusion(symbol, name)).toBe(reason); });
   it("passes ordinary operating companies", () => {
     for (const [symbol, name] of [["GRWT", GROW.name], ["VRT", "Vertiv Holdings Co"], ["MOD", "Modine Manufacturing Co"], ["BRK.B", "Berkshire Hathaway Inc"], ["ALP", "Alpine Summit Corp"]]) expect(nameExclusion(symbol, name)).toBeNull();
+  });
+  it("does not mistake the Prague exchange suffix for preferred shares", () => {
+    expect(nonCommonStockReason("CEZ.PR", "PR")).toBeNull();
+    expect(nonCommonStockReason("CEZ.P.PR", "PR")).toBe("preferred-share symbol");
   });
   it("is applied before the cut so lower ranks fill the shortlist", () => {
     const { shortlist, skipped } = shortlistCandidates([TXO, SDSYA, GROW], new Set(), 2);

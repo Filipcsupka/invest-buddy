@@ -37,8 +37,9 @@ export async function loadSubjects(db: Pick<pg.Pool, "query">, only?: string[]):
     COALESCE(ids.vendor_symbols->>'eodhd', s.vendor_symbol) AS vendor_symbol
     FROM instruments i
     LEFT JOIN instrument_ids ids ON ids.ticker=i.ticker AND ids.valid_to IS NULL
-    LEFT JOIN LATERAL (SELECT vendor_symbol FROM symbols WHERE code=i.ticker AND NOT delisted
-      ORDER BY CASE WHEN exchange='US' THEN 0 ELSE 1 END, exchange LIMIT 1) s ON true
+    LEFT JOIN LATERAL (SELECT vendor_symbol FROM symbols WHERE NOT delisted AND
+      (vendor_symbol=i.ticker OR (exchange='US' AND code=i.ticker))
+      ORDER BY CASE WHEN vendor_symbol=i.ticker THEN 0 ELSE 1 END, exchange LIMIT 1) s ON true
     WHERE i.ticker=ANY($1::text[]) ORDER BY i.ticker`, [universe]);
   const missing = result.rows.filter((row) => !row.vendor_symbol);
   if (missing.length) throw new Error(`Missing EODHD symbol for ${missing.map((row) => row.ticker).join(", ")}; run symbols:sync or set instrument_ids.vendor_symbols.eodhd`);

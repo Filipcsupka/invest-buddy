@@ -1,14 +1,16 @@
 /** Pure universe selection (D35). No I/O: the script gathers inputs, this module ranks and explains. */
 import { createHash } from "node:crypto";
 import { UNCLASSIFIED } from "./sector";
+import { marketIdentity, UNIVERSE_EXCHANGES } from "./market";
 
-export const CRITERIA_VERSION = "d35-2026-10-draft";
+export const CRITERIA_VERSION = "p6-market-2026-10-draft";
 
 export const UNIVERSE_CRITERIA = {
   target: 150,
   minRevenueQuarters: 4,
-  minPrice: 5,
-  minAvgDollarVolume: 10_000_000,
+  minPriceUsd: 5,
+  minAvgDollarVolumeUsd: 10_000_000,
+  minMarketCapUsd: 300_000_000,
   minBarDays: 50,
   growthFirstPct: 15,
   sectorCapPct: 25,
@@ -18,16 +20,21 @@ export type UniverseCriteria = { [K in keyof typeof UNIVERSE_CRITERIA]: number }
 export type ReasonCode =
   | "not_common_stock" | "foreign_filer" | "filer_unknown" | "no_revenue_history" | "short_revenue_history"
   | "no_growth_data" | "growth_not_positive" | "no_price_data" | "short_bar_history" | "price_below_min"
-  | "volume_below_floor" | "duplicate_filer" | "sector_cap" | "below_cut";
+  | "volume_below_floor" | "market_cap_unknown" | "market_cap_below_floor" | "fx_unavailable" | "unsupported_exchange"
+  | "duplicate_filer" | "sector_cap" | "below_cut";
 
 export type Candidate = {
   ticker: string; name: string; sector: string; cik: number | null;
+  /** Internal instrument key may be exchange-qualified; exchange identifies the actual listing. */
+  exchange?: string; currency?: string; vendorSymbol?: string | null; usdPerUnit?: number | null; marketCapUsd?: number | null; securityType?: string | null;
   /** SEC form types seen for this company (filing_watch, fundamentals_pit). */
   forms: string[];
   core: boolean;
   revenueQuarters: number;
   /** Latest quarterly revenue against the same quarter a year earlier, in percent. */
   yoyGrowthPct: number | null;
+  /** Previous quarter's year-over-year growth, when eight dated quarters exist. */
+  priorYoyGrowthPct?: number | null;
   lastClose: number | null;
   avgDollarVolume50: number | null;
   barDays: number;
@@ -43,10 +50,14 @@ export const DUPLICATE_FILERS: Readonly<Record<string, { of: string; note: strin
 };
 
 const NON_COMMON_NAME = /\b(warrants?|units?|rights?|preferred|depositary|notes|etf|trust)\b/i;
-const COMMON_TICKER = /^[A-Z]{1,5}([.-][A-C])?$/;
+const COMMON_CODE = /^[A-Z0-9]{1,12}([.-][A-Z0-9]{1,3})?$/;
 
-export function isCommonStock(c: Pick<Candidate, "ticker" | "name">): boolean {
-  return COMMON_TICKER.test(c.ticker) && !NON_COMMON_NAME.test(c.name);
+export function isCommonStock(c: Pick<Candidate, "ticker" | "name" | "exchange" | "securityType" | "vendorSymbol">): boolean {
+  const exchange = c.exchange ?? "US";
+  const code = c.ticker.endsWith(`.${exchange}`) ? c.ticker.slice(0, -(exchange.length + 1)) : c.ticker;
+  return UNIVERSE_EXCHANGES.some((item) => item === exchange) && (exchange === "US" || c.ticker.endsWith(`.${exchange}`))
+    && COMMON_CODE.test(code) && !NON_COMMON_NAME.test(c.name)
+    && (!c.vendorSymbol || !!c.securityType) && (!c.securityType || /^(common stock|equity)$/i.test(c.securityType));
 }
 
 export function filerType(forms: string[]): "domestic" | "foreign" | "unknown" {
@@ -58,19 +69,26 @@ export function filerType(forms: string[]): "domestic" | "foreign" | "unknown" {
 
 /** First failed criterion, or null. Order is fixed so reason codes are stable. */
 export function failedCriterion(c: Candidate, k: UniverseCriteria): ReasonCode | null {
+  if (!UNIVERSE_EXCHANGES.some((item) => item === (c.exchange ?? "US"))) return "unsupported_exchange";
   if (!isCommonStock(c)) return "not_common_stock";
-  if (DUPLICATE_FILERS[c.ticker]) return "duplicate_filer";
-  const filer = filerType(c.forms);
-  if (filer === "foreign") return "foreign_filer";
-  if (filer === "unknown") return "filer_unknown";
+  if ((c.exchange ?? "US") === "US") {
+    if (DUPLICATE_FILERS[c.ticker.replace(/\.US$/, "")]) return "duplicate_filer";
+    const filer = filerType(c.forms);
+    if (filer === "foreign") return "foreign_filer";
+    if (filer === "unknown") return "filer_unknown";
+  }
   if (c.revenueQuarters === 0) return "no_revenue_history";
   if (c.revenueQuarters < k.minRevenueQuarters) return "short_revenue_history";
   if (c.yoyGrowthPct === null) return "no_growth_data";
   if (c.yoyGrowthPct <= 0) return "growth_not_positive";
   if (c.lastClose === null || c.avgDollarVolume50 === null) return "no_price_data";
   if (c.barDays < k.minBarDays) return "short_bar_history";
-  if (c.lastClose <= k.minPrice) return "price_below_min";
-  if (c.avgDollarVolume50 <= k.minAvgDollarVolume) return "volume_below_floor";
+  const fx = c.usdPerUnit ?? (c.currency === undefined || c.currency === "USD" ? 1 : null);
+  if (fx === null || !Number.isFinite(fx) || fx <= 0) return "fx_unavailable";
+  if (c.lastClose * fx <= k.minPriceUsd) return "price_below_min";
+  if (c.avgDollarVolume50 * fx <= k.minAvgDollarVolumeUsd) return "volume_below_floor";
+  if (c.marketCapUsd === null || c.marketCapUsd === undefined) return "market_cap_unknown";
+  if (c.marketCapUsd <= k.minMarketCapUsd) return "market_cap_below_floor";
   return null;
 }
 
@@ -79,7 +97,12 @@ const byTicker = (a: { ticker: string }, b: { ticker: string }) => (a.ticker < b
 export function selectUniverse(input: Candidate[], overrides: Partial<UniverseCriteria> = {}): Selection {
   const k: UniverseCriteria = { ...UNIVERSE_CRITERIA, ...overrides };
   const seen = new Set<string>();
-  const all = [...input].sort(byTicker).filter((c) => !seen.has(c.ticker) && seen.add(c.ticker));
+  const all = [...input].sort(byTicker).filter((c) => {
+    const key = marketIdentity(c.ticker, c.exchange);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
   const sectorCap = Math.floor((k.target * k.sectorCapPct) / 100);
   const sectorCount = new Map<string, number>();
   const bump = (sector: string) => sectorCount.set(sector, (sectorCount.get(sector) ?? 0) + 1);
@@ -102,7 +125,7 @@ export function selectUniverse(input: Candidate[], overrides: Partial<UniverseCr
   const isGrowth = (c: Candidate) => (c.yoyGrowthPct ?? 0) > k.growthFirstPct;
   eligible.sort((a, b) => Number(isGrowth(b)) - Number(isGrowth(a))
     || (b.yoyGrowthPct ?? 0) - (a.yoyGrowthPct ?? 0)
-    || (b.avgDollarVolume50 ?? 0) - (a.avgDollarVolume50 ?? 0)
+    || (b.avgDollarVolume50 ?? 0) * (b.usdPerUnit ?? 1) - (a.avgDollarVolume50 ?? 0) * (a.usdPerUnit ?? 1)
     || byTicker(a, b));
   for (const c of eligible) {
     const reason: ReasonCode | null = selected.length >= k.target ? "below_cut"
@@ -146,9 +169,9 @@ const csvCell = (v: string | number | null) => {
 const num = (v: number | null, digits: number) => (v === null ? null : v.toFixed(digits));
 
 export function selectedCsv(s: Selection): string {
-  const head = "rank,ticker,name,sector,list,group,yoy_growth_pct,avg_dollar_volume_50d,last_close,revenue_quarters,cik,notes";
-  const rows = s.selected.map((r) => [r.rank, r.ticker, r.name, r.sector, r.list, r.group, num(r.yoyGrowthPct, 2), num(r.avgDollarVolume50, 0),
-    num(r.lastClose, 2), r.revenueQuarters, r.cik, r.notes.join("; ")].map(csvCell).join(","));
+  const head = "rank,ticker,exchange,currency,name,sector,list,group,yoy_growth_pct,avg_local_volume_50d,last_local_close,market_cap_usd,revenue_quarters,cik,notes";
+  const rows = s.selected.map((r) => [r.rank, r.ticker, r.exchange ?? "US", r.currency ?? "USD", r.name, r.sector, r.list, r.group, num(r.yoyGrowthPct, 2), num(r.avgDollarVolume50, 0),
+    num(r.lastClose, 2), num(r.marketCapUsd ?? null, 0), r.revenueQuarters, r.cik, r.notes.join("; ")].map(csvCell).join(","));
   return `${[head, ...rows].join("\n")}\n`;
 }
 
@@ -163,6 +186,7 @@ export function reviewMarkdown(s: Selection, asOf: string, hashes: { selected: s
     `# Universe selection review (${CRITERIA_VERSION}), data as of ${asOf}`,
     "",
     "Dry run. Nothing was written to the database. Thresholds are placeholders until the owner approves `docs/universe-criteria.md`.",
+    "Internal review only. EODHD-derived prices, volumes and fundamentals have no verified public display rights.",
     "",
     `- Target ${s.criteria.target}, selected ${s.selected.length}: ${s.selected.filter((r) => r.list === "core").length} core, ${adds.length} proposed adds (${adds.filter((r) => r.group === "growth").length} above ${s.criteria.growthFirstPct}% growth).`,
     `- Excluded ${s.excluded.length}. Sector cap ${s.sectorCap} names.`,

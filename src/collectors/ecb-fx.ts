@@ -9,11 +9,14 @@ export const ECB_HIST_90D_URL = "https://www.ecb.europa.eu/stats/eurofxref/eurof
 export const ECB_HIST_URL = "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist.xml";
 
 /** Currency code to stored series id. Rate is units of the currency per 1 EUR. */
-export const ECB_SERIES: Readonly<Record<string, string>> = { USD: "ECB_EURUSD", CZK: "ECB_EURCZK", GBP: "ECB_EURGBP" };
+export const ECB_SERIES: Readonly<Record<string, string>> = {
+  USD: "ECB_EURUSD", CZK: "ECB_EURCZK", GBP: "ECB_EURGBP", CHF: "ECB_EURCHF",
+  PLN: "ECB_EURPLN", SEK: "ECB_EURSEK", NOK: "ECB_EURNOK", DKK: "ECB_EURDKK",
+};
 export const ECB_SERIES_IDS: readonly string[] = Object.values(ECB_SERIES);
 
 /**
- * Parses the ECB eurofxref XML (daily, 90 day or full history) into observations for USD, CZK and GBP. Only dates the ECB
+ * Parses the ECB eurofxref XML (daily, 90 day or full history) into supported currency observations. Only dates the ECB
  * published are returned, so weekends and TARGET holidays stay empty. The ECB does not revise, so the vintage is the observation date.
  */
 export function parseEcbFx(xml: string): MacroObservation[] {
