@@ -3,6 +3,17 @@ const US_EXCHANGES = new Set(["NYSEARCA", "NASDAQ", "NYSE", "BATS", "AMEX", "IEX
 const text = (value) => typeof value === "string" && value.trim() ? value.trim() : null;
 const number = (value) => value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value)) ? Number(value) : null;
 
+function expensePercent(etf) {
+  const ratio = number(etf.NetExpenseRatio), ongoing = number(etf.Ongoing_Charge);
+  const ratioPct = ratio !== null && ratio >= 0 && ratio <= 0.1 ? ratio * 100 : null;
+  const ongoingPct = ongoing !== null && ongoing >= 0 && ongoing <= 10 ? ongoing : null;
+  if (ratio !== null && ongoing !== null) return ratioPct !== null && ongoingPct !== null && Math.abs(ratioPct - ongoingPct) <= 0.01 ? ongoingPct : null;
+  // A lone ratio of 1–10% may be a fraction or an already-percent value.
+  if (ratio !== null) return ratio < 0.01 ? ratioPct : null;
+  // A tiny lone ongoing charge may also be a fraction sent in a percent field.
+  return ongoingPct === 0 || (ongoingPct !== null && ongoingPct >= 0.01) ? ongoingPct : null;
+}
+
 export function vendorSymbol(row) {
   if (typeof row.vendorSymbol === "string" && /^[A-Z0-9.-]+\.[A-Z0-9]+$/.test(row.vendorSymbol)) return row.vendorSymbol;
   if (US_EXCHANGES.has(row.exchange) && /^[A-Z0-9][A-Z0-9.-]{0,11}$/.test(row.symbol ?? "")) return `${row.symbol}.US`;
@@ -11,10 +22,7 @@ export function vendorSymbol(row) {
 
 export function mapFundamentals(row, symbol, data) {
   const etf = data?.ETF_Data ?? {}, general = data?.General ?? {};
-  const ratio = number(etf.NetExpenseRatio), ongoing = number(etf.Ongoing_Charge);
-  const charge = US_EXCHANGES.has(row.exchange) ? ratio !== null ? ratio * 100 : ongoing : ongoing ?? (ratio === null ? null : ratio * 100);
-  // EODHD documents NetExpenseRatio as a fraction and Ongoing_Charge as a percent.
-  const terPct = charge !== null && charge >= 0 && charge <= 10 ? charge : null;
+  const terPct = expensePercent(etf);
   const assets = number(etf.TotalAssets);
   const allocation = etf.Asset_Allocation ?? {};
   const classes = Object.entries(allocation).map(([kind, value]) => [
@@ -23,8 +31,7 @@ export function mapFundamentals(row, symbol, data) {
   ]).filter(([kind, value]) => kind && value !== null);
   const totals = Object.groupBy(classes, ([kind]) => kind);
   const assetClass = Object.entries(totals).find(([, values]) => values.reduce((sum, [, value]) => sum + value, 0) > 50)?.[0] ?? null;
-  const regions = Object.entries(etf.World_Regions ?? {}).map(([region, value]) => [region, number(value?.["Equity_%"])]).filter(([, value]) => value !== null).sort((a, b) => b[1] - a[1]);
-  const region = regions[0]?.[1] > 50 ? regions[0][0] : null;
+  const region = null;
   const count = number(etf.Holdings_Count);
   return {
     listingKey: row.listingKey, isin: [etf.ISIN, general.ISIN, row.isin].map(text).find((value) => value && /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(value)) ?? null,
@@ -51,11 +58,18 @@ export async function enrichEodhd(items, { apiKey, request = fetch, dryRun = fal
     if (!response.ok) throw new Error(`EODHD fundamentals ${symbol}: HTTP ${response.status}`);
     cache.set(symbol, await response.json());
   }
-  for (const { row, symbol } of mapped) {
+  const results = mapped.map(({ row, symbol }) => {
     const returned = text(cache.get(symbol)?.ETF_Data?.ISIN) ?? text(cache.get(symbol)?.General?.ISIN);
-    if (row.isin && returned && row.isin !== returned) throw new Error(`EODHD ISIN mismatch for ${row.listingKey}`);
     const type = text(cache.get(symbol)?.General?.Type);
-    if (type && type.toUpperCase() !== "ETF") throw new Error(`EODHD ${symbol}: expected ETF, got ${type}`);
-  }
-  return { items: mapped.map(({ row, symbol }) => mapFundamentals(row, symbol, cache.get(symbol))), calls };
+    if (row.isin && returned && row.isin !== returned) {
+      log(`etf-enrich ${row.listingKey}: vendor ISIN mismatch; marked incomplete`);
+      return mapFundamentals(row, symbol, undefined);
+    }
+    if (type && type.toUpperCase() !== "ETF") {
+      log(`etf-enrich ${row.listingKey}: vendor type ${type}; marked incomplete`);
+      return mapFundamentals(row, symbol, undefined);
+    }
+    return mapFundamentals(row, symbol, cache.get(symbol));
+  });
+  return { items: results, calls };
 }

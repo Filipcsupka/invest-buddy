@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { extractJson, getToken } from "./run-scan.mjs";
 import { codexResearchAdapter } from "./research-adapters.mjs";
 import { schemaErrors } from "./research-validate.mjs";
-import { enrichEodhd } from "./eodhd-etf-enrich.mjs";
+import { enrichEodhd, vendorSymbol } from "./eodhd-etf-enrich.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const schemaPath = join(here, "schema", "etf-enrich.schema.json");
@@ -35,13 +35,23 @@ export async function execute(opts, { adapter = codexResearchAdapter, env = proc
   if (env.RESEARCH_ENABLED === "off") { log("etf-enrich: skipped by RESEARCH_ENABLED=off"); return { batches: 0, failed: 0 }; }
   const source = env.ETF_ENRICH_SOURCE || "codex";
   if (!["codex", "eodhd"].includes(source)) throw new Error("ETF_ENRICH_SOURCE must be eodhd or codex");
+  const maxCalls = Number(env.ETF_EODHD_MAX_CALLS ?? 500);
+  if (source === "eodhd" && (!Number.isInteger(maxCalls) || maxCalls < 10 || maxCalls % 10 !== 0)) throw new Error("ETF_EODHD_MAX_CALLS must be a positive multiple of 10");
   const token = env.INGEST_TOKEN || getToken(); if (!token) throw new Error("INGEST_TOKEN is required");
   if (source === "codex") { const auth = adapter.available?.(env); if (auth && !auth.ok) throw new Error(auth.reason); }
   const base = opts.baseUrl.replace(/\/$/, "");
   const response = await request(`${base}/api/ingest/etf-catalog/pending?limit=${opts.limit}`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(60_000) });
   if (!response.ok) throw new Error(`ETF pending HTTP ${response.status}`);
   const { items } = await response.json(); if (!Array.isArray(items)) throw new Error("ETF pending response has no items array");
-  let failed = 0; const batches = chunks(items); const cache = new Map();
+  const selected = []; const symbols = new Set();
+  for (const row of items) {
+    const symbol = source === "eodhd" ? vendorSymbol(row) : null;
+    if (symbol && !symbols.has(symbol) && symbols.size * 10 >= maxCalls) break;
+    selected.push(row);
+    if (symbol) symbols.add(symbol);
+  }
+  if (source === "eodhd" && selected.length < items.length) log(`etf-enrich eodhd: stopped at ${maxCalls}-call cap; ${items.length - selected.length} rows deferred`);
+  let failed = 0; const batches = chunks(selected); const cache = new Map();
   mkdirSync(opts.outDir, { recursive: true });
   for (const [index, batch] of batches.entries()) {
     const workDir = mkdtempSync(join(tmpdir(), "invest-etf-enrich-"));

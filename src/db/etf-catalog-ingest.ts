@@ -37,9 +37,9 @@ export async function ingestEnrichment(db: CatalogDb, rows: Enrichment[]): Promi
       const ok = enrichmentComplete(row);
       const result = await client.query(`UPDATE etf_catalog SET issuer=$2,asset_class=$3,region=$4,theme=$5,tracked_index=$6,ter_pct=$7,
         aum_usd_m=$8,domicile=$9,replication=$10,distribution=$11,
-        ucits=CASE WHEN $15='eodhd' THEN $12 ELSE COALESCE($12,ucits) END,source_url=$13,
+        ucits=COALESCE($12,ucits),source_url=$13,
         enrichment_status=$14,enrichment_source=$15,holdings_count=$16,
-        enrich_attempts=enrich_attempts+CASE WHEN $14='failed' THEN 1 ELSE 0 END,
+        enrich_attempts=enrich_attempts+CASE WHEN $14 IN ('failed','eodhd_unmapped','eodhd_incomplete') THEN 1 ELSE 0 END,
         enriched_at=CASE WHEN $14='ok' THEN now() ELSE enriched_at END,updated_at=now()
         WHERE listing_key=$1 AND enrichment_status<>'ok' AND enrich_attempts<3 RETURNING listing_key`,
       [row.listingKey,row.issuer,row.assetClass,row.region,row.theme,row.trackedIndex,row.terPct,row.aumUsdM,row.domicile,row.replication,row.distribution,row.ucits,row.sourceUrl,
