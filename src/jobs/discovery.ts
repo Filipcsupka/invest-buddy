@@ -26,6 +26,7 @@ import { deliverNewCandidates, loadWeekCandidates } from "../notify/discovery";
 import { flags } from "../config/flags";
 import { loadCandidates } from "../universe/candidates";
 import { knownUsdPerUnit } from "../universe/market";
+import { instrumentRegion } from "../universe/region";
 
 export interface CandidateSource { kind: "edgar" | "price_volume" | "theme" | "frames" | "pool" | "eodhd" | "clinical_trial" | "ownership" | "thirteenf"; url: string; detail: string; growth?: { current: number; prior: number } }
 /** Returns why a name fails the quality floor (market cap, dollar volume), or null. */
@@ -396,8 +397,26 @@ export async function preScreenMa200(rows: DiscoveryCandidate[], date: string, b
   return { kept: kept.slice(0, limit), dropped, skipped, calls, stoppedByLimit: stopped };
 }
 
+export interface DiscoveryMacro { growthSectorRotation: boolean | null; dataTailwind: boolean | null }
+type StoredMacroValues = { dataTailwind?: unknown; sectorRotationIntoGrowth?: unknown };
+/** macro_findings.data: the top-level values are the US outcome, `regions` holds the others (src/jobs/macro.ts). */
+export type StoredMacro = StoredMacroValues & { regions?: Record<string, StoredMacroValues | undefined> | null };
+
+/**
+ * Macro inputs per candidate from the latest stored macro_findings data. US listings read the top-level (US) values; any other region
+ * reads its own regional outcome, and is unknown when there is none. It never borrows the US values.
+ */
+export function candidateMacro(data: StoredMacro | null | undefined): (row: DiscoveryCandidate) => DiscoveryMacro {
+  const bool = (value: unknown) => typeof value === "boolean" ? value : null;
+  return (row) => {
+    const region = instrumentRegion(row.symbol, row.exchange);
+    const values = region === "US" ? data : data?.regions?.[region];
+    return { growthSectorRotation: bool(values?.sectorRotationIntoGrowth), dataTailwind: bool(values?.dataTailwind) };
+  };
+}
+
 export async function screenCandidates(rows: DiscoveryCandidate[], date: string, barsFor: (symbol: string) => Promise<OHLCV[]>,
-  macro: { growthSectorRotation: boolean | null; dataTailwind: boolean | null }, benchmarkClose: number | null | ((date: string) => Promise<number | null>),
+  macro: DiscoveryMacro | ((row: DiscoveryCandidate) => DiscoveryMacro), benchmarkClose: number | null | ((date: string) => Promise<number | null>),
   notPassed: { symbol: string; reason: string }[] = [], reject?: QualityCheck): Promise<DiscoveryCandidate[]> {
   const screened: DiscoveryCandidate[] = [];
   for (const row of rows) {
@@ -410,7 +429,7 @@ export async function screenCandidates(rows: DiscoveryCandidate[], date: string,
       revenueAccelerating: growth ? growth.current > growth.prior : null, revenueDeclining: growth ? growth.current < 0 : null,
       epsBeat: null, guidanceRaised: null, earningsMissAndGuidanceCut: null, productCatalyst: null,
       insiderOrInstitutionalAccumulation: null, noRevenue: growth ? false : null, memePump: null,
-    }, macro });
+    }, macro: typeof macro === "function" ? macro(row) : macro });
     if (result.invalidReasons.length) { notPassed.push({ symbol: row.symbol, reason: `invalid data: ${result.invalidReasons.join("; ")}` }); continue; }
     if (result.rejectionReasons.length) { notPassed.push({ symbol: row.symbol, reason: `rejected: ${result.rejectionReasons.join("; ")}` }); continue; }
     if (result.total < 12) { notPassed.push({ symbol: row.symbol, reason: `score ${result.total} below 12` }); continue; }
@@ -424,7 +443,7 @@ export async function screenCandidates(rows: DiscoveryCandidate[], date: string,
 }
 
 export async function screenDiscoveryShortlist(rows: DiscoveryCandidate[], date: string, barsFor: (symbol: string) => Promise<OHLCV[]>,
-  macro: { growthSectorRotation: boolean | null; dataTailwind: boolean | null }, benchmarkClose: number | null | ((date: string) => Promise<number | null>), reject?: QualityCheck) {
+  macro: DiscoveryMacro | ((row: DiscoveryCandidate) => DiscoveryMacro), benchmarkClose: number | null | ((date: string) => Promise<number | null>), reject?: QualityCheck) {
   const screened: DiscoveryCandidate[] = [];
   const skipped: { symbol: string; reason: string }[] = [];
   const failures: { symbol: string; reason: string }[] = [];
@@ -606,9 +625,8 @@ async function main() {
       if (!cache.has(symbol)) cache.set(symbol, fetchBars(symbol));
       return cache.get(symbol)!;
     };
-    const macroRow = await pool.query<{ data_tailwind: boolean | null; rotation: boolean | null }>(`SELECT (data->>'dataTailwind')::boolean AS data_tailwind,
-      (data->>'sectorRotationIntoGrowth')::boolean AS rotation FROM macro_findings WHERE as_of <= $1::date ORDER BY as_of DESC LIMIT 1`, [date]);
-    const macro = { growthSectorRotation: macroRow.rows[0]?.rotation ?? null, dataTailwind: macroRow.rows[0]?.data_tailwind ?? null };
+    const macroRow = await pool.query<{ data: StoredMacro }>("SELECT data FROM macro_findings WHERE as_of <= $1::date ORDER BY as_of DESC LIMIT 1", [date]);
+    const macro = candidateMacro(macroRow.rows[0]?.data);
     const benchmarkClose = async (signalDate: string) => {
       const row = await pool.query<{ close: string }>("SELECT close FROM daily_bars WHERE ticker='SPY' AND bar_date=$1::date", [signalDate]);
       return row.rows[0] ? Number(row.rows[0].close) : null;

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import universe from "../../scanner/universe.json";
 import { parseSubmissions, refreshMaster } from "./master-refresh";
 import { loadStoredCiks, loadVendorSymbols } from "./security-master";
+import { REGION_BENCHMARKS } from "../universe/region";
 
 describe("parseSubmissions", () => {
   it("reads SIC, fiscal year end, state and exchange, and drops malformed values", () => {
@@ -38,7 +39,9 @@ describe("security master refresh (Postgres)", () => {
   it.skipIf(!process.env.TEST_DATABASE_URL)("seeds 37 current rows with SQ mapped to XYZ, fills every CIK, flags SPY as etf, and a second run changes nothing", () => inRollback(async (pool) => {
     const seeded = await pool.query("SELECT ticker, instrument_type, cik FROM instrument_ids WHERE valid_to IS NULL");
     // Not a count of `instruments`: other tests leave extra rows there.
-    const expected = [...universe.instruments.map((item) => item.symbol), "SPY"].sort();
+    // Benchmarks: SPY and, from migration 101, the European EXSA.XETRA. Both are ETFs, which the SEC refresh skips.
+    const benchmarks = Object.values(REGION_BENCHMARKS);
+    const expected = [...universe.instruments.map((item) => item.symbol), ...benchmarks].sort();
     expect(seeded.rows.map((r) => r.ticker).sort()).toEqual(expected);
     expect(seeded.rows.find((r) => r.ticker === "SPY")?.instrument_type).toBe("etf");
     expect((await loadVendorSymbols(pool, "twelvedata")).SQ).toBe("XYZ");
@@ -47,7 +50,7 @@ describe("security master refresh (Postgres)", () => {
     const fx = secFixture();
     const first = await refreshMaster(pool, { get: fx.get, today: TODAY });
     expect(first.failures).toEqual([]);
-    expect(first.checked).toBe(expected.length - 1);
+    expect(first.checked).toBe(expected.length - benchmarks.length);
     const after = await pool.query("SELECT ticker, instrument_type, cik, sic, fiscal_year_end FROM instrument_ids WHERE valid_to IS NULL ORDER BY ticker");
     expect(after.rowCount).toBe(seeded.rowCount);
     for (const row of after.rows) {

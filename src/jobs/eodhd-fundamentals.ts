@@ -12,6 +12,7 @@ import { freshnessDays } from "../data/evidence";
 import { putSnapshot } from "../data/raw-store";
 import { runLoggedJob } from "./job-log";
 import { loadUniverse } from "../db/universe";
+import { eodhdClassification } from "../universe/sector";
 
 const SOURCE = "eodhd";
 const DAY = 86_400_000;
@@ -54,6 +55,19 @@ async function states(db: Pick<pg.Pool, "query">): Promise<Map<string, RefreshSt
     lastExpectedReportDate: row.last_expected_report_date }]));
 }
 
+/**
+ * Stores General.Sector and General.Industry on the listing's symbols row. `sector_observed_on` keeps the day the current pair was
+ * first stored, so a score date before that day does not read it. Only a non-null field overwrites; a missing one keeps the stored
+ * value, so a payload without either field (a narrow filter) changes nothing.
+ */
+export async function storeClassification(db: Pick<pg.Pool, "query">, vendorSymbol: string, value: { sector: string | null; industry: string | null }, today: string) {
+  if (!value.sector && !value.industry) return;
+  await db.query(`UPDATE symbols SET sector=COALESCE($2,sector),industry=COALESCE($3,industry),
+    sector_observed_on=CASE WHEN sector IS NOT DISTINCT FROM COALESCE($2,sector) AND industry IS NOT DISTINCT FROM COALESCE($3,industry) AND sector_observed_on IS NOT NULL
+      THEN sector_observed_on ELSE $4::date END
+    WHERE vendor_symbol=$1`, [vendorSymbol, value.sector || null, value.industry || null, today]);
+}
+
 export async function runEodhdFundamentals(db: pg.Pool | null, api: FundamentalsClient, options: RunOptions = {}) {
   const now = options.now ?? new Date();
   const today = now.toISOString().slice(0, 10);
@@ -89,6 +103,7 @@ export async function runEodhdFundamentals(db: pg.Pool | null, api: Fundamentals
       if (db && !options.dryRun) {
         await putSnapshot(db, { sourceId: SOURCE, key: `fundamentals:${row.vendorSymbol}`, body: JSON.stringify(payload), contentType: "application/json", fetchedAt: now });
         await insertFundamentals(db, parsed.rows, SOURCE);
+        await storeClassification(db, row.vendorSymbol, eodhdClassification(payload.General), today);
         if (parsed.earnings.length) await insertEpsHistory(db, { symbol: row.ticker, ticker: row.vendorSymbol, quarters: parsed.earnings,
           rawBody: JSON.stringify(payload.Earnings?.History ?? {}), fetchedAt: now.toISOString() }, SOURCE);
         const latest = parsed.earnings.filter((item) => item.reportedEps !== null).at(-1);
