@@ -32,3 +32,13 @@
 .group { margin-bottom: 1.75rem; }
 .group h2 { margin-bottom: 0.75rem; }
 @media (max-width: 720px) { .table { min-width: 700px; } }
+.pickGroup { margin-top: 1.5rem; }
+.pickGroup h3 { margin-bottom: 0.5rem; }
+.filters input { min-height: 2.75rem; min-width: 12rem; padding: 0.5rem 0.75rem; border: 1px solid var(--rule-strong); border-radius: var(--radius); background: var(--sheet); color: var(--ink); }
+.filters input:focus-visible, .filters select:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+.catalogTable { min-width: 1700px; }
+.catalogTable th:first-child { min-width: 15rem; }
+.catalogTable td, .catalogTable th { overflow-wrap: anywhere; }
+.pagination { display: flex; justify-content: space-between; gap: 1rem; margin-top: 1rem; }
+.pagination a { min-height: 2.75rem; display: inline-flex; align-items: center; padding: 0.4rem 0.9rem; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--sheet); }
+.facts dd { overflow-wrap: anywhere; }
