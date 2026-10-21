@@ -53,6 +53,8 @@ export const EXPECTED_JOBS: ExpectedJob[] = [
   { cronJob: "research-pipeline", schedule: "40 4 * * 2-6", enabled: true, runJob: null, graceMinutes: 30, note: "shares the job name research-pipeline" },
   { cronJob: "research-notify", schedule: "20 7 * * 2-6", enabled: true, runJob: "research-notify", graceMinutes: 15 },
   { cronJob: "research-deepdive", schedule: "0 0 1 1 *", enabled: false, runJob: null, graceMinutes: 50, note: "shell script, not in job_runs" },
+  { cronJob: "etf-research", schedule: "40 7 * * 1", enabled: true, runJob: null, graceMinutes: 50, note: "scanner script, not in job_runs; ETF facts change slowly, so research runs weekly" },
+  { cronJob: "etf-outcomes", schedule: "50 6 * * *", enabled: true, runJob: "etf-outcomes", graceMinutes: 20 },
   { cronJob: "review-calendar", schedule: "0 11 * * 6", enabled: true, runJob: null, graceMinutes: 110, note: "several containers, not one job name" },
   { cronJob: "thirteenf-q3", schedule: "0 8 20 11 *", enabled: false, runJob: null, graceMinutes: 70, note: "yearly, shares the job name thirteenf" },
   { cronJob: "thirteenf-q4", schedule: "0 8 16 2 *", enabled: false, runJob: null, graceMinutes: 70, note: "yearly, shares the job name thirteenf" },

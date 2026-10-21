@@ -53,7 +53,7 @@ describe("missed jobs", () => {
   it("expects the Monday collect, the daily jobs and the Sunday promotion on a Monday morning", () => {
     const monday = d("2026-10-12T06:00:00Z");
     const good = new Map([...allGood(monday)].map(([k]) => [k, d("2026-10-10T10:00:00Z")]));
-    expect(missedJobs(monday, good, allKnown()).map((f) => f.key).sort()).toEqual(["job-missed:collect", "job-missed:discovery", "job-missed:discovery-auto-promote", "job-missed:earnings-calendar", "job-missed:research-verify", "job-missed:retention", "job-missed:universe-promote"]);
+    expect(missedJobs(monday, good, allKnown()).map((f) => f.key).sort()).toEqual(["job-missed:collect", "job-missed:discovery", "job-missed:discovery-auto-promote", "job-missed:earnings-calendar", "job-missed:etf-outcomes", "job-missed:research-verify", "job-missed:retention", "job-missed:universe-promote"]);
     good.set("collect", d("2026-10-11T23:20:00Z")); // Monday 01:20 local
     good.set("earnings-calendar", d("2026-10-12T04:50:00Z")); // Monday 06:50 local
     good.set("universe-promote", d("2026-10-11T13:05:00Z")); // Sunday 15:05 local
@@ -61,6 +61,7 @@ describe("missed jobs", () => {
     good.set("discovery", d("2026-10-11T07:40:00Z")); // Sunday 09:40 local
     good.set("retention", d("2026-10-12T01:05:00Z")); // Monday 03:05 local
     good.set("research-verify", d("2026-10-12T01:35:00Z")); // Monday 03:35 local
+    good.set("etf-outcomes", d("2026-10-12T04:55:00Z")); // Monday 06:55 local
     expect(missedJobs(monday, good, allKnown())).toEqual([]);
   });
 });
