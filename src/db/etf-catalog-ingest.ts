@@ -88,7 +88,12 @@ export async function refreshShortlist(db: CatalogDb, today: string): Promise<nu
 export async function pendingCatalog(db: CatalogDb, limit: number) {
   const result = await db.query(`SELECT listing_key AS "listingKey",isin,name,mnemonic AS symbol,exchange,trading_currency AS "tradingCurrency" FROM etf_catalog
     WHERE enrichment_status <> 'ok' AND enrich_attempts < 3 AND last_seen >= CURRENT_DATE - 30
-    ORDER BY first_seen,listing_key LIMIT $1`, [limit]); return result.rows;
+    ORDER BY (CASE WHEN name ~* '(\\m[23]x\\M|-1x|leverag|inverse|ultra|short|bear|bull|daily|\\mlev\\M)' THEN -100 ELSE 0 END
+      + CASE instrument_type WHEN 'ETF' THEN 20 ELSE 0 END
+      + CASE WHEN name ~* '^(ishares|ishs|vanguard|vang|xtrackers|xtr|spdr|state street|amundi|amu|am-|ais-|invesco|i7-|ubs|lyxor|mul|wisdomtree|witr|vaneck|jpmorgan|jpm|fidelity|schwab|bnp|dws)' THEN 20 ELSE 0 END
+      + CASE WHEN name ~* '(s&p ?500|s\\+p ?500|msci|world|acwi|nasdaq.?100|n100|stoxx|ftse|total market|emerging|\\mem\\M|europe|dividend|treasury|bond|gold|core)' THEN 15 ELSE 0 END
+      + CASE WHEN exchange IN ('XETR','NYSEARCA','NASDAQ','NYSE','BATS') THEN 5 ELSE 0 END) DESC,
+      first_seen,listing_key LIMIT $1`, [limit]); return result.rows;
 }
 export async function shortlistedCatalog(db: CatalogDb) {
   const result = await db.query(`SELECT listing_key AS "listingKey",isin,name,mnemonic AS symbol,exchange,listing_region AS "listingRegion",trading_currency AS "tradingCurrency",issuer,
