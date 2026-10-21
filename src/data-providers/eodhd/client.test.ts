@@ -36,6 +36,19 @@ describe("EodhdClient", () => {
     expect(client.getCallCosts()["eod-bulk-last-day"]).toBe(102);
   });
 
+  it("requests per-symbol split history for one call", async () => {
+    let url = new URL("https://example.test");
+    const client = new EodhdClient({ apiKey: "test-token", fetch: async (input) => {
+      url = new URL(String(input));
+      return fixture([{ date: "2024-06-10", split: "10.000000/1.000000" }]);
+    } });
+    expect(await client.splits("NVDA.US", { from: "2024-06-10", to: "2024-06-10" })).toEqual([{ date: "2024-06-10", split: "10.000000/1.000000" }]);
+    expect(url.pathname).toBe("/api/splits/NVDA.US");
+    expect(url.searchParams.get("from")).toBe("2024-06-10");
+    expect(url.searchParams.get("to")).toBe("2024-06-10");
+    expect(client.getCallCosts().splits).toBe(1);
+  });
+
   it("routes the other typed endpoints with their filters and documented call costs", async () => {
     const urls: URL[] = [];
     const responses: unknown[] = [eod, fundamentals, earnings, news, form4];

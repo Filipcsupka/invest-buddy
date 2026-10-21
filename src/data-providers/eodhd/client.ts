@@ -1,6 +1,6 @@
 const BASE_URL = "https://eodhd.com/api";
 
-export type EodhdEndpoint = "exchanges-list" | "exchange-symbol-list" | "eod" | "eod-bulk-last-day" | "fundamentals" | "calendar/earnings" | "news" | "sec-filings/form4";
+export type EodhdEndpoint = "exchanges-list" | "exchange-symbol-list" | "eod" | "splits" | "eod-bulk-last-day" | "fundamentals" | "calendar/earnings" | "news" | "sec-filings/form4";
 export type CallCosts = Record<EodhdEndpoint, number>;
 
 export interface Exchange { Name: string; Code: string; OperatingMIC?: string; Country?: string; Currency?: string; CountryISO2?: string; CountryISO3?: string }
@@ -8,6 +8,7 @@ export interface ExchangeSymbol { Code: string; Name: string; Country?: string |
 export interface EodBar { date: string; open: number | null; high: number | null; low: number | null; close: number | null; adjusted_close?: number | null; volume: number | null }
 export interface BulkLastDayBar extends EodBar { code: string; exchange_short_name?: string; prev_close?: number | null; change?: number | null; change_p?: number | null; name?: string; type?: string; MarketCapitalization?: number | null; Beta?: number | null; ema_50d?: number | null; ema_200d?: number | null; hi_250d?: number | null; lo_250d?: number | null; avgvol_14d?: number | null; avgvol_50d?: number | null; avgvol_200d?: number | null }
 export interface BulkSplit { code: string; exchange: string; date: string; split: string }
+export interface Split { date: string; split: string }
 export interface BulkDividend { code: string; exchange: string; date: string; dividend: string; currency?: string | null; declarationDate?: string | null; recordDate?: string | null; paymentDate?: string | null; period?: string | null; unadjustedValue?: string | null }
 export interface Fundamentals {
   General?: { Code?: string; Type?: string; Name?: string; Exchange?: string; CurrencyCode?: string; ISIN?: string | null; CUSIP?: string | null; CIK?: string | null; Sector?: string | null; Industry?: string | null };
@@ -36,7 +37,7 @@ export class EodhdClient {
   private readonly sleep: (ms: number) => Promise<void>;
   private readonly now: () => number;
   private readonly maxRetries: number;
-  private readonly counts: CallCosts = { "exchanges-list": 0, "exchange-symbol-list": 0, eod: 0, "eod-bulk-last-day": 0, fundamentals: 0, "calendar/earnings": 0, news: 0, "sec-filings/form4": 0 };
+  private readonly counts: CallCosts = { "exchanges-list": 0, "exchange-symbol-list": 0, eod: 0, splits: 0, "eod-bulk-last-day": 0, fundamentals: 0, "calendar/earnings": 0, news: 0, "sec-filings/form4": 0 };
 
   constructor(options: EodhdOptions = {}) {
     this.apiKey = options.apiKey ?? process.env.EODHD_API_KEY ?? "";
@@ -83,6 +84,9 @@ export class EodhdClient {
   }
   eod(symbol: string, options: { from?: string; to?: string; period?: "d" | "w" | "m"; order?: "a" | "d"; filter?: string } = {}): Promise<EodBar[]> {
     return this.get("eod", `eod/${encodeURIComponent(symbol)}`, options);
+  }
+  splits(symbol: string, options: { from?: string; to?: string } = {}): Promise<Split[]> {
+    return this.get("splits", `splits/${encodeURIComponent(symbol)}`, options);
   }
   eodBulkLastDay(exchange: string, options?: { type?: "eod"; date?: string; symbols?: string[]; filter?: "extended" }): Promise<BulkLastDayBar[]>;
   eodBulkLastDay(exchange: string, options: { type: "splits"; date?: string }): Promise<BulkSplit[]>;
