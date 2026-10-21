@@ -29,7 +29,7 @@ export const claudeResearchAdapter = {
     return env.CLAUDE_CODE_OAUTH_TOKEN || env.ANTHROPIC_API_KEY || env.CLAUDE_CONFIG_DIR
       ? { ok: true, reason: null } : { ok: false, reason: "Claude auth is unavailable" };
   },
-  async quota() { return null; }, // RS5 owns live quota inspection.
+  async quota() { return null; },
   async run({ prompt, model = "sonnet", maxTurns, timeoutMs, workDir, monitor }) {
     const args = ["-p", "--output-format", "json", "--no-session-persistence", "--permission-mode", "dontAsk", "--tools", "WebSearch,WebFetch", "--allowedTools", "WebSearch,WebFetch", "--max-turns", String(maxTurns), "--model", model];
     let stdout;
@@ -152,7 +152,7 @@ export const codexResearchAdapter = {
   authSource(env = process.env) { return env.OPENAI_API_KEY ? "api" : "codex"; },
   defaultModel(env = process.env) { return env.RESEARCH_CODEX_MODEL || "default"; },
   available(env = process.env) {
-    if (env.OPENAI_API_KEY) return { ok: false, reason: "Codex API spend is unmetered: RESEARCH_MONTHLY_USD cannot be enforced without a documented Codex token price" };
+    if (env.OPENAI_API_KEY) return { ok: true, reason: null };
     if (env.CODEX_ACCESS_TOKEN) {
       let home;
       try {

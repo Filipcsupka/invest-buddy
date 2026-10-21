@@ -17,21 +17,7 @@ export async function dailyTokenUsage(db: Pick<pg.Pool, "query">): Promise<numbe
 
 type ResearchCaps = { monthlyTokens: number; monthlyUsd: number; dailyCalls: number; dailyTokens: number; sharedDailyTokens: number };
 type OverrideCaps = { dailyCalls: number; monthlyCalls: number };
-export async function reserveCall(db: Pick<pg.Pool, "query" | "connect">, call: { id: string; kind: "extract" | "judge" | "research"; agent: "claude" | "codex"; authSource: "subscription" | "api" | "codex"; model: string; caps?: ResearchCaps; overrideCaps?: OverrideCaps }) {
-  if (call.kind === "research") {
-    // No token, call or USD caps. One research call at a time, so overlapping jobs do not race the same subscription.
-    const client = await db.connect();
-    try {
-      await client.query("BEGIN");
-      await client.query("SELECT pg_advisory_xact_lock(77853)");
-      const active = await client.query<{ count: string }>("SELECT count(*)::text AS count FROM ai_budget_calls WHERE kind='research' AND completed_at IS NULL AND created_at > now() - interval '45 minutes'");
-      if (Number(active.rows[0]?.count ?? 0) > 0) { await client.query("COMMIT"); return { recorded: false }; }
-      await client.query("INSERT INTO ai_budget_calls (id,month,kind,agent,auth_source,model,reserved_tokens,reserved_usd) VALUES ($1,$2,$3,$4,$5,$6,0,0)", [call.id, monthStart(), call.kind, call.agent, call.authSource, call.model]);
-      await client.query("COMMIT");
-      return { recorded: true };
-    } catch (error) { await client.query("ROLLBACK"); throw error; }
-    finally { client.release(); }
-  }
+export async function reserveCall(db: Pick<pg.Pool, "query">, call: { id: string; kind: "extract" | "judge" | "research"; agent: "claude" | "codex"; authSource: "subscription" | "api" | "codex"; model: string; caps?: ResearchCaps; overrideCaps?: OverrideCaps }) {
   await db.query("INSERT INTO ai_budget_calls (id,month,kind,agent,auth_source,model,reserved_tokens,reserved_usd) VALUES ($1,$2,$3,$4,$5,$6,0,0)", [call.id, monthStart(), call.kind, call.agent, call.authSource, call.model]);
   return { recorded: true };
 }

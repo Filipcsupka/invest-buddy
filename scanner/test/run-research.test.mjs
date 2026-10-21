@@ -72,7 +72,7 @@ test("runner argument validation and prompt safety rules", () => {
   }
 });
 
-async function runFake({ response = clone().output, dryRun = false, cutoff = false, cliFailure = false, wrapped = false, type = "daily", enabled = true, dailyCalls = 0 } = {}) {
+async function runFake({ response = clone().output, dryRun = false, cutoff = false, cliFailure = false, wrapped = false, type = "daily", enabled = true, budgetFailure = null } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "research-test-"));
   const bin = join(dir, "claude");
   const capture = join(dir, "capture.json");
@@ -87,8 +87,7 @@ async function runFake({ response = clone().output, dryRun = false, cutoff = fal
   chmodSync(bin, 0o755);
   const posts = [], budgets = [];
   const server = createServer((req, res) => {
-    if (req.method === "POST") { let body = ""; req.on("data", (d) => { body += d; }); req.on("end", () => { (req.url === "/api/ingest/research" ? posts : budgets).push(JSON.parse(body)); res.writeHead(200, { "Content-Type": "application/json" }); res.end("{}"); }); }
-    else if (req.url === "/api/ingest/ai-budget?report=research-caps") { res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ day: new Date().toISOString().slice(0, 10), month: new Date().toISOString().slice(0, 7), monthlyTokens: 0, monthlyUsd: 0, dailyCalls, dailyTokens: 0, sharedDailyTokens: 0 })); }
+    if (req.method === "POST") { let body = ""; req.on("data", (d) => { body += d; }); req.on("end", () => { const entry = JSON.parse(body); (req.url === "/api/ingest/research" ? posts : budgets).push(entry); const fail = req.url === "/api/ingest/ai-budget" && entry.action === budgetFailure; res.writeHead(fail ? 503 : 200, { "Content-Type": "application/json" }); res.end(fail ? "{}" : JSON.stringify({ recorded: true })); }); }
     else { res.writeHead(500); res.end(); }
   });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -183,4 +182,21 @@ test("kill switch logs a skip without a model call", async () => {
     assert.equal(r.posts.length, 1);
     assert.equal(r.posts[0].skip.status, status);
   }
+});
+
+test("budget reservation failure warns and still posts the research run", async () => {
+  const r = await runFake({ budgetFailure: "reserve" });
+  assert.equal(r.code, 0, r.stderr);
+  assert.equal(r.posts.length, 1);
+  assert.equal(r.posts[0].run.status, "ok");
+  assert.equal(r.capture !== null, true);
+  assert.match(r.stdout, /research budget reservation unavailable; continuing/);
+});
+
+test("budget finish failure warns without failing the research run", async () => {
+  const r = await runFake({ budgetFailure: "finish" });
+  assert.equal(r.code, 0, r.stderr);
+  assert.equal(r.posts.length, 1);
+  assert.equal(r.posts[0].run.status, "ok");
+  assert.match(r.stdout, /research budget finish unavailable/);
 });

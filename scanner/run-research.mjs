@@ -7,8 +7,7 @@ import { fileURLToPath } from "node:url";
 import { extractJson, getToken } from "./run-scan.mjs";
 import { researchAdapter } from "./research-adapters.mjs";
 import { validateResearchOutput } from "./research-validate.mjs";
-import { checkResearchCaps, checkLiveResearchQuota } from "./research-caps.mjs";
-import { fetchLiveUsage } from "./claude-usage.mjs";
+import { checkResearchCaps } from "./research-caps.mjs";
 import { reserveBudget, finishBudget } from "./ai-budget.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -75,19 +74,19 @@ export function buildPrompt(opts, input, group, themesConfig) {
 
 const modelOutput = (value) => value?.output && !value?.findings ? value.output : value;
 const statusFrom = (result) => result.cutoff ? "cutoff" : "ok";
-export async function execute(opts, { adapter = researchAdapter(process.env.RESEARCH_ADAPTER || "claude"), fallbackAdapter = process.env.RESEARCH_FALLBACK_ADAPTER ? researchAdapter(process.env.RESEARCH_FALLBACK_ADAPTER) : null, log = console.log,
-  env = process.env, liveUsage } = {}) {
+export async function execute(opts, { adapter = researchAdapter(process.env.RESEARCH_ADAPTER || "claude"), log = console.log,
+  env = process.env } = {}) {
   // Fail before any network or model call when the adapter has no usable auth.
   if (adapter.failAtStart) { const auth = adapter.available(env); if (!auth.ok) throw new Error(`RESEARCH_ADAPTER=${adapter.name}: ${auth.reason}`); }
   const authSource = adapter.authSource?.(env) ?? (env.ANTHROPIC_API_KEY ? "api" : "subscription");
   const modelName = adapter.defaultModel?.(env) ?? opts.model;
   const token = getToken();
-  if (!token) throw new Error("INGEST_TOKEN is required to check research caps");
-  const earlyKill = env.RESEARCH_ENABLED !== "on";
-  if (earlyKill) {
+  if (!token) throw new Error("INGEST_TOKEN is required to record research runs");
+  const gate = await checkResearchCaps({ env });
+  if (!gate.ok) {
     const runId = randomUUID();
-    await postSkip(opts, token, adapter.name, "killed", "RESEARCH_ENABLED is not on", runId);
-    return [{ skipped: "killed", posted: !opts.dryRun, errors: [] }];
+    await postSkip(opts, token, adapter.name, gate.status, gate.reason, runId);
+    return [{ skipped: gate.status, posted: !opts.dryRun, errors: [] }];
   }
   const input = await fetchInput(opts, token);
   const themesConfig = JSON.parse(readFileSync(join(here, "prompts", "research-themes.json"), "utf8"));
@@ -95,43 +94,16 @@ export async function execute(opts, { adapter = researchAdapter(process.env.RESE
   mkdirSync(outDir, { recursive: true });
   const groups = callGroups(opts, input, themesConfig);
   const results = [];
-  const live = liveUsage ?? (() => fetchLiveUsage(env.CLAUDE_CODE_OAUTH_TOKEN));
   for (const group of groups) {
     const runId = randomUUID();
-    let gate, cur = { adapter, authSource, modelName };
-    const gateFor = (c) => checkResearchCaps({ env, authSource: c.authSource, adapter: c.adapter.name, codexQuota: () => c.adapter.quota(), liveUsage: live });
-    try {
-      gate = await gateFor(cur);
-      // Claude quota is often unreadable (429): fall back to the other adapter instead of skipping the whole run.
-      if (!gate.ok && gate.status === "skipped_quota" && fallbackAdapter && fallbackAdapter.name !== adapter.name) {
-        const auth = fallbackAdapter.available(env);
-        if (auth.ok) {
-          const alt = { adapter: fallbackAdapter, authSource: fallbackAdapter.authSource?.(env) ?? (env.ANTHROPIC_API_KEY ? "api" : "subscription"), modelName: fallbackAdapter.defaultModel?.(env) ?? opts.model };
-          const altGate = await gateFor(alt);
-          log(`${group.id}: ${adapter.name} ${gate.status} (${gate.reason}); fallback ${fallbackAdapter.name}: ${altGate.ok ? "ok" : `${altGate.status} (${altGate.reason})`}`);
-          if (altGate.ok) { cur = alt; gate = altGate; }
-        } else log(`${group.id}: fallback ${fallbackAdapter.name} unavailable (${auth.reason})`);
-      }
-    } catch (error) { gate = { ok: false, status: "skipped_cap", reason: `research cap check unavailable: ${error.message}` }; }
-    if (!gate.ok) {
-      await postSkip(opts, token, cur.adapter.name, gate.status, gate.reason, runId);
-      log(`${group.id}: ${gate.status} (${gate.reason})`);
-      results.push({ skipped: gate.status, posted: !opts.dryRun, errors: [] });
-      continue;
-    }
-    const budgetId = opts.dryRun ? null : await reserveBudget(opts.baseUrl, token, "research", cur.modelName, cur.adapter.name, undefined, cur.authSource);
-    if (!opts.dryRun && !budgetId) {
-      await postSkip(opts, token, cur.adapter.name, "skipped_cap", "research budget reservation unavailable", runId);
-      results.push({ skipped: "skipped_cap", posted: true, errors: [] });
-      continue;
-    }
+    const budgetId = opts.dryRun ? null : await reserveBudget(opts.baseUrl, token, "research", modelName, adapter.name, undefined, authSource);
+    if (!opts.dryRun && !budgetId) log(`${group.id}: research budget reservation unavailable; continuing`);
     const workDir = mkdtempSync(join(tmpdir(), "invest-research-"));
     const started = performance.now();
     let result, output, error = null, adapterFailed = false;
     try {
       const prompt = buildPrompt(opts, input, group, themesConfig);
-      try { result = await cur.adapter.run({ prompt, schemaPath: join(here, "schema", "research-output.schema.json"), model: opts.model, maxTurns: defaults.maxTurns, timeoutMs: opts.timeoutS * 1000, workDir, env,
-        monitor: cur.adapter.name !== "claude" || env.ANTHROPIC_API_KEY ? undefined : () => checkLiveResearchQuota({ env, liveUsage: live }) }); }
+      try { result = await adapter.run({ prompt, schemaPath: join(here, "schema", "research-output.schema.json"), model: opts.model, maxTurns: defaults.maxTurns, timeoutMs: opts.timeoutS * 1000, workDir, env }); }
       catch (caught) { error = caught; adapterFailed = true; }
       if (!adapterFailed) output = result.cutoff ? emptyOutput() : modelOutput(extractJson(result.text));
     } catch (caught) {
@@ -147,7 +119,7 @@ export async function execute(opts, { adapter = researchAdapter(process.env.RESE
     if (adapterFailed) output = emptyOutput();
     const run = {
       runId, runType: typeNames[opts.type], asOf: opts.asOf, generatedAt: new Date().toISOString(), promptVersion: `research-${opts.type}@2026-10-19.2`,
-      adapter: { name: cur.adapter.name, model: result?.model || cur.modelName, authSource: cur.authSource },
+      adapter: { name: adapter.name, model: result?.model || modelName, authSource },
       scope: { themes: group.themes, symbols: group.symbols, deepDiveSymbol: opts.type === "deepdive" ? opts.symbol : null },
       limits: { ...defaults, timeoutS: opts.timeoutS },
       usage: { ...emptyUsage(), inputTokens: result?.usage?.inputTokens ?? error?.usage?.inputTokens ?? null, outputTokens: result?.usage?.outputTokens ?? error?.usage?.outputTokens ?? null, cacheReadTokens: result?.usage?.cacheReadTokens ?? error?.usage?.cacheReadTokens ?? null, cacheCreationTokens: result?.usage?.cacheCreationTokens ?? error?.usage?.cacheCreationTokens ?? null, webSearches: result?.webSearches ?? null, webFetches: result?.webFetches ?? null, costUsd: result?.costUsd ?? error?.costUsd ?? null, durationS: Math.round((performance.now() - started) / 100) / 10 },
@@ -163,7 +135,7 @@ export async function execute(opts, { adapter = researchAdapter(process.env.RESE
       if (!response.ok) throw new Error(`research ingest HTTP ${response.status}; file kept at ${file}`);
     }
     log(`${file}: ${run.status}${opts.dryRun ? " (dry run)" : " (posted)"}`);
-    results.push({ file, posted: !opts.dryRun, errors: budgetRecorded ? [] : ["research budget finish unavailable"], failed: run.status === "failed" });
+    results.push({ file, posted: !opts.dryRun, errors: [], failed: run.status === "failed" });
   }
   return results;
 }
