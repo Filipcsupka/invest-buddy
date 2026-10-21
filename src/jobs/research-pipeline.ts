@@ -11,6 +11,11 @@ import { PostgresUsageLedger } from "../data/usage";
 import type { OHLCV } from "../engine/types";
 
 export interface PromotionScreen { score:number; ruleScore:number; ruleState:string; signalDate:string; benchmarkClose:number|null; sector:string }
+const US_EXCHANGES=new Set(["NASDAQ","NYSE","AMEX","NYSEARCA","BATS","CBOE"]);
+const isForeignExchange=(exchange:string|null)=>!!exchange && !US_EXCHANGES.has(exchange.toUpperCase());
+/** Defense at the handoff to the scored universe, including stale proposals. */
+export const eligiblePromotionSymbols=(candidates:{symbol:string;exchange:string|null}[]):string[]=>
+  candidates.filter(c=>!isForeignExchange(c.exchange)).map(c=>c.symbol);
 /** Insert the DS1 row for a verified candidate. The pipeline promotes it into the scored universe right after the commit (owner decision 2026-10-20: no manual step, no cap). */
 export async function proposePromotion(db:Pick<pg.Pool,"query">, candidate:{symbol:string;companyName:string;themes:string[]}, findings:{id:number;kind:string;evidence:{url:string;status?:string;verificationStatus?:string;verified?:boolean;verify?:{status?:string}}[]}[], asOf:string, screen:PromotionScreen):Promise<boolean> {
   const sources=findings.flatMap(f=>f.evidence.filter(e=>/^https:\/\//.test(e.url) && (e.verified===true || ["verified","exact","fuzzy","passed"].includes(e.status??"") || ["verified","exact","fuzzy","passed"].includes(e.verificationStatus??"") || ["verified","exact","fuzzy","passed"].includes(e.verify?.status??""))).map(e=>({kind:"research",url:e.url,detail:f.kind})));
@@ -74,17 +79,17 @@ async function storedScreen(db:Pick<pg.Pool,"query">, symbol:string, name:string
 export async function runResearchPipeline(pool:pg.Pool,today:string):Promise<{changed:number;proposed:number;promoted:string[]}> {
   const provider=process.env.TWELVE_DATA_API_KEY ? new TwelveDataProvider({apiKey:process.env.TWELVE_DATA_API_KEY,
     reserve:()=>new PostgresUsageLedger(pool).reserve("twelvedata",1,{job:"discovery",credits:1})}) : null;
-  const preflight=await pool.query<{symbol:string;company_name:string}>(`SELECT symbol,company_name FROM (
-      SELECT DISTINCT ON (f.symbol) f.symbol,f.company_name,c.last_screened_at
+  const preflight=await pool.query<{symbol:string;company_name:string;exchange:string|null}>(`SELECT symbol,company_name,exchange FROM (
+      SELECT DISTINCT ON (f.symbol) f.symbol,f.company_name,f.exchange,c.last_screened_at
       FROM research_findings f LEFT JOIN research_candidates c ON c.symbol=f.symbol
       WHERE f.verification_status IN ('verified','lead_only') AND f.kind <> 'macro_release'
         AND (c.symbol IS NULL OR c.state='DISCOVERED' OR (c.state='WATCH' AND c.promotion_status='none'))
       ORDER BY f.symbol,f.id DESC
     ) eligible ORDER BY last_screened_at NULLS FIRST,symbol LIMIT 25`);
   const checks=new Map<string,ScreenCheck>();
-  for(const row of preflight.rows) checks.set(row.symbol,await storedScreen(pool,row.symbol,row.company_name,today,provider));
+  for(const row of preflight.rows) checks.set(row.symbol,isForeignExchange(row.exchange)?{quality:"pending",screen:null}:await storedScreen(pool,row.symbol,row.company_name,today,provider));
   let changed=0,proposed=0;
-  const toPromote:string[]=[];
+  const toPromote:{symbol:string;exchange:string|null}[]=[];
   const client=await pool.connect();
   const db=client as unknown as pg.Pool;
   try {
@@ -136,7 +141,7 @@ export async function runResearchPipeline(pool:pg.Pool,today:string):Promise<{ch
     const signal=await db.query<{action:CandidateInput["engineAction"]}>("SELECT action FROM trade_ideas WHERE symbol=$1 AND as_of<=$2 ORDER BY as_of DESC,id DESC LIMIT 1",[c.symbol,today]);
     const score=await db.query<{state:string}>("SELECT state FROM score_results WHERE ticker=$1 AND as_of<=$2 ORDER BY as_of DESC LIMIT 1",[c.symbol,today]);
     const earnings=await db.query<{report_date:string}>("SELECT report_date::text FROM earnings_calendar_snapshots WHERE ticker=$1 AND report_date>=$2 ORDER BY report_date LIMIT 1",[c.symbol,today]);
-    const foreign=!!c.exchange && !["NASDAQ","NYSE","AMEX","NYSEARCA","BATS","CBOE"].includes(c.exchange.toUpperCase());
+    const foreign=isForeignExchange(c.exchange);
     const checked=checks.get(c.symbol)??null;
     const screen=checked?.screen??null;
     const quality=foreign?"unknown":nameExclusion(c.symbol,c.company_name)?"fail":checked?.quality==="fail"?"fail":c.scorable?"pass":checked?.quality??"pending";
@@ -156,7 +161,7 @@ export async function runResearchPipeline(pool:pg.Pool,today:string):Promise<{ch
       const already=await db.query("SELECT 1 FROM research_events WHERE symbol=$1 AND kind='review_due' AND at::date=$2::date LIMIT 1",[c.symbol,today]);
       if(!already.rowCount) await appendEvent(db,{symbol:c.symbol,kind:"review_due",reason:"scheduled review due"});
     }
-    if(decision.proposePromotion) {
+    if(decision.proposePromotion && !foreign) {
       // The rule screen only ranks the name. A verified primary or press finding is enough to score it, so a missing screen falls back to a neutral row.
       const useScreen:PromotionScreen=screen??{score:1,ruleScore:0,ruleState:"Wait",signalDate:today,benchmarkClose:null,sector:"Discovery"};
       const inserted=await proposePromotion(db,{symbol:c.symbol,companyName:c.company_name,themes:c.themes},fr.rows.filter(f=>f.verification_status==="verified"),today,useScreen);
@@ -165,14 +170,14 @@ export async function runResearchPipeline(pool:pg.Pool,today:string):Promise<{ch
       if(openRow) {
         await db.query("UPDATE research_candidates SET promotion_status='proposed' WHERE symbol=$1",[c.symbol]);
         await appendEvent(db,{symbol:c.symbol,kind:"promotion_proposed",reason:"verified primary or press finding",findingIds:fr.rows.filter(f=>f.verification_status==="verified").map(f=>f.id)}); proposed++;
-        toPromote.push(c.symbol);
+        toPromote.push({symbol:c.symbol,exchange:c.exchange});
       }
     }
   }
   await client.query("COMMIT");
   } catch(error) {await client.query("ROLLBACK");throw error;}
   finally {client.release();}
-  const promoted=await promoteProposed(pool,toPromote,today);
+  const promoted=await promoteProposed(pool,eligiblePromotionSymbols(toPromote),today);
   return {changed,proposed,promoted};
 }
 

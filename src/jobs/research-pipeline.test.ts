@@ -1,11 +1,17 @@
 import {describe,it,expect} from "vitest";
 import pg from "pg";
-import {proposePromotion,runResearchPipeline} from "./research-pipeline";
+import {eligiblePromotionSymbols,proposePromotion,runResearchPipeline} from "./research-pipeline";
 import {insertResearchOutput,writeVerification} from "../db/research";
 import sample from "../research/fixtures/sample-output.json";
 import {randomUUID} from "node:crypto";
 import type {ResearchOutput} from "../research/types";
 import {promoteCandidate} from "../../scripts/discovery-promote";
+
+describe("research promotion queue",()=>{
+  it("never passes a foreign exchange to promotion",()=>{
+    expect(eligiblePromotionSymbols([{symbol:"SIE",exchange:"XETRA"},{symbol:"ABB",exchange:"NYSE"},{symbol:"3687",exchange:"Tokyo"}])).toEqual(["ABB"]);
+  });
+});
 
 describe.skipIf(!process.env.TEST_DATABASE_URL)("research promotion database",()=>{
   it("seeds a candidate only after a fact is checked and writes its event",async()=>{

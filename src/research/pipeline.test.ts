@@ -11,6 +11,14 @@ describe("research pipeline",()=>{
     expect(decideCandidate({...watch,inUniverse:true},today).proposePromotion).toBe(false);
     expect(decideCandidate({...watch,quality:"pending",scorable:false},today).proposePromotion).toBe(false);
   });
+  it("keeps a qualified foreign name in unscored WATCH while a US name proposes promotion",()=>{
+    const candidate={...base("DISCOVERED"),inUniverse:false,scorable:false,quality:"unknown" as const};
+    const foreign=decideCandidate(candidate,today);
+    expect(foreign).toMatchObject({state:"WATCH",scorable:false,proposePromotion:false});
+    expect(decideCandidate({...candidate,state:"WATCH",held:true,engineAction:"ADD"},today).state).toBe("WATCH");
+    const us=decideCandidate({...candidate,quality:"pass",scorable:true},today);
+    expect(us).toMatchObject({state:"WATCH",scorable:true,proposePromotion:true});
+  });
   it("covers every transition row",()=>{
     const cases:{from:CandidateInput["state"];to:CandidateInput["state"];patch:Partial<CandidateInput>}[]=[
       {from:null,to:"DISCOVERED",patch:{findings:[{...fact,verified:false}]}},
