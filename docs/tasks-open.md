@@ -2,7 +2,7 @@
 
 ## Status 2026-10-21 (end of day)
 
-Two parallel tracks now live on the site: the original stock screen (free data jobs plus judge) and an AI track (AI screen for stocks, ETF catalog and weekly ETF picks). Owner decision: compare both in about two months against the old ChatGPT automation. Log: `~/Documents/ops-brain/projects/investing-platform/research/old-automation-vs-pipeline.md` (decision rule written before any result; no verdict under 20 picks per side or before 90 days).
+Owner decision 2026-10-21: remove the AI screen and AI data gathering. Use EODHD ALL-IN-ONE for stock inputs, with AI only as judge. The ETF catalog and weekly ETF picks remain separate.
 
 ### Done today
 - Promotion fix (#264): the pipeline read `e.status` but evidence stores `verify.status`, so nothing was proposed. CGNX, COF, ROK, SYM, VRT, COHR, NOVT now in the scored universe (6 of 7 score Criteria broken, ROK Ignore; real rule results).
@@ -10,13 +10,12 @@ Two parallel tracks now live on the site: the original stock screen (free data j
 - Research gates removed (#266): no live quota check, no 90% stops, no budget skip, no single-run lock. Only `RESEARCH_ENABLED=off` stops a run.
 - Original stock screen is free data plus judge: infra #58 suspended nine research CronJobs (weekly, daily, verify, verify-pm, pipeline, pipeline-early, pipeline-pm, scout, notify). Extract, judge, discovery and the ETF track stay on.
 - ETF track (#268, #269, #270, #272, #274, #275, infra #57 and #59): migration 092 and 094, runner, ingest with server-side quote check, outcomes job, CronJobs (catalog-sync Sun 05:10, enrich Sun 05:40, research Mon 07:40, outcomes daily 06:50), prompt, `/etf` with picks and a global catalog (Xetra list plus Nasdaq Trader ETF lists, 9,386 listings loaded). Catalog is global, no filter by where a fund can be bought.
-- AI screen (#271, #273): `/ai-screen` is public, in the Stocks nav next to the stock screen. Parser keeps raw text. Five cards imported (VLX, ABBN, NFLX, SPCX HOLD, SMCI). Paste form and POST route stay owner-only; cards are loaded with `npx tsx scripts/ai-cards-import.ts file.txt` through a port-forward to Postgres.
 - Docs and sources checked: free price sources for non-US (none confirmed), paid options (EODHD, Twelve Data commercial, quotes not confirmed), index funds (SEC `company_tickers_mf.json` works, FRED SP500 works, Stooq bot-gated).
 
 ### Open, in order
 1. **ETF enrichment is too slow.** `etf-enrich-manual-1` finished batch 1 of 470 (20 funds) in about 6 minutes, so a sequential run would take about two days. 20 of 9,386 rows enriched; the shortlist also shows 20, matching the 20 enriched rows (cause not checked). Fix: run batches in parallel (several Jobs or workers over disjoint ISIN ranges), raise the batch size, or pre-filter to funds worth enriching (for example drop ETNs, leveraged and tiny funds first). Check cost after the first hour. Job is still running.
 2. **Weekly ETF picks need the shortlist.** Until step 1 is done the Monday run reviews almost nothing. Only the test pick FTSS exists. Review the quality of the first full weekly run before trusting calls.
-3. **Old automation log.** Owner sends picks (VLX, ABBN and the rest) with date, call and price. `ai_cards` holds the cards; the forward-return comparison against the pipeline and a benchmark is not built. Build it once there are enough picks (minimum 20 per side, 30/60/90 day horizons).
+3. **Old automation log.** Historical `ai_cards` rows remain in the database. The forward-return comparison against the pipeline and a benchmark is not built.
 4. **S3** (scout chain on 2026-10-21): not needed now, the research CronJobs are suspended. Close.
 5. **S1** (non-US scoring): still no free source with display rights; names stay research-only. Twelve Data Basic is internal use only per its pricing page and covers the US bars we already use; owner to review. Paid options are EODHD (about 20 to 100 USD a month personal, commercial quote needed) or Twelve Data commercial (Enterprise 499 USD a month, 70+ markets, external display).
 6. **Telegram research cards** never send: secret `invest-buddy-telegram-owner` does not exist, so `research-notify` logs `configured:false`. Owner said to ignore for now. The job is suspended anyway.
