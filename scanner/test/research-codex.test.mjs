@@ -160,7 +160,7 @@ test("codex auth check: a local login must pass codex login status", () => {
   assert.equal(codexResearchAdapter.available({ HOME: home }).ok, false);
   assert.match(codexResearchAdapter.available({ HOME: home }).reason, /auth.json/);
   assert.equal(codexResearchAdapter.available({ HOME: home, ANTHROPIC_API_KEY: "x", CLAUDE_CODE_OAUTH_TOKEN: "x" }).ok, false);
-  assert.match(codexResearchAdapter.available({ HOME: home, OPENAI_API_KEY: "k" }).reason, /RESEARCH_MONTHLY_USD/);
+  assert.equal(codexResearchAdapter.available({ HOME: home, OPENAI_API_KEY: "k" }).ok, true);
   writeFileSync(join(home, "auth.json"), "{}");
   assert.match(codexResearchAdapter.available(env).reason, /codex login status/);
   writeFileSync(join(home, "auth.json"), JSON.stringify({ tokens: { access_token: "stub" } }));
@@ -170,17 +170,12 @@ test("codex auth check: a local login must pass codex login status", () => {
   assert.equal(researchAdapter("codex"), codexResearchAdapter);
 });
 
-const usage = { day: "2026-10-11", month: "2026-10", monthlyTokens: 10, monthlyUsd: 1, dailyCalls: 0, codexDailyCalls: 0, dailyTokens: 10, sharedDailyTokens: 10 };
-const gate = (env, override = {}) => checkResearchCaps({ env: { RESEARCH_ENABLED: "on", ...env }, adapter: "codex", authSource: "codex", usage, liveUsage: async () => { throw new Error("Claude quota must not be read"); }, ...override });
+const gate = (env, override = {}) => checkResearchCaps({ env: { RESEARCH_ENABLED: "on", ...env }, adapter: "codex", authSource: "codex", ...override });
 
-test("codex gate: only the kill switch and a 90 percent rate limit stop a run; no call, token, USD or window caps", async () => {
-  assert.equal((await gate({}, { codexQuota: async () => ({ pct: 89 }) })).ok, true);
-  assert.equal((await gate({}, { codexQuota: async () => ({ pct: 90 }) })).status, "skipped_quota");
-  assert.equal((await gate({}, { codexQuota: async () => null })).ok, true);
+test("codex gate: only the kill switch stops a run", async () => {
+  assert.equal((await gate({}, { codexQuota: async () => { throw new Error("quota must not be read"); } })).ok, true);
   assert.equal((await gate({}, {})).ok, true);
   assert.equal((await gate({ RESEARCH_ENABLED: "off" }, {})).status, "killed");
-  assert.equal((await gate({ RESEARCH_WINDOW: "04:00-07:00" }, { now: new Date("2026-10-11T11:00:00Z"), codexQuota: async () => ({ pct: 1 }) })).ok, true);
-  assert.equal((await gate({}, { authSource: "api", codexQuota: async () => ({ pct: 1 }) })).ok, true);
 });
 
 async function runRunner({ adapterEnv = {}, codexDailyCalls = 0, rateLimitPct = null, execFailureEchoToken = false } = {}) {
@@ -246,12 +241,11 @@ test("RESEARCH_ADAPTER=codex without usable auth fails at start with no model ca
   assert.equal(r.posts.length + r.budgets.length, 0);
 });
 
-test("codex API key is rejected before a model call because the USD cap cannot be enforced", async () => {
+test("codex API key can run without a USD cap", async () => {
   const r = await runRunner({ adapterEnv: { OPENAI_API_KEY: "k" } });
-  assert.equal(r.code, 1);
-  assert.match(r.stderr, /RESEARCH_ADAPTER=codex: Codex API spend is unmetered/);
-  assert.deepEqual(r.calls, []);
-  assert.equal(r.posts.length + r.budgets.length, 0);
+  assert.equal(r.code, 0, r.stderr);
+  assert.equal(r.calls.length, 1);
+  assert.equal(r.posts[0].run.adapter.authSource, "api");
 });
 
 test("codex login rejected by CLI fails at start with no model call or network", async () => {

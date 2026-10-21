@@ -1,6 +1,6 @@
 import type pg from "pg";
 
-/** Totals include reserved calls, so a concurrent runner cannot bypass the call cap. */
+/** Historic research usage report, including calls whose accounting is still open. */
 export async function researchCapUsage(db: Pick<pg.Pool, "query">) {
   const result = await db.query<{
     day: string; month: string; monthly_tokens: string; monthly_usd: string;
