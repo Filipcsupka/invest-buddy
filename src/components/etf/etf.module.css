@@ -1,0 +1,34 @@
+.stack { display: grid; gap: 1.5rem; }
+.stats { display: flex; flex-wrap: wrap; gap: 0.75rem; margin: 0 0 1.5rem; }
+.stat { display: grid; gap: 0.2rem; padding: 0.75rem 1rem; background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--radius-lg); }
+.stat dt { color: var(--ink-2); font-size: 0.8125rem; }
+.stat dd { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
+.filters { display: flex; flex-wrap: wrap; align-items: end; gap: 0.75rem; margin-bottom: 1.5rem; }
+.filters label { display: grid; gap: 0.3rem; font-weight: 600; }
+.filters select { min-height: 2.75rem; min-width: 10rem; padding: 0.5rem 0.75rem; border: 1px solid var(--rule-strong); border-radius: var(--radius); background: var(--sheet); color: var(--ink); }
+.tableWrap { overflow-x: auto; }
+.table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.table th, .table td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--rule); vertical-align: top; }
+.table th { color: var(--ink-2); font-size: 0.8125rem; background: var(--sheet-hover); }
+.table a { font-weight: 700; }
+.table tbody tr:hover { background: var(--sheet-hover); }
+.badge { display: inline-flex; align-items: center; border: 1px solid currentColor; border-radius: 999px; padding: 0.15rem 0.55rem; font-size: 0.75rem; font-weight: 700; white-space: nowrap; }
+.buy { color: var(--st-setup); }
+.watch { color: var(--st-watch); }
+.avoid { color: var(--st-broken); }
+.unverified { color: var(--st-ignore); }
+.partial { color: var(--st-wait); }
+.verified { color: var(--st-setup); }
+.lead { max-width: 70ch; line-height: 1.6; }
+.list { margin: 0; padding-left: 1.25rem; display: grid; gap: 0.6rem; }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: 0; margin: 0; }
+.facts div { padding: 0.75rem; border-bottom: 1px solid var(--rule); }
+.facts dt { color: var(--ink-2); font-size: 0.8125rem; }
+.facts dd { margin: 0.25rem 0 0; font-weight: 600; }
+.evidence { display: grid; gap: 1rem; margin: 0; padding: 0; list-style: none; }
+.evidence li { border-bottom: 1px solid var(--rule); padding-bottom: 1rem; overflow-wrap: anywhere; }
+.evidence blockquote { margin: 0.5rem 0; line-height: 1.5; }
+.note { color: var(--ink-2); line-height: 1.5; }
+.group { margin-bottom: 1.75rem; }
+.group h2 { margin-bottom: 0.75rem; }
+@media (max-width: 720px) { .table { min-width: 700px; } }

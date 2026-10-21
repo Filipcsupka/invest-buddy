@@ -20,6 +20,9 @@ it.each(["en", "sk"] as const)("links the scanner and keeps the heat map link (%
   const html = renderToStaticMarkup(<Nav locale={locale} />);
   expect(html).toContain(`href="/${locale}/scanner"`);
   expect(html).toContain(`href="/${locale}/heatmap"`);
+  expect(html).toContain(`href="/${locale}/etf"`);
+  expect(html).toContain(`href="/${locale}/etf/track-record"`);
+  expect(html).toContain(locale === "en" ? "Stocks" : "Akcie");
 });
 
 it.each(["en", "sk"])("keeps the shared footer free of fixture labels in db mode (%s)", async (locale) => {
