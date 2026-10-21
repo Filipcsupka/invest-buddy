@@ -73,8 +73,8 @@ test("runner stops at the EODHD call cap and posts the completed prefix", async 
     if (String(url).includes("/pending?")) return { ok: true, json: async () => ({ items: rows }) };
     vendorCalls++; return { ok: true, json: async () => fixture };
   };
-  const result = await execute(parseArgs(["--limit", "3"], { ETF_ENRICH_SOURCE: "eodhd" }), {
-    env: { ETF_ENRICH_SOURCE: "eodhd", ETF_EODHD_MAX_CALLS: "20", INGEST_TOKEN: "fixture", EODHD_API_KEY: "fixture" }, request, log: () => {},
+  const result = await execute(parseArgs(["--limit", "3"], {}), {
+    env: { ETF_EODHD_MAX_CALLS: "20", INGEST_TOKEN: "fixture", EODHD_API_KEY: "fixture" }, request, log: () => {},
   });
   assert.deepEqual(result, { batches: 1, failed: 0 });
   assert.equal(vendorCalls, 2);
@@ -82,16 +82,16 @@ test("runner stops at the EODHD call cap and posts the completed prefix", async 
 });
 
 test("runner rejects an invalid EODHD call cap", async () => {
-  await assert.rejects(() => execute(parseArgs([], { ETF_ENRICH_SOURCE: "eodhd" }), {
-    env: { ETF_ENRICH_SOURCE: "eodhd", ETF_EODHD_MAX_CALLS: "12", INGEST_TOKEN: "fixture" }, request: async () => { throw new Error("unexpected request"); },
+  await assert.rejects(() => execute(parseArgs([], {}), {
+    env: { ETF_EODHD_MAX_CALLS: "12", INGEST_TOKEN: "fixture" }, request: async () => { throw new Error("unexpected request"); },
   }), /ETF_EODHD_MAX_CALLS/);
 });
 
 test("runner dry run needs no vendor key and makes no vendor or ingest write", async () => {
   const urls = [];
   const request = async (url) => { urls.push(String(url)); return { ok: true, json: async () => ({ items: [us] }) }; };
-  const result = await execute(parseArgs(["--dry-run"], { ETF_ENRICH_SOURCE: "eodhd" }), {
-    env: { ETF_ENRICH_SOURCE: "eodhd", INGEST_TOKEN: "fixture" }, request, log: () => {},
+  const result = await execute(parseArgs(["--dry-run"], {}), {
+    env: { INGEST_TOKEN: "fixture" }, request, log: () => {},
   });
   assert.deepEqual(result, { batches: 1, failed: 0 });
   assert.equal(urls.length, 1);

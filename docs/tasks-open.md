@@ -13,7 +13,7 @@ Owner steps, in order:
 1. Buy EODHD ALL-IN-ONE for one month (about 100 USD) and create secret `invest-buddy-eodhd` key `api-key` in namespace `invest`.
 2. Run `npm run symbols:sync -- --dry-run`, then the real sync; check which exchange codes come back.
 3. Run price backfill and fundamentals for a few names (`--only`), compare with the old sources, then un-suspend the infra CronJobs one by one.
-4. Set `ETF_ENRICH_SOURCE=eodhd` on the ETF enrich CronJob once ETF fields are confirmed; this replaces the Codex enrichment that burned the usage limit.
+4. ETF enrichment is EODHD only (Codex path removed). In infra, drop `CODEX_ACCESS_TOKEN` and `RESEARCH_CODEX_MODEL` from the ETF enrich CronJob and add `EODHD_API_KEY`; confirm ETF fields on a `--limit 20` run first.
 5. Remaining LLM call sites: extract (`scanner/run-extract.mjs`) and judge. Extract can be switched off once EODHD fundamentals and catalyst feed the rules; owner decision.
 
 ### Done today
@@ -25,7 +25,7 @@ Owner steps, in order:
 - Docs and sources checked: free price sources for non-US (none confirmed), paid options (EODHD, Twelve Data commercial, quotes not confirmed), index funds (SEC `company_tickers_mf.json` works, FRED SP500 works, Stooq bot-gated).
 
 ### Open, in order
-1. **ETF enrichment is too slow.** `etf-enrich-manual-1` finished batch 1 of 470 (20 funds) in about 6 minutes, so a sequential run would take about two days. 20 of 9,386 rows enriched; the shortlist also shows 20, matching the 20 enriched rows (cause not checked). Fix: run batches in parallel (several Jobs or workers over disjoint ISIN ranges), raise the batch size, or pre-filter to funds worth enriching (for example drop ETNs, leveraged and tiny funds first). Check cost after the first hour. Job is still running.
+1. **ETF enrichment was too slow (Codex path, now removed).** `etf-enrich-manual-1` finished batch 1 of 470 (20 funds) in about 6 minutes, so a sequential run would take about two days. 20 of 9,386 rows enriched; the shortlist also shows 20, matching the 20 enriched rows (cause not checked). Fix: run batches in parallel (several Jobs or workers over disjoint ISIN ranges), raise the batch size, or pre-filter to funds worth enriching (for example drop ETNs, leveraged and tiny funds first). Check cost after the first hour. Job is still running.
 2. **Weekly ETF picks need the shortlist.** Until step 1 is done the Monday run reviews almost nothing. Only the test pick FTSS exists. Review the quality of the first full weekly run before trusting calls.
 3. **Old automation log.** Historical `ai_cards` rows remain in the database. The forward-return comparison against the pipeline and a benchmark is not built.
 4. **S3** (scout chain on 2026-10-21): closed. P8 removed the research stack, scout included.
