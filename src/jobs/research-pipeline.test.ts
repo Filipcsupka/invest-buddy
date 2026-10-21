@@ -72,6 +72,9 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("research promotion database",()
         [{id:1,kind:"contract",evidence:[{url:"https://example.com/contract",status:"verified"}]}],"2026-10-11",
         {score:3,ruleScore:15,ruleState:"Watch",signalDate:"2026-10-10",benchmarkClose:500,sector:"Technology"});
       expect(inserted).toBe(true);
+      expect(await proposePromotion(client,{symbol:"RSXN",companyName:"Nested Status Test",themes:["robotics"]},
+        [{id:3,kind:"earnings",evidence:[{url:"https://example.com/nested",verify:{status:"verified"}}]}],"2026-10-11",
+        {score:1,ruleScore:0,ruleState:"Wait",signalDate:"2026-10-11",benchmarkClose:null,sector:"Discovery"})).toBe(true);
       expect(await proposePromotion(client,{symbol:"RSXV",companyName:"Unverified Test",themes:["robotics"]},
         [{id:2,kind:"contract",evidence:[{url:"https://example.com/unverified",status:"blocked"}]}],"2026-10-11",
         {score:3,ruleScore:15,ruleState:"Watch",signalDate:"2026-10-10",benchmarkClose:500,sector:"Technology"})).toBe(false);

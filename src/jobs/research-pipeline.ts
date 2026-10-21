@@ -12,8 +12,8 @@ import type { OHLCV } from "../engine/types";
 
 export interface PromotionScreen { score:number; ruleScore:number; ruleState:string; signalDate:string; benchmarkClose:number|null; sector:string }
 /** Insert the DS1 row for a verified candidate. The pipeline promotes it into the scored universe right after the commit (owner decision 2026-10-20: no manual step, no cap). */
-export async function proposePromotion(db:Pick<pg.Pool,"query">, candidate:{symbol:string;companyName:string;themes:string[]}, findings:{id:number;kind:string;evidence:{url:string;status?:string;verificationStatus?:string;verified?:boolean}[]}[], asOf:string, screen:PromotionScreen):Promise<boolean> {
-  const sources=findings.flatMap(f=>f.evidence.filter(e=>/^https:\/\//.test(e.url) && (e.verified===true || ["verified","exact","fuzzy","passed"].includes(e.status??"") || ["verified","exact","fuzzy","passed"].includes(e.verificationStatus??""))).map(e=>({kind:"research",url:e.url,detail:f.kind})));
+export async function proposePromotion(db:Pick<pg.Pool,"query">, candidate:{symbol:string;companyName:string;themes:string[]}, findings:{id:number;kind:string;evidence:{url:string;status?:string;verificationStatus?:string;verified?:boolean;verify?:{status?:string}}[]}[], asOf:string, screen:PromotionScreen):Promise<boolean> {
+  const sources=findings.flatMap(f=>f.evidence.filter(e=>/^https:\/\//.test(e.url) && (e.verified===true || ["verified","exact","fuzzy","passed"].includes(e.status??"") || ["verified","exact","fuzzy","passed"].includes(e.verificationStatus??"") || ["verified","exact","fuzzy","passed"].includes(e.verify?.status??""))).map(e=>({kind:"research",url:e.url,detail:f.kind})));
   if(!sources.length) return false;
   const r=await db.query(`INSERT INTO discovery_candidates
     (week_start,symbol,name,sector,theme,score,rule_score,rule_state,signal_date,benchmark_close,sources,status)
