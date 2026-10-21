@@ -30,6 +30,13 @@ export interface Form4Page { data: Form4Filing[]; meta?: Record<string, unknown>
 
 export interface EodhdOptions { apiKey?: string; fetch?: typeof fetch; sleep?: (ms: number) => Promise<void>; now?: () => number; maxRetries?: number }
 
+export class EodhdHttpError extends Error {
+  constructor(readonly status: number, endpoint: EodhdEndpoint, detail = "") {
+    super(`EODHD ${endpoint}: HTTP ${status}${detail}`);
+    this.name = "EodhdHttpError";
+  }
+}
+
 /** In-process call-cost estimate per endpoint. Retry attempts are counted conservatively. */
 export class EodhdClient {
   private readonly apiKey: string;
@@ -63,7 +70,7 @@ export class EodhdClient {
       catch { throw new Error(`EODHD ${endpoint}: network request failed`); }
       if (response.status === 402) {
         this.counts[endpoint] -= cost; // Documented as rejected before billing.
-        throw new Error(`EODHD ${endpoint}: HTTP 402, API call allowance exhausted or plan access denied`);
+        throw new EodhdHttpError(402, endpoint, ", API call allowance exhausted or plan access denied");
       }
       if (response.status === 429 && attempt < this.maxRetries) {
         const retryAfter = response.headers.get("Retry-After");
@@ -72,7 +79,7 @@ export class EodhdClient {
         await this.sleep(Number.isFinite(hinted) ? Math.max(0, hinted) : Math.min(30_000, 1000 * 2 ** attempt));
         continue;
       }
-      if (!response.ok) throw new Error(`EODHD ${endpoint}: HTTP ${response.status}`);
+      if (!response.ok) throw new EodhdHttpError(response.status, endpoint);
       try { return await response.json() as T; }
       catch { throw new Error(`EODHD ${endpoint}: invalid JSON response`); }
     }

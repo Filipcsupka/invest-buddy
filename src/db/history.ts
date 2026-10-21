@@ -111,7 +111,7 @@ export async function fundamentalsHistory(db: Queryable, ticker: string, concept
             f.filed::text AS filed, f.accession, f.value, f.filed::text || ':' || f.id::text AS "cursorKey"
      FROM fundamentals_pit f
      WHERE f.ticker = $1 AND f.concept = $2
-       AND EXISTS (SELECT 1 FROM data_sources s WHERE s.id = 'sec' AND s.display_allowed)
+       AND EXISTS (SELECT 1 FROM data_sources s WHERE s.id = f.source_id AND s.display_allowed)
        AND ($3::date IS NULL OR f.filed >= $3::date)
        AND ($4::date IS NULL OR f.filed <= $4::date)
        AND ($5::date IS NULL OR (f.filed, f.id) < ($5::date, $6::bigint))

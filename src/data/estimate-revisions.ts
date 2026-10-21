@@ -1,9 +1,9 @@
 import { canDisplay } from "./sources-registry";
 
 /**
- * Forward EPS estimate revisions from the stored Alpha Vantage earnings calendar (earnings_calendar_snapshots, migration 046).
- * Report only: the fact scores 0 points and no rule reads it. Alpha Vantage display rights are not verified (internal_only),
- * so the figures are for the owner view only; public pages get nothing. Scoring would need an owner decision and a rules version bump.
+ * Forward EPS estimate revisions from stored earnings calendars (earnings_calendar_snapshots).
+ * Report only: the fact scores 0 points and no rule reads it. Vendor display rights are unverified,
+ * so the figures are for the owner view only; public pages get nothing. Scoring needs an owner decision and rules version bump.
  */
 export const ESTIMATE_REVISION_SOURCE = "alphavantage";
 export const ESTIMATE_REVISION_SOURCE_NAME = "Alpha Vantage";
@@ -15,7 +15,7 @@ export const BASELINE_TOLERANCE_DAYS = 7;
 export const REVISION_LOOKBACK_DAYS = Math.max(...REVISION_WINDOWS) + BASELINE_TOLERANCE_DAYS;
 
 /** One stored calendar row: what the calendar said on `observedOn` about one expected report. */
-export interface EstimateObservation { observedOn: string; reportDate: string; fiscalDateEnding: string | null; estimate: number | null }
+export interface EstimateObservation { observedOn: string; reportDate: string; fiscalDateEnding: string | null; estimate: number | null; sourceId?: "alphavantage" | "eodhd" }
 
 export type RevisionDirection = "up" | "down" | "flat";
 export interface RevisionWindow {
@@ -37,7 +37,7 @@ export interface EstimateRevisionFact {
   currentObservedOn: string;
   currentEstimate: number | null;
   windows: RevisionWindow[];
-  sourceId: typeof ESTIMATE_REVISION_SOURCE;
+  sourceId: "alphavantage" | "eodhd";
   points: typeof ESTIMATE_REVISION_POINTS;
 }
 
@@ -83,11 +83,11 @@ function revisionWindow(rows: EstimateObservation[], current: EstimateObservatio
 export function estimateRevision(ticker: string, rows: EstimateObservation[], asOf: string, windows: readonly number[] = REVISION_WINDOWS): EstimateRevisionFact | null {
   const current = nextReport(rows, asOf);
   if (!current) return null;
-  const known = rows.filter((row) => row.observedOn <= asOf);
+  const known = rows.filter((row) => row.observedOn <= asOf && (row.sourceId ?? ESTIMATE_REVISION_SOURCE) === (current.sourceId ?? ESTIMATE_REVISION_SOURCE));
   return {
     ticker, asOf, reportDate: current.reportDate, fiscalDateEnding: current.fiscalDateEnding, currentObservedOn: current.observedOn,
     currentEstimate: current.estimate, windows: windows.map((days) => revisionWindow(known, current, asOf, days)),
-    sourceId: ESTIMATE_REVISION_SOURCE, points: ESTIMATE_REVISION_POINTS,
+    sourceId: current.sourceId ?? ESTIMATE_REVISION_SOURCE, points: ESTIMATE_REVISION_POINTS,
   };
 }
 
@@ -101,5 +101,5 @@ export function formatEstimateRevision(fact: EstimateRevisionFact, audience: "ow
   if (audience !== "owner" && !canDisplay(fact.sourceId)) return null;
   const estimate = fact.currentEstimate === null ? "no EPS estimate" : `EPS estimate ${fact.currentEstimate.toFixed(2)}`;
   const windows = fact.windows.map((w) => `${w.days}d ${w.change === null ? "n/a" : `${signed(w.change, 2)}${w.changePct === null ? "" : ` (${signed(w.changePct, 2)}%)`}`}`).join(", ");
-  return `Next report ${fact.reportDate}: ${estimate}; ${windows}. ${ESTIMATE_REVISION_SOURCE_NAME}, not scored.`;
+  return `Next report ${fact.reportDate}: ${estimate}; ${windows}. ${fact.sourceId === "eodhd" ? "EODHD" : ESTIMATE_REVISION_SOURCE_NAME}, not scored.`;
 }

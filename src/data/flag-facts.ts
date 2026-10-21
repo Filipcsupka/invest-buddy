@@ -71,7 +71,7 @@ export async function latestShareCounts(tickers: readonly string[]): Promise<Rec
     const result = await db.query<{ ticker: string; value: string | number }>(
       `SELECT DISTINCT ON (f.ticker) f.ticker, f.value FROM fundamentals_pit f
        WHERE f.ticker = ANY($1) AND f.concept = 'EntityCommonStockSharesOutstanding'
-         AND EXISTS (SELECT 1 FROM data_sources s WHERE s.id = 'sec' AND s.display_allowed)
+         AND EXISTS (SELECT 1 FROM data_sources s WHERE s.id = f.source_id AND s.display_allowed)
        ORDER BY f.ticker, f.period_end DESC, f.filed DESC, f.id DESC`, [[...tickers]]);
     return Object.fromEntries(result.rows.map((row) => [row.ticker, Number(row.value)] as const).filter(([, value]) => Number.isFinite(value)));
   } catch {

@@ -89,3 +89,17 @@ describe("formatEstimateRevision", () => {
     expect(formatEstimateRevision(fact, "public")).toBeNull();
   });
 });
+
+
+it("keeps EODHD estimate revisions separate from Alpha Vantage", () => {
+  const rows: EstimateObservation[] = [
+    row("2026-09-19", 1, { sourceId: "alphavantage" }),
+    row("2026-09-19", 1.1, { sourceId: "eodhd" }),
+    row(asOf, 1.3, { sourceId: "eodhd" }),
+  ];
+  const fact = estimateRevision("NVDA", rows, asOf)!;
+  expect(fact.sourceId).toBe("eodhd");
+  expect(fact.windows[0].fromEstimate).toBe(1.1);
+  expect(formatEstimateRevision(fact, "owner")).toContain("EODHD");
+  expect(formatEstimateRevision(fact, "public")).toBeNull();
+});

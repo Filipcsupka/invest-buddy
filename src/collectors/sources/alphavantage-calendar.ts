@@ -94,7 +94,7 @@ export async function collectEarningsCalendar(db: Pick<pg.Pool, "query">, http: 
   let inserted = 0;
   for (const row of mine) {
     const result = await db.query(`INSERT INTO earnings_calendar_snapshots (observed_at, observed_on, ticker, report_date, fiscal_date_ending, estimate, currency, time_of_day, source_id, raw_snapshot_id)
-      VALUES ($1,$2::date,$3,$4::date,$5::date,$6,$7,$8,$9,$10) ON CONFLICT (observed_on, ticker, report_date) DO NOTHING`,
+      VALUES ($1,$2::date,$3,$4::date,$5::date,$6,$7,$8,$9,$10) ON CONFLICT (observed_on, ticker, report_date, source_id) DO NOTHING`,
       [now.toISOString(), observedOn, row.symbol, row.reportDate, row.fiscalDateEnding, row.estimate, row.currency, row.timeOfDay, SOURCE, raw.id]);
     inserted += result.rowCount ?? 0;
   }

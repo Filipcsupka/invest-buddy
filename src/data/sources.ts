@@ -2,9 +2,9 @@
  * Where each flag comes from, for the company page. Built once per symbol at scoring time from the consensus_findings
  * evidence refs already loaded for the score, plus one lookup of the stored source_documents those refs point to.
  * A link exists only for a stored source_documents row with meta.display_allowed true, or for the public SEC XBRL url.
- * Third-party data that may not be displayed (Alpha Vantage, FRED, Cboe VIX) keeps a kind and no href.
+ * Third-party data that may not be displayed (Alpha Vantage, EODHD, FRED, Cboe VIX) keeps a kind and no href.
  */
-export type SourceKind = "release" | "10-Q" | "10-K" | "8-K" | "form4" | "filing" | "xbrl" | "alphavantage" | "fred" | "vix" | "prices" | "pricesUniverse" | "unstored";
+export type SourceKind = "release" | "10-Q" | "10-K" | "8-K" | "form4" | "filing" | "xbrl" | "alphavantage" | "eodhd" | "fred" | "vix" | "prices" | "pricesUniverse" | "unstored";
 export interface SourceItem { kind: SourceKind; publishedAt: string | null; href: string | null; /** 8-K item number when the catalyst rule cites a filing item, shown as "SEC 8-K item X". */ item?: string }
 /** What the lookup knows about a stored document. */
 export interface StoredDocInfo { docType: string; publishedAt: string | null; displayAllowed: boolean }
@@ -25,7 +25,7 @@ export function httpsUrl(value: unknown): string | null {
 }
 const isoDay = (value: unknown) => typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value) ? value.slice(0, 10) : null;
 
-const THIRD_PARTY: ReadonlySet<SourceKind> = new Set(["alphavantage", "fred", "vix", "unstored"]);
+const THIRD_PARTY: ReadonlySet<SourceKind> = new Set(["alphavantage", "eodhd", "fred", "vix", "unstored"]);
 function docKind(docType: string): SourceKind | null {
   if (/^8-K EX-99/.test(docType)) return "release";
   if (docType === "10-Q") return "10-Q";
@@ -39,6 +39,7 @@ function hostKind(url: string): SourceKind | null {
   let host = "";
   try { host = new URL(url).hostname; } catch { return null; }
   if (/(^|\.)alphavantage\.co$/.test(host)) return "alphavantage";
+  if (/(^|\.)eodhd\.com$/.test(host)) return "eodhd";
   if (/(^|\.)stlouisfed\.org$/.test(host)) return "fred";
   if (/(^|\.)cboe\.com$/.test(host)) return "vix";
   return null;
@@ -48,7 +49,7 @@ function hostKind(url: string): SourceKind | null {
 export function classifyRef(ref: { url?: string; publishedAt?: string; fiscalPeriod?: string }, doc?: StoredDocInfo): SourceItem | null {
   if (!ref.url) return null;
   const xbrl = SEC_PUBLIC_URL.test(ref.url);
-  let kind: SourceKind = xbrl ? "xbrl" : (doc && docKind(doc.docType)) || hostKind(ref.url) || (ref.fiscalPeriod?.startsWith("Form 4") ? "form4" : doc?.displayAllowed ? "filing" : "unstored");
+  let kind: SourceKind = xbrl ? "xbrl" : hostKind(ref.url) || (doc && docKind(doc.docType)) || (ref.fiscalPeriod?.startsWith("Form 4") ? "form4" : doc?.displayAllowed ? "filing" : "unstored");
   if (!xbrl && !doc?.displayAllowed && !THIRD_PARTY.has(kind) && kind !== "form4") kind = "unstored";
   const href = xbrl ? httpsUrl(ref.url) : doc?.displayAllowed && !THIRD_PARTY.has(kind) ? httpsUrl(ref.url) : null;
   const item = (kind === "8-K" || kind === "release") && href ? /^SEC 8-K item (\d{1,2}\.\d{2})$/.exec(ref.fiscalPeriod ?? "")?.[1] : undefined;
