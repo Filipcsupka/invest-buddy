@@ -25,6 +25,7 @@ import { telegramFromEnv } from "../notify/telegram";
 import { deliverNewCandidates, loadWeekCandidates } from "../notify/discovery";
 import { flags } from "../config/flags";
 import { loadCandidates } from "../universe/candidates";
+import { knownUsdPerUnit } from "../universe/market";
 
 export interface CandidateSource { kind: "edgar" | "price_volume" | "theme" | "frames" | "pool" | "eodhd" | "clinical_trial" | "ownership" | "thirteenf"; url: string; detail: string; growth?: { current: number; prior: number } }
 /** Returns why a name fails the quality floor (market cap, dollar volume), or null. */
@@ -576,7 +577,7 @@ async function main() {
     filtered.push(...profiled.excluded);
     const profiles = new Map(profiled.profiles);
     const quality: QualityCheck = (row, bars) => liquidityReason(bars, profiles.get(row.symbol)?.sharesOutstanding ?? null,
-      DISCOVERY, row.usdPerUnit ?? (row.currency ? NaN : 1), row.marketCapUsd ?? null);
+      DISCOVERY, knownUsdPerUnit(row) ?? NaN, row.marketCapUsd ?? null);
     if (!eodhdOnly && !process.env.TWELVE_DATA_API_KEY) throw new Error("TWELVE_DATA_API_KEY is required to apply the scoring rules to discovery candidates");
     const usage = eodhdOnly ? null : new PostgresUsageLedger(pool);
     const provider = eodhdOnly ? null : new TwelveDataProvider({ apiKey: process.env.TWELVE_DATA_API_KEY!, reserve: () => usage!.reserve("twelvedata", 1, { job: "discovery", credits: 1 }) });

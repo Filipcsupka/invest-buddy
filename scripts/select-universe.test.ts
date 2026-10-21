@@ -6,7 +6,7 @@ import { loadCandidates, parseArgs, writeReport } from "./select-universe";
 import type { Candidate } from "../src/universe/select";
 
 const row = (ticker: string, growth: number): Candidate => ({ ticker, name: `${ticker} Corp`, sector: "Tech", cik: 1, forms: ["10-K"], core: ticker === "AAA",
-  revenueQuarters: 6, yoyGrowthPct: growth, lastClose: 20, avgDollarVolume50: 20_000_000, barDays: 50, marketCapUsd: 1_000_000_000 });
+  revenueQuarters: 6, yoyGrowthPct: growth, lastClose: 20, avgDollarVolume50: 20_000_000, barDays: 50 });
 
 describe("select-universe script", () => {
   it("validates arguments", () => {

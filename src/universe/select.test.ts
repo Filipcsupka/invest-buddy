@@ -1,11 +1,39 @@
 import { describe, expect, it } from "vitest";
-import { barMetrics, excludedCsv, filerType, reviewMarkdown, revenueGrowth, selectedCsv, selectUniverse, sha256, type Candidate } from "./select";
+import { barMetrics, excludedCsv, failedCriterion, filerType, isCommonStock, reviewMarkdown, revenueGrowth, selectedCsv, selectUniverse, sha256, UNIVERSE_CRITERIA, type Candidate } from "./select";
 import marketRows from "./fixtures/market-candidates.json";
-import { usdPerUnit } from "./market";
+import golden from "./fixtures/us-golden-expected.json";
+import { GOLDEN_INPUTS } from "./fixtures/us-golden";
+import { fxConversion, type FxObservation } from "./market";
 
+/** Same base row as before the market-aware model: no exchange, currency or market cap. */
 const base = (ticker: string, over: Partial<Candidate> = {}): Candidate => ({
   ticker, name: `${ticker} Corp`, sector: "Tech", cik: 1, forms: ["10-Q"], core: false, revenueQuarters: 8, yoyGrowthPct: 20,
-  lastClose: 50, avgDollarVolume50: 50_000_000, barDays: 50, marketCapUsd: 1_000_000_000, ...over,
+  lastClose: 50, avgDollarVolume50: 50_000_000, barDays: 50, ...over,
+});
+
+describe("US selection is unchanged for pre-market-universe inputs", () => {
+  for (const [name, expected] of Object.entries(golden.cases)) {
+    it(`matches origin/main output for ${name}`, () => {
+      const s = selectUniverse(GOLDEN_INPUTS[name](), expected.overrides);
+      expect(s.selected.map((r) => [r.rank, r.ticker, r.list, r.group, r.notes.join("; ")])).toEqual(expected.selected);
+      expect(s.excluded.map((e) => [e.ticker, e.reason])).toEqual(expected.excluded);
+    });
+  }
+  it("keeps the strict D35 code pattern for US listings and the looser one for European codes", () => {
+    for (const ticker of ["BAC-PL", "XYZ.WS", "XYZ.U", "ABCW.R", "TOOLONG", "A1B"]) {
+      expect(isCommonStock({ ticker, name: `${ticker} Corp` })).toBe(false);
+      expect(isCommonStock({ ticker: `${ticker}.US`, name: `${ticker} Corp`, exchange: "US" })).toBe(false);
+    }
+    expect(isCommonStock({ ticker: "BRK.B", name: "Berkshire", exchange: "US" })).toBe(true);
+    expect(isCommonStock({ ticker: "ABC.US", name: "ABC Inc", exchange: "US", vendorSymbol: "ABC.US", securityType: "Common Stock" })).toBe(true);
+    expect(isCommonStock({ ticker: "1COV.XETRA", name: "Covestro AG", exchange: "XETRA", vendorSymbol: "1COV.XETRA", securityType: "Common Stock" })).toBe(true);
+    expect(isCommonStock({ ticker: "BP-B.LSE", name: "BP Preferred", exchange: "LSE", vendorSymbol: "BP-B.LSE", securityType: "Common Stock" })).toBe(false);
+  });
+  it("applies the market-cap floor to a US name only when a dated cap exists", () => {
+    expect(failedCriterion(base("NOCAP"), UNIVERSE_CRITERIA)).toBeNull();
+    expect(failedCriterion(base("SMALL", { marketCapUsd: 100_000_000 }), UNIVERSE_CRITERIA)).toBe("market_cap_below_floor");
+    expect(failedCriterion(base("SAP.XETRA", { exchange: "XETRA", currency: "EUR", usdPerUnit: 1.16 }), UNIVERSE_CRITERIA)).toBe("market_cap_unknown");
+  });
 });
 
 describe("exchange-aware selection", () => {
@@ -28,14 +56,49 @@ describe("exchange-aware selection", () => {
   it("converts price, liquidity and market cap into USD and fails closed without FX", () => {
     const rows = marketRows as Candidate[];
     const failed = selectUniverse([rows[0], { ...rows[0], ticker: "LOW.XETRA", avgDollarVolume50: 8_000_000 },
-      { ...rows[2], ticker: "NOFX.SW", usdPerUnit: null }, { ...rows[1], ticker: "SMALL.AS", marketCapUsd: 100_000_000 }], { target: 20, sectorCapPct: 100 });
+      { ...rows[2], ticker: "NOFX.SW", usdPerUnit: null }, { ...rows[1], ticker: "SMALL.AS", marketCapUsd: 100_000_000 },
+      { ...rows[2], ticker: "OLD.SW", usdPerUnit: null, fxIssue: "fx_stale" }, { ...rows[0], ticker: "BLANK.XETRA", usdPerUnit: undefined, currency: "" }],
+    { target: 20, sectorCapPct: 100 });
     expect(failed.excluded.map((row) => [row.ticker, row.reason])).toEqual([
-      ["LOW.XETRA", "volume_below_floor"], ["NOFX.SW", "fx_unavailable"], ["SMALL.AS", "market_cap_below_floor"],
+      ["BLANK.XETRA", "fx_unavailable"], ["LOW.XETRA", "volume_below_floor"], ["NOFX.SW", "fx_unavailable"], ["OLD.SW", "fx_stale"], ["SMALL.AS", "market_cap_below_floor"],
     ]);
-    const rates = new Map([["ECB_EURUSD", 1.16], ["ECB_EURGBP", 0.87], ["ECB_EURCHF", 0.93]]);
-    expect(usdPerUnit("EUR", rates)).toBe(1.16);
-    expect(usdPerUnit("GBX", rates)).toBeCloseTo(1.16 / 0.87 / 100);
-    expect(usdPerUnit("CHF", new Map())).toBeNull();
+  });
+  it("can set the traded-value floor per exchange without changing the default", () => {
+    const sap = (marketRows as Candidate[])[0];
+    const low = { ...sap, ticker: "LOW.XETRA", avgDollarVolume50: 5_000_000 };
+    expect(failedCriterion(low, UNIVERSE_CRITERIA)).toBe("volume_below_floor");
+    expect(failedCriterion(low, { ...UNIVERSE_CRITERIA, minAvgDollarVolumeUsdByExchange: { XETRA: 5_000_000 } })).toBeNull();
+    expect(failedCriterion(base("LOWV", { avgDollarVolume50: 9_000_000 }), { ...UNIVERSE_CRITERIA, minAvgDollarVolumeUsdByExchange: { XETRA: 1 } })).toBe("volume_below_floor");
+  });
+  it("accepts three half-years or four quarters of revenue history", () => {
+    const sap = (marketRows as Candidate[])[0];
+    expect(failedCriterion({ ...sap, revenueQuarters: 3, revenuePeriod: "half" }, UNIVERSE_CRITERIA)).toBeNull();
+    expect(failedCriterion({ ...sap, revenueQuarters: 2, revenuePeriod: "half" }, UNIVERSE_CRITERIA)).toBe("short_revenue_history");
+    expect(failedCriterion({ ...sap, revenueQuarters: 3 }, UNIVERSE_CRITERIA)).toBe("short_revenue_history");
+  });
+  it("fails closed on loader listing issues", () => {
+    const vod = (marketRows as Candidate[]).find((row) => row.ticker === "VOD.LSE")!;
+    expect(failedCriterion({ ...vod, listingIssue: "currency_unverified_gbx" }, UNIVERSE_CRITERIA)).toBe("currency_unverified_gbx");
+    expect(failedCriterion({ ...vod, listingIssue: "listing_not_synced" }, UNIVERSE_CRITERIA)).toBe("listing_not_synced");
+  });
+});
+
+describe("ECB conversion", () => {
+  const asOf = "2026-10-21";
+  const rates = (entries: [string, number, string][]) => new Map<string, FxObservation>(entries.map(([id, value, date]) => [id, { value, date }]));
+  it("converts EUR, GBP pence and crosses from rates of the same day", () => {
+    const fresh = rates([["ECB_EURUSD", 1.16, "2026-10-20"], ["ECB_EURGBP", 0.87, "2026-10-20"], ["ECB_EURCHF", 0.93, "2026-10-20"]]);
+    expect(fxConversion("USD", new Map(), asOf)).toEqual({ usdPerUnit: 1, reason: null });
+    expect(fxConversion("EUR", fresh, asOf).usdPerUnit).toBe(1.16);
+    expect(fxConversion("GBX", fresh, asOf).usdPerUnit).toBeCloseTo(1.16 / 0.87 / 100);
+    expect(fxConversion("CHF", new Map(), asOf)).toEqual({ usdPerUnit: null, reason: "fx_unavailable" });
+    expect(fxConversion("", fresh, asOf)).toEqual({ usdPerUnit: null, reason: "fx_unavailable" });
+  });
+  it("rejects a series older than five days and a cross rate from two dates", () => {
+    expect(fxConversion("EUR", rates([["ECB_EURUSD", 1.16, "2026-10-16"]]), asOf).reason).toBeNull();
+    expect(fxConversion("EUR", rates([["ECB_EURUSD", 1.16, "2026-10-15"]]), asOf)).toEqual({ usdPerUnit: null, reason: "fx_stale" });
+    expect(fxConversion("GBP", rates([["ECB_EURUSD", 1.16, "2026-10-20"], ["ECB_EURGBP", 0.87, "2026-10-19"]]), asOf)).toEqual({ usdPerUnit: null, reason: "fx_stale" });
+    expect(fxConversion("GBP", rates([["ECB_EURUSD", 1.16, "2026-10-20"], ["ECB_EURGBP", 0.87, "2026-09-01"]]), asOf).reason).toBe("fx_stale");
   });
 });
 

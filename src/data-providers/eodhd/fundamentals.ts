@@ -9,12 +9,22 @@ const number = (value: unknown): number | null => {
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
 };
-const quarterStart = (end: string, previousEnd?: string): string => {
+const daysBetween = (from: string | undefined, to: string | undefined) =>
+  from && to ? (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000 : NaN;
+const isHalfSpan = (days: number) => days >= 170 && days <= 195;
+
+/**
+ * Period start from the previous reported period end. A six-month gap is a half-year only when a neighbouring gap is six months
+ * too (a semi-annual reporter, as most LSE issuers are); a single missing quarter keeps the three-month fallback.
+ */
+const periodStart = (ends: string[], index: number): string => {
+  const end = ends[index], previousEnd = ends[index - 1];
   const endDay = Date.parse(`${end}T00:00:00Z`);
   if (previousEnd) {
     const prior = Date.parse(`${previousEnd}T00:00:00Z`);
     const span = (endDay - prior) / 86_400_000;
-    if (span >= 70 && span <= 105) return new Date(prior + 86_400_000).toISOString().slice(0, 10);
+    const half = isHalfSpan(span) && (isHalfSpan(daysBetween(ends[index - 2], previousEnd)) || isHalfSpan(daysBetween(end, ends[index + 1])));
+    if ((span >= 70 && span <= 105) || half) return new Date(prior + 86_400_000).toISOString().slice(0, 10);
   }
   const e = new Date(endDay);
   const targetYear = e.getUTCFullYear();
@@ -46,6 +56,7 @@ export function parseEodhdFundamentals(data: Fundamentals, ticker: string, asOf:
     const item = object(raw);
     return { item, end: date(item.date) ? item.date : date(key) ? key : null };
   }).filter((row): row is { item: Record<string, unknown>; end: string } => row.end !== null).sort((a, b) => a.end.localeCompare(b.end));
+  const ends = quarters.map((row) => row.end);
   for (const [index, { item, end }] of quarters.entries()) {
     const value = number(item.totalRevenue);
     if (value === null || value <= 0) continue;
@@ -53,7 +64,7 @@ export function parseEodhdFundamentals(data: Fundamentals, ticker: string, asOf:
     if (!filed || filed > asOf || filed < end) continue;
     const unit = typeof item.currency_symbol === "string" && /^[A-Z]{3}$/.test(item.currency_symbol) ? item.currency_symbol : data.General?.CurrencyCode;
     if (!unit || !/^[A-Z]{3}$/.test(unit)) continue;
-    rows.push({ ticker, taxonomy: "eodhd", concept: "Revenues", unit, periodStart: quarterStart(end, quarters[index - 1]?.end), periodEnd: end,
+    rows.push({ ticker, taxonomy: "eodhd", concept: "Revenues", unit, periodStart: periodStart(ends, index), periodEnd: end,
       ...period(end), form: "EODHD", filed, accession: `eodhd:revenue:${end}:${filed}`, value, frame: null });
   }
   for (const [key, raw] of Object.entries(object(data.outstandingShares?.quarterly))) {

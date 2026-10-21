@@ -1,13 +1,15 @@
 /** Pure universe selection (D35). No I/O: the script gathers inputs, this module ranks and explains. */
 import { createHash } from "node:crypto";
 import { UNCLASSIFIED } from "./sector";
-import { marketIdentity, UNIVERSE_EXCHANGES } from "./market";
+import { isUniverseExchange, knownUsdPerUnit, marketIdentity } from "./market";
 
 export const CRITERIA_VERSION = "p6-market-2026-10-draft";
 
 export const UNIVERSE_CRITERIA = {
   target: 150,
   minRevenueQuarters: 4,
+  /** Half-yearly reporters (most LSE and many EU issuers) need three dated half-year periods instead. */
+  minRevenueHalfYears: 3,
   minPriceUsd: 5,
   minAvgDollarVolumeUsd: 10_000_000,
   minMarketCapUsd: 300_000_000,
@@ -15,12 +17,19 @@ export const UNIVERSE_CRITERIA = {
   growthFirstPct: 15,
   sectorCapPct: 25,
 } as const;
-export type UniverseCriteria = { [K in keyof typeof UNIVERSE_CRITERIA]: number };
+export type UniverseCriteria = { [K in keyof typeof UNIVERSE_CRITERIA]: number } & {
+  /**
+   * Per-exchange override of minAvgDollarVolumeUsd. Empty by default, so every market uses the same USD floor. EODHD volume for
+   * European listings is primary-venue only (no MTF or consolidated volume), which biases this floor against EU names.
+   */
+  minAvgDollarVolumeUsdByExchange?: Readonly<Partial<Record<string, number>>>;
+};
 
 export type ReasonCode =
   | "not_common_stock" | "foreign_filer" | "filer_unknown" | "no_revenue_history" | "short_revenue_history"
   | "no_growth_data" | "growth_not_positive" | "no_price_data" | "short_bar_history" | "price_below_min"
-  | "volume_below_floor" | "market_cap_unknown" | "market_cap_below_floor" | "fx_unavailable" | "unsupported_exchange"
+  | "volume_below_floor" | "market_cap_unknown" | "market_cap_below_floor" | "fx_unavailable" | "fx_stale" | "unsupported_exchange"
+  | "currency_unverified_gbx" | "listing_not_synced"
   | "duplicate_filer" | "sector_cap" | "below_cut";
 
 export type Candidate = {
@@ -30,10 +39,17 @@ export type Candidate = {
   /** SEC form types seen for this company (filing_watch, fundamentals_pit). */
   forms: string[];
   core: boolean;
+  /** Distinct dated revenue periods (quarters, or half-years when revenuePeriod is "half"). */
   revenueQuarters: number;
   /** Latest quarterly revenue against the same quarter a year earlier, in percent. */
   yoyGrowthPct: number | null;
-  /** Previous quarter's year-over-year growth, when eight dated quarters exist. */
+  /** Length of the revenue periods counted in revenueQuarters. Absent means quarterly. */
+  revenuePeriod?: RevenuePeriod;
+  /** Set by the read model when the listing cannot be trusted for this date (unknown pence quote, symbol not yet synced). */
+  listingIssue?: "currency_unverified_gbx" | "listing_not_synced";
+  /** Set by the read model when an FX rate exists but is too old or a cross rate mixes dates. */
+  fxIssue?: "fx_stale";
+  /** Previous period's year-over-year growth, when enough dated periods exist. */
   priorYoyGrowthPct?: number | null;
   lastClose: number | null;
   avgDollarVolume50: number | null;
@@ -50,13 +66,16 @@ export const DUPLICATE_FILERS: Readonly<Record<string, { of: string; note: strin
 };
 
 const NON_COMMON_NAME = /\b(warrants?|units?|rights?|preferred|depositary|notes|etf|trust)\b/i;
-const COMMON_CODE = /^[A-Z0-9]{1,12}([.-][A-Z0-9]{1,3})?$/;
+/** US codes keep the D35 pattern: one to five letters and an optional A-C share class, so BAC-PL, XYZ.WS and XYZ.U stay out. */
+const US_COMMON_CODE = /^[A-Z]{1,5}([.-][A-C])?$/;
+/** European codes can contain digits and longer classes; non-common lines are caught by NON_COMMON_NAME and the EODHD type. */
+const NON_US_COMMON_CODE = /^[A-Z0-9]{1,12}([.-][A-Z0-9]{1,3})?$/;
 
 export function isCommonStock(c: Pick<Candidate, "ticker" | "name" | "exchange" | "securityType" | "vendorSymbol">): boolean {
   const exchange = c.exchange ?? "US";
   const code = c.ticker.endsWith(`.${exchange}`) ? c.ticker.slice(0, -(exchange.length + 1)) : c.ticker;
-  return UNIVERSE_EXCHANGES.some((item) => item === exchange) && (exchange === "US" || c.ticker.endsWith(`.${exchange}`))
-    && COMMON_CODE.test(code) && !NON_COMMON_NAME.test(c.name)
+  return isUniverseExchange(exchange) && (exchange === "US" || c.ticker.endsWith(`.${exchange}`))
+    && (exchange === "US" ? US_COMMON_CODE : NON_US_COMMON_CODE).test(code) && !NON_COMMON_NAME.test(c.name)
     && (!c.vendorSymbol || !!c.securityType) && (!c.securityType || /^(common stock|equity)$/i.test(c.securityType));
 }
 
@@ -69,26 +88,30 @@ export function filerType(forms: string[]): "domestic" | "foreign" | "unknown" {
 
 /** First failed criterion, or null. Order is fixed so reason codes are stable. */
 export function failedCriterion(c: Candidate, k: UniverseCriteria): ReasonCode | null {
-  if (!UNIVERSE_EXCHANGES.some((item) => item === (c.exchange ?? "US"))) return "unsupported_exchange";
+  const exchange = c.exchange ?? "US";
+  if (!isUniverseExchange(exchange)) return "unsupported_exchange";
   if (!isCommonStock(c)) return "not_common_stock";
-  if ((c.exchange ?? "US") === "US") {
+  if (c.listingIssue) return c.listingIssue;
+  if (exchange === "US") {
     if (DUPLICATE_FILERS[c.ticker.replace(/\.US$/, "")]) return "duplicate_filer";
     const filer = filerType(c.forms);
     if (filer === "foreign") return "foreign_filer";
     if (filer === "unknown") return "filer_unknown";
   }
   if (c.revenueQuarters === 0) return "no_revenue_history";
-  if (c.revenueQuarters < k.minRevenueQuarters) return "short_revenue_history";
+  if (c.revenueQuarters < (c.revenuePeriod === "half" ? k.minRevenueHalfYears : k.minRevenueQuarters)) return "short_revenue_history";
   if (c.yoyGrowthPct === null) return "no_growth_data";
   if (c.yoyGrowthPct <= 0) return "growth_not_positive";
   if (c.lastClose === null || c.avgDollarVolume50 === null) return "no_price_data";
   if (c.barDays < k.minBarDays) return "short_bar_history";
-  const fx = c.usdPerUnit ?? (c.currency === undefined || c.currency === "USD" ? 1 : null);
-  if (fx === null || !Number.isFinite(fx) || fx <= 0) return "fx_unavailable";
+  const fx = knownUsdPerUnit(c);
+  if (fx === null) return c.fxIssue ?? "fx_unavailable";
   if (c.lastClose * fx <= k.minPriceUsd) return "price_below_min";
-  if (c.avgDollarVolume50 * fx <= k.minAvgDollarVolumeUsd) return "volume_below_floor";
-  if (c.marketCapUsd === null || c.marketCapUsd === undefined) return "market_cap_unknown";
-  if (c.marketCapUsd <= k.minMarketCapUsd) return "market_cap_below_floor";
+  if (c.avgDollarVolume50 * fx <= (k.minAvgDollarVolumeUsdByExchange?.[exchange] ?? k.minAvgDollarVolumeUsd)) return "volume_below_floor";
+  // US names without a dated share count keep the D35 rule (no market-cap floor); every other listing needs a dated cap.
+  const cap = typeof c.marketCapUsd === "number" && Number.isFinite(c.marketCapUsd) ? c.marketCapUsd : null;
+  if (cap === null) return exchange === "US" ? null : "market_cap_unknown";
+  if (cap <= k.minMarketCapUsd) return "market_cap_below_floor";
   return null;
 }
 
@@ -125,7 +148,7 @@ export function selectUniverse(input: Candidate[], overrides: Partial<UniverseCr
   const isGrowth = (c: Candidate) => (c.yoyGrowthPct ?? 0) > k.growthFirstPct;
   eligible.sort((a, b) => Number(isGrowth(b)) - Number(isGrowth(a))
     || (b.yoyGrowthPct ?? 0) - (a.yoyGrowthPct ?? 0)
-    || (b.avgDollarVolume50 ?? 0) * (b.usdPerUnit ?? 1) - (a.avgDollarVolume50 ?? 0) * (a.usdPerUnit ?? 1)
+    || (b.avgDollarVolume50 ?? 0) * (knownUsdPerUnit(b) ?? 0) - (a.avgDollarVolume50 ?? 0) * (knownUsdPerUnit(a) ?? 0)
     || byTicker(a, b));
   for (const c of eligible) {
     const reason: ReasonCode | null = selected.length >= k.target ? "below_cut"
@@ -140,9 +163,10 @@ export function selectUniverse(input: Candidate[], overrides: Partial<UniverseCr
 }
 
 export type QuarterRevenue = { periodEnd: string; value: number };
+export type RevenuePeriod = "quarter" | "half";
 const DAY = 86_400_000;
 
-/** Distinct quarters and latest YoY growth from three-month revenue facts (one value per period end). */
+/** Distinct periods and latest YoY growth from same-length revenue facts (quarters or half-years, one value per period end). */
 export function revenueGrowth(quarters: QuarterRevenue[]): { quarters: number; yoyGrowthPct: number | null } {
   const byEnd = new Map(quarters.map((q) => [q.periodEnd, q.value]));
   const ends = [...byEnd.keys()].sort();

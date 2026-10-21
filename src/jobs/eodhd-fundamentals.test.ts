@@ -50,6 +50,20 @@ describe("EODHD fundamentals parsing", () => {
       fy: row.fy!, fp: row.fp!, form: row.form, filed: row.filed }));
     expect(revenueFromCompanyFacts({ facts: { "us-gaap": { Revenues: { units: { USD: facts } } } } }, "2025-10-01")?.revenueAccelerating).toBe(true);
   });
+  it("stores six-month periods for a half-year reporter and keeps a single missing quarter as three months", () => {
+    const halves = ["2024-06-30", "2024-12-31", "2025-06-30", "2025-12-31"];
+    const filed = ["2024-09-15", "2025-03-15", "2025-09-15", "2026-03-15"];
+    const payload: Fundamentals = { General: { CurrencyCode: "GBP" }, Financials: { Income_Statement: { quarterly:
+      Object.fromEntries(halves.map((end, i) => [end, { date: end, filing_date: filed[i], totalRevenue: 100 + i }])) } } };
+    const parsed = parseEodhdFundamentals(payload, "ZZH.LSE", "2026-10-01").rows.filter((row) => row.concept === "Revenues");
+    expect(parsed.map((row) => [row.periodStart, row.periodEnd])).toEqual([
+      ["2024-03-31", "2024-06-30"], ["2024-07-01", "2024-12-31"], ["2025-01-01", "2025-06-30"], ["2025-07-01", "2025-12-31"],
+    ]);
+    const gapped = ["2025-03-31", "2025-06-30", "2025-12-31", "2026-03-31"];
+    const quarterly: Fundamentals = { General: { CurrencyCode: "USD" }, Financials: { Income_Statement: { quarterly:
+      Object.fromEntries(gapped.map((end) => [end, { date: end, filing_date: "2026-05-01", totalRevenue: 100 }])) } } };
+    expect(parseEodhdFundamentals(quarterly, "GAP", "2026-10-01").rows.find((row) => row.periodEnd === "2025-12-31")?.periodStart).toBe("2025-10-01");
+  });
   it("parses a bulk calendar and filters the requested window", () => {
     expect(parseEodhdCalendar(calendar, "2025-10-01", "2025-10-31")).toMatchObject([{ vendorSymbol: "AAPL.US", reportDate: "2025-10-15", fiscalDateEnding: "2025-09-30", estimate: 2.34 }]);
   });
