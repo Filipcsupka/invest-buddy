@@ -10,7 +10,7 @@ export interface CatalogFund {
   exchange: string; tradingCurrency: string | null; ucits: boolean | null; issuer: string | null;
   assetClass: EtfAssetClass | null; region: string | null; theme: string | null; trackedIndex: string | null;
   terPct: number | null; aumUsdM: number | null; domicile: string | null; replication: string | null;
-  distribution: "acc" | "dist" | null; sourceUrl: string | null; enrichmentStatus: "pending" | "ok" | "failed";
+  distribution: "acc" | "dist" | null; sourceUrl: string | null; enrichmentStatus: "pending" | "ok" | "failed" | "eodhd_unmapped" | "eodhd_incomplete";
   enrichedAt: string | null; firstSeen: string; lastSeen: string; shortlist: boolean; pickSymbol: string | null;
 }
 export interface CatalogFilters {
@@ -29,7 +29,7 @@ type Row = {
   exchange: string; trading_currency: string | null; ucits: boolean | null; issuer: string | null;
   asset_class: EtfAssetClass | null; region: string | null; theme: string | null; tracked_index: string | null;
   ter_pct: string | number | null; aum_usd_m: string | number | null; domicile: string | null; replication: string | null;
-  distribution: "acc" | "dist" | null; source_url: string | null; enrichment_status: "pending" | "ok" | "failed";
+  distribution: "acc" | "dist" | null; source_url: string | null; enrichment_status: CatalogFund["enrichmentStatus"];
   enriched_at: string | Date | null; first_seen: string | Date; last_seen: string | Date; shortlist: boolean; pick_symbol: string | null;
 };
 const date = (value: string | Date | null): string | null => value == null ? null : value instanceof Date ? value.toISOString().slice(0, 10) : String(value).slice(0, 10);

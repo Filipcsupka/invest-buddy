@@ -8,8 +8,12 @@ describe("catalog enrichment status", () => {
     const updates: { sql: string; args: unknown[] }[] = [];
     const db = { connect: async () => ({ query: async (sql: string, args: unknown[] = []) => { if (sql.includes("UPDATE etf_catalog SET issuer")) updates.push({ sql, args }); return { rowCount: 1 }; }, release() {} }) };
     await ingestEnrichment(db as never, [item,{ ...item, listingKey: "NASDAQ:TEST", terPct: null }]);
-    expect(updates[0].args.at(-1)).toBe("ok");
-    expect(updates[1].args.at(-1)).toBe("failed");
+    expect(updates[0].args[13]).toBe("ok");
+    expect(updates[1].args[13]).toBe("failed");
+    await ingestEnrichment(db as never, [{ ...item, listingKey: "XETR:TEST", source: "eodhd", issuer: null, sourceUrl: null }]);
+    expect(updates[2].args[13]).toBe("eodhd_unmapped");
+    await ingestEnrichment(db as never, [{ ...item, listingKey: "XETR:PARTIAL", source: "eodhd", issuer: null }]);
+    expect(updates[3].args[13]).toBe("eodhd_incomplete");
     expect(updates[0].sql).toContain("enrich_attempts=enrich_attempts+CASE WHEN $14='failed' THEN 1 ELSE 0 END");
     expect(updates[0].sql).toContain("enrich_attempts<3");
   });
