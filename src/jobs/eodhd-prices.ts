@@ -10,6 +10,13 @@ import { insertCorporateActions } from "../db/corporate-actions";
 import type { CorporateAction } from "../data/corporate-actions";
 import { EodhdClient, type BulkLastDayBar, type BulkSplit, type EodBar, type Split } from "../data-providers/eodhd/client";
 import { runLoggedJob } from "./job-log";
+import { instrumentRegion, REGION_BENCHMARKS } from "../universe/region";
+
+/** SPY always; a region's benchmark joins when the universe holds one of its listings (European keys carry the exchange suffix). */
+export function withBenchmarks(tickers: string[]): string[] {
+  const regions = new Set(tickers.map((ticker) => instrumentRegion(ticker)));
+  return [...new Set([...tickers, REGION_BENCHMARKS.US, ...(regions.has("Europe") ? [REGION_BENCHMARKS.Europe] : [])])];
+}
 
 export interface PriceSymbol { ticker: string; vendorSymbol: string; exchange: string; code: string; currency: string }
 type EodhdPricesClient = Pick<EodhdClient, "eod" | "splits" | "getCallCosts"> & {
@@ -179,7 +186,7 @@ async function main() {
   if (!process.env.DATABASE_URL || !process.env.EODHD_API_KEY) throw new Error("DATABASE_URL and EODHD_API_KEY are required; no request was made");
   const db = new pg.Pool({ connectionString: process.env.DATABASE_URL });
   try {
-    const universe = [...new Set([...(await loadUniverse(db, undefined, { collect: true })).map((item) => item.symbol), "SPY"])];
+    const universe = withBenchmarks((await loadUniverse(db, undefined, { collect: true })).map((item) => item.symbol));
     const unknown = args.only?.filter((ticker) => !universe.includes(ticker)) ?? [];
     if (unknown.length) throw new Error(`Unknown ticker(s): ${unknown.join(", ")}`);
     const { symbols, unmapped } = await loadEodhdPriceSymbols(db, args.only ?? universe);

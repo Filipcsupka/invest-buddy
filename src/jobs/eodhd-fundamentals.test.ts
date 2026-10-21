@@ -4,7 +4,8 @@ import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { parseEodhdCalendar, parseEodhdFundamentals } from "../data-providers/eodhd/fundamentals";
 import type { EarningsCalendar, Fundamentals } from "../data-providers/eodhd/client";
-import { dueForRefresh, loadSubjects, parseArgs, runEodhdFundamentals } from "./eodhd-fundamentals";
+import pg from "pg";
+import { dueForRefresh, loadSubjects, parseArgs, runEodhdFundamentals, storeClassification } from "./eodhd-fundamentals";
 
 const fixture = (name: string) => JSON.parse(readFileSync(join(process.cwd(), "src/data-providers/eodhd/fixtures/offline", name), "utf8"));
 const fundamentals = fixture("AAPL.US.json") as Fundamentals;
@@ -153,4 +154,25 @@ it("revenue score reads EODHD observations only after they were reported and fir
   expect(result?.currentGrowth).toBeCloseTo(30);
   expect(result?.priorGrowth).toBeCloseTo(10);
   expect(await eodhdRevenueStored(db, "AAPL", "2025-10-14")).toBeNull();
+});
+
+describe("EODHD sector and industry", () => {
+  it("skips a payload without either field", async () => {
+    const calls: unknown[] = [];
+    await storeClassification({ query: async (...args: unknown[]) => { calls.push(args); return { rows: [] }; } } as never, "SAP.XETRA", { sector: null, industry: null }, "2026-10-21");
+    expect(calls).toEqual([]);
+  });
+  it.skipIf(!process.env.TEST_DATABASE_URL)("keeps the first observed day until the pair changes (Postgres)", async () => {
+    const pool = new pg.Pool({ connectionString: process.env.TEST_DATABASE_URL, max: 1 });
+    try {
+      await pool.query("BEGIN");
+      await pool.query("INSERT INTO symbols (vendor_symbol,code,exchange,name,first_seen,last_seen) VALUES ('ZZC.XETRA','ZZC','XETRA','ZZ','2026-01-01','2026-10-21')");
+      const read = async () => (await pool.query("SELECT sector,industry,sector_observed_on::text observed FROM symbols WHERE vendor_symbol='ZZC.XETRA'")).rows[0];
+      await storeClassification(pool, "ZZC.XETRA", { sector: "Technology", industry: "Semiconductors" }, "2026-10-01");
+      await storeClassification(pool, "ZZC.XETRA", { sector: "Technology", industry: "Semiconductors" }, "2026-10-10");
+      expect(await read()).toEqual({ sector: "Technology", industry: "Semiconductors", observed: "2026-10-01" });
+      await storeClassification(pool, "ZZC.XETRA", { sector: "Technology", industry: "Software - Application" }, "2026-10-15");
+      expect(await read()).toEqual({ sector: "Technology", industry: "Software - Application", observed: "2026-10-15" });
+    } finally { await pool.query("ROLLBACK"); await pool.end(); }
+  });
 });

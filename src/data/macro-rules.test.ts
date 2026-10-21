@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_MACRO_CONFIG, evaluateDataTailwind, evaluateSectorRotation, macroConfig, type Bar, type VixPoint, type YieldPoint } from "./macro-rules";
+import { DEFAULT_MACRO_CONFIG, evaluateBenchmarkTrend, evaluateDataTailwind, evaluateSectorRotation, macroConfig, type Bar, type VixPoint, type YieldPoint } from "./macro-rules";
 
 const ASOF = "2026-10-02"; // Friday
 const dates = (n: number, last = ASOF) => Array.from({ length: n }, (_, i) => new Date(Date.parse(`${last}T00:00:00Z`) - (n - 1 - i) * 86_400_000).toISOString().slice(0, 10));
@@ -158,5 +158,21 @@ describe("macroConfig", () => {
     expect(() => macroConfig({ MACRO_VIX_MAX: "abc" })).toThrow(/Invalid macro setting/);
     expect(() => macroConfig({ MACRO_WINDOW_SESSIONS: "2" })).toThrow();
     expect(() => macroConfig({ MACRO_MIN_COVERAGE: "1.5" })).toThrow();
+  });
+});
+
+describe("benchmark trend", () => {
+  const series = (n: number, first: number, end: number, endDate = "2026-10-02") => Array.from({ length: n }, (_, i) => ({
+    date: new Date(Date.parse(`${endDate}T00:00:00Z`) - (n - 1 - i) * 86_400_000).toISOString().slice(0, 10), close: first + ((end - first) * i) / (n - 1) }));
+  it("is true above and false at or below the 50-session average", () => {
+    expect(evaluateBenchmarkTrend(series(60, 100, 110), "2026-10-02", "EXSA.XETRA").value).toBe(true);
+    expect(evaluateBenchmarkTrend(series(60, 110, 100), "2026-10-02", "EXSA.XETRA").value).toBe(false);
+    expect(evaluateBenchmarkTrend(series(60, 100, 100), "2026-10-02", "EXSA.XETRA").value).toBe(false);
+  });
+  it("ignores bars after the date and is unknown when missing, short or stale", () => {
+    expect(evaluateBenchmarkTrend([...series(60, 100, 110), { date: "2026-10-05", close: 1 }], "2026-10-02", "EXSA.XETRA").value).toBe(true);
+    expect(evaluateBenchmarkTrend(null, "2026-10-02", "EXSA.XETRA").reason).toBe("Unknown: EXSA.XETRA bars are missing");
+    expect(evaluateBenchmarkTrend(series(49, 100, 110), "2026-10-02", "EXSA.XETRA").value).toBeNull();
+    expect(evaluateBenchmarkTrend(series(60, 100, 110, "2026-09-20"), "2026-10-02", "EXSA.XETRA").reason).toMatch(/stale/);
   });
 });
