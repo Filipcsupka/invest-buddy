@@ -1,0 +1,8 @@
+{
+  "type": "Earnings",
+  "description": "Historical and upcoming Earnings",
+  "symbols": "AAPL.US",
+  "earnings": [
+    { "code": "AAPL.US", "report_date": "2025-01-30", "date": "2024-12-31", "before_after_market": "AfterMarket", "currency": "USD", "actual": 2.4, "estimate": 2.34, "difference": 0.06, "percent": 2.5641 }
+  ]
+}
