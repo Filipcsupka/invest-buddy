@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { spawnSync } from "node:child_process";
 import { parseEodhdCalendar, parseEodhdFundamentals } from "../data-providers/eodhd/fundamentals";
 import type { EarningsCalendar, Fundamentals } from "../data-providers/eodhd/client";
 import { dueForRefresh, parseArgs, runEodhdFundamentals } from "./eodhd-fundamentals";
@@ -46,14 +47,17 @@ describe("EODHD fundamentals parsing", () => {
 });
 
 describe("EODHD refresh scheduling", () => {
-  it("bootstraps once and refreshes only after a new expected report, with retry spacing", () => {
+  it("matches nearby report dates, backs off missed updates, and refreshes stale calendar-free symbols", () => {
     expect(dueForRefresh(null, undefined, "2025-10-21")).toBe(true);
     expect(dueForRefresh(null, { attemptedAt: "2025-10-15T00:00:00Z", latestReportDate: null }, "2025-10-21")).toBe(false);
-    expect(dueForRefresh("2025-10-15", { attemptedAt: "2025-10-18T00:00:00Z", latestReportDate: "2025-07-15" }, "2025-10-21")).toBe(true);
-    expect(dueForRefresh("2025-10-15", { attemptedAt: "2025-10-20T00:00:00Z", latestReportDate: "2025-07-15" }, "2025-10-21")).toBe(false);
+    expect(dueForRefresh("2025-10-15", { attemptedAt: "2025-10-18T00:00:00Z", latestReportDate: "2025-10-17", lastExpectedReportDate: "2025-10-15" }, "2025-11-10")).toBe(false);
+    expect(dueForRefresh("2025-10-15", { attemptedAt: "2025-10-18T00:00:00Z", latestReportDate: "2025-10-13", lastExpectedReportDate: "2025-10-15" }, "2025-11-10")).toBe(false);
+    expect(dueForRefresh("2025-10-15", { attemptedAt: "2025-10-18T00:00:00Z", latestReportDate: "2025-07-15", lastExpectedReportDate: "2025-10-15" }, "2025-10-21")).toBe(false);
+    expect(dueForRefresh("2025-10-15", { attemptedAt: "2025-10-18T00:00:00Z", latestReportDate: "2025-07-15", lastExpectedReportDate: "2025-10-15" }, "2025-11-01")).toBe(true);
+    expect(dueForRefresh("2025-10-15", { attemptedAt: "2025-10-18T00:00:00Z", latestReportDate: "2025-07-15", lastExpectedReportDate: "2025-07-15" }, "2025-10-21")).toBe(true);
+    expect(dueForRefresh("2025-10-15", { attemptedAt: "2025-10-20T00:00:00Z", latestReportDate: "2025-07-15", lastExpectedReportDate: "2025-10-15" }, "2025-10-21")).toBe(false);
     expect(dueForRefresh("2025-10-15", { attemptedAt: "2025-10-18T00:00:00Z", latestReportDate: "2025-10-15" }, "2025-10-21")).toBe(false);
-    const missed = { attemptedAt: "2025-10-18T00:00:00Z", latestReportDate: "2025-07-15", lastExpectedReportDate: "2025-10-15" };
-    expect(dueForRefresh(missed.lastExpectedReportDate, missed, "2025-10-21")).toBe(true);
+    expect(dueForRefresh(null, { attemptedAt: "2025-07-13T00:00:00Z", latestReportDate: "2025-07-12" }, "2025-10-21")).toBe(true);
   });
   it("uses one bulk calendar call, forwards the configurable filter and writes nothing in dry-run", async () => {
     const calls: string[] = [];
@@ -66,6 +70,47 @@ describe("EODHD refresh scheduling", () => {
       subjects: [{ ticker: "AAPL", vendorSymbol: "AAPL.US" }], filter: "Financials::Income_Statement::quarterly" });
     expect(calls).toEqual(["calendar:2025-10-07:2026-01-19", "fundamentals:AAPL.US:Financials::Income_Statement::quarterly"]);
     expect(result).toMatchObject({ calendarRows: 1, due: 1, refreshed: 1, facts: 6, eps: 2, calls: 11 });
+  });
+  it("records a failed symbol and continues with the next one", async () => {
+    const calls: string[] = [];
+    const api = {
+      earningsCalendar: async () => ({ earnings: [] }),
+      fundamentals: async (symbol: string) => {
+        calls.push(symbol);
+        if (symbol === "BAD.US") throw new Error("temporary failure");
+        return fundamentals;
+      },
+      getCallCosts: () => ({ fundamentals: 20, calendar: 1 }),
+    };
+    const result = await runEodhdFundamentals(null, api, { dryRun: true, now: new Date("2025-10-21T12:00:00Z"), subjects: [
+      { ticker: "BAD", vendorSymbol: "BAD.US" }, { ticker: "AAPL", vendorSymbol: "AAPL.US" },
+    ] });
+    expect(calls).toEqual(["BAD.US", "AAPL.US"]);
+    expect(result).toMatchObject({ failures: 1, refreshed: 1, failedSymbols: "BAD", facts: 6 });
+  });
+  it.each([401, 402, 403])("stops after HTTP %i authorization or allowance errors", async (status) => {
+    const calls: string[] = [];
+    const { EodhdClient } = await import("../data-providers/eodhd/client");
+    const client = new EodhdClient({ apiKey: "test-token", fetch: async (input) => {
+      if (String(input).includes("calendar/earnings")) return new Response(JSON.stringify({ earnings: [] }));
+      const symbol = String(input).match(/fundamentals\/([^?]+)/)?.[1];
+      if (symbol) calls.push(symbol);
+      return symbol === "BAD.US" ? new Response("denied", { status }) : new Response(JSON.stringify(fundamentals));
+    } });
+    const result = await runEodhdFundamentals(null, client, { dryRun: true, now: new Date("2025-10-21T12:00:00Z"), subjects: [
+      { ticker: "BAD", vendorSymbol: "BAD.US" }, { ticker: "AAPL", vendorSymbol: "AAPL.US" },
+    ] });
+    expect(calls).toEqual(["BAD.US"]);
+    expect(result).toMatchObject({ failures: 1, refreshed: 0, failedSymbols: "BAD", stoppedEarly: true });
+  });
+  it("exits nonzero with a failure summary after continuing past a bad fixture", () => {
+    const result = spawnSync(process.execPath, ["--import", "tsx", "src/jobs/eodhd-fundamentals.ts", "--dry-run",
+      "--fixture-dir", "src/data-providers/eodhd/fixtures/offline", "--only", "MISSING.US,AAPL.US", "--as-of", "2025-10-21"],
+    { cwd: process.cwd(), encoding: "utf8" });
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain('"refreshed":1');
+    expect(result.stdout).toContain('"failures":1');
+    expect(result.stdout).toContain('"failedSymbols":"MISSING"');
   });
 });
 

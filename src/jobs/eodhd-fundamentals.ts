@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import pg from "pg";
-import { EodhdClient, type EarningsCalendar, type Fundamentals } from "../data-providers/eodhd/client";
+import { EodhdClient, EodhdHttpError, type EarningsCalendar, type Fundamentals } from "../data-providers/eodhd/client";
 import { parseEodhdCalendar, parseEodhdFundamentals } from "../data-providers/eodhd/fundamentals";
 import { insertFundamentals } from "../collectors/sources/companyfacts";
 import { insertEpsHistory } from "../db/eps-history";
@@ -21,11 +21,13 @@ export interface RefreshState { attemptedAt: string; latestReportDate: string | 
 export interface FundamentalsClient { fundamentals(symbol: string, filter?: string): Promise<Fundamentals>; earningsCalendar(options: { from: string; to: string }): Promise<EarningsCalendar>; getCallCosts(): Record<string, number> }
 export interface RunOptions { dryRun?: boolean; maxSymbols?: number; filter?: string; only?: string[]; subjects?: Subject[]; now?: Date }
 
-/** A fresh actual report makes the symbol current. Missing actuals are retried every three days after an expected date. */
+/** Match reports within three days, retry a missed expected report after 14 days, and refresh every 100 days without a calendar match. */
 export function dueForRefresh(expected: string | null, state: RefreshState | undefined, today: string): boolean {
   if (!state) return true;
-  if (!expected || expected <= (state.latestReportDate ?? "")) return false;
-  return state.attemptedAt.slice(0, 10) <= shift(today, -3);
+  if (state.attemptedAt.slice(0, 10) <= shift(today, -100)) return true;
+  if (!expected || (state.latestReportDate ?? "") >= shift(expected, -3)) return false;
+  if (state.lastExpectedReportDate !== expected) return true;
+  return state.attemptedAt.slice(0, 10) <= shift(today, -14);
 }
 
 export async function loadSubjects(db: Pick<pg.Pool, "query">, only?: string[]): Promise<Subject[]> {
@@ -56,7 +58,7 @@ export async function runEodhdFundamentals(db: pg.Pool | null, api: Fundamentals
   const today = now.toISOString().slice(0, 10);
   const from = shift(today, -14), to = shift(today, 90);
   const subjects = options.subjects ?? (db ? await loadSubjects(db, options.only) : []);
-  if (!subjects.length) return { calendarRows: 0, due: 0, refreshed: 0, facts: 0, eps: 0, calls: 0 };
+  if (!subjects.length) return { calendarRows: 0, due: 0, refreshed: 0, facts: 0, eps: 0, calls: 0, failures: 0, failedSymbols: "", stoppedEarly: false };
   const byVendor = new Map(subjects.map((row) => [row.vendorSymbol, row.ticker]));
   const calendar = await api.earningsCalendar({ from, to }); // One bulk call for the whole window.
   const observations = parseEodhdCalendar(calendar, from, to).flatMap((row) => {
@@ -76,37 +78,51 @@ export async function runEodhdFundamentals(db: pg.Pool | null, api: Fundamentals
   const last = db ? await states(db) : new Map<string, RefreshState>();
   const due = subjects.filter((row) => dueForRefresh(expected.get(row.ticker) ?? last.get(row.ticker)?.lastExpectedReportDate ?? null, last.get(row.ticker), today));
   const picked = due.slice(0, options.maxSymbols ?? 25);
-  let facts = 0, eps = 0;
+  let facts = 0, eps = 0, refreshed = 0, stoppedEarly = false;
+  const failed: string[] = [];
   const repo = db ? new PostgresCollectorRepository(db) : null;
   for (const row of picked) {
-    const payload = await api.fundamentals(row.vendorSymbol, options.filter);
-    const parsed = parseEodhdFundamentals(payload, row.ticker, today);
-    facts += parsed.rows.length;
-    eps += parsed.earnings.length;
-    if (!db || options.dryRun) continue;
-    await putSnapshot(db, { sourceId: SOURCE, key: `fundamentals:${row.vendorSymbol}`, body: JSON.stringify(payload), contentType: "application/json", fetchedAt: now });
-    await insertFundamentals(db, parsed.rows, SOURCE);
-    if (parsed.earnings.length) await insertEpsHistory(db, { symbol: row.ticker, ticker: row.vendorSymbol, quarters: parsed.earnings,
-      rawBody: JSON.stringify(payload.Earnings?.History ?? {}), fetchedAt: now.toISOString() }, SOURCE);
-    const latest = parsed.earnings.filter((item) => item.reportedEps !== null).at(-1);
-    if (latest?.reportedDate) {
-      const url = `https://eodhd.com/api/v1.1/fundamentals/${encodeURIComponent(row.vendorSymbol)}#${latest.reportedDate}`;
-      const doc = document({ source: SOURCE, sourceId: SOURCE, symbol: row.ticker, docType: "EPS surprise", url,
-        publishedAt: `${latest.reportedDate}T00:00:00Z`, body: `${row.ticker} EPS report dated ${latest.reportedDate}.`,
-        meta: { display_allowed: false, fiscalDateEnding: latest.fiscalDateEnding } });
-      const stored = await repo!.upsertDocument(doc);
-      await repo!.upsertFact({ symbol: row.ticker, key: EPS_FACT_KEY, asOf: latest.reportedDate,
-        value: { reportedDate: latest.reportedDate, fiscalDateEnding: latest.fiscalDateEnding, reportedEps: latest.reportedEps,
-          estimatedEps: latest.estimatedEps, surprisePercent: latest.surprisePct, source: SOURCE, displayAllowed: false },
-        documentIds: [stored.id], expiresAt: shift(latest.reportedDate, freshnessDays.epsBeat), sourceId: SOURCE });
+    try {
+      const payload = await api.fundamentals(row.vendorSymbol, options.filter);
+      const parsed = parseEodhdFundamentals(payload, row.ticker, today);
+      if (db && !options.dryRun) {
+        await putSnapshot(db, { sourceId: SOURCE, key: `fundamentals:${row.vendorSymbol}`, body: JSON.stringify(payload), contentType: "application/json", fetchedAt: now });
+        await insertFundamentals(db, parsed.rows, SOURCE);
+        if (parsed.earnings.length) await insertEpsHistory(db, { symbol: row.ticker, ticker: row.vendorSymbol, quarters: parsed.earnings,
+          rawBody: JSON.stringify(payload.Earnings?.History ?? {}), fetchedAt: now.toISOString() }, SOURCE);
+        const latest = parsed.earnings.filter((item) => item.reportedEps !== null).at(-1);
+        if (latest?.reportedDate) {
+          const url = `https://eodhd.com/api/v1.1/fundamentals/${encodeURIComponent(row.vendorSymbol)}#${latest.reportedDate}`;
+          const doc = document({ source: SOURCE, sourceId: SOURCE, symbol: row.ticker, docType: "EPS surprise", url,
+            publishedAt: `${latest.reportedDate}T00:00:00Z`, body: `${row.ticker} EPS report dated ${latest.reportedDate}.`,
+            meta: { display_allowed: false, fiscalDateEnding: latest.fiscalDateEnding } });
+          const stored = await repo!.upsertDocument(doc);
+          await repo!.upsertFact({ symbol: row.ticker, key: EPS_FACT_KEY, asOf: latest.reportedDate,
+            value: { reportedDate: latest.reportedDate, fiscalDateEnding: latest.fiscalDateEnding, reportedEps: latest.reportedEps,
+              estimatedEps: latest.estimatedEps, surprisePercent: latest.surprisePct, source: SOURCE, displayAllowed: false },
+            documentIds: [stored.id], expiresAt: shift(latest.reportedDate, freshnessDays.epsBeat), sourceId: SOURCE });
+        }
+        await db.query(`INSERT INTO eodhd_fundamentals_refresh (ticker,attempted_at,latest_report_date,last_expected_report_date)
+          VALUES ($1,$2,$3,$4) ON CONFLICT (ticker) DO UPDATE SET attempted_at=EXCLUDED.attempted_at,
+            latest_report_date=GREATEST(eodhd_fundamentals_refresh.latest_report_date,EXCLUDED.latest_report_date),
+            last_expected_report_date=EXCLUDED.last_expected_report_date`,
+        [row.ticker, now, latest?.reportedDate ?? null, expected.get(row.ticker) ?? last.get(row.ticker)?.lastExpectedReportDate ?? null]);
+      }
+      facts += parsed.rows.length;
+      eps += parsed.earnings.length;
+      refreshed++;
+    } catch (error) {
+      failed.push(row.ticker);
+      const reason = error instanceof EodhdHttpError ? `HTTP ${error.status}` : error instanceof Error ? error.name : "error";
+      process.stderr.write(`${JSON.stringify({ event: "eodhd_fundamentals_symbol_failed", ticker: row.ticker, reason })}\n`);
+      if (error instanceof EodhdHttpError && [401, 402, 403].includes(error.status)) {
+        stoppedEarly = true;
+        break;
+      }
     }
-    await db.query(`INSERT INTO eodhd_fundamentals_refresh (ticker,attempted_at,latest_report_date,last_expected_report_date)
-      VALUES ($1,$2,$3,$4) ON CONFLICT (ticker) DO UPDATE SET attempted_at=EXCLUDED.attempted_at,
-        latest_report_date=GREATEST(eodhd_fundamentals_refresh.latest_report_date,EXCLUDED.latest_report_date),
-        last_expected_report_date=EXCLUDED.last_expected_report_date`,
-      [row.ticker, now, latest?.reportedDate ?? null, expected.get(row.ticker) ?? last.get(row.ticker)?.lastExpectedReportDate ?? null]);
   }
-  return { calendarRows: observations.length, due: due.length, refreshed: picked.length, facts, eps,
+  return { calendarRows: observations.length, due: due.length, refreshed, facts, eps,
+    failures: failed.length, failedSymbols: failed.join(","), stoppedEarly,
     calls: Object.values(api.getCallCosts()).reduce((n, cost) => n + cost, 0) };
 }
 
@@ -145,6 +161,7 @@ async function main() {
   try {
     const result = await runEodhdFundamentals(db, api, options);
     process.stdout.write(`eodhd-fundamentals: ${JSON.stringify(result)}${options.dryRun ? " (dry run)" : ""}\n`);
+    if (result.failures) process.exitCode = 1;
     return result;
   } finally { await db?.end(); }
 }
