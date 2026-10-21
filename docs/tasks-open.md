@@ -5,16 +5,28 @@
 Owner decision 2026-10-21: remove the AI screen and AI data gathering. Use EODHD ALL-IN-ONE for stock inputs, with AI only as judge. The ETF catalog and weekly ETF picks remain separate.
 
 ### EODHD data layer (2026-10-21)
-Merged: AI screen removed (#278), EODHD client and symbols table (#279), price bars (#280), ETF enrichment from EODHD (#281), fundamentals and earnings (#282), Form 4 insider fallback (#283), earnings and news catalyst (#284), market-aware US plus Europe universe (#285), suspended AI research stack removed (#286). In progress: regional macro and sector (P7), CronJobs and secret in the infra repo (P11, prepared locally, not pushed).
+Owner decisions: no AI scraping or collection. EODHD ALL-IN-ONE supplies every input. No AI token spend until EODHD data is live; the AI role (judge or other) is decided afterwards.
 
-Nothing runs against EODHD yet. No API key exists, so every job is tested on recorded fixtures only. UNVERIFIED until a real response is checked: exchange codes PA, AS, SW, PR, the quarterly income statement filter path, ETF field names and UCITS coverage, LSE price unit (GBX or GBP), news call cost, All-In-One plan limits. Details in `docs/eodhd.md` and `docs/eodhd-universe.md`.
+Done:
+- AI screen removed (#278). Suspended AI research stack removed (#286).
+- EODHD client and symbols table (#279), price bars (#280), fundamentals and earnings (#282), Form 4 insider fallback (#283), earnings and news catalyst (#284), US plus Europe universe (#285), regional macro and sector (#288).
+- ETF enrichment from EODHD (#281). Codex path dropped (#289).
+- Infra #60: AI CronJobs suspended (extract, judge, review-calendar, etf-enrich, etf-research).
+- The research CronJobs removal and the new EODHD CronJobs (suspended) are on local infra branch `feat/invest-eodhd-cronjobs`, not pushed.
+- Nothing runs against EODHD yet. There is no key and all tests use recorded fixtures.
 
-Owner steps, in order:
-1. Buy EODHD ALL-IN-ONE for one month (about 100 USD) and create secret `invest-buddy-eodhd` key `api-key` in namespace `invest`.
-2. Run `npm run symbols:sync -- --dry-run`, then the real sync; check which exchange codes come back.
-3. Run price backfill and fundamentals for a few names (`--only`), compare with the old sources, then un-suspend the infra CronJobs one by one.
-4. ETF enrichment is EODHD only (Codex path removed). In infra, drop `CODEX_ACCESS_TOKEN` and `RESEARCH_CODEX_MODEL` from the ETF enrich CronJob and add `EODHD_API_KEY`; confirm ETF fields on a `--limit 20` run first.
-5. Remaining LLM call sites: extract (`scanner/run-extract.mjs`) and judge. Extract can be switched off once EODHD fundamentals and catalyst feed the rules; owner decision.
+Next, in order:
+1. Owner: buy EODHD ALL-IN-ONE and create secret `invest-buddy-eodhd` key `api-key` in namespace `invest` (`KUBECONFIG=~/.kube/khtz kubectl -n invest create secret generic invest-buddy-eodhd --from-literal=api-key=<KEY>`).
+2. Verify against real responses (listed as UNVERIFIED in `docs/eodhd.md` and `docs/eodhd-universe.md`): exchange codes PA, AS, SW, PR; the quarterly income statement filter path; ETF field names and UCITS coverage; LSE price unit (GBX or GBP, LSE listings are excluded until confirmed); `EXSA.XETRA` availability; news call cost; plan limits. Fix the code where the response differs.
+3. Symbols sync with `--dry-run`, then for real. Check the exchange list.
+4. Price backfill (`prices:eodhd --mode backfill --only ...`) on a few tickers, compare with the old price source, then the whole universe (MA200 needs 200 bars).
+5. Fundamentals and catalyst on a few names, compare with SEC and Alpha Vantage, then widen.
+6. Push and merge infra branch `feat/invest-eodhd-cronjobs` (needs owner approval), then un-suspend the EODHD CronJobs one at a time: symbols, prices, fundamentals, catalyst, insider.
+7. ETF enrichment live run after step 2: `etf:enrich --limit 100` first (relevance order, call cap), then un-suspend `etf-enrich` (weekly). Un-suspend `etf-research` only after the AI role decision.
+8. Owner decision on the AI role. Judge, ETF picks and extract are all suspended. Decide which AI runs go on top of EODHD data (for example judge on structured data only, no web search) and which provider. Extract can stay off once fundamentals and catalyst feed the rules.
+9. Owner sign-off on scoring: European macro points use a STOXX 600 ETF price trend (placeholder, no ECB series is collected). US rotation averages US names only. EU primary-venue volume biases the traded-value floor. Thresholds in `docs/eodhd-universe.md` are provisional.
+10. Cleanup once the key works: drop tables `research_runs`, `research_findings`, `research_candidates`, `research_events` and `ai_cards` (migration, needs owner OK); remove the SEC and Alpha Vantage collectors that EODHD replaces; remove `scanner/run-scan.mjs` (old scan, no CronJob).
+11. Forward-return comparison of the old ChatGPT picks against the pipeline is not built. It needs 20 picks per side and the `ai_cards` rows, so back them up before step 10.
 
 ### Done today
 - Promotion fix (#264): the pipeline read `e.status` but evidence stores `verify.status`, so nothing was proposed. CGNX, COF, ROK, SYM, VRT, COHR, NOVT now in the scored universe (6 of 7 score Criteria broken, ROK Ignore; real rule results).
