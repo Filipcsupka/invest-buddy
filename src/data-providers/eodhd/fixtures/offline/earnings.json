@@ -1,0 +1,7 @@
+{
+  "type": "Earnings",
+  "earnings": [
+    { "code": "AAPL.US", "report_date": "2025-10-15", "date": "2025-09-30", "estimate": 2.34, "currency": "USD", "before_after_market": "AfterMarket" },
+    { "code": "MSFT.US", "report_date": "2025-11-05", "date": "2025-09-30", "estimate": 3.1, "currency": "USD" }
+  ]
+}

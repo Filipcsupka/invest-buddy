@@ -1,0 +1,17 @@
+{
+  "General": { "Code": "AAPL", "CurrencyCode": "USD" },
+  "Financials": { "Income_Statement": { "quarterly": {
+    "2025-09-30": { "date": "2025-09-30", "filing_date": "2025-10-15", "totalRevenue": 130, "currency_symbol": "USD" },
+    "2025-06-30": { "date": "2025-06-30", "filing_date": "2025-07-15", "totalRevenue": 110, "currency_symbol": "USD" },
+    "2024-09-30": { "date": "2024-09-30", "filing_date": "2024-10-15", "totalRevenue": 100, "currency_symbol": "USD" },
+    "2024-06-30": { "date": "2024-06-30", "filing_date": "2024-07-15", "totalRevenue": 100, "currency_symbol": "USD" }
+  } } },
+  "Earnings": { "History": {
+    "2025-09-30": { "reportDate": "2025-10-15", "epsActual": 2.4, "epsEstimate": 2.34, "surprisePercent": 2.56 },
+    "2025-06-30": { "reportDate": "2025-07-15", "epsActual": 2.1, "epsEstimate": 2.0, "surprisePercent": 5 }
+  } },
+  "outstandingShares": { "quarterly": {
+    "2025-09-30": { "date": "2025-09-30", "sharesMln": 15000 },
+    "2025-06-30": { "date": "2025-06-30", "sharesMln": 15100 }
+  } }
+}

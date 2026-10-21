@@ -23,8 +23,10 @@ export async function readEarningsSnapshots(db: Query, asOf: string, symbols?: s
   const r = await db.query<EarningsSnapshotRow>(`
     WITH seen AS (SELECT * FROM earnings_calendar_snapshots WHERE observed_on <= $1::date AND ($2::text[] IS NULL OR ticker = ANY($2::text[]))),
     newest AS (SELECT ticker, max(observed_on) AS observed_on FROM seen GROUP BY ticker),
-    cur AS (SELECT s.* FROM seen s JOIN newest n ON n.ticker = s.ticker AND n.observed_on = s.observed_on),
-    moved AS (SELECT o.* FROM seen o JOIN cur c ON c.ticker = o.ticker AND c.fiscal_date_ending = o.fiscal_date_ending
+    cur AS (SELECT DISTINCT ON (s.ticker,COALESCE(s.fiscal_date_ending,s.report_date)) s.*
+      FROM seen s JOIN newest n ON n.ticker = s.ticker AND n.observed_on = s.observed_on
+      ORDER BY s.ticker,COALESCE(s.fiscal_date_ending,s.report_date),CASE WHEN s.source_id='eodhd' THEN 0 ELSE 1 END,s.report_date),
+    moved AS (SELECT o.* FROM seen o JOIN cur c ON c.ticker = o.ticker AND c.source_id=o.source_id AND c.fiscal_date_ending = o.fiscal_date_ending
       WHERE o.observed_on < c.observed_on AND o.report_date <> c.report_date AND c.report_date >= $1::date)
     SELECT ticker, observed_on::text AS "observedOn", report_date::text AS "reportDate", fiscal_date_ending::text AS "fiscalDateEnding",
       time_of_day AS "timeOfDay"

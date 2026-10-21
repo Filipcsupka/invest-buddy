@@ -32,15 +32,15 @@ export function parseCompanyfacts(body: string, ticker: string): FundamentalRow[
   return rows;
 }
 
-export async function insertFundamentals(db: Pick<pg.Pool, "query">, rows: FundamentalRow[]): Promise<number> {
+export async function insertFundamentals(db: Pick<pg.Pool, "query">, rows: FundamentalRow[], sourceId = "sec"): Promise<number> {
   let inserted = 0;
   // Bounded batches avoid a giant parameter list for issuers with long histories.
   for (let offset = 0; offset < rows.length; offset += 500) {
     const result = await db.query<{ id: string }>(`INSERT INTO fundamentals_pit
-      (ticker,taxonomy,concept,unit,period_start,period_end,fy,fp,form,filed,accession,value,frame)
-      SELECT x.ticker,x.taxonomy,x.concept,x.unit,x."periodStart"::date,x."periodEnd"::date,x.fy,x.fp,x.form,x.filed::date,x.accession,x.value,x.frame
+      (ticker,taxonomy,concept,unit,period_start,period_end,fy,fp,form,filed,accession,value,frame,source_id)
+      SELECT x.ticker,x.taxonomy,x.concept,x.unit,x."periodStart"::date,x."periodEnd"::date,x.fy,x.fp,x.form,x.filed::date,x.accession,x.value,x.frame,$2
       FROM jsonb_to_recordset($1::jsonb) AS x(ticker text,taxonomy text,concept text,unit text,"periodStart" text,"periodEnd" text,fy integer,fp text,form text,filed text,accession text,value numeric,frame text)
-      ON CONFLICT (ticker,taxonomy,concept,unit,period_start,period_end,accession) DO NOTHING RETURNING id`, [JSON.stringify(rows.slice(offset, offset + 500))]);
+      ON CONFLICT (ticker,taxonomy,concept,unit,period_start,period_end,accession) DO NOTHING RETURNING id`, [JSON.stringify(rows.slice(offset, offset + 500)), sourceId]);
     inserted += result.rowCount ?? result.rows.length;
   }
   return inserted;

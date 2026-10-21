@@ -105,7 +105,7 @@ export class MemoryCollectorRepository implements CollectorRepository {
 export async function loadEpsSurprise(pool: pg.Pool, symbol: string, asOf: string, minSurprisePct = DEFAULT_EPS_BEAT_MIN_SURPRISE_PCT): Promise<EpsResult | null> {
   const fact = await pool.query<{ as_of: string; value: unknown; url: string | null }>(`SELECT f.as_of::text,f.value,
       (SELECT d.url FROM source_documents d WHERE d.id = ANY(f.document_ids) ORDER BY d.id DESC LIMIT 1) AS url
-    FROM collected_facts f WHERE f.symbol=$1 AND f.fact_key=$2 AND f.as_of <= $3::date ORDER BY f.as_of DESC LIMIT 1`, [symbol, EPS_FACT_KEY, asOf]);
+    FROM collected_facts f WHERE f.symbol=$1 AND f.fact_key=$2 AND f.as_of <= $3::date AND (f.source_id <> 'eodhd' OR f.computed_at::date <= $3::date) ORDER BY f.as_of DESC LIMIT 1`, [symbol, EPS_FACT_KEY, asOf]);
   const row = fact.rows[0];
   return row ? epsFromFact({ asOf: row.as_of, value: row.value }, row.url, asOf, minSurprisePct) : null;
 }
@@ -169,7 +169,8 @@ export class PostgresCollectorRepository implements CollectorRepository {
         COALESCE((SELECT s.licence_class FROM data_sources s WHERE s.id = src.id),'unknown') FROM src
       ON CONFLICT (symbol,fact_key,as_of) DO UPDATE SET value=EXCLUDED.value,document_ids=EXCLUDED.document_ids,
         computed_at=now(),expires_at=EXCLUDED.expires_at,source_id=EXCLUDED.source_id,licence_class=EXCLUDED.licence_class
-      WHERE (collected_facts.value,collected_facts.document_ids,collected_facts.source_id) IS DISTINCT FROM (EXCLUDED.value,EXCLUDED.document_ids,EXCLUDED.source_id)`,
+      WHERE (collected_facts.value,collected_facts.document_ids,collected_facts.source_id) IS DISTINCT FROM (EXCLUDED.value,EXCLUDED.document_ids,EXCLUDED.source_id)
+        AND NOT (collected_facts.fact_key='eps_surprise_latest' AND collected_facts.source_id='eodhd' AND EXCLUDED.source_id <> 'eodhd')`,
       [fact.symbol, fact.key, fact.asOf, JSON.stringify(fact.value), fact.documentIds, fact.expiresAt ?? null, fact.sourceId ?? FACT_SOURCE_IDS[fact.key] ?? null]);
     return (result.rowCount ?? 0) > 0;
   }

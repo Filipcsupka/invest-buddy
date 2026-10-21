@@ -92,8 +92,8 @@ export const byScore = (a: ScreenRow, b: ScreenRow) => (b.percent ?? -1) - (a.pe
 /** One source as the page shows it: a localized label, an optional publish date and an https link only for displayable documents. */
 export type SourceLink = { key: string; kind: SourceKind; label: string; date: string | null; dateLabel: string | null; href: string | null };
 
-const KINDS: readonly SourceKind[] = ["release", "10-Q", "10-K", "8-K", "form4", "filing", "xbrl", "alphavantage", "fred", "vix", "prices", "pricesUniverse", "unstored"];
-const NO_LINK: ReadonlySet<SourceKind> = new Set(["alphavantage", "fred", "vix", "prices", "pricesUniverse", "unstored"]);
+const KINDS: readonly SourceKind[] = ["release", "10-Q", "10-K", "8-K", "form4", "filing", "xbrl", "alphavantage", "eodhd", "fred", "vix", "prices", "pricesUniverse", "unstored"];
+const NO_LINK: ReadonlySet<SourceKind> = new Set(["alphavantage", "eodhd", "fred", "vix", "prices", "pricesUniverse", "unstored"]);
 const isKind = (value: string): value is SourceKind => (KINDS as readonly string[]).includes(value);
 const plain = (kind: SourceKind): SourceItem => ({ kind, publishedAt: null, href: null });
 const itemKey = (s: SourceItem) => s.href ?? `${s.kind}:${s.publishedAt ?? ""}`;

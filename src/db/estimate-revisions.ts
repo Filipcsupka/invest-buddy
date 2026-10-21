@@ -10,10 +10,10 @@ export interface StoredEstimateObservation extends EstimateObservation { ticker:
 export async function storedEstimateObservations(db: Pick<pg.Pool, "query">, tickers: string[], asOf: string, lookbackDays = REVISION_LOOKBACK_DAYS): Promise<StoredEstimateObservation[]> {
   if (!tickers.length) return [];
   const result = await db.query<StoredEstimateObservation>(
-    `SELECT ticker, observed_on::text AS "observedOn", report_date::text AS "reportDate", fiscal_date_ending::text AS "fiscalDateEnding", estimate::float8 AS estimate
+    `SELECT DISTINCT ON (ticker,observed_on,COALESCE(fiscal_date_ending,report_date)) ticker, observed_on::text AS "observedOn", report_date::text AS "reportDate", fiscal_date_ending::text AS "fiscalDateEnding", estimate::float8 AS estimate, source_id AS "sourceId"
        FROM earnings_calendar_snapshots
       WHERE ticker = ANY($1::text[]) AND observed_on <= $2::date AND observed_on >= $2::date - $3::int AND report_date >= $2::date - $3::int
-      ORDER BY ticker, observed_on, report_date`, [tickers, asOf, lookbackDays]);
+      ORDER BY ticker, observed_on, COALESCE(fiscal_date_ending,report_date), CASE WHEN source_id='eodhd' THEN 0 ELSE 1 END, report_date`, [tickers, asOf, lookbackDays]);
   return result.rows;
 }
 
