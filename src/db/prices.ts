@@ -6,7 +6,7 @@ export interface PriceRunRecord {
   failures: { ticker: string; reason: string }[]; stoppedReason: string | null;
 }
 /** Where a batch of bars came from: registry id and the symbol the vendor was asked for. */
-export interface BarProvenance { sourceId: string; vendorSymbol: string }
+export interface BarProvenance { sourceId: string; vendorSymbol: string; currency?: string | null }
 export interface UpsertResult { written: number; revised: number }
 export interface BarRevision extends OHLCV { ticker: string; observedAt: string; sourceId: string; kind: "first" | "superseded" }
 export interface PriceRepository {
@@ -38,7 +38,7 @@ export class MemoryPriceRepository implements PriceRepository {
       } else if (old.open !== bar.open || old.high !== bar.high || old.low !== bar.low || old.close !== bar.close || old.volume !== bar.volume) {
         this.revisions.push({ ...old, ticker, observedAt: this.observed.get(key) ?? observedAt, sourceId: this.provenance.get(ticker)?.sourceId ?? provenance.sourceId, kind: "superseded" });
         revised++;
-      } else continue;
+      } else if (this.provenance.get(ticker)?.sourceId === provenance.sourceId && this.provenance.get(ticker)?.vendorSymbol === provenance.vendorSymbol && this.provenance.get(ticker)?.currency === provenance.currency) continue;
       store.set(bar.date, { ...bar });
       this.observed.set(key, observedAt);
       changed++;
@@ -64,20 +64,21 @@ export class PostgresPriceRepository implements PriceRepository {
       const arrays = [bars.map((b) => b.date), bars.map((b) => b.open), bars.map((b) => b.high), bars.map((b) => b.low), bars.map((b) => b.close), bars.map((b) => b.volume)];
       const source = `FROM unnest($2::date[],$3::numeric[],$4::numeric[],$5::numeric[],$6::numeric[],$7::numeric[]) AS t(d,o,h,l,c,v)`;
       // Bars never stored before: keep the values as first seen.
-      await client.query(`INSERT INTO daily_bar_revisions (ticker,bar_date,observed_at,open,high,low,close,volume,source_id,kind)
-        SELECT $1, d, now(), o, h, l, c, v, $8::text, 'first' ${source}
-        WHERE NOT EXISTS (SELECT 1 FROM daily_bars b WHERE b.ticker=$1 AND b.bar_date=d)`, [ticker, ...arrays, provenance.sourceId]);
+      await client.query(`INSERT INTO daily_bar_revisions (ticker,bar_date,observed_at,open,high,low,close,volume,source_id,kind,currency)
+        SELECT $1, d, now(), o, h, l, c, v, $8::text, 'first', $9::text ${source}
+        WHERE NOT EXISTS (SELECT 1 FROM daily_bars b WHERE b.ticker=$1 AND b.bar_date=d)`, [ticker, ...arrays, provenance.sourceId, provenance.currency ?? null]);
       // Stored bars about to be replaced: keep the old values, with the time they were fetched.
-      const revised = await client.query(`INSERT INTO daily_bar_revisions (ticker,bar_date,observed_at,open,high,low,close,volume,source_id,kind)
-        SELECT b.ticker, b.bar_date, COALESCE(b.fetched_at, now()), b.open, b.high, b.low, b.close, b.volume, COALESCE(b.source_id, $8::text), 'superseded'
+      const revised = await client.query(`INSERT INTO daily_bar_revisions (ticker,bar_date,observed_at,open,high,low,close,volume,source_id,kind,currency)
+        SELECT b.ticker, b.bar_date, COALESCE(b.fetched_at, now()), b.open, b.high, b.low, b.close, b.volume, COALESCE(b.source_id, $8::text), 'superseded', b.currency
         FROM daily_bars b JOIN (SELECT d,o,h,l,c,v ${source}) n ON n.d=b.bar_date
         WHERE b.ticker=$1 AND (b.open,b.high,b.low,b.close,b.volume) IS DISTINCT FROM (n.o,n.h,n.l,n.c,n.v)`, [ticker, ...arrays, provenance.sourceId]);
-      const result = await client.query(`INSERT INTO daily_bars (ticker,bar_date,open,high,low,close,volume,source_id,vendor_symbol,fetched_at)
-        SELECT $1, d, o, h, l, c, v, $8::text, $9::text, now() ${source}
+      const result = await client.query(`INSERT INTO daily_bars (ticker,bar_date,open,high,low,close,volume,source_id,vendor_symbol,fetched_at,currency)
+        SELECT $1, d, o, h, l, c, v, $8::text, $9::text, now(), $10::text ${source}
         ON CONFLICT (ticker,bar_date) DO UPDATE SET open=EXCLUDED.open,high=EXCLUDED.high,low=EXCLUDED.low,close=EXCLUDED.close,volume=EXCLUDED.volume,
-          source_id=EXCLUDED.source_id,vendor_symbol=EXCLUDED.vendor_symbol,fetched_at=EXCLUDED.fetched_at
-        WHERE (daily_bars.open,daily_bars.high,daily_bars.low,daily_bars.close,daily_bars.volume) IS DISTINCT FROM (EXCLUDED.open,EXCLUDED.high,EXCLUDED.low,EXCLUDED.close,EXCLUDED.volume)`,
-        [ticker, ...arrays, provenance.sourceId, provenance.vendorSymbol]);
+          source_id=EXCLUDED.source_id,vendor_symbol=EXCLUDED.vendor_symbol,fetched_at=EXCLUDED.fetched_at,currency=COALESCE(EXCLUDED.currency,daily_bars.currency)
+        WHERE (daily_bars.open,daily_bars.high,daily_bars.low,daily_bars.close,daily_bars.volume,daily_bars.source_id,daily_bars.vendor_symbol,daily_bars.currency)
+          IS DISTINCT FROM (EXCLUDED.open,EXCLUDED.high,EXCLUDED.low,EXCLUDED.close,EXCLUDED.volume,EXCLUDED.source_id,EXCLUDED.vendor_symbol,COALESCE(EXCLUDED.currency,daily_bars.currency))`,
+        [ticker, ...arrays, provenance.sourceId, provenance.vendorSymbol, provenance.currency ?? null]);
       await client.query("COMMIT");
       return { written: result.rowCount ?? 0, revised: revised.rowCount ?? 0 };
     } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
