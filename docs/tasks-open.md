@@ -1,5 +1,22 @@
 # Open tasks
 
+## Status 2026-11-04
+
+Waiting on the EODHD key (E1). Everything that needs real vendor responses (E2 to E9) stays blocked until it is bought.
+
+Done since 2026-10-21:
+- Infra #61 merged: five EODHD CronJobs added (suspended), ETF enrich reads `invest-buddy-eodhd` key `api-key`, research CronJobs and the verify NetworkPolicy removed. The `invest-buddy-research-config` ConfigMap stays. All EODHD CronJobs stay suspended until the secret exists and a dry run looks right (E7).
+- Production dependency audit clean: Next 16.4.5 and Vite 7.3.7 (#296). Dev audit still lists ESLint/minimatch and Vitest/tinypool findings that need major toolchain upgrades.
+- S6 fixed (#297): a later discovery run refreshes pending rows of the same week; approved and rejected rows stay snapshots.
+- Dependabot #292, #294, #295 merged.
+
+Corrections to the list below:
+- Open item 1 (slow Codex ETF enrich) no longer applies: the Codex path is gone (#289). Re-check speed and call cost in E9.
+- Open item 6 (remove research CronJobs) is done (infra #61).
+- E12 must keep `scanner/run-scan.mjs` and the SEC and Alpha Vantage collectors until their readers are replaced: the scanner is still the Docker entrypoint and judge and ETF runners import it, and current jobs and pages read the SEC and research tables. Remove only what grep shows unused.
+
+Not started, needs an owner decision: index funds second tier (fee source), non-US benchmark source for ETF outcomes, E10 and E11 sign-offs.
+
 ## Status 2026-10-21 (end of day)
 
 Owner decision 2026-10-21: remove the AI screen and AI data gathering. Use EODHD ALL-IN-ONE for stock inputs, with AI only as judge. The ETF catalog and weekly ETF picks remain separate.
