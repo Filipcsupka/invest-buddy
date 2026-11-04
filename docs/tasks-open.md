@@ -1,5 +1,12 @@
 # Open tasks
 
+## When the EODHD key arrives (start here)
+
+1. Do E1 below: create secret `invest-buddy-eodhd` (key `api-key`) in namespace `invest`, export `EODHD_API_KEY` in the local shell only, call `/api/user`, write plan and daily call limit into `docs/eodhd.md`.
+2. Do E2: one real call per UNVERIFIED item, save trimmed fixtures, fix parsers, one PR.
+3. Then E3 to E9 in order. Each real DB write and each un-suspend of an `invest-buddy-eodhd-*` CronJob needs the owner's yes. Edit `suspend` in the infra manifest, never `kubectl patch`.
+4. If the plan gives a different data set than ALL-IN-ONE (for example no fundamentals or no Form 4), list which of the five scoring inputs lose coverage before E3 and ask the owner.
+
 ## Status 2026-11-04
 
 Waiting on the EODHD key (E1). Everything that needs real vendor responses (E2 to E9) stays blocked until it is bought.
