@@ -460,14 +460,30 @@ export async function screenDiscoveryShortlist(rows: DiscoveryCandidate[], date:
   return { screened, skippedCount: skipped.length, skipped, notPassed, failureCount: failures.length, failures };
 }
 
+export async function loadKnownDiscoverySymbols(db: pg.Pool, date: string, week: string): Promise<Set<string>> {
+  const result = await db.query<{ ticker: string }>(`SELECT ticker FROM universe_membership WHERE list <> 'benchmark'
+    AND valid_from <= $1::date AND (valid_to IS NULL OR valid_to > $1::date)
+    UNION SELECT symbol AS ticker FROM discovery_candidates
+    WHERE status='approved' OR (status='pending' AND week_start <> $2::date)`, [date, week]);
+  return new Set(result.rows.map((row) => row.ticker));
+}
+
 export async function saveCandidates(db: pg.Pool, week: string, rows: DiscoveryCandidate[], max: number = DISCOVERY.maxCandidatesPerWeek): Promise<DiscoveryCandidate[]> {
   const client = await db.connect();
   try {
     await client.query("BEGIN");
     await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`discovery:${week}`]);
-    const existing = await client.query<{ symbol: string }>("SELECT symbol FROM discovery_candidates WHERE week_start=$1", [week]);
+    const existing = await client.query<{ symbol: string; status: string }>("SELECT symbol,status FROM discovery_candidates WHERE week_start=$1", [week]);
     const slots = Math.max(0, max - existing.rows.length);
-    const seen = new Set(existing.rows.map((r) => r.symbol));
+    const status = new Map(existing.rows.map((row) => [row.symbol, row.status]));
+    for (const row of rows.filter((candidate) => status.get(candidate.symbol) === "pending")) {
+      if (row.ruleScore === undefined || !row.ruleState || !row.signalDate) throw new Error(`Candidate ${row.symbol} lacks rule screening`);
+      await client.query(`UPDATE discovery_candidates SET name=$3,sector=$4,theme=$5,score=$6,rule_score=$7,
+        rule_state=$8,signal_date=$9,benchmark_close=$10,sources=$11::jsonb
+        WHERE week_start=$1 AND symbol=$2 AND status='pending'`,
+      [week, row.symbol, row.name, row.sector, row.theme, row.score, row.ruleScore, row.ruleState, row.signalDate, row.benchmarkClose ?? null, JSON.stringify(row.sources)]);
+    }
+    const seen = new Set(existing.rows.map((row) => row.symbol));
     const selected = rows.filter((row) => !seen.has(row.symbol)).slice(0, slots);
     for (const row of selected) {
       if (row.ruleScore === undefined || !row.ruleState || !row.signalDate) throw new Error(`Candidate ${row.symbol} lacks rule screening`);
@@ -540,9 +556,7 @@ async function main() {
     }
     if (!eodhdOnly) requireSecUserAgent(process.env.SEC_USER_AGENT);
     const week = weekStart(explicitDate ?? new Date().toISOString().slice(0, 10));
-    const known = new Set((await pool.query<{ ticker: string }>(`SELECT ticker FROM universe_membership WHERE list <> 'benchmark'
-      AND valid_from <= $1::date AND (valid_to IS NULL OR valid_to > $1::date)
-      UNION SELECT symbol AS ticker FROM discovery_candidates WHERE status IN ('approved','pending')`, [date])).rows.map((r) => r.ticker));
+    const known = await loadKnownDiscoverySymbols(pool, date, week);
     const previousWeek = new Date(`${week}T00:00:00Z`);
     previousWeek.setUTCDate(previousWeek.getUTCDate() - 7);
     const since = previousWeek.toISOString().slice(0, 10);
@@ -654,8 +668,8 @@ async function main() {
     const skipped = [...filtered, ...result.skipped];
     const skippedCount = skipped.length;
     for (const failure of failures) process.stderr.write(`${failure.symbol}: screening failed: ${failure.reason}\n`);
-    const selected = screened.sort((a, b) => (b.ruleScore ?? 0) - (a.ruleScore ?? 0) || b.score - a.score || a.symbol.localeCompare(b.symbol)).slice(0, DISCOVERY.maxCandidatesPerWeek);
-    const saved = await saveCandidates(pool, week, selected);
+    const rankedScreened = screened.sort((a, b) => (b.ruleScore ?? 0) - (a.ruleScore ?? 0) || b.score - a.score || a.symbol.localeCompare(b.symbol));
+    const saved = await saveCandidates(pool, week, rankedScreened);
     const telegram = await notifyWeek(pool, week);
     process.stdout.write(`${JSON.stringify({ weekStart: week, sourceRows: summary, uniqueSymbols: new Set([...sources, ...poolRows].map((row) => row.symbol)).size, ranked: ranked.length, preScreened: preScreened?.preScreened ?? 0, preScreenDropped: preScreened?.dropped.length ?? 0, preScreenDroppedNames: preScreened?.dropped ?? [], telegram, twelveDataRequests: provider?.requests ?? 0, pool: poolSummary, screened: shortlist.length + poolProfiled.kept.length, shortlisted: shortlist.length, candidates: saved, notPassed: result.notPassed, skippedCount, skipped, failureCount, failures })}\n`);
   } finally { await pool.end(); }

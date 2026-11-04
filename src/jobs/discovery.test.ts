@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import pg from "pg";
 import { describe, expect, it } from "vitest";
-import { candidateMacro, edgarCandidates, frameCandidates, managerHoldingChanges, moverCandidates, nonCommonStockReason, ownershipCandidates, parse13fHoldings, preScreenMa200, rankCandidates, reviewCandidate, saveCandidates, saveDiscoveryPriceBars, screenCandidates, shortlistCandidates, sourceSummary, screenDiscoveryShortlist, themeCandidates, weekStart, type DiscoveryCandidate } from "./discovery";
+import { candidateMacro, edgarCandidates, frameCandidates, loadKnownDiscoverySymbols, managerHoldingChanges, moverCandidates, nonCommonStockReason, ownershipCandidates, parse13fHoldings, preScreenMa200, rankCandidates, reviewCandidate, saveCandidates, saveDiscoveryPriceBars, screenCandidates, shortlistCandidates, sourceSummary, screenDiscoveryShortlist, themeCandidates, weekStart, type DiscoveryCandidate } from "./discovery";
 import { DailyLimitError, SymbolNotFoundError } from "../data/twelvedata";
 import type { OHLCV } from "../engine/types";
 import { loadUniverse } from "../db/universe";
@@ -11,6 +11,36 @@ import { loadUniverse } from "../db/universe";
 const filingFeed = readFileSync(join(process.cwd(), "src/collectors/sources/fixtures/sec_getcurrent_8k.xml"), "utf8");
 
 describe("weekly discovery", () => {
+  it("screens pending names again in their week but excludes reviewed and older names", async () => {
+    const query = async (sql: string, params: unknown[]) => {
+      expect(params).toEqual(["2026-10-21", "2026-10-19"]);
+      expect(sql).toContain("status='approved' OR (status='pending' AND week_start <> $2::date)");
+      return { rows: [{ ticker: "TRACKED" }, { ticker: "REVIEWED" }, { ticker: "OLD_PENDING" }] };
+    };
+    expect(await loadKnownDiscoverySymbols({ query } as unknown as pg.Pool, "2026-10-21", "2026-10-19"))
+      .toEqual(new Set(["TRACKED", "REVIEWED", "OLD_PENDING"]));
+  });
+
+  it("refreshes fresh-screened pending rows without changing reviewed rows or their first-seen time", async () => {
+    const candidate = (symbol: string): DiscoveryCandidate => ({ symbol, name: `${symbol} new`, sector: "Growth", theme: null, score: 3,
+      ruleScore: 14, ruleState: "Watch", signalDate: "2026-10-21", benchmarkClose: 500, sources: [{ kind: "pool", url: "https://sec.gov/x", detail: "growth" }] });
+    const statements: { sql: string; params?: unknown[] }[] = [];
+    const client = { query: async (sql: string, params?: unknown[]) => {
+      statements.push({ sql, params });
+      if (sql.startsWith("SELECT symbol,status FROM discovery_candidates")) return { rows: [
+        { symbol: "PENDING", status: "pending" }, { symbol: "APPROVED", status: "approved" }, { symbol: "REJECTED", status: "rejected" },
+      ] };
+      return { rows: [] };
+    }, release: () => undefined };
+    const db = { connect: async () => client } as unknown as pg.Pool;
+    const saved = await saveCandidates(db, "2026-10-19", [candidate("NEW"), candidate("APPROVED"), candidate("REJECTED"), candidate("PENDING"), candidate("SECOND_NEW")], 4);
+    expect(saved.map((row) => row.symbol)).toEqual(["NEW"]);
+    const updates = statements.filter((statement) => statement.sql.startsWith("UPDATE discovery_candidates"));
+    expect(updates).toHaveLength(1);
+    expect(updates[0].params?.slice(0, 2)).toEqual(["2026-10-19", "PENDING"]);
+    expect(updates[0].sql).toContain("status='pending'");
+    expect(updates[0].sql).not.toContain("created_at");
+  });
   it("filters current 8-Ks to Items 1.01 and 2.02 using submissions, with filing links", async () => {
     const get = async (url: string) => {
       if (url.includes("getcurrent")) return filingFeed;
