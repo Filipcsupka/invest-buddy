@@ -10,6 +10,9 @@ import { writeHttpLog } from "@/app/api/ingest/request-log";
 import { resolveRequestId } from "@/app/request-id";
 import { statusPage } from "@/app/status-page";
 import { ownerAuthorized } from "@/app/[locale]/owner/auth";
+import { marketsViewable } from "@/markets/gate";
+
+const marketSections = new Set(["indices", "forex", "crypto", "economy", "congress", "news", "screener"]);
 
 /** Resolve unavailable pages before a streamed layout can commit a 200 response. */
 export async function proxy(request: NextRequest) {
@@ -34,6 +37,10 @@ async function handle(request: NextRequest) {
   if (previewParam === "free" && resolveViewer(flags(), "free").preview) incoming.set(PREVIEW_HEADER, "free");
   const [, locale, section, ticker] = request.nextUrl.pathname.split("/");
   const featureFlags = flags();
+  if (marketSections.has(section) && featureFlags.MARKETS_VIEWS &&
+    !marketsViewable(request.headers.get("authorization"))) {
+    return new NextResponse("Authentication required", { status: 401, headers: { "WWW-Authenticate": 'Basic realm="Owner"', "Cache-Control": "private, no-store", "X-Robots-Tag": "noindex" } });
+  }
   if (section === "owner" && featureFlags.OWNER_VIEW &&
     !ownerAuthorized(request.headers.get("authorization"), process.env.OWNER_RESEARCH_PASSWORD)) {
     return new NextResponse("Authentication required", { status: 401, headers: { "WWW-Authenticate": 'Basic realm="Owner"', "Cache-Control": "no-store" } });
@@ -45,10 +52,12 @@ async function handle(request: NextRequest) {
     || (section === "ideas" && (!ideasEnabled() || !featureFlags.ADVICE_OUTPUT))
     || (section === "owner-allocation" && !ownerViewEnabled())
     || (section === "owner" && !featureFlags.OWNER_VIEW)
+    || (marketSections.has(section) && !featureFlags.MARKETS_VIEWS)
     || (section === "company" && (!ticker || !(await instrumentUniverse()).some((item) => item.ticker === ticker.toUpperCase())));
   if (!unavailable) {
     const response = NextResponse.next({ request: { headers: incoming } });
-    if (section === "owner") response.headers.set("Cache-Control", "private, no-store");
+    if (section === "owner" || marketSections.has(section)) response.headers.set("Cache-Control", "private, no-store");
+    if (marketSections.has(section)) response.headers.set("X-Robots-Tag", "noindex");
     if (request.nextUrl.searchParams.has("view")) response.headers.set("X-Robots-Tag", "noindex");
     response.headers.set("x-request-id", requestId);
     response.headers.set("server-timing", `rid;desc="${requestId}"`);

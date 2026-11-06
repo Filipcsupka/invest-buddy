@@ -7,6 +7,9 @@ import { Analytics } from "@/components/analytics";
 import { JsonLd } from "@/components/json-ld";
 import { siteJsonLd, siteNoindex, siteUrl } from "@/i18n/metadata";
 import { TierBanner } from "@/components/kit/tier";
+import { headers } from "next/headers";
+import { marketsViewable } from "@/markets/gate";
+import { flags } from "@/config/flags";
 import { getKitMessages } from "@/i18n/kit-messages";
 import "../fonts.css";
 import "../globals.css";
@@ -54,7 +57,7 @@ export default async function LocaleLayout({ children, params }: { children: Rea
           {m.common.skipToContent}
         </a>
         <div className="app-shell">
-          <Nav locale={locale} />
+          <Nav locale={locale} marketsViewable={flags().MARKETS_VIEWS && marketsViewable((await headers()).get("authorization"))} />
           <div className="app-body">
             {/* Tier logic is a later work package; until it decides a mode, the banner stays hidden for everyone. */}
             <TierBanner mode="hidden" title={kit.banner.admin} note={kit.banner.adminNote} badgeLabel={kit.tier.paid} />

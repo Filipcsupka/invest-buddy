@@ -22,7 +22,7 @@ export function BrandMark() {
   );
 }
 
-export function Nav({ locale }: { locale: Locale }) {
+export function Nav({ locale, marketsViewable = false }: { locale: Locale; marketsViewable?: boolean }) {
   const m = getMessages(locale);
   const kit = getKitMessages(locale);
   const target = otherLocale(locale);
@@ -59,6 +59,15 @@ export function Nav({ locale }: { locale: Locale }) {
           { href: "/etf", text: m.nav.etfResearch, icon: "scanner" },
           { href: "/etf/track-record", text: m.nav.etfTrackRecord, icon: "track" },
         ]} />
+        {marketsViewable && <NavLinks locale={locale} label={m.nav.markets} sectionLabel={m.nav.markets} items={[
+          { href: "/indices", text: m.nav.indices, icon: "indices" },
+          { href: "/forex", text: m.nav.forex, icon: "forex" },
+          { href: "/crypto", text: m.nav.crypto, icon: "crypto" },
+          { href: "/economy", text: m.nav.economy, icon: "economy" },
+          { href: "/congress", text: m.nav.congress, icon: "congress" },
+          { href: "/news", text: m.nav.news, icon: "news" },
+          { href: "/screener", text: m.nav.screener, icon: "scanner" },
+        ]} />}
         </div>
         <div className="side-foot">
           {flags().WAITLIST && (

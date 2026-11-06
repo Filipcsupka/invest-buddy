@@ -27,6 +27,12 @@ it.each(["en", "sk"] as const)("links the scanner and keeps the heat map link (%
   expect(html).toContain(locale === "en" ? "Stocks" : "Akcie");
 });
 
+it("shows the markets group only for an owner request", () => {
+  expect(renderToStaticMarkup(<Nav locale="en" />)).not.toContain('href="/en/indices"');
+  const html = renderToStaticMarkup(<Nav locale="en" marketsViewable />);
+  for (const route of ["indices", "forex", "crypto", "economy", "congress", "news", "screener"]) expect(html).toContain(`href="/en/${route}"`);
+});
+
 it.each(["en", "sk"])("keeps the shared footer free of fixture labels in db mode (%s)", async (locale) => {
   process.env.DATA_MODE = "db";
   scores.mockResolvedValue({ rows: [], sample: false, lastUpdated: null, stale: false });
