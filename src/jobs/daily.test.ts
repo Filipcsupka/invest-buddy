@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { fixtureProvider } from "../data/fixtures";
 import { MemoryScoreRepository } from "../db/memory";
-import { purgeWebCacheRemote, runDaily } from "./daily";
+import { purgeWebCacheRemote, runDaily, SCORE_BAR_WINDOW } from "./daily";
 
 it("runs fixture scoring once for a date", async () => {
   const repository = new MemoryScoreRepository();
@@ -87,4 +87,23 @@ describe("purgeWebCacheRemote", () => {
     expect(await purgeWebCacheRemote(env, (async () => new Response("", { status: 500 })) as unknown as typeof fetch)).toBe(false);
     expect(await purgeWebCacheRemote(env, (async () => { throw new Error("down"); }) as unknown as typeof fetch)).toBe(false);
   });
+});
+
+it("stores only the recent bar window in the score audit", async () => {
+  const { fixtureBars, fixtureFundamentals, fixtureMacro, instruments } = await import("../data/fixtures");
+  const instrument = instruments[0];
+  const recent = fixtureBars(instrument.ticker);
+  const last = recent.at(-1)!;
+  // Prepend ten years of older history, as an EODHD backfill does.
+  const start = Date.parse(`${recent[0].date}T00:00:00Z`);
+  const old = Array.from({ length: 2500 }, (_, i) => ({ ...recent[0], date: new Date(start - (2500 - i) * 86_400_000).toISOString().slice(0, 10) }));
+  const provider = { instruments: async () => [instrument], bars: async () => [...old, ...recent], fundamentals: async () => fixtureFundamentals(instrument.ticker), macro: async () => fixtureMacro(instrument.ticker) };
+  const full = new MemoryScoreRepository(), short = new MemoryScoreRepository();
+  await runDaily(provider, full, last.date);
+  await runDaily({ ...provider, bars: async () => recent.slice(-SCORE_BAR_WINDOW) }, short, last.date);
+  const [stored] = await full.scores(last.date);
+  expect(stored.inputs.bars).toHaveLength(SCORE_BAR_WINDOW);
+  expect(stored.inputs.bars.at(-1)?.date).toBe(last.date);
+  const [expected] = await short.scores(last.date);
+  expect({ total: stored.total, state: stored.state }).toEqual({ total: expected.total, state: expected.state });
 });
