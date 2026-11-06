@@ -37,6 +37,7 @@ import { CatalystCalendar } from "@/components/catalyst-calendar";
 import { storedMacroEvents } from "@/data/macro-calendar-store";
 import { publicEarningsDate } from "@/data/catalyst-calendar-store";
 import { MarketCapSection, ownerMarketCap } from "./market-cap-section";
+import { requireCompanyDataAccess } from "../../owner/data/access";
 export const dynamic = "force-dynamic";
 import { fill, formatDate, formatPercent, formatPrice, getMessages, isLocale, type Locale } from "@/i18n";
 import { pageMetadata } from "@/i18n/metadata";
@@ -59,6 +60,7 @@ async function load(params: Params["params"]) {
   const instruments = await instrumentUniverse();
   const instrument = instruments.find((item) => item.ticker === ticker.toUpperCase());
   if (!instrument) notFound();
+  await requireCompanyDataAccess(instrument.ticker);
   const data = await latestScores();
   const row = data.rows.find((item) => item.instrument.ticker === instrument.ticker);
   return { locale: locale as Locale, instrument, instruments, result: row?.result ?? null, data };
