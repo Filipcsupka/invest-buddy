@@ -1,3 +1,4 @@
+import { eodhdPrivateUse } from "../data/eodhd-private-use";
 import { runLoggedJob } from "./job-log";
 import pg from "pg";
 import { liveVerifier, offVerifier, fixtureVerifier, freshnessDays, type EvidenceRef, type EvidenceVerifier } from "../data/evidence";
@@ -168,8 +169,8 @@ export async function runReconcile(pool: pg.Pool, asOf: string, verify: Evidence
     const eps = await epsLookup(symbol, asOf);
     const catalyst = await catalystLookup(symbol, asOf);
     for (const field of fields) {
-      // Macro data_rule rows come from the macro job. Recompute all other fields so a switch change can replace a previous EODHD result.
-      if (ruleRows.has(`${symbol}:${field}`) && MACRO_FIELDS.has(field)) continue;
+      // Private mode recomputes non-macro rules; otherwise preserve existing data_rule rows except productCatalyst.
+      if (ruleRows.has(`${symbol}:${field}`) && (eodhdPrivateUse() ? MACRO_FIELDS.has(field) : field !== "productCatalyst")) continue;
       const item = await reconcileField(symbol, field, asOf, MACRO_FIELDS.has(field) ? macroFindings : findings, verify, sec, insider, { storedVerify: extras.storedVerify, eps, catalyst, research: researchBySymbol.get(symbol) });
       pending.push(item);
     }

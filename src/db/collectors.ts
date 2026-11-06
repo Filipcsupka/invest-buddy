@@ -105,11 +105,22 @@ export class MemoryCollectorRepository implements CollectorRepository {
 }
 /** Reads the newest eps_surprise_latest fact on or before asOf (also a stale one, so the reason can say so). null when there is none. */
 export async function loadEpsSurprise(pool: pg.Pool, symbol: string, asOf: string, minSurprisePct = DEFAULT_EPS_BEAT_MIN_SURPRISE_PCT): Promise<EpsResult | null> {
-  const fact = await pool.query<{ as_of: string; value: unknown; url: string | null }>(`SELECT f.as_of::text,f.value,
+  // EODHD can occupy the shared fact key before AV runs. AV's append-only history still keeps its answer.
+  const fact = await pool.query<{ as_of: string; value: unknown; url: string | null }>(`SELECT as_of,value,url FROM (
+    SELECT f.as_of::text,f.value,f.computed_at AS observed_at,
       (SELECT d.url FROM source_documents d WHERE d.id = ANY(f.document_ids) ORDER BY d.id DESC LIMIT 1) AS url
     FROM collected_facts f WHERE f.symbol=$1 AND f.fact_key=$2 AND f.as_of <= $3::date
       AND (f.source_id IS DISTINCT FROM 'eodhd' OR ($4::boolean AND f.computed_at::date <= $3::date))
-    ORDER BY f.as_of DESC LIMIT 1`, [symbol, EPS_FACT_KEY, asOf, eodhdPrivateUse()]);
+    UNION ALL
+    SELECT h.reported_date::text,jsonb_build_object('reportedDate',h.reported_date,'fiscalDateEnding',h.fiscal_date_ending,
+      'surprisePercent',h.surprise_pct,'source','alphavantage'),h.observed_at,
+      (SELECT d.url FROM source_documents d WHERE d.symbol=h.ticker AND d.source_id='alphavantage'
+        AND d.doc_type='EPS surprise' AND d.published_at::date=h.reported_date ORDER BY d.id DESC LIMIT 1) AS url
+    FROM eps_history h WHERE h.ticker=$1 AND h.source_id='alphavantage' AND h.reported_date <= $3::date
+      AND h.observed_at::date <= $3::date
+      AND EXISTS (SELECT 1 FROM collected_facts f WHERE f.symbol=h.ticker AND f.fact_key=$2
+        AND f.as_of=h.reported_date AND f.source_id='eodhd' AND (NOT $4::boolean OR f.computed_at::date > $3::date))
+    ) candidates ORDER BY as_of DESC,observed_at DESC LIMIT 1`, [symbol, EPS_FACT_KEY, asOf, eodhdPrivateUse()]);
   const row = fact.rows[0];
   return row ? epsFromFact({ asOf: row.as_of, value: row.value }, row.url, asOf, minSurprisePct) : null;
 }
