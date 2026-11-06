@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import { spawn } from "node:child_process";
-import { chmodSync, mkdtempSync, readFileSync, readdirSync, writeFileSync, existsSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -156,18 +156,26 @@ test("figures: input numbers and common rule windows pass, others are rejected",
   assert.deepEqual(inventedFigures(["target 150 and 33.1"], inp), [150, 33.1]);
 });
 
-test("a verified research quote supports its figure and cannot license an invented one", () => {
-  const item = figureInput({ context: { researchFacts: [{ claim: "Outlook rose 13%", quote: "The company raised its outlook by 12%.", confirmed: true }] } });
-  assert.deepEqual(inventedFigures(["Outlook rose 12%."], item), []);
-  assert.deepEqual(inventedFigures(["Outlook rose 13%."], item), [13]);
+test("a stored EODHD value supports its figure and rejects an invented one", () => {
+  const item = figureInput({ context: { structuredFacts: [{ source: "eodhd", kind: "eps", value: { surprisePct: 12 }, provenance: "eps_history:2026-09-30" }] } });
+  assert.deepEqual(inventedFigures(["EPS surprise was 12%."], item), []);
+  assert.deepEqual(inventedFigures(["EPS surprise was 13%."], item), [13]);
 });
-test("the judge can cite a verified research fact supplied for its symbol", () => {
+test("old web research is excluded from the model input", () => {
   const i = input();
   const url = "https://example.com/verified-research";
   i.symbols[0].researchFacts = [{ claim: "Raised outlook", kind: "guidance", sourceClass: "primary", url, date: "2026-10-01", readingLabel: "quote checked", confirmed: true, quote: "Outlook rose 12%." }];
   const idea = words("NVDA");
   idea.evidence.push({ url, label: "Company release" });
   idea.sk.evidence.push({ url, label: "Správa spoločnosti" });
+  assert.throws(() => merge([idea, words("AMD", { evidence: [] })], i), /evidence url not in the input/);
+});
+
+test("a structured EODHD buy can be stored without invented evidence links", () => {
+  const i = input();
+  i.symbols[0].structuredFacts = [{ source: "eodhd", kind: "eps", asOf: "2026-10-01", observedOn: "2026-10-02", value: { surprisePct: 12 }, provenance: "eps_history:2026-09-30" }];
+  i.symbols[0].evidence = [];
+  const idea = words("NVDA", { evidence: [] });
   assert.doesNotThrow(() => merge([idea, words("AMD", { evidence: [] })], i));
 });
 
@@ -376,6 +384,7 @@ function mockWeb({ skipDay = false, skipHash = false, inputOverride = null } = {
       seen.auth.push(req.headers.authorization);
       const send = (o, status = 200) => { res.writeHead(status, { "content-type": "application/json" }); res.end(JSON.stringify(o)); };
       if (req.method === "POST" && req.url === "/api/ingest/ideas") { seen.posts.push(JSON.parse(body)); return send({ recorded: true, stored: 1 }); }
+      if (req.method === "GET" && req.url === "/api/ingest/ai-budget") return send({ tokensPerDayUtc: {} });
       if (req.method === "POST" && req.url === "/api/ingest/ai-budget") { seen.budgets.push(JSON.parse(body)); return send({ allowed: true }); }
       if (req.url.startsWith("/api/ingest/judge-input")) { seen.gets.push(req.url); return send(inputOverride ?? input()); }
       if (req.url.startsWith("/api/ingest/ideas?")) { seen.gets.push(req.url); return send({ skip: req.url.includes("inputHash") ? skipHash : skipDay }); }
@@ -389,7 +398,7 @@ function runJudge(args, { s, env = {} }) {
   const gate = join(out, "gate.json"); writeFileSync(gate, JSON.stringify({ symbols: ["NVDA", "AMD"] }));
   const gatedArgs = args.includes("--symbols-file") || args.includes("--force") ? args : [...args, "--symbols-file", gate];
   return new Promise((resolve) => {
-    const child = spawn(process.execPath, [SCRIPT, ...gatedArgs], { env: { ...process.env, PATH: `${s.dir}:${process.env.PATH}`, INGEST_TOKEN: "test-token", SCAN_OUT_DIR: out, ...env } });
+    const child = spawn(process.execPath, [SCRIPT, ...gatedArgs], { env: { ...process.env, PATH: `${s.dir}:${process.env.PATH}`, INGEST_TOKEN: "test-token", EODHD_PRIVATE_USE: "on", SCAN_OUT_DIR: out, ...env } });
     let err = ""; child.stderr.on("data", (d) => { err += d; });
     child.on("close", (code) => resolve({ code, err, out }));
   });
@@ -595,17 +604,13 @@ test("agent mode: read-only tools, prepared files in the working directory, turn
   } finally { await web2.close(); }
 });
 
-test("dry run with an input file needs no token, posts nothing and writes the payload", async () => {
-  const s = stub(); s.respond(envelope(JSON.stringify({ ideas: both })));
+test("dry run with an input file works offline without a model call", async () => {
+  const s = stub();
   const file = join(mkdtempSync(join(tmpdir(), "judge-in-")), "input.json"); writeFileSync(file, JSON.stringify(input()));
-  const r = await runJudge(["--as-of", "2026-10-05", "--dry-run", "--input-file", file], { s, env: { INGEST_TOKEN: "", CLAUDE_CODE_OAUTH_TOKEN: "synthetic-offline-token", HOME: "/nonexistent" } });
+  const r = await runJudge(["--as-of", "2026-10-05", "--dry-run", "--input-file", file], { s, env: { INGEST_TOKEN: "", HOME: "/nonexistent" } });
   assert.equal(r.code, 0, r.err);
-  assert.match(r.err, /dry run: nothing posted/);
-  assert.doesNotMatch(r.err, /USAGE /);
-  const name = readdirSync(r.out).find((n) => /^judge-payload-/.test(n));
-  const payload = JSON.parse(readFileSync(join(r.out, name), "utf8"));
-  assert.equal(payload.ideas.length, 2);
-  assert.equal(payload.run.status, "ok");
+  assert.match(r.err, /offline dry run: 2 signals; expected .*0 model calls/);
+  assert.equal(s.calls().length, 0);
 });
 
 test("paired reason and evidence figures must match; identical figures pass", () => {

@@ -119,7 +119,7 @@ export const codexResearchAdapter = {
     return { ok: true, reason: null };
   },
   async quota() { return lastCodexRateLimit === null ? null : { window: "codex", pct: lastCodexRateLimit, resetAt: null }; },
-  async run({ prompt, schemaPath, schemaName = "modelOutput", timeoutMs, workDir, monitor, env = process.env }) {
+  async run({ prompt, schemaPath, schemaName = "modelOutput", timeoutMs, workDir, monitor, env = process.env, allowSearch = true }) {
     const ioDir = mkdtempSync(join(tmpdir(), "invest-codex-io-"));
     let tokenHome;
     try {
@@ -129,7 +129,7 @@ export const codexResearchAdapter = {
       }
       const schemaFile = join(ioDir, "output-schema.json"), replyFile = join(ioDir, "reply.json");
       writeFileSync(schemaFile, JSON.stringify(deriveStrictSchema(JSON.parse(readFileSync(schemaPath, "utf8")), schemaName)));
-      const args = ["--search", "-a", "never", "exec", "--sandbox", "read-only", "--skip-git-repo-check", "--ephemeral", "--ignore-user-config", "--ignore-rules", "--output-schema", schemaFile, "-C", workDir, "-o", replyFile, "--json"];
+      const args = [...(allowSearch ? ["--search"] : []), "-a", "never", "exec", "--sandbox", "read-only", "--skip-git-repo-check", "--ephemeral", "--ignore-user-config", "--ignore-rules", "--output-schema", schemaFile, "-C", workDir, "-o", replyFile, "--json"];
       if (env.RESEARCH_CODEX_MODEL) args.push("-m", env.RESEARCH_CODEX_MODEL);
       args.push("-");
       let stdout;

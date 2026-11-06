@@ -34,29 +34,20 @@ test("ETF prompt calls match the schema enum", () => {
   assert.deepEqual(schema.properties.candidates.items.properties.call.enum, ["BUY_ZONE", "WATCH", "AVOID"]);
 });
 
-test("ETF prompt names the output schema file", () => {
-  assert.match(read(promptPath), /etf-output\.schema\.json/);
+test("ETF prompt uses stored data without web research", () => {
+  const prompt = read(promptPath);
+  assert.match(prompt, /no web access/i);
+  assert.match(prompt, /stored catalog rows/i);
+  assert.match(prompt, /null/);
+  assert.match(prompt, /do not[^.]*invent a price/i);
+  assert.match(prompt, /evidence to an empty array/i);
+  assert.doesNotMatch(prompt, /browse the web|use issuer fund pages|fresh news/i);
 });
 
-test("ETF prompt says to use null instead of guessing", () => {
+test("ETF prompt names every model decision and copied catalog field", () => {
   const prompt = read(promptPath);
-  assert.match(prompt, /null instead of guessing/i);
-  assert.match(prompt, /never invent[^.]*price/i, "forbids invented prices");
-});
-
-test("ETF prompt requires verbatim, machine-checked quotes", () => {
-  const prompt = read(promptPath);
-  assert.match(prompt, /quote[^.]*verbatim/i, "quote copied verbatim");
-  assert.match(prompt, /machine-checked/i);
-  assert.match(prompt, /unverified/i, "says what happens when a quote is not found");
-});
-
-test("ETF prompt mentions every required candidate field and evidence claim", () => {
-  const prompt = read(promptPath);
-  const item = JSON.parse(read(schemaPath)).properties.candidates.items;
-  for (const field of item.required) assert.ok(prompt.includes(`\`${field}\``) || prompt.includes(`\`${field}.`), `mentions ${field}`);
-  for (const claim of item.properties.evidence.items.properties.claim.enum) assert.ok(prompt.includes(`\`${claim}\``), `lists claim ${claim}`);
-  for (const assetClass of item.properties.assetClass.enum) assert.ok(prompt.includes(`\`${assetClass}\``), `lists asset class ${assetClass}`);
+  for (const field of ["symbol", "exchange", "name", "ISIN", "assetClass", "region", "cost", "price", "evidence", "call", "conviction", "thesis", "whatHappened", "whyItMatters", "plan", "risks"])
+    assert.ok(prompt.toLowerCase().includes(field.toLowerCase()), `mentions ${field}`);
 });
 
 test("ETF prompt has no worked example output", () => {
