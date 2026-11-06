@@ -2,6 +2,7 @@ import { cache } from "react";
 import { getPool } from "../db/pool";
 import { scoredMember } from "../db/universe";
 import { CACHE_TAGS, webCached } from "./web-cache";
+import { trimmedAudit } from "./audit-sql";
 import type { ScoreResult } from "../engine";
 import type { Instrument } from "./providers";
 import { scoredUniverse as fixtureUniverse } from "./scored";
@@ -28,11 +29,12 @@ const noPool = () => !pool();
 async function latestScoresUncached(): Promise<StoreData<StoreRow[]>> {
   if (fixtureMode()) { const rows = await fixtureUniverse(); return { rows, sample: true, lastUpdated: rows[0]?.result.asOf ?? null, stale: false }; }
   const db = pool(); if (!db) return { rows: [], sample: false, lastUpdated: null, stale: false };
-  const result = await db.query<{ ticker: string; name: string; sector: string; tier: 1 | 2 | 3 | null; source: Instrument["source"]; audit: ScoreResult; as_of: string }>(`SELECT DISTINCT ON (s.ticker) s.ticker,i.name,i.sector,m.tier,i.source,s.audit,s.as_of::text FROM score_results s
+  const result = await db.query<{ ticker: string; name: string; sector: string; tier: 1 | 2 | 3 | null; source: Instrument["source"]; audit: ScoreResult; as_of: string }>(`SELECT l.ticker,l.name,l.sector,l.tier,l.source,${trimmedAudit("r.audit")} AS audit,l.as_of::text FROM (SELECT DISTINCT ON (s.ticker) s.ticker,i.name,i.sector,m.tier,i.source,s.as_of FROM score_results s
     JOIN instruments i ON i.ticker=s.ticker JOIN universe_membership m ON m.ticker=i.ticker
     WHERE s.audit ? 'scanRunId' AND ${scoredMember()} AND m.valid_from <= CURRENT_DATE
       AND s.as_of >= m.valid_from
-      AND (m.valid_to IS NULL OR m.valid_to > CURRENT_DATE) ORDER BY s.ticker,s.as_of DESC`);
+      AND (m.valid_to IS NULL OR m.valid_to > CURRENT_DATE) ORDER BY s.ticker,s.as_of DESC) l
+    JOIN score_results r ON r.ticker=l.ticker AND r.as_of=l.as_of ORDER BY l.ticker`);
   const rows = result.rows.map((row) => ({ instrument: { ticker: row.ticker, name: row.name, sector: row.sector, tier: row.tier, source: row.source }, result: row.audit }));
   const lastUpdated = result.rows.map((row) => row.as_of).sort().at(-1) ?? null;
   return { rows, sample: false, lastUpdated, stale: stale(lastUpdated) };
@@ -49,7 +51,7 @@ async function instrumentUniverseUncached(): Promise<Instrument[]> {
 export async function scoreHistory(): Promise<StoreData<StoreRow[]>> {
   if (fixtureMode()) { const rows = fixtureRecord(); return { rows, sample: true, lastUpdated: rows[0]?.result.asOf ?? null, stale: false }; }
   const db = pool(); if (!db) return { rows: [], sample: false, lastUpdated: null, stale: false };
-  const result = await db.query<{ ticker: string; name: string; sector: string; tier: 1 | 2 | 3 | null; source: Instrument["source"]; audit: ScoreResult; as_of: string }>("SELECT s.ticker,i.name,i.sector,i.tier,i.source,s.audit,s.as_of::text FROM score_results s JOIN instruments i ON i.ticker=s.ticker WHERE s.audit ? 'scanRunId' ORDER BY s.as_of DESC,s.ticker");
+  const result = await db.query<{ ticker: string; name: string; sector: string; tier: 1 | 2 | 3 | null; source: Instrument["source"]; audit: ScoreResult; as_of: string }>(`SELECT s.ticker,i.name,i.sector,i.tier,i.source,${trimmedAudit("s.audit", 0)} AS audit,s.as_of::text FROM score_results s JOIN instruments i ON i.ticker=s.ticker WHERE s.audit ? 'scanRunId' ORDER BY s.as_of DESC,s.ticker`);
   const rows = result.rows.map((row) => ({ instrument: { ticker: row.ticker, name: row.name, sector: row.sector, tier: row.tier, source: row.source }, result: row.audit }));
   const lastUpdated = result.rows[0]?.as_of ?? null;
   return { rows, sample: false, lastUpdated, stale: stale(lastUpdated) };
