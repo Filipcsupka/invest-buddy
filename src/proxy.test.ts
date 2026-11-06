@@ -5,12 +5,25 @@ const universe = vi.fn();
 vi.mock("@/data/store", () => ({ instrumentUniverse: () => universe() }));
 import { proxy } from "./proxy";
 
-const original = { mode: process.env.DATA_MODE, ideas: process.env.IDEAS_PAGE, owner: process.env.OWNER_VIEW, password: process.env.OWNER_RESEARCH_PASSWORD, paywall: process.env.PAYWALL, auth: process.env.AUTH, advice: process.env.ADVICE_OUTPUT };
+const original = { mode: process.env.DATA_MODE, ideas: process.env.IDEAS_PAGE, owner: process.env.OWNER_VIEW, password: process.env.OWNER_RESEARCH_PASSWORD, paywall: process.env.PAYWALL, auth: process.env.AUTH, advice: process.env.ADVICE_OUTPUT, markets: process.env.MARKETS_VIEWS };
 afterEach(() => {
   universe.mockReset();
-  for (const [key, value] of [["DATA_MODE", original.mode], ["IDEAS_PAGE", original.ideas], ["OWNER_VIEW", original.owner], ["OWNER_RESEARCH_PASSWORD", original.password], ["PAYWALL", original.paywall], ["AUTH", original.auth], ["ADVICE_OUTPUT", original.advice]] as const) {
+  for (const [key, value] of [["DATA_MODE", original.mode], ["IDEAS_PAGE", original.ideas], ["OWNER_VIEW", original.owner], ["OWNER_RESEARCH_PASSWORD", original.password], ["PAYWALL", original.paywall], ["AUTH", original.auth], ["ADVICE_OUTPUT", original.advice], ["MARKETS_VIEWS", original.markets]] as const) {
     if (value === undefined) delete process.env[key]; else process.env[key] = value;
   }
+});
+
+it("keeps market routes private even when the flag is on", async () => {
+  const url = "https://example.com/en/indices";
+  process.env.MARKETS_VIEWS = "off";
+  expect((await proxy(new NextRequest(url))).status).toBe(404);
+  process.env.MARKETS_VIEWS = "on";
+  process.env.OWNER_RESEARCH_PASSWORD = "private-test-password";
+  expect((await proxy(new NextRequest(url))).status).toBe(401);
+  const response = await proxy(new NextRequest(url, { headers: { authorization: `Basic ${Buffer.from("owner:private-test-password").toString("base64")}` } }));
+  expect(response.status).toBe(200);
+  expect(response.headers.get("x-robots-tag")).toBe("noindex");
+  expect(response.headers.get("cache-control")).toBe("private, no-store");
 });
 
 it("challenges for private owner pages and accepts only the owner password", async () => {

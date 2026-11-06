@@ -13,6 +13,28 @@ The client lives in `src/data-providers/eodhd/client.ts`. Set `EODHD_API_KEY` in
 | `/calendar/earnings` | `earningsCalendar` | 1 |
 | `/news` | `news` | 5 base calls |
 | `/sec-filings/{SYM}/form4` | `form4` | 10 |
+| `/div/{SYM}` | `dividends` | 1 |
+| `/economic-events` | `economicEvents` | 1 |
+| `/sentiments` | `sentiments` | UNVERIFIED; counter assumes 1 |
+| `/historical-market-cap/{SYM}` | `historicalMarketCap` | 10 |
+| `/screener` | `screener` | 5 |
+| `/congressional-trades` | `congressionalTrades` | 10 |
+| `/ust/{bill,long-term,yield,real-yield}-rates` | `ustRates` | 1 |
+| `/macro-indicator/{ISO3}` | `macroIndicator` | 10 |
+
+`etfData` calls Fundamentals with an `ETF_Data::` filter. The supported filters are `Top_10_Holdings`, `Holdings`, `World_Regions`, `Sector_Weights`, `Asset_Allocation` and `Performance`; each request costs 10 calls.
+
+## Market view preparation
+
+Migration 102 stores 25 indices, 23 FX pairs and 14 cryptocurrencies in `tracked_assets`. Their codes were present in the EODHD INDX, FOREX and CC symbol lists on 2026-11-06. `asset_bars` keeps their daily bars apart from scoring prices. `eodhd_call_log` records each market bar job's estimated calls by day. The EODHD registry row remains display restricted. New bars take their display flag from `canDisplay("eodhd")` when written, which is currently false. Fresh databases also map SQ to the vendor symbol `XYZ.US`.
+
+Run `npm run markets:bars -- --class index --dry-run` to count tracked assets without requesting vendor data or writing bars. The class may be `index`, `fx`, `crypto` or `all`. A live first run asks for five years by default; later runs start after each symbol's latest stored day. `--backfill N` changes the first-run window. The job upserts bars and counts attempted EODHD calls, including failed requests. `build:jobs` discovers every `src/jobs/eodhd-*.ts` job and excludes test files. The Docker runtime copies `dist/jobs`.
+
+The new market routes use the existing `OWNER_RESEARCH_PASSWORD` Basic auth check from `/owner/research`. They require both that password and `MARKETS_VIEWS=on`; the flag defaults off. The proxy returns 404 while the flag is off and challenges unauthorized requests when it is on. It sets `Cache-Control: private, no-store` and `X-Robots-Tag: noindex` for authorized requests. The routes are absent from the sitemap, excluded by robots rules, and their navigation group appears only after the owner check. `assertViewable()` is available for the page loaders.
+
+Ten live requests on 2026-11-06 checked the three symbol lists, EOD bars for GSPC.INDX, EURUSD.FOREX and BTC-USD.CC, `ETF_Data::Top_10_Holdings` for IWDA.AS, AAPL.US sentiment, a two-row congressional page and 2026 Treasury yield rates. Trimmed captured responses are in `src/data-providers/eodhd/fixtures/markets`. The congressional page worked without a symbol filter; its response has `data`, `meta` and `links`. The yield response has `meta.total` and `data` rows with date, tenor and rate. The coordinator also verified economic events, AAPL.US market-cap history and a two-row screener response. Other fixtures in that folder model those observed or documented shapes; their values are examples.
+
+**UNVERIFIED:** the billed cost of `/sentiments`; live response shapes for bill, long-term and real-yield Treasury rates, macro indicators, dividends, ETF full holdings and ETF exposure filters. Those methods follow the [Treasury rates](https://eodhd.com/financial-apis/us-treasury-ust-interest-rates-api-beta), [macro indicators](https://eodhd.com/financial-apis/macroeconomics-data-and-macro-indicators-api), [dividends](https://eodhd.com/financial-apis/api-splits-dividends) and [sentiment](https://eodhd.com/financial-apis/stock-market-financial-news-api) documentation. Collectors should check a live response before treating those fields as complete.
 
 The [EODHD call limits](https://eodhd.com/financial-apis/api-limits) distinguish requests from billed calls. Paid plans start at 100,000 calls per day and the standard request ceiling is 1,000 per minute. A rejected 402 request is not billed; failed ticker lookups can be. The account's actual allowance belongs to `/api/user`. **UNVERIFIED:** whether 429 responses consume daily calls; the counter includes them conservatively. The ALL-IN-ONE plan's exact allowance is **UNVERIFIED** and is not hardcoded here. The [bulk API documentation](https://eodhd.com/financial-apis/bulk-api-eod-splits-dividends) says `filter=extended` adds profile and technical fields without an extra charge. Those technical fields can be zero for older dates, while market cap and beta are not point-in-time.
 
