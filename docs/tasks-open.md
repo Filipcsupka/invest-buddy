@@ -7,7 +7,7 @@ State at handoff, checked on the cluster that day:
 - E1 and E2 done (#303). Bulk fundamentals return 403, so fundamentals cost 10 calls per symbol. Milan (`MI`) is not in the exchange list. Terms of the personal plan forbid showing vendor data to others, so everything EODHD-derived stays owner-only (`EODHD_PRIVATE_USE=on`, owner auth on data routes, #311).
 - The five `invest-buddy-eodhd-*` CronJobs are un-suspended (infra). Manual Jobs for prices, fundamentals, catalyst, insider, daily and reconcile completed on 2026-11-06. The first scheduled `eodhd-prices` run on 2026-11-05 failed; cause not checked.
 - Web crashlooped on out-of-memory because score audits stored the full bar history (about 23 MB per dashboard item). Fixed by #312, #313 and #315 (latest 320 to 520 bars). Web runs `sha-31371c5`.
-- Owner pages use user `owner`, password in `~/backups/invest-owner-password.txt` on the owner's Mac (secret `invest-buddy-owner`). On 2026-11-06 `/en/owner/data` still returned 401 with that password; not resolved when this was written.
+- Owner pages use user `owner`, password in `~/backups/invest-owner-password.txt` on the owner's Mac (secret `invest-buddy-owner`). The file has two lines (`user: owner`, `password: ...`); use the value after `password: ` with username `owner`. On 2026-11-06 `/en/owner/data` and `/en/owner/horizons` returned 200 with it and 401 without.
 - Not verified at handoff: row counts per table, E4 close comparison against the old price source, E5 comparison against SEC and Alpha Vantage, E8 score comparison for the 36 names, E9 results of the 100-fund ETF run.
 
 Open PRs at handoff: #316 (economy, news, congress market views), #310 (ETF detail tabs), #308 (judge on stored EODHD facts).
@@ -16,7 +16,7 @@ Deferred by owner: the judge and `etf-research` stay suspended until 2026-11-07 
 
 Not done and not approved: E12 (drop `ai_cards` and `research_*`, remove SEC and Alpha Vantage collectors). Keep `scanner/run-scan.mjs` until its readers are replaced.
 
-Next session, in order: fix the owner 401, merge or close the three open PRs, check the failed `eodhd-prices` run, collect row counts and the E4, E5, E8 comparisons, then E9 and the judge.
+Next session, in order: merge or close the three open PRs, check the failed `eodhd-prices` run, collect row counts and the E4, E5, E8 comparisons, then E9 and the judge.
 
 ## When the EODHD key arrives (start here)
 
