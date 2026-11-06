@@ -58,3 +58,43 @@ const sk: typeof en = {
 };
 export type EtfMessages = typeof en;
 export const getEtfMessages = (locale: Locale): EtfMessages => locale === "sk" ? sk : en;
+
+// Owner-only ETF detail from EODHD. Facts only: no calls, scores or states for these fields.
+const detailEn = {
+  tabsLabel: "Fund data sections", overview: "Overview", holdings: "Holdings", exposure: "Exposure", performance: "Performance", dividends: "Dividends",
+  ownerOnly: "Owner only. Vendor data is not cleared for public display.", vendorData: "Vendor fund data", vendorLede: "Stored EODHD fund data for this listing.",
+  openVendorData: "Open vendor data", noData: "No data", noStats: "No vendor fund data has been stored for this listing yet.",
+  priceChart: "Price history", noBars: "No stored price bars for this listing.", vendorSymbol: "Vendor symbol", asOf: "Data as of", origin: "Collected by",
+  originJob: "weekly ETF job", originEnrich: "catalog enrichment",
+  totalAssets: "Total assets", totalAssetsNote: "Currency not stated by the vendor.", yield: "Yield", dividendFrequency: "Dividend frequency",
+  inception: "Inception", ongoingCharge: "Ongoing charge", expenseRatio: "Net expense ratio", holdingsCount: "Holdings reported",
+  holdingsListed: "Holdings listed", topOnly: "The vendor lists {listed} holdings for this fund. For some UCITS funds this covers only the ten largest, so the portfolio may be incomplete.",
+  capped: "Showing the largest {shown} of {listed} listed holdings.", position: "#", holding: "Holding", weight: "Weight", sector: "Sector", country: "Country",
+  noHoldings: "No holdings are stored for this listing.",
+  region: "Regions", sectors: "Sectors", mcap: "Market capitalisation", asset: "Asset allocation", credit: "Credit quality", noExposure: "No breakdown stored.",
+  exposureNote: "Weights are the vendor's equity or net-asset percentages and may not sum to 100.",
+  returns: "Returns", period: "Period", ytd: "Year to date", y1: "1 year", y3: "3 years (annualised)", y5: "5 years (annualised)", y10: "10 years (annualised)",
+  risk: "Risk", vol1y: "Volatility, 1 year", vol3y: "Volatility, 3 years", sharpe3y: "Sharpe ratio, 3 years", performanceNote: "Vendor-reported figures; past returns say nothing about future returns.",
+  exDate: "Ex-date", amount: "Amount", payDate: "Payment date", frequency: "Period", noDividends: "No dividends are stored for this listing. Accumulating funds pay none.",
+  yieldCol: "Yield", ret1yCol: "1y return",
+};
+const detailSk: typeof detailEn = {
+  tabsLabel: "Časti údajov o fonde", overview: "Prehľad", holdings: "Pozície", exposure: "Expozícia", performance: "Výkonnosť", dividends: "Dividendy",
+  ownerOnly: "Len pre vlastníka. Údaje dodávateľa nie sú schválené na verejné zobrazenie.", vendorData: "Údaje dodávateľa o fonde", vendorLede: "Uložené údaje EODHD o tomto zápise.",
+  openVendorData: "Otvoriť údaje dodávateľa", noData: "Bez údajov", noStats: "Pre tento zápis zatiaľ nie sú uložené údaje dodávateľa.",
+  priceChart: "Vývoj ceny", noBars: "Pre tento zápis nie sú uložené cenové údaje.", vendorSymbol: "Symbol dodávateľa", asOf: "Údaje k", origin: "Zdroj zberu",
+  originJob: "týždenná úloha ETF", originEnrich: "obohatenie katalógu",
+  totalAssets: "Celkové aktíva", totalAssetsNote: "Dodávateľ neuvádza menu.", yield: "Výnos", dividendFrequency: "Frekvencia dividend",
+  inception: "Založenie", ongoingCharge: "Priebežné náklady", expenseRatio: "Čistý nákladový pomer", holdingsCount: "Počet pozícií podľa dodávateľa",
+  holdingsListed: "Uvedené pozície", topOnly: "Dodávateľ pri tomto fonde uvádza {listed} pozícií. Pri niektorých fondoch UCITS ide len o desať najväčších, takže portfólio môže byť neúplné.",
+  capped: "Zobrazených {shown} najväčších z {listed} uvedených pozícií.", position: "#", holding: "Pozícia", weight: "Váha", sector: "Sektor", country: "Krajina",
+  noHoldings: "Pre tento zápis nie sú uložené pozície.",
+  region: "Regióny", sectors: "Sektory", mcap: "Trhová kapitalizácia", asset: "Rozdelenie aktív", credit: "Úverová kvalita", noExposure: "Rozdelenie nie je uložené.",
+  exposureNote: "Váhy sú percentá akcií alebo čistých aktív podľa dodávateľa a nemusia dávať súčet 100.",
+  returns: "Výnosy", period: "Obdobie", ytd: "Od začiatku roka", y1: "1 rok", y3: "3 roky (ročne)", y5: "5 rokov (ročne)", y10: "10 rokov (ročne)",
+  risk: "Riziko", vol1y: "Volatilita, 1 rok", vol3y: "Volatilita, 3 roky", sharpe3y: "Sharpov pomer, 3 roky", performanceNote: "Údaje dodávateľa; minulé výnosy nehovoria nič o budúcich.",
+  exDate: "Dátum ex", amount: "Suma", payDate: "Dátum výplaty", frequency: "Obdobie", noDividends: "Pre tento zápis nie sú uložené dividendy. Akumulačné fondy ich nevyplácajú.",
+  yieldCol: "Výnos", ret1yCol: "Výnos 1 r.",
+};
+export type EtfDetailMessages = typeof detailEn;
+export const getEtfDetailMessages = (locale: Locale): EtfDetailMessages => locale === "sk" ? detailSk : detailEn;

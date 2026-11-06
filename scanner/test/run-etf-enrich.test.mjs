@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { chunks, execute, parseArgs, validateBatch } from "../run-etf-enrich.mjs";
+import { DETAIL_HOLDINGS, chunks, detailPayload, execute, parseArgs, validateBatch } from "../run-etf-enrich.mjs";
 
 const fixture = JSON.parse(readFileSync(new URL("./fixtures/eodhd-etf.json", import.meta.url)));
 const first = { listingKey: "NYSEARCA:SPY", isin: null, symbol: "SPY", exchange: "NYSEARCA", name: "SPDR ETF" };
@@ -20,15 +20,20 @@ test("failed enrichment batch leaves it pending and later batch posts", async ()
   const outDir = mkdtempSync(join(tmpdir(), "etf-enrich-test-")); let vendorCalls = 0; const posts = [];
   const items = Array.from({ length: 21 }, (_, i) => ({ ...first, listingKey: `NYSEARCA:E${i}`, symbol: `E${i}` }));
   const request = async (url, init = {}) => {
-    if (init.method === "POST") { posts.push(JSON.parse(init.body)); return { ok: true }; }
+    if (init.method === "POST") { (String(url).endsWith("/etf-detail") ? details : posts).push(JSON.parse(init.body)); return { ok: true }; }
     if (String(url).includes("/pending?")) return { ok: true, json: async () => ({ items }) };
     return ++vendorCalls === 1 ? { ok: false, status: 500 } : { ok: true, json: async () => fixture };
   };
+  const details = [];
   try {
     const result = await execute(parseArgs(["--limit", "21", "--out-dir", outDir]), { env: { INGEST_TOKEN: "test", EODHD_API_KEY: "test" }, request, log: () => {} });
     assert.deepEqual(result, { batches: 2, failed: 1 });
     assert.equal(posts.length, 1);
     assert.equal(posts[0].items[0].listingKey, "NYSEARCA:E20");
+    // The paid ETF_Data payload is stored once per fetched fund; the failed batch sends none.
+    assert.equal(details.length, 1);
+    assert.deepEqual(Object.keys(details[0]), ["listingKey", "vendorSymbol", "data"]);
+    assert.equal(details[0].vendorSymbol, "E20.US");
   } finally { rmSync(outDir, { recursive: true, force: true }); }
 });
 
@@ -40,4 +45,14 @@ test("a missing EODHD key fails the batch without an ingest write", async () => 
     assert.deepEqual(result, { batches: 1, failed: 1 });
     assert.equal(posts.length, 0);
   } finally { rmSync(outDir, { recursive: true, force: true }); }
+});
+
+test("detail payload keeps the largest holdings and only identifying General fields", () => {
+  const holdings = Object.fromEntries(Array.from({ length: DETAIL_HOLDINGS + 3 }, (_, i) => [`H${i}.US`, { "Assets_%": i }]));
+  const payload = detailPayload({ General: { Type: "ETF", ISIN: "US78462F1030", CurrencyCode: "USD", Description: "long" }, ETF_Data: { Holdings: holdings, Yield: 1 } });
+  assert.deepEqual(payload.General, { Type: "ETF", ISIN: "US78462F1030", CurrencyCode: "USD" });
+  assert.equal(Object.keys(payload.ETF_Data.Holdings).length, DETAIL_HOLDINGS);
+  assert.ok(payload.ETF_Data.Holdings[`H${DETAIL_HOLDINGS + 2}.US`]);
+  assert.equal(payload.ETF_Data.Holdings["H0.US"], undefined);
+  assert.equal(detailPayload({ General: {} }), null);
 });

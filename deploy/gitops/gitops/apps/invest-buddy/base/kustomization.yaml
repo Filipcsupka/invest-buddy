@@ -26,5 +26,6 @@ resources:
   - watchdog-cronjob.yaml
   - backup-cronjob.yaml
   - etf-cronjobs.yaml
+  - etf-detail-cronjob.yaml
   - markets-cronjob.yaml
   - research-config.yaml

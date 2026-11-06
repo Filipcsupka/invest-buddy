@@ -8,10 +8,11 @@ type Query = Pick<pg.Pool, "query">;
 const num = (value: string | number | null | undefined): number | null => value == null ? null : Number.isFinite(Number(value)) ? Number(value) : null;
 
 /** Vendor suffix per asset class; routes use the bare code (GSPC, EURUSD, BTC-USD). */
-export const SUFFIX: Record<AssetClass, string> = { index: "INDX", fx: "FOREX", crypto: "CC" };
+type MarketClass = Exclude<AssetClass, "etf">;
+export const SUFFIX: Record<MarketClass, string> = { index: "INDX", fx: "FOREX", crypto: "CC" };
 export const CODE_PATTERN = /^[A-Z0-9][A-Z0-9._-]{0,19}$/;
 /** The vendor symbol for a route code, or null when the code is not a plain market code. */
-export function vendorSymbolFor(assetClass: AssetClass, code: string): string | null {
+export function vendorSymbolFor(assetClass: MarketClass, code: string): string | null {
   const upper = decodeURIComponent(code).toUpperCase();
   return CODE_PATTERN.test(upper) ? `${upper}.${SUFFIX[assetClass]}` : null;
 }
