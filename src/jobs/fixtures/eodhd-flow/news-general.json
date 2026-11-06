@@ -1,0 +1,53 @@
+[
+  {
+    "date": "2026-11-06T21:48:22+00:00",
+    "title": "Update: US Equity Indexes Mixed After Blowout Jobs Report Pushes Treasury Yields Higher",
+    "link": "https://finance.yahoo.com/economy/articles/us-equity-indexes-mixed-blowout-214822243.html",
+    "symbols": [
+      "DJI.INDX",
+      "GSPC.INDX",
+      "IXIC.INDX"
+    ],
+    "tags": [],
+    "sentiment": {
+      "polarity": -0.44,
+      "neg": 0.048,
+      "neu": 0.952,
+      "pos": 0
+    }
+  },
+  {
+    "date": "2026-11-06T21:48:20+00:00",
+    "title": "Update: Tech-Heavy Nasdaq Rebounds at End of Bruising Week For Wall Street",
+    "link": "https://finance.yahoo.com/markets/stocks/articles/tech-heavy-nasdaq-rebounds-end-214820374.html",
+    "symbols": [
+      "DJI.INDX",
+      "GSPC.INDX",
+      "IXIC.INDX"
+    ],
+    "tags": [],
+    "sentiment": {
+      "polarity": -0.44,
+      "neg": 0.044,
+      "neu": 0.956,
+      "pos": 0
+    }
+  },
+  {
+    "date": "2026-11-06T21:47:55+00:00",
+    "title": "Apollomics GAAP EPS of -$4.04",
+    "link": "https://seekingalpha.com/news/4668645-apollomics-gaap-eps-of-4_04?utm_source=feed_news_all&amp;utm_medium=referral&amp;feed_item_type=news",
+    "symbols": [
+      "APLM.US"
+    ],
+    "tags": [
+      "EARNINGS NEWS"
+    ],
+    "sentiment": {
+      "polarity": 0,
+      "neg": 0,
+      "neu": 1,
+      "pos": 0
+    }
+  }
+]

@@ -1,0 +1,41 @@
+{
+  "AAPL.US": [
+    {
+      "date": "2026-11-06",
+      "count": 46,
+      "normalized": 0.7381
+    },
+    {
+      "date": "2026-11-05",
+      "count": 70,
+      "normalized": 0.6738
+    },
+    {
+      "date": "2026-11-04",
+      "count": 80,
+      "normalized": 0.7593
+    },
+    {
+      "date": "2026-11-03",
+      "count": 119,
+      "normalized": 0.5413
+    },
+    {
+      "date": "2026-11-02",
+      "count": 135,
+      "normalized": 0.5441
+    },
+    {
+      "date": "2026-11-01",
+      "count": 13,
+      "normalized": 0.1799
+    }
+  ],
+  "BTC-USD.CC": [
+    {
+      "date": "2026-11-03",
+      "count": 1,
+      "normalized": 0.178
+    }
+  ]
+}

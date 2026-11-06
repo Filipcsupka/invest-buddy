@@ -1,0 +1,150 @@
+{
+  "meta": {
+    "total": 14
+  },
+  "data": [
+    {
+      "date": "2026-11-04",
+      "tenor": "4WK",
+      "discount": 3.85,
+      "coupon": 3.91,
+      "avg_discount": 3.88,
+      "avg_coupon": 3.94,
+      "maturity_date": "2026-12-01",
+      "cusip": "912797VZ7"
+    },
+    {
+      "date": "2026-11-04",
+      "tenor": "6WK",
+      "discount": 3.92,
+      "coupon": 3.99,
+      "avg_discount": 3.92,
+      "avg_coupon": 3.99,
+      "maturity_date": "2026-12-17",
+      "cusip": "912797VH7"
+    },
+    {
+      "date": "2026-11-04",
+      "tenor": "8WK",
+      "discount": 3.98,
+      "coupon": 4.06,
+      "avg_discount": 3.99,
+      "avg_coupon": 4.07,
+      "maturity_date": "2026-12-29",
+      "cusip": "912797WH6"
+    },
+    {
+      "date": "2026-11-04",
+      "tenor": "13WK",
+      "discount": 4.03,
+      "coupon": 4.13,
+      "avg_discount": 4.03,
+      "avg_coupon": 4.13,
+      "maturity_date": "2027-02-04",
+      "cusip": "912797VV6"
+    },
+    {
+      "date": "2026-11-04",
+      "tenor": "17WK",
+      "discount": 4.1,
+      "coupon": 4.21,
+      "avg_discount": 4.09,
+      "avg_coupon": 4.2,
+      "maturity_date": "2027-03-09",
+      "cusip": "912797XG7"
+    },
+    {
+      "date": "2026-11-04",
+      "tenor": "26WK",
+      "discount": 4.14,
+      "coupon": 4.29,
+      "avg_discount": 4.14,
+      "avg_coupon": 4.29,
+      "maturity_date": "2027-05-06",
+      "cusip": "912797WX1"
+    },
+    {
+      "date": "2026-11-04",
+      "tenor": "52WK",
+      "discount": 4.19,
+      "coupon": 4.39,
+      "avg_discount": 4.19,
+      "avg_coupon": 4.39,
+      "maturity_date": "2027-10-28",
+      "cusip": "912797WT0"
+    },
+    {
+      "date": "2026-11-05",
+      "tenor": "4WK",
+      "discount": 3.89,
+      "coupon": 3.96,
+      "avg_discount": 3.88,
+      "avg_coupon": 3.95,
+      "maturity_date": "2026-12-08",
+      "cusip": "912797WE3"
+    },
+    {
+      "date": "2026-11-05",
+      "tenor": "6WK",
+      "discount": 3.91,
+      "coupon": 3.98,
+      "avg_discount": 3.92,
+      "avg_coupon": 3.99,
+      "maturity_date": "2026-12-17",
+      "cusip": "912797VH7"
+    },
+    {
+      "date": "2026-11-05",
+      "tenor": "8WK",
+      "discount": 3.98,
+      "coupon": 4.06,
+      "avg_discount": 3.99,
+      "avg_coupon": 4.07,
+      "maturity_date": "2027-01-05",
+      "cusip": "912797WN3"
+    },
+    {
+      "date": "2026-11-05",
+      "tenor": "13WK",
+      "discount": 4,
+      "coupon": 4.1,
+      "avg_discount": 4.02,
+      "avg_coupon": 4.12,
+      "maturity_date": "2027-02-04",
+      "cusip": "912797VV6"
+    },
+    {
+      "date": "2026-11-05",
+      "tenor": "17WK",
+      "discount": 4.05,
+      "coupon": 4.16,
+      "avg_discount": 4.08,
+      "avg_coupon": 4.19,
+      "maturity_date": "2027-03-09",
+      "cusip": "912797XG7"
+    },
+    {
+      "date": "2026-11-05",
+      "tenor": "26WK",
+      "discount": 4.08,
+      "coupon": 4.22,
+      "avg_discount": 4.13,
+      "avg_coupon": 4.28,
+      "maturity_date": "2027-05-06",
+      "cusip": "912797WX1"
+    },
+    {
+      "date": "2026-11-05",
+      "tenor": "52WK",
+      "discount": 4.09,
+      "coupon": 4.28,
+      "avg_discount": 4.17,
+      "avg_coupon": 4.36,
+      "maturity_date": "2027-10-28",
+      "cusip": "912797WT0"
+    }
+  ],
+  "links": {
+    "next": null
+  }
+}
