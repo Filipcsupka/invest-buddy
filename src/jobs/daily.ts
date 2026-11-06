@@ -14,6 +14,12 @@ function validDate(value: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00Z`)) && new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value;
 }
 
+/**
+ * Sessions kept per instrument for scoring and the stored audit. The rules read at most 210 (MA200, MA50 ten days back);
+ * 400 also covers the web's one-year charts. Without the cap an EODHD backfill (decades of bars) went into every audit row.
+ */
+export const SCORE_BAR_WINDOW = 400;
+
 export async function runDaily(provider: UniverseProvider, repository: ScoreRepository, asOf?: string, providerName = "fixture"): Promise<SaveOutcome> {
   if (asOf && !validDate(asOf)) throw new Error("Date must be YYYY-MM-DD");
   const instruments = await provider.instruments();
@@ -26,8 +32,8 @@ export async function runDaily(provider: UniverseProvider, repository: ScoreRepo
   const date = asOf ?? (provider instanceof DatabaseUniverseProvider ? await provider.latestScanDate() : inputs[0]?.bars.at(-1)?.date);
   if (!date || !validDate(date)) throw new Error("No valid data date available");
   const records: ScoredInstrument[] = inputs.map(({ instrument, bars, fundamentals, macro }) => {
-    const throughDate = bars.filter((bar) => bar.date <= date);
-    const result = scoreAsOf({ ticker: instrument.ticker, bars, fundamentals, macro }, date);
+    const throughDate = bars.filter((bar) => bar.date <= date).slice(-SCORE_BAR_WINDOW);
+    const result = scoreAsOf({ ticker: instrument.ticker, bars: throughDate, fundamentals, macro }, date);
     const origin = provider instanceof DatabaseUniverseProvider ? provider.provenance.get(instrument.ticker) : undefined;
     const fingerprint = createHash("sha256").update(JSON.stringify({ consensus: origin?.fingerprintRows ?? { fundamentals, macro }, sources: origin?.sources ?? null, latestBarDate: throughDate.at(-1)?.date ?? null, bars: throughDate, rules: SCORE_RULES_VERSION })).digest("hex");
     return { instrument, fingerprint, consensusRows: origin?.fingerprintRows, result: { ...result, ...(origin ? { scanRunId: Object.values(origin.runIds)[0], scanRunIds: origin.runIds, agreement: origin.agreement, consensusValues: origin.consensusValues, evidenceUrls: origin.evidenceUrls, sources: origin.sources, ...(origin.carriedFrom ? { carriedFrom: origin.carriedFrom, expiredFields: origin.expiredFields ?? [] } : {}) } : {}) } };

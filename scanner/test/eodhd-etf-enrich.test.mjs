@@ -78,6 +78,16 @@ test("ambiguous or conflicting TER units remain incomplete", () => {
   assert.equal(tinyOngoing.terPct, null);
 });
 
+test("a lone NetExpenseRatio above 0.1 is read as a percent (live 2026-11-06 samples)", () => {
+  const ter = (value) => mapFundamentals(us, "VTI.US", { ...fixture, ETF_Data: { ...fixture.ETF_Data, NetExpenseRatio: value, Ongoing_Charge: null } }).terPct;
+  assert.equal(ter(0.381), 0.381); // QHY.US, 0.38% fund
+  assert.equal(ter(0.1208), 0.1208); // VCRM.US, 0.12% fund
+  assert.equal(ter(0.0009), 0.09); // SPY.US, fraction
+  assert.equal(ter(0.1), null); // 10% or 0.1%
+  assert.equal(ter(0.05), null); // 5% or 0.05%
+  assert.equal(ter(12), null);
+});
+
 test("runner stops at the EODHD call cap and posts the completed prefix", async () => {
   const rows = ["AAA", "BBB", "CCC"].map((symbol) => ({ ...us, listingKey: `NYSEARCA:${symbol}`, symbol }));
   const posts = []; let vendorCalls = 0;

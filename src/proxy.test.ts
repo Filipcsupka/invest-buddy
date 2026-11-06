@@ -5,11 +5,37 @@ const universe = vi.fn();
 vi.mock("@/data/store", () => ({ instrumentUniverse: () => universe() }));
 import { proxy } from "./proxy";
 
-const original = { mode: process.env.DATA_MODE, ideas: process.env.IDEAS_PAGE, owner: process.env.OWNER_VIEW, password: process.env.OWNER_RESEARCH_PASSWORD, paywall: process.env.PAYWALL, auth: process.env.AUTH, advice: process.env.ADVICE_OUTPUT, markets: process.env.MARKETS_VIEWS };
+const original = { mode: process.env.DATA_MODE, ideas: process.env.IDEAS_PAGE, owner: process.env.OWNER_VIEW, password: process.env.OWNER_RESEARCH_PASSWORD, paywall: process.env.PAYWALL, auth: process.env.AUTH, advice: process.env.ADVICE_OUTPUT, markets: process.env.MARKETS_VIEWS, privateUse: process.env.EODHD_PRIVATE_USE };
 afterEach(() => {
   universe.mockReset();
-  for (const [key, value] of [["DATA_MODE", original.mode], ["IDEAS_PAGE", original.ideas], ["OWNER_VIEW", original.owner], ["OWNER_RESEARCH_PASSWORD", original.password], ["PAYWALL", original.paywall], ["AUTH", original.auth], ["ADVICE_OUTPUT", original.advice], ["MARKETS_VIEWS", original.markets]] as const) {
+  for (const [key, value] of [["DATA_MODE", original.mode], ["IDEAS_PAGE", original.ideas], ["OWNER_VIEW", original.owner], ["OWNER_RESEARCH_PASSWORD", original.password], ["PAYWALL", original.paywall], ["AUTH", original.auth], ["ADVICE_OUTPUT", original.advice], ["MARKETS_VIEWS", original.markets], ["EODHD_PRIVATE_USE", original.privateUse]] as const) {
     if (value === undefined) delete process.env[key]; else process.env[key] = value;
+  }
+});
+
+it("keeps vendor-backed pages private while allowing public content and health probes", async () => {
+  process.env.EODHD_PRIVATE_USE = "on";
+  process.env.OWNER_RESEARCH_PASSWORD = "private-test-password";
+  universe.mockResolvedValue([{ ticker: "NVDA" }]);
+  const auth = `Basic ${Buffer.from("owner:private-test-password").toString("base64")}`;
+  for (const path of ["dashboard", "scanner", "company/NVDA", "etf", "heatmap", "insiders", "portfolio", "track-record"]) {
+    const url = `https://example.com/en/${path}`;
+    const blocked = await proxy(new NextRequest(url));
+    expect(blocked.status, path).toBe(401);
+    expect(blocked.headers.get("cache-control"), path).toBe("private, no-store");
+    const owner = await proxy(new NextRequest(url, { headers: { authorization: auth } }));
+    expect(owner.status, path).toBe(200);
+    expect(owner.headers.get("x-robots-tag"), path).toBe("noindex");
+  }
+  for (const path of ["/en", "/en/methodology", "/en/legal/terms", "/api/health", "/_next/static/test.js", "/favicon.svg"]) {
+    expect((await proxy(new NextRequest(`https://example.com${path}`))).status, path).toBe(200);
+  }
+});
+
+it("leaves public data routes unchanged when private use is off", async () => {
+  process.env.EODHD_PRIVATE_USE = "off";
+  for (const path of ["dashboard", "scanner", "etf", "heatmap", "portfolio", "track-record"]) {
+    expect((await proxy(new NextRequest(`https://example.com/en/${path}`))).status, path).toBe(200);
   }
 });
 

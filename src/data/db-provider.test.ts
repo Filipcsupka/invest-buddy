@@ -2,7 +2,7 @@ import type pg from "pg";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ScoreResult } from "../engine";
 import { ruleDetail } from "../i18n/score-text";
-import { DatabaseUniverseProvider } from "./db-provider";
+import { BAR_HISTORY_LIMIT, DatabaseUniverseProvider } from "./db-provider";
 
 const row = (field: string, agreement: string, value: boolean | null, verified = true) => ({ field, as_of: "2026-10-05", carried_from: null, value, agreement, agent_values: { claude: { value, runId: "c1" } }, evidence_refs: [], reason: "r", verified });
 const rows = [
@@ -107,4 +107,15 @@ describe("DatabaseUniverseProvider sources", () => {
       });
     });
   }
+});
+
+describe("DatabaseUniverseProvider bars", () => {
+  it("reads only the latest bars, oldest first", async () => {
+    const calls: { sql: string; params: unknown[] }[] = [];
+    const fake = { query: async (sql: string, params: unknown[]) => { calls.push({ sql, params }); return { rows: [{ bar_date: "2026-11-04", open: "1", high: "2", low: "1", close: "2", volume: "10" }, { bar_date: "2026-11-05", open: "2", high: "3", low: "2", close: "3", volume: "11" }] }; } } as unknown as pg.Pool;
+    const bars = await new DatabaseUniverseProvider(fake, "2026-11-05", false).bars("MSFT");
+    expect(calls[0].sql).toContain("ORDER BY bar_date DESC LIMIT $3");
+    expect(calls[0].params).toEqual(["MSFT", "2026-11-05", BAR_HISTORY_LIMIT]);
+    expect(bars.map((bar) => bar.date)).toEqual(["2026-11-04", "2026-11-05"]);
+  });
 });

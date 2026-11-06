@@ -12,8 +12,11 @@ import { statusPage } from "@/app/status-page";
 import { ownerAuthorized } from "@/app/[locale]/owner/auth";
 import { marketsViewable } from "@/markets/gate";
 import { isEtfDataPath } from "@/components/etf/tabs";
+import { PRIVATE_DATA_SECTIONS } from "@/app/private-data-routes";
 
 const marketSections = new Set(["indices", "forex", "crypto", "economy", "congress", "news", "screener"]);
+const privateDataSections = new Set<string>(PRIVATE_DATA_SECTIONS);
+const ownerChallenge = () => new NextResponse("Authentication required", { status: 401, headers: { "WWW-Authenticate": 'Basic realm="Owner"', "Cache-Control": "private, no-store", "X-Robots-Tag": "noindex" } });
 
 /** Resolve unavailable pages before a streamed layout can commit a 200 response. */
 export async function proxy(request: NextRequest) {
@@ -38,11 +41,14 @@ async function handle(request: NextRequest) {
   if (previewParam === "free" && resolveViewer(flags(), "free").preview) incoming.set(PREVIEW_HEADER, "free");
   const [, locale, section, ticker] = request.nextUrl.pathname.split("/");
   const featureFlags = flags();
+  const privateDataRoute = privateDataSections.has(section);
+  if (process.env.EODHD_PRIVATE_USE === "on" && privateDataRoute &&
+    !ownerAuthorized(request.headers.get("authorization"), process.env.OWNER_RESEARCH_PASSWORD)) return ownerChallenge();
   // Owner-only EODHD ETF tabs under /etf/fund/{key}/{tab} share the market gate.
   const market = marketSections.has(section) || isEtfDataPath(request.nextUrl.pathname);
   if (market && featureFlags.MARKETS_VIEWS &&
     !marketsViewable(request.headers.get("authorization"))) {
-    return new NextResponse("Authentication required", { status: 401, headers: { "WWW-Authenticate": 'Basic realm="Owner"', "Cache-Control": "private, no-store", "X-Robots-Tag": "noindex" } });
+    return ownerChallenge();
   }
   if (section === "owner" && featureFlags.OWNER_VIEW &&
     !ownerAuthorized(request.headers.get("authorization"), process.env.OWNER_RESEARCH_PASSWORD)) {
@@ -59,8 +65,8 @@ async function handle(request: NextRequest) {
     || (section === "company" && (!ticker || !(await instrumentUniverse()).some((item) => item.ticker === ticker.toUpperCase())));
   if (!unavailable) {
     const response = NextResponse.next({ request: { headers: incoming } });
-    if (section === "owner" || market) response.headers.set("Cache-Control", "private, no-store");
-    if (market) response.headers.set("X-Robots-Tag", "noindex");
+    if (section === "owner" || market || (process.env.EODHD_PRIVATE_USE === "on" && privateDataRoute)) response.headers.set("Cache-Control", "private, no-store");
+    if (market || (process.env.EODHD_PRIVATE_USE === "on" && privateDataRoute)) response.headers.set("X-Robots-Tag", "noindex");
     if (request.nextUrl.searchParams.has("view")) response.headers.set("X-Robots-Tag", "noindex");
     response.headers.set("x-request-id", requestId);
     response.headers.set("server-timing", `rid;desc="${requestId}"`);

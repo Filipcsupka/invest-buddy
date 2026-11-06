@@ -53,6 +53,12 @@ export const EXPECTED_JOBS: ExpectedJob[] = [
   { cronJob: "thirteenf-q4", schedule: "0 8 16 2 *", enabled: false, runJob: null, graceMinutes: 70, note: "yearly, shares the job name thirteenf" },
   { cronJob: "weekly", schedule: "0 18 * * 0", enabled: false, runJob: "weekly", graceMinutes: 20 },
   { cronJob: "watchdog", schedule: "45 7 * * 1-5", enabled: false, runJob: null, graceMinutes: 15, note: "the watchdog does not watch itself; PL28 adds a dead-man check" },
+  { cronJob: "eodhd-market-bars-index", schedule: "20 0 * * 2-6", enabled: false, runJob: null, graceMinutes: 20, note: "shares the job name eodhd-market-bars with the fx and crypto CronJobs" },
+  { cronJob: "eodhd-market-bars-fx", schedule: "25 0 * * *", enabled: false, runJob: null, graceMinutes: 20, note: "shares the job name eodhd-market-bars" },
+  { cronJob: "eodhd-market-bars-crypto", schedule: "30 0 * * *", enabled: false, runJob: null, graceMinutes: 20, note: "shares the job name eodhd-market-bars" },
+  { cronJob: "eodhd-index-components", schedule: "15 1 * * 0", enabled: false, runJob: "eodhd-index-components", graceMinutes: 20 },
+  { cronJob: "eodhd-market-cap", schedule: "40 1 * * 0", enabled: false, runJob: "eodhd-market-cap", graceMinutes: 40 },
+  { cronJob: "eodhd-screener", schedule: "0 6 * * 2-6", enabled: false, runJob: "eodhd-screener", graceMinutes: 20 },
   { cronJob: "watchdog-noon", schedule: "0 12 * * *", enabled: false, runJob: null, graceMinutes: 15, note: "the watchdog does not watch itself; PL28 adds a dead-man check" },
 ];
 

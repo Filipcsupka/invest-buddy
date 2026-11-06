@@ -1,0 +1,373 @@
+# Market views (indices, forex, crypto, screener, market cap). Proposal for the infra repo: every job starts suspended.
+# The windows avoid the 04:00-04:25 scoring chain and the existing EODHD jobs (fundamentals 02:30, insider 02:45, catalyst 06:45).
+# Index bars after the US close, Tuesday to Saturday. 25 symbols, 1 call each; each run re-reads the last stored day.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: invest-buddy-eodhd-market-bars-index
+  namespace: invest
+spec:
+  suspend: true
+  schedule: "20 0 * * 2-6"
+  timeZone: Europe/Bratislava
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 900
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: invest-buddy
+            app.kubernetes.io/component: eodhd-market-bars-index
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          nodeSelector:
+            kubernetes.io/hostname: k8s-worker-01
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            fsGroup: 10001
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: eodhd-market-bars-index
+              image: ghcr.io/filipcsupka/invest-buddy:latest
+              command: ["node", "dist/jobs/eodhd-market-bars.js", "--class", "index"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-secrets
+                      key: DATABASE_URL
+                - name: EODHD_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-eodhd
+                      key: api-key
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 128Mi
+                limits:
+                  memory: 512Mi
+---
+# Currency pair bars every day (the vendor can publish weekend rows). 23 symbols, 1 call each.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: invest-buddy-eodhd-market-bars-fx
+  namespace: invest
+spec:
+  suspend: true
+  schedule: "25 0 * * *"
+  timeZone: Europe/Bratislava
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 900
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: invest-buddy
+            app.kubernetes.io/component: eodhd-market-bars-fx
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          nodeSelector:
+            kubernetes.io/hostname: k8s-worker-01
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            fsGroup: 10001
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: eodhd-market-bars-fx
+              image: ghcr.io/filipcsupka/invest-buddy:latest
+              command: ["node", "dist/jobs/eodhd-market-bars.js", "--class", "fx"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-secrets
+                      key: DATABASE_URL
+                - name: EODHD_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-eodhd
+                      key: api-key
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 128Mi
+                limits:
+                  memory: 512Mi
+---
+# Crypto bars every day. 14 symbols, 1 call each. The current UTC day is still open at 00:30 Bratislava, so the next run replaces it.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: invest-buddy-eodhd-market-bars-crypto
+  namespace: invest
+spec:
+  suspend: true
+  schedule: "30 0 * * *"
+  timeZone: Europe/Bratislava
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 900
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: invest-buddy
+            app.kubernetes.io/component: eodhd-market-bars-crypto
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          nodeSelector:
+            kubernetes.io/hostname: k8s-worker-01
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            fsGroup: 10001
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: eodhd-market-bars-crypto
+              image: ghcr.io/filipcsupka/invest-buddy:latest
+              command: ["node", "dist/jobs/eodhd-market-bars.js", "--class", "crypto"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-secrets
+                      key: DATABASE_URL
+                - name: EODHD_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-eodhd
+                      key: api-key
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 128Mi
+                limits:
+                  memory: 512Mi
+---
+# Index constituents on Sunday; each index is refreshed when its last attempt is 28 days old. 10 calls per index, capped at 300 a run.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: invest-buddy-eodhd-index-components
+  namespace: invest
+spec:
+  suspend: true
+  schedule: "15 1 * * 0"
+  timeZone: Europe/Bratislava
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 900
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: invest-buddy
+            app.kubernetes.io/component: eodhd-index-components
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          nodeSelector:
+            kubernetes.io/hostname: k8s-worker-01
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            fsGroup: 10001
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: eodhd-index-components
+              image: ghcr.io/filipcsupka/invest-buddy:latest
+              command: ["node", "dist/jobs/eodhd-index-components.js"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-secrets
+                      key: DATABASE_URL
+                - name: EODHD_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-eodhd
+                      key: api-key
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 128Mi
+                limits:
+                  memory: 512Mi
+---
+# Weekly market cap history for US universe names, oldest attempt first; a name is refreshed every 28 days. 10 calls each, at most 800 a run.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: invest-buddy-eodhd-market-cap
+  namespace: invest
+spec:
+  suspend: true
+  schedule: "40 1 * * 0"
+  timeZone: Europe/Bratislava
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 1800
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: invest-buddy
+            app.kubernetes.io/component: eodhd-market-cap
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          nodeSelector:
+            kubernetes.io/hostname: k8s-worker-01
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            fsGroup: 10001
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: eodhd-market-cap
+              image: ghcr.io/filipcsupka/invest-buddy:latest
+              command: ["node", "dist/jobs/eodhd-market-cap.js", "--max-symbols", "80"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-secrets
+                      key: DATABASE_URL
+                - name: EODHD_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-eodhd
+                      key: api-key
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 128Mi
+                limits:
+                  memory: 512Mi
+---
+# Ten stored screener presets after the US session, Tuesday to Saturday. 5 calls each, capped at 100 a run.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: invest-buddy-eodhd-screener
+  namespace: invest
+spec:
+  suspend: true
+  schedule: "0 6 * * 2-6"
+  timeZone: Europe/Bratislava
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 900
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: invest-buddy
+            app.kubernetes.io/component: eodhd-screener
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          nodeSelector:
+            kubernetes.io/hostname: k8s-worker-01
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            fsGroup: 10001
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: eodhd-screener
+              image: ghcr.io/filipcsupka/invest-buddy:latest
+              command: ["node", "dist/jobs/eodhd-screener.js"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-secrets
+                      key: DATABASE_URL
+                - name: EODHD_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-eodhd
+                      key: api-key
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 128Mi
+                limits:
+                  memory: 512Mi
