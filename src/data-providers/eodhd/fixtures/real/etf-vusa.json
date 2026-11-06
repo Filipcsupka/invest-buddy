@@ -1,0 +1,32 @@
+{
+  "status": 200,
+  "response": {
+    "General": {
+      "Code": "VUSA",
+      "Type": "ETF",
+      "Exchange": "XETRA",
+      "CurrencyCode": "EUR"
+    },
+    "ETF_Data": {
+      "ISIN": "IE00B3XXRP09",
+      "Company_Name": "Vanguard Group (Ireland) Limited",
+      "Domicile": "Ireland",
+      "Index_Name": "Morningstar US Large TR USD",
+      "NetExpenseRatio": null,
+      "Ongoing_Charge": 0.0688,
+      "TotalAssets": 51632340992,
+      "Holdings_Count": 10
+    },
+    "Earnings": {
+      "History": {}
+    },
+    "outstandingShares": {
+      "quarterly": {}
+    },
+    "Financials": {
+      "Income_Statement": {
+        "quarterly": {}
+      }
+    }
+  }
+}

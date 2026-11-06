@@ -1,0 +1,26 @@
+{
+  "status": 200,
+  "response": [
+    {
+      "Code": "HSBA",
+      "Name": "HSBC Holdings PLC",
+      "Currency": "GBX",
+      "Type": "Common Stock",
+      "Isin": "GB0005405286"
+    },
+    {
+      "Code": "SHEL",
+      "Name": "Shell plc",
+      "Currency": "GBX",
+      "Type": "Common Stock",
+      "Isin": "GB00BP6MXD84"
+    },
+    {
+      "Code": "VOD",
+      "Name": "Vodafone Group PLC",
+      "Currency": "GBX",
+      "Type": "Common Stock",
+      "Isin": "GB00BH4HKS39"
+    }
+  ]
+}

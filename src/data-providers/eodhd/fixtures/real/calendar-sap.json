@@ -1,0 +1,19 @@
+{
+  "status": 200,
+  "response": {
+    "type": "Earnings",
+    "earnings": [
+      {
+        "code": "SAP.XETRA",
+        "report_date": "2026-10-20",
+        "date": "2026-09-30",
+        "before_after_market": "AfterMarket",
+        "currency": "EUR",
+        "actual": 1.89,
+        "estimate": 1.83,
+        "difference": 0.06,
+        "percent": 3.2787
+      }
+    ]
+  }
+}

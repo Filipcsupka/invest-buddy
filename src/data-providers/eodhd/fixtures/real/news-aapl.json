@@ -1,0 +1,19 @@
+{
+  "status": 200,
+  "response": [
+    {
+      "date": "2026-11-06T18:16:32+00:00",
+      "link": "https://finance.yahoo.com/technology/articles/qualcomm-faces-worst-day-since-181632192.html",
+      "symbols": [
+        "AAPL.US"
+      ],
+      "tags": [],
+      "sentiment": {
+        "polarity": -0.917,
+        "neg": 0.091,
+        "neu": 0.859,
+        "pos": 0.05
+      }
+    }
+  ]
+}

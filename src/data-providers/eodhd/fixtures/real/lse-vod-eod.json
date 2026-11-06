@@ -1,0 +1,23 @@
+{
+  "status": 200,
+  "response": [
+    {
+      "date": "2026-11-04",
+      "open": 117.2,
+      "high": 121.15,
+      "low": 117,
+      "close": 121.15,
+      "adjusted_close": 121.15,
+      "volume": 238547886
+    },
+    {
+      "date": "2026-11-05",
+      "open": 121.4,
+      "high": 122.65,
+      "low": 119.393,
+      "close": 119.4,
+      "adjusted_close": 119.4,
+      "volume": 79179493
+    }
+  ]
+}
