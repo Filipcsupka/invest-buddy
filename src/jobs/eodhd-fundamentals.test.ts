@@ -10,6 +10,7 @@ import { dueForRefresh, loadSubjects, parseArgs, runEodhdFundamentals, storeClas
 const fixture = (name: string) => JSON.parse(readFileSync(join(process.cwd(), "src/data-providers/eodhd/fixtures/offline", name), "utf8"));
 const fundamentals = fixture("AAPL.US.json") as Fundamentals;
 const calendar = fixture("earnings.json") as EarningsCalendar;
+const real = (name: string) => JSON.parse(readFileSync(join(process.cwd(), "src/data-providers/eodhd/fixtures/real", name), "utf8")).response as Fundamentals;
 
 describe("EODHD subject mapping", () => {
   it("maps exchange-qualified instruments to the same vendor symbol", async () => {
@@ -42,7 +43,7 @@ describe("EODHD fundamentals parsing", () => {
     const ends = ["2024-05-31", "2024-08-31", "2025-05-31", "2025-08-31"];
     const revenue = [100, 100, 110, 130];
     const payload: Fundamentals = { General: { CurrencyCode: "USD" }, Financials: { Income_Statement: { quarterly:
-      Object.fromEntries(ends.map((end, i) => [end, { date: end, filing_date: `${end.slice(0, 7)}-31`, totalRevenue: revenue[i] }])) } } };
+      Object.fromEntries(ends.map((end, i) => [end, { date: end, filing_date: new Date(Date.parse(`${end}T00:00:00Z`) + 15 * 86_400_000).toISOString().slice(0, 10), currency_symbol: "USD", totalRevenue: revenue[i] }])) } } };
     const parsed = parseEodhdFundamentals(payload, "OFF", "2025-10-01");
     const latest = parsed.rows.find((row) => row.periodEnd === "2025-08-31");
     expect(latest?.periodStart).toBe("2025-06-01");
@@ -55,23 +56,50 @@ describe("EODHD fundamentals parsing", () => {
     const halves = ["2024-06-30", "2024-12-31", "2025-06-30", "2025-12-31"];
     const filed = ["2024-09-15", "2025-03-15", "2025-09-15", "2026-03-15"];
     const payload: Fundamentals = { General: { CurrencyCode: "GBP" }, Financials: { Income_Statement: { quarterly:
-      Object.fromEntries(halves.map((end, i) => [end, { date: end, filing_date: filed[i], totalRevenue: 100 + i }])) } } };
+      Object.fromEntries(halves.map((end, i) => [end, { date: end, filing_date: filed[i], currency_symbol: "GBP", totalRevenue: 100 + i }])) } } };
     const parsed = parseEodhdFundamentals(payload, "ZZH.LSE", "2026-10-01").rows.filter((row) => row.concept === "Revenues");
     expect(parsed.map((row) => [row.periodStart, row.periodEnd])).toEqual([
       ["2024-03-31", "2024-06-30"], ["2024-07-01", "2024-12-31"], ["2025-01-01", "2025-06-30"], ["2025-07-01", "2025-12-31"],
     ]);
     const gapped = ["2025-03-31", "2025-06-30", "2025-12-31", "2026-03-31"];
     const quarterly: Fundamentals = { General: { CurrencyCode: "USD" }, Financials: { Income_Statement: { quarterly:
-      Object.fromEntries(gapped.map((end) => [end, { date: end, filing_date: "2026-05-01", totalRevenue: 100 }])) } } };
+      Object.fromEntries(gapped.map((end) => [end, { date: end, filing_date: "2026-05-01", currency_symbol: "USD", totalRevenue: 100 }])) } } };
     expect(parseEodhdFundamentals(quarterly, "GAP", "2026-10-01").rows.find((row) => row.periodEnd === "2025-12-31")?.periodStart).toBe("2025-10-01");
   });
   it("parses a bulk calendar and filters the requested window", () => {
     expect(parseEodhdCalendar(calendar, "2025-10-01", "2025-10-31")).toMatchObject([{ vendorSymbol: "AAPL.US", reportDate: "2025-10-15", fiscalDateEnding: "2025-09-30", estimate: 2.34 }]);
   });
-  it("requires a valid unverified filter value and fixture dry-run arguments", () => {
+  it("accepts the verified filter value and fixture dry-run arguments", () => {
     expect(parseArgs(["--dry-run", "--fixture-dir", "fixtures", "--only", "AAPL.US", "--filter", "Financials::Income_Statement::quarterly"]).filter).toBe("Financials::Income_Statement::quarterly");
     expect(() => parseArgs(["--fixture-dir", "fixtures", "--only", "AAPL.US"])).toThrow(/dry-run/);
     expect(parseArgs(["--dry-run", "--as-of", "2025-10-21"]).now?.toISOString()).toBe("2025-10-21T12:00:00.000Z");
+  });
+  it("uses real SAP report dates and dateFormatted share periods", () => {
+    const parsed = parseEodhdFundamentals(real("sap-full.json"), "SAP.XETRA", "2026-11-06");
+    expect(parsed.rows.find((row) => row.concept === "Revenues" && row.periodEnd === "2026-09-30"))
+      .toMatchObject({ filed: "2026-10-20", unit: "EUR", value: 10_270_000_000 });
+    expect(parsed.rows.find((row) => row.concept === "EntityCommonStockSharesOutstanding" && row.periodEnd === "2026-09-30"))
+      .toMatchObject({ filed: "2026-10-20", value: 1_164_000_000 });
+    expect(parseEodhdFundamentals(real("sap-full.json"), "SAP.XETRA", "2026-10-19").rows
+      .some((row) => row.periodEnd === "2026-09-30")).toBe(false);
+  });
+  it("receives a bare date map from the quarterly filter", () => {
+    const filtered = real("sap-quarterly-filter.json") as Record<string, { totalRevenue: string }>;
+    expect(filtered).not.toHaveProperty("Financials");
+    expect(filtered["2026-09-30"].totalRevenue).toBe("10270000000.00");
+  });
+  it("does not label HSBC's USD revenue as GBX or publish an undated period", () => {
+    const parsed = parseEodhdFundamentals(real("hsba-full.json"), "HSBA.LSE", "2026-11-06");
+    expect(parsed.rows.find((row) => row.concept === "Revenues" && row.periodEnd === "2026-06-30"))
+      .toMatchObject({ filed: "2026-08-04", unit: "USD" });
+    expect(parsed.rows.some((row) => row.concept === "Revenues" && row.periodEnd === "2026-09-30")).toBe(false);
+  });
+  it("waits for a later filing date when it follows the earnings report", () => {
+    const payload = structuredClone(real("sap-full.json"));
+    const quarters = (payload.Financials as { Income_Statement: { quarterly: Record<string, { filing_date: string }> } }).Income_Statement.quarterly;
+    quarters["2026-09-30"].filing_date = "2026-10-25";
+    expect(parseEodhdFundamentals(payload, "SAP.XETRA", "2026-10-24").rows.some((row) => row.periodEnd === "2026-09-30" && row.concept === "Revenues")).toBe(false);
+    expect(parseEodhdFundamentals(payload, "SAP.XETRA", "2026-10-25").rows.find((row) => row.periodEnd === "2026-09-30" && row.concept === "Revenues")?.filed).toBe("2026-10-25");
   });
 });
 

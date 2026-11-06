@@ -1,11 +1,18 @@
 import { describe, expect, it } from "vitest";
 import form4 from "../data-providers/eodhd/fixtures/form4.json";
+import realForm4 from "../data-providers/eodhd/fixtures/real/form4-aapl.json";
 import { dueForInsiderFallback, parseEodhdInsider, parseSharesAfter, runEodhdInsider, type InsiderSubject } from "./eodhd-insider";
 
 const subject = (changes: Partial<InsiderSubject> = {}): InsiderSubject => ({ ticker: "AAPL", vendorSymbol: "AAPL.US",
   secCheckedAt: null, vendorCheckedAt: null, secFailed: true, ...changes });
 
 describe("EODHD Form 4 fallback", () => {
+  it("parses a live AAPL page with a relative next link", () => {
+    const page = realForm4.response;
+    expect(page.meta.page).toMatchObject({ offset: 0, limit: 1 });
+    expect(page.links.next).toMatch(/^\/api\/sec-filings\/AAPL.US\/form4\?/);
+    expect(parseEodhdInsider(page.data[0], "2026-11-06")).toMatchObject([{ code: "S", shares: 2399, filedAt: "2026-11-05" }]);
+  });
   it("only schedules when SEC is stale or failed and the paid refresh is due", () => {
     expect(dueForInsiderFallback(subject({ secCheckedAt: "2026-10-20", secFailed: false }), "2026-10-21")).toBe(false);
     expect(dueForInsiderFallback(subject({ secCheckedAt: "2026-10-20", secFailed: true }), "2026-10-21")).toBe(true);

@@ -79,7 +79,7 @@ export class EodhdClient {
     url.searchParams.set("api_token", this.apiKey);
     url.searchParams.set("fmt", "json");
     for (let attempt = 0; ; attempt++) {
-      // UNVERIFIED: whether HTTP 429 consumes daily calls. Count every attempted request conservatively.
+      // Count every attempted request conservatively; 429 billing was not observed.
       this.counts[endpoint] += cost;
       let response: Response;
       try { response = await this.fetcher(url, { headers: { Accept: "application/json" } }); }
@@ -122,7 +122,6 @@ export class EodhdClient {
     return this.get("eod-bulk-last-day", `eod-bulk-last-day/${encodeURIComponent(exchange)}`, { ...options, symbols: options.symbols?.join(",") }, 100 + (options.symbols?.length ?? 0));
   }
   fundamentals<T = Fundamentals>(symbol: string, filter?: string): Promise<T> {
-    // UNVERIFIED: Financials::Income_Statement::quarterly filter path is inferred from the documented filter pattern.
     return this.get("fundamentals", `v1.1/fundamentals/${encodeURIComponent(symbol)}`, { filter }, 10);
   }
   etfData<T = EtfHoldings | Record<string, unknown>>(symbol: string, filter: EtfDataFilter): Promise<T> {
@@ -153,7 +152,6 @@ export class EodhdClient {
     return this.get("calendar/earnings", "calendar/earnings", { ...options, symbols: options.symbols?.join(",") });
   }
   news(options: { symbol?: string; tag?: string; from?: string; to?: string; limit?: number; offset?: number } = {}): Promise<NewsItem[]> {
-    // UNVERIFIED: docs also say "+5 per ticker"; the counter records only the documented base of 5 per request.
     return this.get("news", "news", { s: options.symbol, t: options.tag, from: options.from, to: options.to, limit: options.limit, offset: options.offset }, 5);
   }
   form4(symbol: string, options: { offset?: number; limit?: number } = {}): Promise<Form4Page> {

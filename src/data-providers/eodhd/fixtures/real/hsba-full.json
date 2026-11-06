@@ -1,0 +1,109 @@
+{
+  "status": 200,
+  "response": {
+    "General": {
+      "Code": "HSBA",
+      "Type": "Common Stock",
+      "Exchange": "LSE",
+      "CurrencyCode": "GBX",
+      "ISIN": "GB0005405286",
+      "Sector": "Financial Services",
+      "Industry": "Banks - Diversified"
+    },
+    "SharesStats": {
+      "SharesOutstanding": 17098856509
+    },
+    "Earnings": {
+      "History": {
+        "2026-09-30": {
+          "reportDate": "2026-10-27",
+          "date": "2026-09-30",
+          "beforeAfterMarket": null,
+          "currency": null,
+          "epsActual": 0.42,
+          "epsEstimate": 0.437,
+          "epsDifference": -0.017,
+          "surprisePercent": -3.8902
+        },
+        "2026-06-30": {
+          "reportDate": "2026-08-04",
+          "date": "2026-06-30",
+          "beforeAfterMarket": null,
+          "currency": null,
+          "epsActual": 0.45,
+          "epsEstimate": 0.4484,
+          "epsDifference": 0.0016,
+          "surprisePercent": 0.3568
+        },
+        "2026-03-31": {
+          "reportDate": "2026-05-05",
+          "date": "2026-03-31",
+          "beforeAfterMarket": null,
+          "currency": null,
+          "epsActual": 0.44,
+          "epsEstimate": 0.3153,
+          "epsDifference": 0.1247,
+          "surprisePercent": 39.5496
+        }
+      }
+    },
+    "outstandingShares": {
+      "quarterly": {
+        "0": {
+          "date": "2026-Q3",
+          "dateFormatted": "2026-09-30",
+          "sharesMln": "17292.6830",
+          "shares": 17292683000
+        },
+        "1": {
+          "date": "2026-Q2",
+          "dateFormatted": "2026-06-30",
+          "sharesMln": "17293.0000",
+          "shares": 17293000000
+        },
+        "2": {
+          "date": "2026-Q1",
+          "dateFormatted": "2026-03-31",
+          "sharesMln": "17293.0000",
+          "shares": 17293000000
+        },
+        "3": {
+          "date": "2025-Q4",
+          "dateFormatted": "2025-12-31",
+          "sharesMln": "17609.9760",
+          "shares": 17609976000
+        }
+      }
+    },
+    "Financials": {
+      "Income_Statement": {
+        "quarterly": {
+          "2026-09-30": {
+            "date": "2026-09-30",
+            "filing_date": "2026-09-30",
+            "currency_symbol": null,
+            "totalRevenue": "38717877000.00"
+          },
+          "2026-06-30": {
+            "date": "2026-06-30",
+            "filing_date": "2026-06-30",
+            "currency_symbol": "USD",
+            "totalRevenue": "34159000000.00"
+          },
+          "2026-03-31": {
+            "date": "2026-03-31",
+            "filing_date": "2026-03-31",
+            "currency_symbol": "USD",
+            "totalRevenue": "33838000000.00"
+          },
+          "2025-12-31": {
+            "date": "2025-12-31",
+            "filing_date": "2025-12-31",
+            "currency_symbol": "USD",
+            "totalRevenue": "33030000000.00"
+          }
+        }
+      }
+    }
+  }
+}

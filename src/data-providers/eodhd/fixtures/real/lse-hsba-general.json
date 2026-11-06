@@ -1,0 +1,13 @@
+{
+  "status": 200,
+  "response": {
+    "Code": "HSBA",
+    "Type": "Common Stock",
+    "Name": "HSBC Holdings PLC",
+    "CurrencyCode": "GBX",
+    "CurrencyName": "Pence sterling",
+    "CurrencySymbol": "p",
+    "Exchange": "LSE",
+    "ISIN": "GB0005405286"
+  }
+}

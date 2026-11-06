@@ -129,7 +129,7 @@ export async function runEodhdCatalyst(db: pg.Pool | null, api: CatalystClient, 
   }
   return { subjects: subjects.length, shortlisted: shortlisted.length, newsRequests: requests, newsArticles: articles,
     documents, facts, failures: failed.length, failedSymbols: failed.join(","), stoppedEarly,
-    baseCalls: api.getCallCosts().news ?? 0, possibleTickerSurcharge: shortlisted.length * 5 };
+    baseCalls: api.getCallCosts().news ?? 0 };
 }
 
 export function parseArgs(args: string[]): CatalystOptions {

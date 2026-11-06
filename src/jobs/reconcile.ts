@@ -11,6 +11,7 @@ import { isIsoDate } from "../db/iso-date";
 import { insiderMinNetBuyUsd, type InsiderResult } from "../data/insider";
 import { loadEpsSurprise, loadInsider } from "../db/collectors";
 import { loadCatalyst, type CatalystResult } from "../data/catalyst";
+import { loadUniverse } from "../db/universe";
 
 type Agent = "claude" | "codex";
 /**
@@ -157,6 +158,9 @@ export async function runReconcile(pool: pg.Pool, asOf: string, verify: Evidence
        AND (f.event_date IS NULL OR f.event_date <= $1::date)`, [asOf]);
   const researchBySymbol = primaryResearchReadings(researchRows.rows, asOf);
   for (const symbol of researchBySymbol.keys()) if (!grouped.has(symbol)) grouped.set(symbol, []);
+  // Private mode runs the stored-fact rules for every scored universe symbol, also when no extractor or research finding exists.
+  const seeded = new Set<string>();
+  if (eodhdPrivateUse()) for (const { symbol } of await loadUniverse(pool, asOf)) if (!grouped.has(symbol)) { grouped.set(symbol, []); seeded.add(symbol); }
   const macros = await pool.query<{ run_id: string; data: Record<string, unknown>; evidence: { items: EvidenceRef[] } }>("SELECT run_id,data,evidence FROM macro_findings WHERE as_of=$1 AND superseded_by IS NULL AND data->>'runnerName' IN ('claude','codex')", [asOf]);
   const macroFindings = macros.rows.map((row) => ({ runId: row.run_id, runner: { name: row.data.runnerName as Agent }, fundamentals: row.data, evidence: row.evidence, confidence: "high" }));
   const pending: ConsensusField[] = [];
@@ -171,7 +175,10 @@ export async function runReconcile(pool: pg.Pool, asOf: string, verify: Evidence
     for (const field of fields) {
       // Private mode recomputes non-macro rules; otherwise preserve existing data_rule rows except productCatalyst.
       if (ruleRows.has(`${symbol}:${field}`) && (eodhdPrivateUse() ? MACRO_FIELDS.has(field) : field !== "productCatalyst")) continue;
+      if (seeded.has(symbol) && MACRO_FIELDS.has(field)) continue;
       const item = await reconcileField(symbol, field, asOf, MACRO_FIELDS.has(field) ? macroFindings : findings, verify, sec, insider, { storedVerify: extras.storedVerify, eps, catalyst, research: researchBySymbol.get(symbol) });
+      // A universe-only symbol stores only fields a stored-fact rule settled; its other fields keep earlier rows or carry forward as before.
+      if (seeded.has(symbol) && !item.verified) continue;
       pending.push(item);
     }
   }
@@ -180,7 +187,8 @@ export async function runReconcile(pool: pg.Pool, asOf: string, verify: Evidence
   const carried: CarriedField[] = [];
   if (carry) {
     const latest = await pool.query<ConsensusRow & { symbol: string }>("SELECT DISTINCT ON (symbol,field) symbol,field,as_of::text AS as_of,value,agreement,agent_values,evidence_refs,verified,reason,carried_from::text AS carried_from FROM consensus_findings WHERE as_of < $1 ORDER BY symbol,field,as_of DESC", [asOf]);
-    for (const row of latest.rows) if (!grouped.has(row.symbol) && (fields as readonly string[]).includes(row.field) && !ruleRows.has(`${row.symbol}:${row.field}`)) carried.push(carryField(row, asOf));
+    const fresh = new Set(pending.map((item) => `${item.symbol}:${item.field}`));
+    for (const row of latest.rows) if ((!grouped.has(row.symbol) || seeded.has(row.symbol) && !fresh.has(`${row.symbol}:${row.field}`)) && (fields as readonly string[]).includes(row.field) && !ruleRows.has(`${row.symbol}:${row.field}`)) carried.push(carryField(row, asOf));
   }
   const client = await pool.connect();
   try {

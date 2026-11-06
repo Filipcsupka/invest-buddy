@@ -7,7 +7,7 @@ export type Region = typeof REGIONS[number];
 
 /**
  * Price benchmark per region, as an instrument key in daily_bars. SPY stays the US benchmark. EXSA.XETRA is the iShares STOXX Europe 600
- * UCITS ETF (DE), quoted in EUR on XETRA (migration 101 seeds it). UNVERIFIED: that EODHD lists EXSA on XETRA with full history.
+ * ETF (DE), quoted in EUR on XETRA (migration 101 seeds it). EODHD returned 470 daily bars from 2025-01-02 through 2026-11-05 on 2026-11-06; UCITS status is not supplied by EODHD.
  */
 export const REGION_BENCHMARKS: Record<Region, string> = { US: "SPY", Europe: "EXSA.XETRA" };
 

@@ -1,0 +1,13 @@
+{
+  "status": 200,
+  "response": {
+    "Code": "VOD",
+    "Type": "Common Stock",
+    "Name": "Vodafone Group PLC",
+    "CurrencyCode": "GBX",
+    "CurrencyName": "Pence sterling",
+    "CurrencySymbol": "p",
+    "Exchange": "LSE",
+    "ISIN": "GB00BH4HKS39"
+  }
+}

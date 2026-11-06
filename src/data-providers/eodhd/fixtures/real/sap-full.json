@@ -1,0 +1,109 @@
+{
+  "status": 200,
+  "response": {
+    "General": {
+      "Code": "SAP",
+      "Type": "Common Stock",
+      "Exchange": "XETRA",
+      "CurrencyCode": "EUR",
+      "ISIN": "DE0007164600",
+      "Sector": "Technology",
+      "Industry": "Software - Application"
+    },
+    "SharesStats": {
+      "SharesOutstanding": 1154204232
+    },
+    "Earnings": {
+      "History": {
+        "2026-12-31": {
+          "reportDate": "2027-01-28",
+          "date": "2026-12-31",
+          "beforeAfterMarket": "AfterMarket",
+          "currency": null,
+          "epsActual": null,
+          "epsEstimate": 1.98,
+          "epsDifference": 0,
+          "surprisePercent": null
+        },
+        "2026-09-30": {
+          "reportDate": "2026-10-20",
+          "date": "2026-09-30",
+          "beforeAfterMarket": "AfterMarket",
+          "currency": "EUR",
+          "epsActual": 1.89,
+          "epsEstimate": 1.83,
+          "epsDifference": 0.06,
+          "surprisePercent": 3.2787
+        },
+        "2026-06-30": {
+          "reportDate": "2026-07-22",
+          "date": "2026-06-30",
+          "beforeAfterMarket": "AfterMarket",
+          "currency": "EUR",
+          "epsActual": 1.59,
+          "epsEstimate": 1.75,
+          "epsDifference": -0.16,
+          "surprisePercent": -9.1429
+        }
+      }
+    },
+    "outstandingShares": {
+      "quarterly": {
+        "0": {
+          "date": "2026-Q3",
+          "dateFormatted": "2026-09-30",
+          "sharesMln": "1164.0000",
+          "shares": 1164000000
+        },
+        "1": {
+          "date": "2026-Q2",
+          "dateFormatted": "2026-06-30",
+          "sharesMln": "1158.0000",
+          "shares": 1158000000
+        },
+        "2": {
+          "date": "2026-Q1",
+          "dateFormatted": "2026-03-31",
+          "sharesMln": "1168.0000",
+          "shares": 1168000000
+        },
+        "3": {
+          "date": "2025-Q4",
+          "dateFormatted": "2025-12-31",
+          "sharesMln": "1172.0000",
+          "shares": 1172000000
+        }
+      }
+    },
+    "Financials": {
+      "Income_Statement": {
+        "quarterly": {
+          "2026-09-30": {
+            "date": "2026-09-30",
+            "filing_date": "2026-09-30",
+            "currency_symbol": "EUR",
+            "totalRevenue": "10270000000.00"
+          },
+          "2026-06-30": {
+            "date": "2026-06-30",
+            "filing_date": "2026-06-30",
+            "currency_symbol": "EUR",
+            "totalRevenue": "9878000000.00"
+          },
+          "2026-03-31": {
+            "date": "2026-03-31",
+            "filing_date": "2026-03-31",
+            "currency_symbol": "EUR",
+            "totalRevenue": "9555000000.00"
+          },
+          "2025-12-31": {
+            "date": "2025-12-31",
+            "filing_date": "2025-12-31",
+            "currency_symbol": "EUR",
+            "totalRevenue": "9684000000.00"
+          }
+        }
+      }
+    }
+  }
+}

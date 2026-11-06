@@ -1,0 +1,40 @@
+{
+  "status": 200,
+  "response": [
+    {
+      "date": "2026-11-06T11:55:03+00:00",
+      "link": "https://finance.yahoo.com/technology/articles/chip-inspection-leader-fell-24-115503476.html",
+      "symbols": [
+        "ASML.AS"
+      ],
+      "tags": [
+        "EARNINGS PER SHARE",
+        "FREE CASH FLOW"
+      ],
+      "sentiment": {
+        "polarity": 0.896,
+        "neg": 0.048,
+        "neu": 0.886,
+        "pos": 0.066
+      }
+    },
+    {
+      "date": "2026-11-06T09:18:13+00:00",
+      "link": "https://finance.yahoo.com/markets/stocks/articles/asml-stock-focus-euv-machine-091813711.html",
+      "symbols": [
+        "ASML.AS"
+      ],
+      "tags": [
+        "BALANCE SHEET",
+        "REVENUE GROWTH",
+        "SHARE PRICE"
+      ],
+      "sentiment": {
+        "polarity": 0.99,
+        "neg": 0.06,
+        "neu": 0.843,
+        "pos": 0.098
+      }
+    }
+  ]
+}

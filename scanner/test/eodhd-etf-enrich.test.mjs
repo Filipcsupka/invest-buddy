@@ -6,6 +6,7 @@ import { validateBatch } from "../run-etf-enrich.mjs";
 import { execute, parseArgs } from "../run-etf-enrich.mjs";
 
 const fixture = JSON.parse(readFileSync(new URL("./fixtures/eodhd-etf.json", import.meta.url)));
+const real = (name) => JSON.parse(readFileSync(new URL(`../../src/data-providers/eodhd/fixtures/real/${name}`, import.meta.url))).response;
 const us = { listingKey: "NYSEARCA:VTI", isin: null, symbol: "VTI", exchange: "NYSEARCA" };
 
 test("maps recorded ETF fields and validates the ingest payload", () => {
@@ -31,6 +32,18 @@ test("ISIN symbol wins; absent UCITS data stays null and incomplete", () => {
   const unmapped = mapFundamentals({ ...eu, vendorSymbol: null }, null, undefined);
   assert.equal(unmapped.sourceUrl, null);
   assert.equal(unmapped.issuer, null);
+});
+
+test("maps sampled XETRA ETF fees without inventing USD assets or UCITS status", () => {
+  for (const [symbol, fee, holdings] of [["EXSA", 0.1918, 600], ["VUSA", 0.0688, 10]]) {
+    const data = real(`etf-${symbol.toLowerCase()}.json`);
+    const row = { listingKey: data.ETF_Data.ISIN, isin: data.ETF_Data.ISIN, symbol, exchange: "XETR", vendorSymbol: `${symbol}.XETRA` };
+    const mapped = mapFundamentals(row, row.vendorSymbol, data);
+    assert.equal(mapped.terPct, fee);
+    assert.equal(mapped.holdingsCount, holdings);
+    assert.equal(mapped.aumUsdM, null);
+    assert.equal(mapped.ucits, null);
+  }
 });
 
 test("dry run makes no vendor calls; duplicate symbols share one paid call", async () => {
