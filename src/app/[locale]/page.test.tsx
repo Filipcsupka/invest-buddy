@@ -3,12 +3,26 @@ import { afterEach, expect, it, vi } from "vitest";
 import { scoredUniverse } from "@/data/scored";
 
 const scores = vi.fn();
+const authHeader = vi.fn<() => string | null>(() => null);
+vi.mock("next/headers", () => ({ headers: async () => ({ get: () => authHeader() }) }));
 vi.mock("@/data/store", () => ({ latestScores: () => scores() }));
 import Home from "./page";
 
 const originalMode = process.env.DATA_MODE;
+const originalPrivate = process.env.EODHD_PRIVATE_USE;
+const originalPassword = process.env.OWNER_RESEARCH_PASSWORD;
 const props = (locale: string) => ({ params: Promise.resolve({ locale }) });
-afterEach(() => { scores.mockReset(); process.env.DATA_MODE = originalMode; });
+afterEach(() => { scores.mockReset(); authHeader.mockReset(); authHeader.mockReturnValue(null); process.env.DATA_MODE = originalMode; process.env.EODHD_PRIVATE_USE = originalPrivate; process.env.OWNER_RESEARCH_PASSWORD = originalPassword; });
+
+it("keeps vendor-derived scores out of the public landing while private use is on", async () => {
+  process.env.EODHD_PRIVATE_USE = "on";
+  process.env.OWNER_RESEARCH_PASSWORD = "private-test-password";
+  scores.mockResolvedValue({ rows: [{ instrument: { ticker: "PRIVATE_EODHD_VALUE" } }], sample: false, lastUpdated: "2026-11-06", stale: false });
+  const html = renderToStaticMarkup(await Home(props("en")));
+  expect(html).not.toContain("PRIVATE_EODHD_VALUE");
+  expect(scores).not.toHaveBeenCalled();
+  expect(html).toContain("No data yet");
+});
 
 it.each(["en", "sk"])("shows empty and stale live states on home in %s", async (locale) => {
   process.env.DATA_MODE = "db";

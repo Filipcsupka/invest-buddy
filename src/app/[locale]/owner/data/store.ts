@@ -3,8 +3,8 @@ import type pg from "pg";
 type Db = Pick<pg.Pool, "query">;
 export type DataRow = Record<string, unknown>;
 const rows = async (db: Db, sql: string, values: unknown[] = []): Promise<DataRow[]> => (await db.query(sql, values)).rows;
-const optionalRows = async (db: Db, sql: string): Promise<DataRow[]> => {
-  try { return await rows(db, sql); } catch (error) {
+const optionalRows = async (db: Db, sql: string, values: unknown[] = []): Promise<DataRow[]> => {
+  try { return await rows(db, sql, values); } catch (error) {
     if ((error as { code?: string }).code === "42P01") return [];
     throw error;
   }
@@ -35,13 +35,15 @@ export async function ownerDataOverview(db: Db, etfPage = 1) {
   const [assets, callLog, assetSummary] = await Promise.all([
     optionalRows(db, `SELECT a.vendor_symbol,a.asset_class,a.name,a.exchange,a.currency,b.bar_date::text,b.close::text,b.volume::text,b.source_id FROM tracked_assets a LEFT JOIN LATERAL (SELECT bar_date,close,volume,source_id FROM asset_bars WHERE vendor_symbol=a.vendor_symbol ORDER BY bar_date DESC LIMIT 1) b ON true WHERE a.enabled ORDER BY a.asset_class,a.sort,a.vendor_symbol LIMIT 100`),
     optionalRows(db, `SELECT job,run_date::text,calls,source_id FROM eodhd_call_log ORDER BY run_date DESC,job LIMIT 60`),
-    optionalRows(db, `SELECT 'Market asset bars' AS family,count(*)::int AS records,max(bar_date)::text AS latest FROM asset_bars WHERE source_id='eodhd'`),
+    optionalRows(db, `SELECT 'Market asset bars' AS family,count(*)::int AS records,max(bar_date)::text AS latest FROM asset_bars WHERE source_id='eodhd'
+      UNION ALL SELECT 'Vendor splits',count(*)::int,max(action_date)::text FROM corporate_actions WHERE source_id='eodhd'
+      UNION ALL SELECT 'Fundamentals refresh',count(*)::int,max(attempted_at)::date::text FROM eodhd_fundamentals_refresh`),
   ]);
   return { sources: [...sources, ...assetSummary], usage, exchanges, universe, etfs, etfPage: page, etfPages: Math.max(1, Math.ceil(Number(etfCount[0]?.count ?? 0) / 100)), macro, jobs, assets, callLog };
 }
 
 export async function ownerTickerData(db: Db, ticker: string) {
-  const [identity, bars, fundamentals, eps, calendar, catalysts, insiders, documents] = await Promise.all([
+  const [identity, bars, fundamentals, eps, calendar, catalysts, insiders, documents, actions, refresh] = await Promise.all([
     rows(db, `SELECT i.ticker,i.name,i.sector,s.vendor_symbol,s.exchange,s.currency,s.country,s.sector AS vendor_sector,s.industry,s.sector_observed_on::text,s.last_seen::text,s.delisted FROM instruments i LEFT JOIN instrument_ids ids ON ids.ticker=i.ticker AND ids.valid_to IS NULL LEFT JOIN LATERAL (
       SELECT s.* FROM symbols s WHERE s.vendor_symbol=ids.vendor_symbols->>'eodhd'
         OR (s.code=split_part(i.ticker,'.',1) AND (s.exchange=ids.exchange OR (ids.exchange IN ('NASDAQ','NYSE') AND s.exchange='US')))
@@ -56,6 +58,8 @@ export async function ownerTickerData(db: Db, ticker: string) {
     rows(db, `SELECT fact_key,as_of::text,value,computed_at::text,source_id FROM collected_facts WHERE symbol=$1 AND source_id='eodhd' ORDER BY as_of DESC,computed_at DESC LIMIT 20`, [ticker]),
     rows(db, `SELECT transaction_date::text,filed_at::text,owner_name,code,shares::text,price::text,acquired_disposed,shares_after::text,source_id,first_observed_at::text FROM insider_transactions WHERE ticker=$1 AND source_id='eodhd' ORDER BY transaction_date DESC,line_no LIMIT 30`, [ticker]),
     rows(db, `SELECT doc_type,published_at::text,fetched_at::text,split_part(url,'?',1) AS url,meta->>'title' AS title,meta->>'sentiment' AS sentiment,source_id FROM source_documents WHERE symbol=$1 AND source_id='eodhd' ORDER BY published_at DESC LIMIT 20`, [ticker]),
+    optionalRows(db, `SELECT action_date::text,kind,ratio::text,amount::text,detected_by,source_id,observed_at::text FROM corporate_actions WHERE ticker=$1 AND source_id='eodhd' ORDER BY action_date DESC LIMIT 20`, [ticker]),
+    optionalRows(db, `SELECT attempted_at::text,latest_report_date::text,last_expected_report_date::text FROM eodhd_fundamentals_refresh WHERE ticker=$1 LIMIT 1`, [ticker]),
   ]);
-  return { identity: identity[0] ?? null, bars, fundamentals, eps, calendar, catalysts, insiders, documents };
+  return { identity: identity[0] ?? null, bars, fundamentals, eps, calendar, catalysts, insiders, documents, actions, refresh };
 }

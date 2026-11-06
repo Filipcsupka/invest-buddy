@@ -41,5 +41,7 @@ export default async function OwnerTickerPage({ params, searchParams }: Props) {
     {section("catalysts", m.catalysts, data.catalysts)}
     {section("insiders", m.insiders, data.insiders)}
     {section("documents", m.documents, data.documents)}
+    {section("actions", m.actions, data.actions)}
+    {section("refresh", m.refresh, data.refresh)}
   </div></article>;
 }
