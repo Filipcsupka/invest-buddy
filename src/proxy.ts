@@ -11,6 +11,7 @@ import { resolveRequestId } from "@/app/request-id";
 import { statusPage } from "@/app/status-page";
 import { ownerAuthorized } from "@/app/[locale]/owner/auth";
 import { marketsViewable } from "@/markets/gate";
+import { isEtfDataPath } from "@/components/etf/tabs";
 import { PRIVATE_DATA_SECTIONS } from "@/app/private-data-routes";
 
 const marketSections = new Set(["indices", "forex", "crypto", "economy", "congress", "news", "screener"]);
@@ -43,7 +44,9 @@ async function handle(request: NextRequest) {
   const privateDataRoute = privateDataSections.has(section);
   if (process.env.EODHD_PRIVATE_USE === "on" && privateDataRoute &&
     !ownerAuthorized(request.headers.get("authorization"), process.env.OWNER_RESEARCH_PASSWORD)) return ownerChallenge();
-  if (marketSections.has(section) && featureFlags.MARKETS_VIEWS &&
+  // Owner-only EODHD ETF tabs under /etf/fund/{key}/{tab} share the market gate.
+  const market = marketSections.has(section) || isEtfDataPath(request.nextUrl.pathname);
+  if (market && featureFlags.MARKETS_VIEWS &&
     !marketsViewable(request.headers.get("authorization"))) {
     return ownerChallenge();
   }
@@ -58,12 +61,12 @@ async function handle(request: NextRequest) {
     || (section === "ideas" && (!ideasEnabled() || !featureFlags.ADVICE_OUTPUT))
     || (section === "owner-allocation" && !ownerViewEnabled())
     || (section === "owner" && !featureFlags.OWNER_VIEW)
-    || (marketSections.has(section) && !featureFlags.MARKETS_VIEWS)
+    || (market && !featureFlags.MARKETS_VIEWS)
     || (section === "company" && (!ticker || !(await instrumentUniverse()).some((item) => item.ticker === ticker.toUpperCase())));
   if (!unavailable) {
     const response = NextResponse.next({ request: { headers: incoming } });
-    if (section === "owner" || marketSections.has(section) || (process.env.EODHD_PRIVATE_USE === "on" && privateDataRoute)) response.headers.set("Cache-Control", "private, no-store");
-    if (marketSections.has(section) || (process.env.EODHD_PRIVATE_USE === "on" && privateDataRoute)) response.headers.set("X-Robots-Tag", "noindex");
+    if (section === "owner" || market || (process.env.EODHD_PRIVATE_USE === "on" && privateDataRoute)) response.headers.set("Cache-Control", "private, no-store");
+    if (market || (process.env.EODHD_PRIVATE_USE === "on" && privateDataRoute)) response.headers.set("X-Robots-Tag", "noindex");
     if (request.nextUrl.searchParams.has("view")) response.headers.set("X-Robots-Tag", "noindex");
     response.headers.set("x-request-id", requestId);
     response.headers.set("server-timing", `rid;desc="${requestId}"`);

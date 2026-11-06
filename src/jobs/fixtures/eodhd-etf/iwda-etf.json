@@ -1,0 +1,395 @@
+{
+ "General": {
+  "Code": "IWDA",
+  "Type": "ETF",
+  "Name": "iShares Core MSCI World UCITS ETF USD (Acc)",
+  "Exchange": "AS",
+  "OperatingMIC": "XAMS",
+  "CurrencyCode": "EUR",
+  "CurrencyName": "Euro",
+  "CurrencySymbol": "€",
+  "CountryName": "Netherlands",
+  "CountryISO": "NL",
+  "OpenFigi": "BBG000P71QK5",
+  "Category": "Global Equity",
+  "UpdatedAt": "2026-11-04"
+ },
+ "ETF_Data": {
+  "ISIN": "IE00B4L5Y983",
+  "Company_Name": "BlackRock Asset Management Ireland - ETF",
+  "ETF_URL": "www.ishares.com",
+  "Domicile": "Ireland",
+  "Index_Name": "Morningstar Global TME NR USD",
+  "Yield": null,
+  "Dividend_Paying_Frequency": null,
+  "Inception_Date": "2009-09-25",
+  "Max_Annual_Mgmt_Charge": 0,
+  "Ongoing_Charge": 0.1974,
+  "Date_Ongoing_Charge": "2026-02-09",
+  "NetExpenseRatio": null,
+  "AnnualHoldingsTurnover": 0.1078,
+  "TotalAssets": 101700000000,
+  "Average_Mkt_Cap_Mil": 293684.0385,
+  "Market_Capitalisation": {
+   "Mega": 46.1139,
+   "Big": 36.8606,
+   "Medium": 18.1345,
+   "Small": 0.5979,
+   "Micro": 0
+  },
+  "Asset_Allocation": {
+   "Cash": {
+    "Long_%": 0.4603,
+    "Short_%": 0.0005,
+    "Net_Assets_%": 0.4597
+   },
+   "NotClassified": {
+    "Long_%": 0,
+    "Short_%": 0,
+    "Net_Assets_%": 0
+   },
+   "Stock non-US": {
+    "Long_%": 28.148,
+    "Short_%": 0,
+    "Net_Assets_%": 28.148
+   },
+   "Other": {
+    "Long_%": 0.035,
+    "Short_%": 0,
+    "Net_Assets_%": 0.035
+   },
+   "Stock US": {
+    "Long_%": 72.8285,
+    "Short_%": 0,
+    "Net_Assets_%": 72.8285
+   },
+   "Bond": {
+    "Long_%": 0,
+    "Short_%": 0,
+    "Net_Assets_%": 0
+   }
+  },
+  "World_Regions": {
+   "North America": {
+    "Equity_%": 78.1701
+   },
+   "United Kingdom": {
+    "Equity_%": 3.3486
+   },
+   "Europe Developed": {
+    "Equity_%": 12.2734
+   },
+   "Europe Emerging": {
+    "Equity_%": 0
+   },
+   "Africa/Middle East": {
+    "Equity_%": 0.244
+   },
+   "Japan": {
+    "Equity_%": 5.8479
+   },
+   "Australasia": {
+    "Equity_%": 1.5999
+   },
+   "Asia Developed": {
+    "Equity_%": 0.8643
+   },
+   "Asia Emerging": {
+    "Equity_%": 0.1204
+   },
+   "Latin America": {
+    "Equity_%": 0.1246
+   }
+  },
+  "Sector_Weights": {
+   "Basic Materials": {
+    "Equity_%": 2.8807
+   },
+   "Consumer Cyclicals": {
+    "Equity_%": 8.3811
+   },
+   "Financial Services": {
+    "Equity_%": 16.1104
+   },
+   "Real Estate": {
+    "Equity_%": 1.6646
+   },
+   "Communication Services": {
+    "Equity_%": 7.64
+   },
+   "Energy": {
+    "Equity_%": 4.4444
+   },
+   "Industrials": {
+    "Equity_%": 10.6534
+   },
+   "Technology": {
+    "Equity_%": 30.5172
+   },
+   "Consumer Defensive": {
+    "Equity_%": 5.1683
+   },
+   "Healthcare": {
+    "Equity_%": 10.3824
+   },
+   "Utilities": {
+    "Equity_%": 2.3691
+   }
+  },
+  "Fixed_Income": {
+   "EffectiveDuration": {
+    "Fund_%": 0
+   },
+   "ModifiedDuration": {
+    "Fund_%": 0
+   },
+   "EffectiveMaturity": {
+    "Fund_%": 0
+   },
+   "CreditQuality": {
+    "Fund_%": 0
+   },
+   "Coupon": {
+    "Fund_%": 0
+   },
+   "Price": {
+    "Fund_%": 0
+   },
+   "YieldToMaturity": {
+    "Fund_%": 0
+   }
+  },
+  "Holdings_Count": 10,
+  "Top_10_Holdings": {
+   "NVDA.US": {
+    "Code": "NVDA",
+    "Exchange": "US",
+    "Name": "NVIDIA Corporation",
+    "Sector": "Technology",
+    "Industry": "Semiconductors",
+    "Country": "United States",
+    "Region": "North America",
+    "Assets_%": 5.6742
+   },
+   "AAPL.US": {
+    "Code": "AAPL",
+    "Exchange": "US",
+    "Name": "Apple Inc.",
+    "Sector": "Technology",
+    "Industry": "Consumer Electronics",
+    "Country": "United States",
+    "Region": "North America",
+    "Assets_%": 5.6304
+   },
+   "MSFT.US": {
+    "Code": "MSFT",
+    "Exchange": "US",
+    "Name": "Microsoft Corporation",
+    "Sector": "Technology",
+    "Industry": "Software - Infrastructure",
+    "Country": "United States",
+    "Region": "North America",
+    "Assets_%": 3.9074
+   },
+   "AMZN.US": {
+    "Code": "AMZN",
+    "Exchange": "US",
+    "Name": "Amazon.com Inc",
+    "Sector": "Consumer Cyclical",
+    "Industry": "Internet Retail",
+    "Country": "United States",
+    "Region": "North America",
+    "Assets_%": 2.7087
+   },
+   "GOOGL.US": {
+    "Code": "GOOGL",
+    "Exchange": "US",
+    "Name": "Alphabet Inc Class A",
+    "Sector": "Communication Services",
+    "Industry": "Internet Content & Information",
+    "Country": "United States",
+    "Region": "North America",
+    "Assets_%": 2.2339
+   },
+   "META.US": {
+    "Code": "META",
+    "Exchange": "US",
+    "Name": "Meta Platforms Inc.",
+    "Sector": "Communication Services",
+    "Industry": "Internet Content & Information",
+    "Country": "United States",
+    "Region": "North America",
+    "Assets_%": 1.7506
+   },
+   "GOOG.US": {
+    "Code": "GOOG",
+    "Exchange": "US",
+    "Name": "Alphabet Inc Class C",
+    "Sector": "Communication Services",
+    "Industry": "Internet Content & Information",
+    "Country": "United States",
+    "Region": "North America",
+    "Assets_%": 1.7499
+   },
+   "AVGO.US": {
+    "Code": "AVGO",
+    "Exchange": "US",
+    "Name": "Broadcom Inc",
+    "Sector": "Technology",
+    "Industry": "Semiconductors",
+    "Country": "United States",
+    "Region": "North America",
+    "Assets_%": 1.7181
+   },
+   "MU.US": {
+    "Code": "MU",
+    "Exchange": "US",
+    "Name": "Micron Technology Inc",
+    "Sector": "Technology",
+    "Industry": "Semiconductors",
+    "Country": "United States",
+    "Region": "North America",
+    "Assets_%": 1.3601
+   },
+   "TSLA.US": {
+    "Code": "TSLA",
+    "Exchange": "US",
+    "Name": "Tesla Inc",
+    "Sector": "Consumer Cyclical",
+    "Industry": "Auto Manufacturers",
+    "Country": "United States",
+    "Region": "North America",
+    "Assets_%": 1.1056
+   }
+  },
+  "Holdings": {
+   "NVDA.US": {
+    "Code": "NVDA",
+    "Exchange": "US",
+    "Name": "NVIDIA Corporation",
+    "Sector": "Technology",
+    "Industry": "Semiconductors",
+    "Country": "United States",
+    "Region": "North America",
+    "Assets_%": 5.6742
+   },
+   "AAPL.US": {
+    "Code": "AAPL",
+    "Exchange": "US",
+    "Name": "Apple Inc.",
+    "Sector": "Technology",
+    "Industry": "Consumer Electronics",
+    "Country": "United States",
+    "Region": "North America",
+    "Assets_%": 5.6304
+   },
+   "MSFT.US": {
+    "Code": "MSFT",
+    "Exchange": "US",
+    "Name": "Microsoft Corporation",
+    "Sector": "Technology",
+    "Industry": "Software - Infrastructure",
+    "Country": "United States",
+    "Region": "North America",
+    "Assets_%": 3.9074
+   },
+   "AMZN.US": {
+    "Code": "AMZN",
+    "Exchange": "US",
+    "Name": "Amazon.com Inc",
+    "Sector": "Consumer Cyclical",
+    "Industry": "Internet Retail",
+    "Country": "United States",
+    "Region": "North America",
+    "Assets_%": 2.7087
+   },
+   "GOOGL.US": {
+    "Code": "GOOGL",
+    "Exchange": "US",
+    "Name": "Alphabet Inc Class A",
+    "Sector": "Communication Services",
+    "Industry": "Internet Content & Information",
+    "Country": "United States",
+    "Region": "North America",
+    "Assets_%": 2.2339
+   },
+   "META.US": {
+    "Code": "META",
+    "Exchange": "US",
+    "Name": "Meta Platforms Inc.",
+    "Sector": "Communication Services",
+    "Industry": "Internet Content & Information",
+    "Country": "United States",
+    "Region": "North America",
+    "Assets_%": 1.7506
+   },
+   "GOOG.US": {
+    "Code": "GOOG",
+    "Exchange": "US",
+    "Name": "Alphabet Inc Class C",
+    "Sector": "Communication Services",
+    "Industry": "Internet Content & Information",
+    "Country": "United States",
+    "Region": "North America",
+    "Assets_%": 1.7499
+   },
+   "AVGO.US": {
+    "Code": "AVGO",
+    "Exchange": "US",
+    "Name": "Broadcom Inc",
+    "Sector": "Technology",
+    "Industry": "Semiconductors",
+    "Country": "United States",
+    "Region": "North America",
+    "Assets_%": 1.7181
+   },
+   "MU.US": {
+    "Code": "MU",
+    "Exchange": "US",
+    "Name": "Micron Technology Inc",
+    "Sector": "Technology",
+    "Industry": "Semiconductors",
+    "Country": "United States",
+    "Region": "North America",
+    "Assets_%": 1.3601
+   },
+   "TSLA.US": {
+    "Code": "TSLA",
+    "Exchange": "US",
+    "Name": "Tesla Inc",
+    "Sector": "Consumer Cyclical",
+    "Industry": "Auto Manufacturers",
+    "Country": "United States",
+    "Region": "North America",
+    "Assets_%": 1.1056
+   }
+  },
+  "Valuations_Growth": {
+   "Valuations_Rates_Portfolio": {
+    "Price/Prospective Earnings": null,
+    "Price/Book": null,
+    "Price/Sales": null,
+    "Price/Cash Flow": null,
+    "Dividend-Yield Factor": null
+   },
+   "Growth_Rates_Portfolio": {
+    "Long-Term Projected Earnings Growth": null,
+    "Historical Earnings Growth": null,
+    "Sales Growth": null,
+    "Cash-Flow Growth": null,
+    "Book-Value Growth": null
+   }
+  },
+  "Performance": {
+   "1y_Volatility": 12.5592,
+   "3y_Volatility": 11.679,
+   "3y_ExpReturn": 0,
+   "3y_SharpRatio": 1.3856,
+   "Returns_YTD": 9.9491,
+   "Returns_1Y": 12.2351,
+   "Returns_3Y": 19.8609,
+   "Returns_5Y": 10.7397,
+   "Returns_10Y": 12.7174
+  }
+ }
+}

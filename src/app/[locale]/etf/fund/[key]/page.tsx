@@ -8,6 +8,9 @@ import { getEtfMessages } from "@/i18n/etf-messages";
 import { pageMetadata } from "@/i18n/metadata";
 import { RecordCard, RecordHead } from "@/components/record-parts";
 import { CallBadge, displayedDate, percent, amount, signedPercent } from "@/components/etf/format";
+import { etfOwnerView } from "@/components/etf/owner";
+import { ETF_TABS, etfTabHref } from "@/components/etf/tabs";
+import { getEtfDetailMessages } from "@/i18n/etf-messages";
 import s from "@/components/etf/etf.module.css";
 import { resolveLocale } from "../../../locale";
 import { requireEtfDataAccess } from "../../../owner/data/access";
@@ -33,6 +36,8 @@ async function EtfFundPage({ params }: Props) {
   const { fund, sample } = result;
   const detail = fund.pickSymbol ? await etfDetail(fund.pickSymbol) : null;
   const m = getEtfMessages(locale);
+  const owner = await etfOwnerView();
+  const d = getEtfDetailMessages(locale);
   const field = (value: string | null) => value || m.noValue;
   return <div className="frame page">
     <RecordHead title={fund.name} lede={m.fundLede} stamp={sample ? <span className="stamp">{m.sample}</span> : undefined} actions={<Link className="button secondary" href={`/${locale}/etf#etf-catalog`}>{m.back}</Link>} />
@@ -45,6 +50,9 @@ async function EtfFundPage({ params }: Props) {
         <div><dt>{m.enrichment}</dt><dd>{m[fund.enrichmentStatus]}</dd></div><div><dt>{m.shortlist}</dt><dd>{fund.shortlist ? m.yes : m.no}</dd></div><div><dt>{m.firstSeen}</dt><dd>{displayedDate(locale, fund.firstSeen)}</dd></div><div><dt>{m.enrichedAt}</dt><dd>{displayedDate(locale, fund.enrichedAt)}</dd></div><div><dt>{m.lastCatalogSync}</dt><dd>{displayedDate(locale, fund.lastSeen)}</dd></div>
         <div><dt>{m.source}</dt><dd>{fund.sourceUrl?.startsWith("https://") ? <a href={fund.sourceUrl} target="_blank" rel="noopener noreferrer">{fund.sourceUrl}</a> : m.noValue}</dd></div>
       </dl></RecordCard>
+      {owner ? <RecordCard id="fund-vendor" title={d.vendorData} lede={d.ownerOnly}>
+        <nav className="kit-tabs" aria-label={d.tabsLabel}>{ETF_TABS.map((tab) => <Link key={tab} href={etfTabHref(locale, fund.listingKey, tab)}>{d[tab]}</Link>)}</nav>
+      </RecordCard> : null}
       <RecordCard id="fund-pick" title={m.picksTitle}>{detail ? <p><Link href={`/${locale}/etf/${encodeURIComponent(detail.pick.symbol)}`}>{m.pickLink}: {detail.pick.symbol}</Link> · <CallBadge call={detail.pick.call} locale={locale} /> · {m.conviction}: {detail.pick.conviction === null ? m.noValue : `${detail.pick.conviction}/5`}</p> : <p>{m.noPick}</p>}</RecordCard>
       {detail ? <>
         <RecordCard id="fund-history" title={m.history}>{detail.history.length ? <div className={s.tableWrap}><table className={s.table}><thead><tr><th scope="col">{m.lastSeen}</th><th scope="col">{m.call}</th><th scope="col">{m.conviction}</th></tr></thead><tbody>{detail.history.map((item) => <tr key={item.asOf}><td>{displayedDate(locale, item.asOf)}</td><td><CallBadge call={item.call} locale={locale} /></td><td>{item.conviction === null ? m.noValue : `${item.conviction}/5`}</td></tr>)}</tbody></table></div> : <p>{m.noHistory}</p>}</RecordCard>

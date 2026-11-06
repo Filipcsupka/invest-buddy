@@ -2,13 +2,14 @@ import type pg from "pg";
 import type { EodBar } from "../data-providers/eodhd/client";
 import { canDisplay } from "../data/sources-registry";
 
-export type AssetClass = "index" | "fx" | "crypto";
+export type AssetClass = "index" | "fx" | "crypto" | "etf";
 export interface TrackedAsset { vendor_symbol: string; asset_class: AssetClass; currency: string | null; last_bar_date: string | null }
 
+/** Without a class, ETF rows are left out: the eodhd-etf job refreshes their bars. */
 export async function trackedAssets(db: Pick<pg.Pool, "query">, assetClass?: AssetClass): Promise<TrackedAsset[]> {
   const result = await db.query<TrackedAsset>(`SELECT a.vendor_symbol, a.asset_class, a.currency,
     (SELECT max(bar_date)::text FROM asset_bars b WHERE b.vendor_symbol=a.vendor_symbol) AS last_bar_date
-    FROM tracked_assets a WHERE enabled AND ($1::text IS NULL OR asset_class=$1) ORDER BY sort,vendor_symbol`, [assetClass ?? null]);
+    FROM tracked_assets a WHERE enabled AND (($1::text IS NULL AND asset_class<>'etf') OR asset_class=$1) ORDER BY sort,vendor_symbol`, [assetClass ?? null]);
   return result.rows;
 }
 

@@ -318,3 +318,18 @@ describe("corporate actions job", () => {
     expect(minutes("dq-corporate-actions").at).toBeGreaterThan(minutes("daily").at);
   });
 });
+
+describe("EODHD ETF detail job", () => {
+  it("is suspended, nightly, outside daily scoring, with the ETF call cap and EODHD key", () => {
+    const doc = job("eodhd-etf");
+    const at = minutes("eodhd-etf");
+    expect(doc).toContain("suspend: true");
+    expect(doc).toContain("timeZone: Europe/Bratislava");
+    expect(doc).toContain('command: ["node", "dist/jobs/eodhd-etf.js"]');
+    expect(doc).toContain("name: ETF_EODHD_MAX_CALLS");
+    expect(doc).toContain("name: invest-buddy-eodhd");
+    expect(at.at).toBeGreaterThanOrEqual(15);
+    expect(at.at + deadline("eodhd-etf")).toBeLessThanOrEqual(4 * 60);
+    for (const text of ["runAsNonRoot: true", "automountServiceAccountToken: false", "readOnlyRootFilesystem: true", "concurrencyPolicy: Forbid"]) expect(doc).toContain(text);
+  });
+});
