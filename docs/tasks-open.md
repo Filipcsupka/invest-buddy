@@ -8,9 +8,10 @@ State at handoff, checked on the cluster that day:
 - The five `invest-buddy-eodhd-*` CronJobs are un-suspended (infra). Manual Jobs for prices, fundamentals, catalyst, insider, daily and reconcile completed on 2026-11-06. The first scheduled `eodhd-prices` run on 2026-11-05 failed; cause not checked.
 - Web crashlooped on out-of-memory because score audits stored the full bar history (about 23 MB per dashboard item). Fixed by #312, #313 and #315 (latest 320 to 520 bars). Web runs `sha-31371c5`.
 - Owner pages use user `owner`, password in `~/backups/invest-owner-password.txt` on the owner's Mac (secret `invest-buddy-owner`). The file has two lines (`user: owner`, `password: ...`); use the value after `password: ` with username `owner`. On 2026-11-06 `/en/owner/data` and `/en/owner/horizons` returned 200 with it and 401 without.
-- Not verified at handoff: row counts per table, E4 close comparison against the old price source, E5 comparison against SEC and Alpha Vantage, E8 score comparison for the 36 names, E9 results of the 100-fund ETF run.
+- Row counts on 2026-11-06 (read-only query): `symbols` 68,986; EODHD `daily_bars` 803,396; EODHD `fundamentals_pit` 12,798; `eps_history` 15,279; 100 ETF rows with `enrichment_source=eodhd`. Web owner check: 183 catalyst facts, 17 insider lines, 181 news documents, 214 splits, 168 calendar rows; regional macro rows and market asset bars were 0.
+- Not verified at handoff: E4 close comparison against the old price source, E5 comparison against SEC and Alpha Vantage, E8 score comparison for the 36 names, E9 results of the 100-fund ETF run.
 
-Open PRs at handoff: #316 (economy, news, congress market views), #310 (ETF detail tabs), #308 (judge on stored EODHD facts).
+Open PRs at handoff: #316 (economy, news, congress market views), #308 (judge on stored EODHD facts).
 
 Deferred by owner: the judge and `etf-research` stay suspended until 2026-11-07 because both Codex accounts hit their limit. Then review #308, run the judge once manually, set a token cap, and un-suspend. E10 (AI role) and E11 (scoring sign-off) are still the owner's.
 
