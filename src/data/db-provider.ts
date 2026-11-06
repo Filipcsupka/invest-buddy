@@ -10,6 +10,8 @@ import { eodhdPrivateUse } from "./eodhd-private-use";
 type CarryRow = ConsensusRow & { field: string };
 export { CONFIRMED_FUNDAMENTAL_AGREEMENTS };
 const confirmedFundamental = (row: { verified: boolean; agreement: string }) => row.verified && CONFIRMED_FUNDAMENTAL_AGREEMENTS.includes(row.agreement);
+/** Scoring and charts need about two years of sessions (MA200, 52-week range, relative strength). The EODHD backfill stores far more, so reads stop at the latest 520 bars. */
+export const BAR_HISTORY_LIMIT = 520;
 const SEC_REVENUE_URL = /^https:\/\/data\.sec\.gov\/api\/xbrl\/companyfacts\/CIK\d{10}\.json$/;
 const EODHD_REVENUE_URL = "https://eodhd.com/financial-apis/stock-etfs-fundamental-data-feeds";
 const SEC_GROWTH_QUOTE = /^Revenue growth (-?\d+(?:\.\d+)?)% versus (-?\d+(?:\.\d+)?)%$/;
@@ -49,7 +51,7 @@ export class DatabaseUniverseProvider implements UniverseProvider {
     return rows.rows.map((row) => ({ ...row }));
   }
   async bars(ticker: string): Promise<OHLCV[]> {
-    const rows = await this.pool.query<{ bar_date: string; open: string; high: string; low: string; close: string; volume: string }>("SELECT bar_date::text,open,high,low,close,volume FROM daily_bars WHERE ticker=$1 AND ($2::date IS NULL OR bar_date <= $2) ORDER BY bar_date", [ticker, this.asOf ?? null]);
+    const rows = await this.pool.query<{ bar_date: string; open: string; high: string; low: string; close: string; volume: string }>("SELECT bar_date::text,open,high,low,close,volume FROM (SELECT bar_date,open,high,low,close,volume FROM daily_bars WHERE ticker=$1 AND ($2::date IS NULL OR bar_date <= $2) ORDER BY bar_date DESC LIMIT $3) recent ORDER BY bar_date", [ticker, this.asOf ?? null, BAR_HISTORY_LIMIT]);
     return rows.rows.map((row) => ({ date: row.bar_date, open: Number(row.open), high: Number(row.high), low: Number(row.low), close: Number(row.close), volume: Number(row.volume) }));
   }
   async fundamentals(ticker: string): Promise<Fundamentals> {

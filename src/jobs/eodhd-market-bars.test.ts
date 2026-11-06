@@ -9,7 +9,7 @@ it("parses a bounded backfill and asset class", () => {
   expect(() => parseMarketBarsArgs(["--backfill", "31"])).toThrow();
 });
 
-it("starts after the last stored day, upserts valid bars and logs billed attempts", async () => {
+it("starts at the last stored day so a partial bar is replaced, upserts valid bars and logs billed attempts", async () => {
   const sql: string[] = [];
   const params: unknown[][] = [];
   const db = { query: async (text: string, values: unknown[]) => {
@@ -22,7 +22,7 @@ it("starts after the last stored day, upserts valid bars and logs billed attempt
     return [{ date: "2026-11-05", open: 10, high: 12, low: 9, close: 11, volume: 100 }];
   }, getCallCosts: () => ({ eod: 1 }) };
   const result = await runMarketBars(db, api, { assetClass: "index", dryRun: false, backfill: 5 }, "2026-11-05");
-  expect(fetched).toEqual([{ symbol: "GSPC.INDX", from: "2026-11-05", to: "2026-11-05" }]);
+  expect(fetched).toEqual([{ symbol: "GSPC.INDX", from: "2026-11-04", to: "2026-11-05" }]);
   expect(result).toMatchObject({ assets: 1, refreshed: 1, rows: 1, calls: 1, failures: 0 });
   expect(sql[1]).toContain("ON CONFLICT (vendor_symbol,bar_date) DO UPDATE");
   expect(params[1].at(-1)).toBe(false);
