@@ -77,6 +77,20 @@ describe("EODHD prices", () => {
     expect(result).toMatchObject({ requested: 100, succeeded: 100, failed: 0, callCost: 200 });
   });
 
+  it("fetches a symbol missing from the bulk response on its own", async () => {
+    const tracked = Array.from({ length: 100 }, (_, i): PriceSymbol => ({ ticker: `T${i}`, vendorSymbol: `T${i}.US`, exchange: "US", code: `T${i}`, currency: "USD" }));
+    const row = bulkFixture[0] as BulkLastDayBar;
+    const single: string[] = [];
+    const client = { eod: async (symbol: string) => { single.push(symbol); return [row as EodBar]; }, splits: async () => [] as Split[],
+      eodBulkLastDay: async (_exchange: string, options: { type?: string }) => options.type === "splits" ? [] : tracked.filter((s) => s.code !== "T7").map((s) => ({ ...row, code: s.code })),
+      getCallCosts: () => costs(1, 1, 200) };
+    const repo = new MemoryPriceRepository();
+    const result = await runEodhdPrices(client as never, repo, tracked, { mode: "daily" });
+    expect(single).toEqual(["T7.US"]);
+    expect(result).toMatchObject({ requested: 100, succeeded: 100, failed: 0 });
+    expect(repo.bars.get("T7")?.get(row.date)?.close).toBe(row.close);
+  });
+
   it("backfills history and refuses a shorter replacement", async () => {
     const client = { eod: async () => historyFixture as EodBar[], splits: async () => [] as Split[], eodBulkLastDay: noBulk, getCallCosts: () => costs(1, 1) };
     const repo = new MemoryPriceRepository();
