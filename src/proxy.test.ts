@@ -26,6 +26,20 @@ it("keeps market routes private even when the flag is on", async () => {
   expect(response.headers.get("cache-control")).toBe("private, no-store");
 });
 
+it("gates the owner ETF data tabs like market routes and leaves the public fund page open", async () => {
+  const tab = "https://example.com/en/etf/fund/NYSEARCA%3ASPY/holdings";
+  process.env.MARKETS_VIEWS = "off";
+  expect((await proxy(new NextRequest(tab))).status).toBe(404);
+  expect((await proxy(new NextRequest("https://example.com/en/etf/fund/NYSEARCA%3ASPY"))).status).toBe(200);
+  process.env.MARKETS_VIEWS = "on";
+  process.env.OWNER_RESEARCH_PASSWORD = "private-test-password";
+  expect((await proxy(new NextRequest(tab))).status).toBe(401);
+  const response = await proxy(new NextRequest(tab, { headers: { authorization: `Basic ${Buffer.from("owner:private-test-password").toString("base64")}` } }));
+  expect(response.status).toBe(200);
+  expect(response.headers.get("x-robots-tag")).toBe("noindex");
+  expect(response.headers.get("cache-control")).toBe("private, no-store");
+});
+
 it("challenges for private owner pages and accepts only the owner password", async () => {
   process.env.OWNER_VIEW = "on";
   process.env.OWNER_RESEARCH_PASSWORD = "private-test-password";

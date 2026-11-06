@@ -20,6 +20,7 @@
     "prices": "tsx src/jobs/prices.ts",
     "prices:eodhd": "tsx src/jobs/eodhd-prices.ts",
     "markets:bars": "tsx src/jobs/eodhd-market-bars.ts",
+    "etf:detail": "tsx src/jobs/eodhd-etf.ts",
     "catalyst:eodhd": "tsx src/jobs/eodhd-catalyst.ts",
     "reconcile": "tsx src/jobs/reconcile.ts",
     "collect": "tsx src/jobs/collect.ts",

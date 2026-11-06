@@ -1,0 +1,32 @@
+[
+ {
+  "date": "2025-03-21",
+  "declarationDate": "2025-01-09",
+  "recordDate": "2025-03-21",
+  "paymentDate": "2025-04-30",
+  "period": "Quarterly",
+  "value": 1.69553,
+  "unadjustedValue": 1.69553,
+  "currency": "USD"
+ },
+ {
+  "date": "2025-06-20",
+  "declarationDate": "2025-01-09",
+  "recordDate": "2025-06-20",
+  "paymentDate": "2025-07-31",
+  "period": "Quarterly",
+  "value": 1.76112,
+  "unadjustedValue": 1.76112,
+  "currency": "USD"
+ },
+ {
+  "date": "2025-09-19",
+  "declarationDate": "2025-01-09",
+  "recordDate": "2025-09-19",
+  "paymentDate": "2025-10-31",
+  "period": "Quarterly",
+  "value": 1.83111,
+  "unadjustedValue": 1.83111,
+  "currency": "USD"
+ }
+]

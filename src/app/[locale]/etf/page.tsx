@@ -3,7 +3,10 @@ import Link from "next/link";
 import { withPageLog } from "@/app/page-log";
 import { etfList, type EtfAssetClass, type EtfCall } from "@/db/etf";
 import { etfCatalogList, type CatalogFilters } from "@/db/etf-catalog";
-import { getEtfMessages } from "@/i18n/etf-messages";
+import { getEtfDetailMessages, getEtfMessages } from "@/i18n/etf-messages";
+import { etfListStats } from "@/db/etf-detail";
+import { etfOwnerView } from "@/components/etf/owner";
+import { pct } from "@/components/etf/detail";
 import { pageMetadata } from "@/i18n/metadata";
 import { formatNumber } from "@/i18n";
 import { RecordHead } from "@/components/record-parts";
@@ -27,6 +30,9 @@ async function EtfPage({ params, searchParams }: Props) {
   const assetClass = classes.find((item) => item === query.assetClass);
   const call = calls.find((item) => item === query.call);
   const [{ picks, run, sample: picksSample }, catalog] = await Promise.all([etfList(), etfCatalogList(query)]);
+  // Vendor yield and 1-year return are internal EODHD data: shown only to the authenticated owner.
+  const vendor = await etfOwnerView() ? await etfListStats(catalog.funds.map((fund) => fund.listingKey)) : null;
+  const d = getEtfDetailMessages(locale);
   const filtered = picks.filter((pick) => (!assetClass || pick.assetClass === assetClass) && (!call || pick.call === call));
   const grouped = classes.map((item) => ({ assetClass: item, picks: filtered.filter((pick) => pick.assetClass === item) })).filter((group) => group.picks.length);
   const pageHref = (page: number) => {
@@ -76,9 +82,9 @@ async function EtfPage({ params, searchParams }: Props) {
       {!catalog.stats.size ? <p className="notice">{m.catalogEmpty}</p> : !catalog.total ? <p className="notice">{m.catalogNoMatch}</p> : <>
         <p className={s.note}>{m.results}: {formatNumber(locale, catalog.total)} · {m.page} {catalog.page} {m.of} {catalog.pages}</p>
         <div className={s.tableWrap}><table className={`${s.table} ${s.catalogTable}`}><thead><tr>
-          <th scope="col">{m.name}</th><th scope="col">{m.isin}</th><th scope="col">{m.ticker}</th><th scope="col">{m.listingRegion}</th><th scope="col">{m.exchange}</th><th scope="col">{m.issuer}</th><th scope="col">{m.assetClass}</th><th scope="col">{m.region}</th><th scope="col">{m.index}</th><th scope="col">{m.ter}</th><th scope="col">{m.aum}</th><th scope="col">{m.domicile}</th><th scope="col">{m.distribution}</th><th scope="col">{m.ucits}</th><th scope="col">{m.currency}</th><th scope="col">{m.instrumentType}</th><th scope="col">{m.enrichment}</th><th scope="col">{m.shortlist}</th><th scope="col">{m.call}</th>
+          <th scope="col">{m.name}</th><th scope="col">{m.isin}</th><th scope="col">{m.ticker}</th><th scope="col">{m.listingRegion}</th><th scope="col">{m.exchange}</th><th scope="col">{m.issuer}</th><th scope="col">{m.assetClass}</th><th scope="col">{m.region}</th><th scope="col">{m.index}</th><th scope="col">{m.ter}</th><th scope="col">{m.aum}</th>{vendor ? <><th scope="col">{d.yieldCol}</th><th scope="col">{d.ret1yCol}</th></> : null}<th scope="col">{m.domicile}</th><th scope="col">{m.distribution}</th><th scope="col">{m.ucits}</th><th scope="col">{m.currency}</th><th scope="col">{m.instrumentType}</th><th scope="col">{m.enrichment}</th><th scope="col">{m.shortlist}</th><th scope="col">{m.call}</th>
         </tr></thead><tbody>{catalog.funds.map((fund) => <tr key={fund.listingKey}>
-          <th scope="row"><Link href={`/${locale}/etf/fund/${encodeURIComponent(fund.listingKey)}`}>{fund.name}</Link></th><td>{fund.isin ?? m.noValue}</td><td>{fund.mnemonic ?? m.noValue}</td><td>{fund.listingRegion === "US" ? m.us : fund.listingRegion === "EU" ? m.eu : m.noValue}</td><td>{fund.exchange}</td><td>{fund.issuer ?? m.noValue}</td><td>{fund.assetClass ? m[fund.assetClass] : m.noValue}</td><td>{fund.region ?? m.noValue}</td><td>{fund.trackedIndex ?? m.noValue}</td><td>{percent(locale, fund.terPct)}</td><td>{amount(locale, fund.aumUsdM)}</td><td>{fund.domicile ?? m.noValue}</td><td>{fund.distribution ? m[fund.distribution] : m.noValue}</td><td>{fund.ucits === null ? m.unknown : fund.ucits ? m.yes : m.no}</td><td>{fund.tradingCurrency ?? m.noValue}</td><td>{fund.instrumentType.replace("_", " ")}</td><td>{m[fund.enrichmentStatus]}</td><td>{fund.shortlist ? m.onShortlist : "—"}</td><td>{fund.pickSymbol ? <Link href={`/${locale}/etf/${encodeURIComponent(fund.pickSymbol)}`}>{m.pickLink}</Link> : "—"}</td>
+          <th scope="row"><Link href={`/${locale}/etf/fund/${encodeURIComponent(fund.listingKey)}`}>{fund.name}</Link></th><td>{fund.isin ?? m.noValue}</td><td>{fund.mnemonic ?? m.noValue}</td><td>{fund.listingRegion === "US" ? m.us : fund.listingRegion === "EU" ? m.eu : m.noValue}</td><td>{fund.exchange}</td><td>{fund.issuer ?? m.noValue}</td><td>{fund.assetClass ? m[fund.assetClass] : m.noValue}</td><td>{fund.region ?? m.noValue}</td><td>{fund.trackedIndex ?? m.noValue}</td><td>{percent(locale, fund.terPct)}</td><td>{amount(locale, fund.aumUsdM)}</td>{vendor ? <><td>{pct(locale, vendor.get(fund.listingKey)?.yieldPct ?? null)}</td><td>{pct(locale, vendor.get(fund.listingKey)?.ret1yPct ?? null)}</td></> : null}<td>{fund.domicile ?? m.noValue}</td><td>{fund.distribution ? m[fund.distribution] : m.noValue}</td><td>{fund.ucits === null ? m.unknown : fund.ucits ? m.yes : m.no}</td><td>{fund.tradingCurrency ?? m.noValue}</td><td>{fund.instrumentType.replace("_", " ")}</td><td>{m[fund.enrichmentStatus]}</td><td>{fund.shortlist ? m.onShortlist : "—"}</td><td>{fund.pickSymbol ? <Link href={`/${locale}/etf/${encodeURIComponent(fund.pickSymbol)}`}>{m.pickLink}</Link> : "—"}</td>
         </tr>)}</tbody></table></div>
         <nav className={s.pagination} aria-label={m.page}>{catalog.page > 1 ? <Link href={pageHref(catalog.page - 1) + "#etf-catalog"}>{m.previous}</Link> : <span />}{catalog.page < catalog.pages ? <Link href={pageHref(catalog.page + 1) + "#etf-catalog"}>{m.next}</Link> : null}</nav>
       </>}
