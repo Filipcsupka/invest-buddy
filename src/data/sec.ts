@@ -1,6 +1,7 @@
 import { requireSecUserAgent } from "../collectors/sec-user-agent";
 import { REVENUE_CONCEPTS } from "../collectors/sources/frames";
 import { fundamentalsHistory, type Queryable } from "../db/history";
+import { eodhdPrivateUse } from "./eodhd-private-use";
 
 /** SEC companyfacts revenue calculations. Only comparable filed fiscal quarters are used. */
 export interface SecFact { start?: string; end: string; val: number; accn: string; fy: number; fp: string; form: string; filed: string; frame?: string }
@@ -172,6 +173,6 @@ export async function eodhdRevenueStored(db: Queryable, symbol: string, asOf: st
 
 export function revenueLookup(db: Queryable, fallback?: (symbol: string, asOf: string) => Promise<RevenueResult | null>) {
   return async (symbol: string, asOf: string): Promise<RevenueResult | null> =>
-    (await eodhdRevenueStored(db, symbol, asOf).catch(() => null)) ??
+    (eodhdPrivateUse() ? await eodhdRevenueStored(db, symbol, asOf).catch(() => null) : null) ??
     (await secRevenueStored(db, symbol, asOf).catch(() => null)) ?? (fallback ? fallback(symbol, asOf) : null);
 }
