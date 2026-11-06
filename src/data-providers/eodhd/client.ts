@@ -134,7 +134,7 @@ export class EodhdClient {
     return this.get("sentiments", "sentiments", { s: symbol, ...options });
   }
   historicalMarketCap(symbol: string, options: { from?: string; to?: string } = {}): Promise<HistoricalMarketCap> { return this.get("historical-market-cap", `historical-market-cap/${encodeURIComponent(symbol)}`, options, 10); }
-  screener(options: { sort?: string; limit?: number; offset?: number; filters?: string } = {}): Promise<ScreenerPage> { return this.get("screener", "screener", options, 5); }
+  screener(options: { sort?: string; limit?: number; offset?: number; filters?: string; signals?: string } = {}): Promise<ScreenerPage> { return this.get("screener", "screener", options, 5); }
   congressionalTrades(options: { symbol?: string; chamber?: string; type?: string; offset?: number; limit?: number } = {}): Promise<CongressionalTradesPage> {
     if (options.limit !== undefined && (options.limit < 1 || options.limit > 100)) throw new Error("EODHD congressional limit must be 1–100");
     return this.get("congressional-trades", "congressional-trades", { symbol: options.symbol, chamber: options.chamber, type: options.type, "page[offset]": options.offset, "page[limit]": options.limit }, 10);
