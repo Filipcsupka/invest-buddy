@@ -1,18 +1,23 @@
-import pg from "pg";
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
+import { PGlite } from "@electric-sql/pglite";
+import type pg from "pg";
 import { describe, expect, it } from "vitest";
 import { assetDetail, assetSummaries, componentsDue, indexComponents, saveComponents } from "./markets";
 import { latestScreenerRuns, mapScreenerRows, saveScreenerRun, screenerResults } from "./screener";
 import { SCREENER_PRESETS } from "./screener-presets";
 import { marketCapSeries, saveMarketCap } from "./market-cap";
 
-/** One connection, so BEGIN and ROLLBACK wrap every write. Needs a migrated TEST_DATABASE_URL (CI runs migrations first). */
+/** A fresh in-memory database with every migration applied, so migration 120 and these queries run as written. */
 async function inRollback(fn: (pool: pg.Pool) => Promise<void>) {
-  const pool = new pg.Pool({ connectionString: process.env.TEST_DATABASE_URL, max: 1 });
-  try { await pool.query("BEGIN"); await fn(pool); } finally { await pool.query("ROLLBACK"); await pool.end(); }
+  const db = new PGlite();
+  const dir = join(process.cwd(), "migrations");
+  for (const file of readdirSync(dir).filter((name) => name.endsWith(".sql")).sort()) await db.exec(readFileSync(join(dir, file), "utf8"));
+  try { await fn({ query: (sql: string, params?: unknown[]) => db.query(sql, params) } as unknown as pg.Pool); } finally { await db.close(); }
 }
 
-describe("market view tables (Postgres)", () => {
-  it.skipIf(!process.env.TEST_DATABASE_URL)("summarizes stored bars with the prior-year base and reads a detail", () => inRollback(async (pool) => {
+describe("market view tables (PGlite)", () => {
+  it("summarizes stored bars with the prior-year base and reads a detail", () => inRollback(async (pool) => {
     await pool.query(`INSERT INTO asset_bars (vendor_symbol,bar_date,open,high,low,close) VALUES
       ('GSPC.INDX','2025-12-31',90,95,85,90),('GSPC.INDX','2026-11-04',99,101,98,100),('GSPC.INDX','2026-11-05',100,104,99,103)`);
     const rows = await assetSummaries("index", pool);
@@ -25,8 +30,8 @@ describe("market view tables (Postgres)", () => {
     expect(detail?.bars).toHaveLength(3);
     expect(detail).toMatchObject({ high52: 104, low52: 85 });
     expect(await assetDetail("fx", "GSPC.INDX", pool)).toBeNull();
-  }));
-  it.skipIf(!process.env.TEST_DATABASE_URL)("replaces a day's constituents and tracks attempts", () => inRollback(async (pool) => {
+  }), 60_000);
+  it("replaces a day's constituents and tracks attempts", () => inRollback(async (pool) => {
     await saveComponents(pool, "GSPC.INDX", "2026-11-08", [{ code: "AIZ", exchange: "US", name: "Assurant", sector: null, industry: null, weight: 0.0002 }, { code: "OLD", exchange: "US", name: null, sector: null, industry: null, weight: null }]);
     await saveComponents(pool, "GSPC.INDX", "2026-11-08", [{ code: "AIZ", exchange: "US", name: "Assurant, Inc.", sector: null, industry: null, weight: 0.0003 }]);
     await saveComponents(pool, "VIX.INDX", "2026-11-08", []);
@@ -36,8 +41,8 @@ describe("market view tables (Postgres)", () => {
     expect(due).not.toContain("GSPC.INDX");
     expect(due).not.toContain("VIX.INDX");
     expect(await componentsDue(pool, "2999-01-01", ["GSPC.INDX"])).toEqual(["GSPC.INDX"]);
-  }));
-  it.skipIf(!process.env.TEST_DATABASE_URL)("stores screener runs idempotently and market cap points", () => inRollback(async (pool) => {
+  }), 60_000);
+  it("stores screener runs idempotently and market cap points", () => inRollback(async (pool) => {
     const rows = mapScreenerRows([{ code: "AAPL", exchange: "US", name: "Apple Inc.", adjusted_close: 342.37, refund_1d_p: -0.52, market_capitalization: 5001541320704, dividend_yield: 0.003 }]);
     await saveScreenerRun(pool, SCREENER_PRESETS[0], "2026-11-07", rows);
     await saveScreenerRun(pool, SCREENER_PRESETS[0], "2026-11-07", rows);
@@ -47,5 +52,5 @@ describe("market view tables (Postgres)", () => {
     await saveMarketCap(pool, { ticker: "AAPL", vendorSymbol: "AAPL.US" }, null);
     expect(await marketCapSeries("aapl", pool)).toEqual([{ date: "2026-10-23", value: 4e12 }, { date: "2026-10-30", value: 5e12 }]);
     expect((await pool.query("SELECT latest_week::text, status FROM market_cap_refresh WHERE vendor_symbol='AAPL.US'")).rows[0]).toEqual({ latest_week: "2026-10-30", status: "failed" });
-  }));
+  }), 60_000);
 });
