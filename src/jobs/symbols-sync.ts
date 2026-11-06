@@ -2,8 +2,7 @@ import pg from "pg";
 import { EodhdClient, type ExchangeSymbol } from "../data-providers/eodhd/client";
 import { runLoggedJob } from "./job-log";
 
-// UNVERIFIED: PA, AS, SW, PR, MI, MC, ST, OL, CO, HE, VI, BR and LS may not be EODHD exchange codes.
-// exchanges-list is checked on each run; absent codes are logged and skipped.
+// MI was absent from exchanges-list on 2026-11-06; keep the runtime check for vendor changes.
 export const EXCHANGES = ["US", "XETRA", "LSE", "PA", "AS", "SW", "PR", "WAR", "MI", "MC", "ST", "OL", "CO", "HE", "VI", "BR", "LS"] as const;
 
 type Query = Pick<pg.PoolClient, "query">;

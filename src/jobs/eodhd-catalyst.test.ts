@@ -17,12 +17,13 @@ const news: NewsItem[] = [
 
 describe("EODHD catalyst job", () => {
   it("requests one symbol at a time and keeps low-score names off the paid endpoint", async () => {
-    const api = { news: vi.fn().mockResolvedValue(news), getCallCosts: () => ({ news: 5 }) };
+    const api = { news: vi.fn().mockResolvedValue(news), getCallCosts: () => ({ news: 10 }) };
     const result = await runEodhdCatalyst(null, api, { dryRun: true, now, subjects: rows, calendarRows: [] });
     expect(api.news).toHaveBeenCalledTimes(2);
     expect(api.news.mock.calls.map((call) => call[0].symbol)).toEqual(["ASML.AS", "SAP.XETRA"]);
     expect(api.news.mock.calls[0][0]).toMatchObject({ from: "2026-10-14", to: "2026-10-21", limit: 25 });
-    expect(result).toMatchObject({ shortlisted: 2, newsRequests: 2, newsArticles: 2, facts: 1, documents: 0, possibleTickerSurcharge: 10 });
+    expect(result).toMatchObject({ shortlisted: 2, newsRequests: 2, newsArticles: 2, facts: 1, documents: 0, baseCalls: 10 });
+    expect(result).not.toHaveProperty("possibleTickerSurcharge");
   });
 
   it("lets a busy name fill only its own request and ignores articles for other symbols", async () => {

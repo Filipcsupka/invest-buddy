@@ -7,9 +7,9 @@
 3. Then E3 to E9 in order. Each real DB write and each un-suspend of an `invest-buddy-eodhd-*` CronJob needs the owner's yes. Edit `suspend` in the infra manifest, never `kubectl patch`.
 4. If the plan gives a different data set than ALL-IN-ONE (for example no fundamentals or no Form 4), list which of the five scoring inputs lose coverage before E3 and ask the owner.
 
-## Status 2026-11-04
+## Status 2026-11-06
 
-Waiting on the EODHD key (E1). Everything that needs real vendor responses (E2 to E9) stays blocked until it is bought.
+E1 is verified: the secret exists and `/api/user` reports a paid monthly subscription with a 100,000-call daily limit. E2 live samples and parser corrections are in progress in a PR. The response does not name the plan, bulk fundamentals returned HTTP 403, and public display rights need an owner decision before vendor-backed results are shown to others. E3 to E9 still depend on E2 and their stated approvals.
 
 Done since 2026-10-21:
 - Infra #61 merged: five EODHD CronJobs added (suspended), ETF enrich reads `invest-buddy-eodhd` key `api-key`, research CronJobs and the verify NetworkPolicy removed. The `invest-buddy-research-config` ConfigMap stays. All EODHD CronJobs stay suspended until the secret exists and a dry run looks right (E7).
@@ -37,7 +37,7 @@ Done:
 - ETF enrichment from EODHD (#281). Codex path dropped (#289).
 - Infra #60: AI CronJobs suspended (extract, judge, review-calendar, etf-enrich, etf-research).
 - The research CronJobs removal and the new EODHD CronJobs (suspended) are on local infra branch `feat/invest-eodhd-cronjobs`, not pushed.
-- Nothing runs against EODHD yet. There is no key and all tests use recorded fixtures.
+- This was the state on 2026-10-21. The key and E2 live samples arrived on 2026-11-06; see the current status above.
 
 Next tasks (follow in this order). Each has depends-on, steps and a definition of done (DoD). "Approval" means the owner says yes first. Commands run with `KUBECONFIG=~/.kube/khtz`, namespace `invest`. Production is read-only unless the step says otherwise.
 

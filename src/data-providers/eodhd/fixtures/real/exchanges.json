@@ -1,0 +1,101 @@
+{
+  "status": 200,
+  "response": [
+    {
+      "Code": "US",
+      "Name": "USA Stocks",
+      "Currency": "USD",
+      "Country": "USA"
+    },
+    {
+      "Code": "LSE",
+      "Name": "London Exchange",
+      "Currency": "GBP",
+      "Country": "UK"
+    },
+    {
+      "Code": "XETRA",
+      "Name": "XETRA Stock Exchange",
+      "Currency": "EUR",
+      "Country": "Germany"
+    },
+    {
+      "Code": "VI",
+      "Name": "Vienna Exchange",
+      "Currency": "EUR",
+      "Country": "Austria"
+    },
+    {
+      "Code": "PA",
+      "Name": "Euronext Paris",
+      "Currency": "EUR",
+      "Country": "France"
+    },
+    {
+      "Code": "BR",
+      "Name": "Euronext Brussels",
+      "Currency": "EUR",
+      "Country": "Belgium"
+    },
+    {
+      "Code": "SW",
+      "Name": "SIX Swiss Exchange",
+      "Currency": "CHF",
+      "Country": "Switzerland"
+    },
+    {
+      "Code": "MC",
+      "Name": "Madrid Exchange",
+      "Currency": "EUR",
+      "Country": "Spain"
+    },
+    {
+      "Code": "LS",
+      "Name": "Euronext Lisbon",
+      "Currency": "EUR",
+      "Country": "Portugal"
+    },
+    {
+      "Code": "AS",
+      "Name": "Euronext Amsterdam",
+      "Currency": "EUR",
+      "Country": "Netherlands"
+    },
+    {
+      "Code": "CO",
+      "Name": "Copenhagen Exchange",
+      "Currency": "DKK",
+      "Country": "Denmark"
+    },
+    {
+      "Code": "ST",
+      "Name": "Stockholm Exchange",
+      "Currency": "SEK",
+      "Country": "Sweden"
+    },
+    {
+      "Code": "OL",
+      "Name": "Oslo Stock Exchange",
+      "Currency": "NOK",
+      "Country": "Norway"
+    },
+    {
+      "Code": "HE",
+      "Name": "Helsinki Exchange",
+      "Currency": "EUR",
+      "Country": "Finland"
+    },
+    {
+      "Code": "PR",
+      "Name": "Prague Stock Exchange",
+      "Currency": "CZK",
+      "Country": "Czech Republic"
+    },
+    {
+      "Code": "WAR",
+      "Name": "Warsaw Stock Exchange",
+      "Currency": "PLN",
+      "Country": "Poland"
+    }
+  ]
+}

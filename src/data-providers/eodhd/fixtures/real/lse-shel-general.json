@@ -1,0 +1,13 @@
+{
+  "status": 200,
+  "response": {
+    "Code": "SHEL",
+    "Type": "Common Stock",
+    "Name": "Shell plc",
+    "CurrencyCode": "GBX",
+    "CurrencyName": "Pence sterling",
+    "CurrencySymbol": "p",
+    "Exchange": "LSE",
+    "ISIN": "GB00BP6MXD84"
+  }
+}

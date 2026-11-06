@@ -12,6 +12,10 @@ const number = (value: unknown): number | null => {
 const daysBetween = (from: string | undefined, to: string | undefined) =>
   from && to ? (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000 : NaN;
 const isHalfSpan = (days: number) => days >= 170 && days <= 195;
+const availabilityDate = (item: Record<string, unknown>, end: string, reportDate?: string): string | undefined =>
+  [reportDate, item.reportDate, item.filing_date]
+    .filter((value): value is string => date(value) && value > end)
+    .sort().at(-1);
 
 /**
  * Period start from the previous reported period end. A six-month gap is a half-year only when a neighbouring gap is six months
@@ -60,21 +64,22 @@ export function parseEodhdFundamentals(data: Fundamentals, ticker: string, asOf:
   for (const [index, { item, end }] of quarters.entries()) {
     const value = number(item.totalRevenue);
     if (value === null || value <= 0) continue;
-    const filed = date(item.filing_date) ? item.filing_date : date(item.reportDate) ? item.reportDate : reports.get(end);
+    const filed = availabilityDate(item, end, reports.get(end));
     if (!filed || filed > asOf || filed < end) continue;
-    const unit = typeof item.currency_symbol === "string" && /^[A-Z]{3}$/.test(item.currency_symbol) ? item.currency_symbol : data.General?.CurrencyCode;
+    // General.CurrencyCode is the quote currency, which may differ from the statement currency (for example HSBC GBX/USD).
+    const unit = typeof item.currency_symbol === "string" && /^[A-Z]{3}$/.test(item.currency_symbol) ? item.currency_symbol : null;
     if (!unit || !/^[A-Z]{3}$/.test(unit)) continue;
     rows.push({ ticker, taxonomy: "eodhd", concept: "Revenues", unit, periodStart: periodStart(ends, index), periodEnd: end,
       ...period(end), form: "EODHD", filed, accession: `eodhd:revenue:${end}:${filed}`, value, frame: null });
   }
   for (const [key, raw] of Object.entries(object(data.outstandingShares?.quarterly))) {
     const item = object(raw);
-    const end = date(item.date) ? item.date : date(key) ? key : null;
+    const end = date(item.dateFormatted) ? item.dateFormatted : date(item.date) ? item.date : date(key) ? key : null;
     if (!end) continue;
     const shares = number(item.shares);
     const millions = number(item.sharesMln);
     const value = shares ?? (millions === null ? null : millions * 1_000_000);
-    const filed = date(item.filing_date) ? item.filing_date : date(item.reportDate) ? item.reportDate : reports.get(end);
+    const filed = availabilityDate(item, end, reports.get(end));
     if (!filed || filed > asOf || filed < end || value === null || value <= 0) continue;
     rows.push({ ticker, taxonomy: "eodhd", concept: "EntityCommonStockSharesOutstanding", unit: "shares", periodStart: null,
       periodEnd: end, ...period(end), form: "EODHD", filed, accession: `eodhd:shares:${end}:${filed}`, value, frame: null });

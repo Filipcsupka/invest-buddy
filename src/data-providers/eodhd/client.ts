@@ -17,7 +17,6 @@ export interface Fundamentals {
   outstandingShares?: { annual?: Record<string, { date?: string; dateFormatted?: string; sharesMln?: number | null; shares?: number | null }>; quarterly?: Record<string, { date?: string; dateFormatted?: string; sharesMln?: number | null; shares?: number | null }> };
   Earnings?: { History?: Record<string, { reportDate?: string; date?: string; beforeAfterMarket?: string; currency?: string; epsActual?: number | null; epsEstimate?: number | null; epsDifference?: number | null; surprisePercent?: number | null }> };
   Financials?: Record<string, unknown>;
-  // UNVERIFIED: ETF fields may differ or be absent for UCITS and other exchanges.
   ETF_Data?: { NetExpenseRatio?: number | string | null; Ongoing_Charge?: number | string | null; Max_Annual_Mgmt_Charge?: number | string | null; TotalAssets?: number | string | null; Holdings?: Record<string, unknown>; Top_10_Holdings?: Record<string, unknown>; Holdings_Count?: number | null };
   [section: string]: unknown;
 }
@@ -63,7 +62,7 @@ export class EodhdClient {
     url.searchParams.set("api_token", this.apiKey);
     url.searchParams.set("fmt", "json");
     for (let attempt = 0; ; attempt++) {
-      // UNVERIFIED: whether HTTP 429 consumes daily calls. Count every attempted request conservatively.
+      // Count every attempted request conservatively; 429 billing was not observed.
       this.counts[endpoint] += cost;
       let response: Response;
       try { response = await this.fetcher(url, { headers: { Accept: "application/json" } }); }
@@ -102,14 +101,12 @@ export class EodhdClient {
     return this.get("eod-bulk-last-day", `eod-bulk-last-day/${encodeURIComponent(exchange)}`, { ...options, symbols: options.symbols?.join(",") }, 100 + (options.symbols?.length ?? 0));
   }
   fundamentals<T = Fundamentals>(symbol: string, filter?: string): Promise<T> {
-    // UNVERIFIED: Financials::Income_Statement::quarterly filter path is inferred from the documented filter pattern.
     return this.get("fundamentals", `v1.1/fundamentals/${encodeURIComponent(symbol)}`, { filter }, 10);
   }
   earningsCalendar(options: { from?: string; to?: string; symbols?: string[] } = {}): Promise<EarningsCalendar> {
     return this.get("calendar/earnings", "calendar/earnings", { ...options, symbols: options.symbols?.join(",") });
   }
   news(options: { symbol?: string; tag?: string; from?: string; to?: string; limit?: number; offset?: number } = {}): Promise<NewsItem[]> {
-    // UNVERIFIED: docs also say "+5 per ticker"; the counter records only the documented base of 5 per request.
     return this.get("news", "news", { s: options.symbol, t: options.tag, from: options.from, to: options.to, limit: options.limit, offset: options.offset }, 5);
   }
   form4(symbol: string, options: { offset?: number; limit?: number } = {}): Promise<Form4Page> {

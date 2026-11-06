@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import bulkFixture from "../data-providers/eodhd/fixtures/bulk-eod.json";
 import historyFixture from "../data-providers/eodhd/fixtures/eod.json";
 import type { BulkLastDayBar, BulkSplit, EodBar, Split } from "../data-providers/eodhd/client";
@@ -13,8 +15,23 @@ const symbols: PriceSymbol[] = [
   { ticker: "NVDA", vendorSymbol: "NVDA.US", exchange: "US", code: "NVDA", currency: "USD" },
 ];
 const noBulk = async () => { throw new Error("bulk should not be called"); };
+const real = (name: string) => JSON.parse(readFileSync(join(process.cwd(), "src/data-providers/eodhd/fixtures/real", name), "utf8")).response;
 
 describe("EODHD prices", () => {
+  it("keeps real NVDA pre-split prices and restores traded volume", () => {
+    const actions = splitActions("NVDA", real("nvda-splits.json") as Split[]);
+    const bars = barsFromHistory(real("nvda-split-eod.json") as EodBar[], actions);
+    expect(bars.find((bar) => bar.date === "2024-06-07")).toMatchObject({ close: 1208.88, volume: 41_238_577.6 });
+    expect(bars.find((bar) => bar.date === "2024-06-10")).toMatchObject({ close: 121.79, volume: 314_162_688 });
+  });
+  it("keeps three LSE closes in the vendor's GBX unit", () => {
+    for (const [name, close] of [["vod", 119.4], ["hsba", 1307.4], ["shel", 3784]] as const) {
+      const general = real(`lse-${name}-general.json`);
+      const bars = barsFromHistory(real(`lse-${name}-eod.json`) as EodBar[]);
+      expect(general.CurrencyCode).toBe("GBX");
+      expect(bars.at(-1)?.close).toBe(close);
+    }
+  });
   it("stores raw OHLC and reverses split adjustments in reported volume without dividend look-ahead", () => {
     expect(rawBar(historyFixture[0])).toEqual({ date: "2024-01-02", open: 295.05, high: 297.28, low: 295.05, close: 297.04, volume: 4458400 });
     expect(rawBar({ date: "2026-10-20", open: 200, high: 210, low: 190, close: 205, adjusted_close: 102.5, volume: 1000 })).toMatchObject({ close: 205, volume: 1000 });

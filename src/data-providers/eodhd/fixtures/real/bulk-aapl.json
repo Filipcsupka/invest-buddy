@@ -1,0 +1,19 @@
+{
+  "status": 200,
+  "response": [
+    {
+      "code": "AAPL",
+      "exchange_short_name": "US",
+      "date": "2026-11-06",
+      "open": 338.73,
+      "high": 345.79,
+      "low": 338.3,
+      "close": 342.37,
+      "adjusted_close": 342.37,
+      "volume": 40563428,
+      "prev_close": 344.17,
+      "change": -1.8,
+      "change_p": -0.523
+    }
+  ]
+}

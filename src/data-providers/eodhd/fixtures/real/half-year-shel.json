@@ -1,0 +1,119 @@
+{
+  "status": 200,
+  "response": {
+    "General": {
+      "Code": "SHEL",
+      "Type": "Common Stock",
+      "Exchange": "LSE",
+      "CurrencyCode": "GBX"
+    },
+    "Earnings": {
+      "History": {
+        "2026-12-31": {
+          "reportDate": "2027-02-04",
+          "date": "2026-12-31",
+          "beforeAfterMarket": "AfterMarket",
+          "currency": null,
+          "epsActual": null,
+          "epsEstimate": 1.7,
+          "epsDifference": 0,
+          "surprisePercent": null
+        },
+        "2026-09-30": {
+          "reportDate": "2026-10-29",
+          "date": "2026-09-30",
+          "beforeAfterMarket": "BeforeMarket",
+          "currency": null,
+          "epsActual": 1.93,
+          "epsEstimate": 1.8,
+          "epsDifference": 0.13,
+          "surprisePercent": 7.2222
+        },
+        "2026-06-30": {
+          "reportDate": "2026-07-30",
+          "date": "2026-06-30",
+          "beforeAfterMarket": "BeforeMarket",
+          "currency": null,
+          "epsActual": 1.76,
+          "epsEstimate": 1.55,
+          "epsDifference": 0.21,
+          "surprisePercent": 13.5484
+        },
+        "2026-03-31": {
+          "reportDate": "2026-05-07",
+          "date": "2026-03-31",
+          "beforeAfterMarket": "BeforeMarket",
+          "currency": null,
+          "epsActual": 1.22,
+          "epsEstimate": 1.06,
+          "epsDifference": 0.16,
+          "surprisePercent": 15.0943
+        },
+        "2025-12-31": {
+          "reportDate": "2026-02-05",
+          "date": "2025-12-31",
+          "beforeAfterMarket": "BeforeMarket",
+          "currency": null,
+          "epsActual": 0.57,
+          "epsEstimate": 0.7,
+          "epsDifference": -0.13,
+          "surprisePercent": -18.5714
+        }
+      }
+    },
+    "Financials": {
+      "Income_Statement": {
+        "quarterly": {
+          "2026-09-30": {
+            "date": "2026-09-30",
+            "filing_date": "2026-09-30",
+            "currency_symbol": "USD",
+            "totalRevenue": "93592227000.00"
+          },
+          "2026-06-30": {
+            "date": "2026-06-30",
+            "filing_date": "2026-06-30",
+            "currency_symbol": "USD",
+            "totalRevenue": "94664000000.00"
+          },
+          "2026-03-31": {
+            "date": "2026-03-31",
+            "filing_date": "2026-03-31",
+            "currency_symbol": "USD",
+            "totalRevenue": "68203535000.00"
+          },
+          "2025-12-31": {
+            "date": "2025-12-31",
+            "filing_date": "2025-12-31",
+            "currency_symbol": "USD",
+            "totalRevenue": "64847172000.00"
+          },
+          "2025-09-30": {
+            "date": "2025-09-30",
+            "filing_date": "2025-10-30",
+            "currency_symbol": "USD",
+            "totalRevenue": "67743704000.00"
+          },
+          "2025-06-30": {
+            "date": "2025-06-30",
+            "filing_date": "2025-06-30",
+            "currency_symbol": "USD",
+            "totalRevenue": "65406000000.00"
+          },
+          "2025-03-31": {
+            "date": "2025-03-31",
+            "filing_date": "2025-03-31",
+            "currency_symbol": "USD",
+            "totalRevenue": "69234000000.00"
+          },
+          "2024-12-31": {
+            "date": "2024-12-31",
+            "filing_date": "2024-12-31",
+            "currency_symbol": "USD",
+            "totalRevenue": "66281000000.00"
+          }
+        }
+      }
+    }
+  }
+}
