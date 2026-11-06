@@ -1,0 +1,19 @@
+.stack { display: grid; gap: 2.5rem; }
+.head { max-width: 68ch; }
+.head p { color: var(--ink-2); }
+.section { background: var(--sheet); border: 1px solid var(--rule); border-radius: 14px; padding: 1.5rem; box-shadow: var(--shadow-1); min-width: 0; }
+.section h2 { margin: 0 0 1rem; font-family: var(--font-display); font-size: 1.35rem; }
+.scroll { max-width: 100%; overflow-x: auto; }
+.table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; white-space: nowrap; font-size: .875rem; }
+.table th, .table td { border-bottom: 1px solid var(--rule); padding: .65rem .8rem; text-align: left; vertical-align: top; }
+.table th { color: var(--ink-2); font-weight: 700; }
+.table tr:last-child td { border-bottom: 0; }
+.table tbody tr:hover { background: var(--sheet-hover); }
+.json { display: block; max-width: 32rem; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .8rem; }
+.empty { color: var(--ink-2); margin: 0; }
+.form { display: flex; flex-wrap: wrap; gap: .75rem; align-items: end; }
+.form label { display: grid; gap: .35rem; font-size: .875rem; }
+.form input { min-height: 44px; padding: .5rem .75rem; border: 1px solid var(--rule-strong); border-radius: 8px; background: var(--sheet); color: var(--ink); }
+.form input:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+.actions { display: flex; flex-wrap: wrap; gap: .75rem; }
+@media (max-width: 600px) { .section { padding: 1rem; } .stack { gap: 1.5rem; } }

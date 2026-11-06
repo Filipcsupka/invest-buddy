@@ -13,10 +13,12 @@ import { ETF_TABS, etfTabHref } from "@/components/etf/tabs";
 import { getEtfDetailMessages } from "@/i18n/etf-messages";
 import s from "@/components/etf/etf.module.css";
 import { resolveLocale } from "../../../locale";
+import { requireEtfDataAccess } from "../../../owner/data/access";
 
 export const dynamic = "force-dynamic";
 type Props = { params: Promise<{ locale: string; key: string }> };
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  await requireEtfDataAccess();
   const locale = await resolveLocale(params);
   const { key } = await params;
   if (!/^[A-Za-z0-9:._-]{1,80}$/.test(key)) notFound();
@@ -25,6 +27,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return pageMetadata(locale, `/etf/fund/${encodeURIComponent(result.fund.listingKey)}`, result.fund.name, getEtfMessages(locale).fundLede);
 }
 async function EtfFundPage({ params }: Props) {
+  await requireEtfDataAccess();
   const locale = await resolveLocale(params);
   const { key } = await params;
   if (!/^[A-Za-z0-9:._-]{1,80}$/.test(key)) notFound();

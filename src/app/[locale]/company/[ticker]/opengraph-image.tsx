@@ -4,6 +4,7 @@ import { instrumentUniverse, latestScores } from "@/data/store";
 import { formatDate, formatScorePercent, getMessages, isLocale } from "@/i18n";
 import { stateKey } from "@/i18n/score-text";
 import { companyImage, OG_CONTENT_TYPE, OG_SIZE } from "@/og/card";
+import { requireCompanyDataAccess } from "../../owner/data/access";
 
 // Same data loaders as the page, so the image follows the W5 cache (300 s, purged with the page data).
 export const dynamic = "force-dynamic";
@@ -15,6 +16,7 @@ export default async function Image({ params }: { params: Promise<{ locale: stri
   const { locale, ticker } = await params;
   if (!isLocale(locale)) notFound();
   const symbol = ticker.toUpperCase();
+  await requireCompanyDataAccess(symbol);
   const instrument = (await instrumentUniverse()).find((item) => item.ticker === symbol);
   if (!instrument) notFound();
   const data = await latestScores();
