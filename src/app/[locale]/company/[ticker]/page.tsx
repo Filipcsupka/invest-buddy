@@ -36,6 +36,7 @@ import { ProfileBlock } from "@/components/public-profile";
 import { CatalystCalendar } from "@/components/catalyst-calendar";
 import { storedMacroEvents } from "@/data/macro-calendar-store";
 import { publicEarningsDate } from "@/data/catalyst-calendar-store";
+import { MarketCapSection, ownerMarketCap } from "./market-cap-section";
 export const dynamic = "force-dynamic";
 import { fill, formatDate, formatPercent, formatPrice, getMessages, isLocale, type Locale } from "@/i18n";
 import { pageMetadata } from "@/i18n/metadata";
@@ -123,6 +124,8 @@ async function Company({ params }: Params) {
   const horizons = await publicHorizons();
   const today = new Date().toISOString().slice(0, 10);
   const [macroSchedule, earningsDate] = await Promise.all([storedMacroEvents(today), publicEarningsDate(instrument.ticker, today)]);
+  // Owner-only EODHD market cap; null for every public request.
+  const marketCap = await ownerMarketCap(instrument.ticker);
   const index = instruments.findIndex((item) => item.ticker === instrument.ticker);
   const prev = instruments[(index - 1 + instruments.length) % instruments.length];
   const next = instruments[(index + 1) % instruments.length];
@@ -377,6 +380,8 @@ async function Company({ params }: Params) {
               {(v) => <PaywallSegment id="score-history" viewer={v} locale={locale}><div><ScoreHistory ticker={instrument.ticker} rows={history} locale={locale} /></div></PaywallSegment>}
             </PaidPart>
           </section>
+
+          {marketCap ? <MarketCapSection locale={locale} ticker={instrument.ticker} series={marketCap} /> : null}
         </div>
 
         <div className="co-rail" role="group" aria-label={c.railLabel}>

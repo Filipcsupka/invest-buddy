@@ -23,7 +23,8 @@ export async function runMarketBars(db: Pick<pg.Pool, "query">, api: Pick<EodhdC
   const failures: string[] = [];
   try {
     if (!options.dryRun && api) for (const asset of assets) {
-      const from = asset.last_bar_date ? new Date(Date.parse(`${asset.last_bar_date}T00:00:00Z`) + DAY).toISOString().slice(0, 10)
+      // Re-read the latest stored day: a crypto or FX bar fetched before its session closed was partial (BTC-USD.CC, 2026-11-06 21:57 UTC).
+      const from = asset.last_bar_date ? asset.last_bar_date
         : new Date(Date.parse(`${today}T00:00:00Z`) - Math.round(options.backfill * 365.25) * DAY).toISOString().slice(0, 10);
       if (from > today) continue;
       try {
