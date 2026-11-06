@@ -14,6 +14,7 @@ import { storedMacroSeries } from "../db/macro-observations";
 import { storeDailyEcbFx, storeDailyMacroObservations } from "./macro-observations";
 import { evaluateBenchmarkTrend, evaluateDataTailwind, evaluateSectorRotation, macroConfig, MACRO_RULES_VERSION, REGIONAL_MACRO_RULES_VERSION, type Bar, type MacroConfig, type MacroResult, type VixPoint, type YieldPoint } from "../data/macro-rules";
 import { instrumentRegion, loadRegions, REGION_BENCHMARKS, type Region } from "../universe/region";
+import { macroReleaseFacts, type MacroReleaseFact } from "../data/macro-release";
 
 export const BENCHMARK = REGION_BENCHMARKS.US;
 /** Evidence url for the VIX document. The page url is the stored document url, not the CSV link. */
@@ -133,7 +134,7 @@ const upsertConsensus = `INSERT INTO consensus_findings (symbol,field,as_of,valu
  * Each ticker gets the outcome of its region; the top-level macro_findings values stay the US ones, and `regions` holds the others.
  * Reconcile leaves data_rule rows alone. Rerunning for the same date rewrites the same rows.
  */
-export async function writeMacro(pool: pg.Pool, asOf: string, outcome: MacroOutcome, config: MacroConfig, tickers: string[] = symbols, regions?: Map<string, Region>): Promise<number> {
+export async function writeMacro(pool: pg.Pool, asOf: string, outcome: MacroOutcome, config: MacroConfig, tickers: string[] = symbols, regions?: Map<string, Region>, releases: MacroReleaseFact[] = []): Promise<number> {
   const runId = macroRunId(asOf);
   const usFields = [["dataTailwind", outcome.dataTailwind], ["sectorRotationIntoGrowth", outcome.sectorRotationIntoGrowth]] as const;
   const fieldsFor = (ticker: string) => {
@@ -147,7 +148,7 @@ export async function writeMacro(pool: pg.Pool, asOf: string, outcome: MacroOutc
     benchmark: REGION_BENCHMARKS[region as Region], dataTailwind: item.dataTailwind.value, sectorRotationIntoGrowth: item.sectorRotationIntoGrowth.value,
     notes: `${item.dataTailwind.reason}. ${item.sectorRotationIntoGrowth.reason}`.slice(0, 1000) }] as const);
   const data = { runnerName: RUNNER, rulesVersion: MACRO_RULES_VERSION, placeholder: true, config, dataTailwind: outcome.dataTailwind.value, sectorRotationIntoGrowth: outcome.sectorRotationIntoGrowth.value,
-    notes: `${outcome.dataTailwind.reason}. ${outcome.sectorRotationIntoGrowth.reason}`.slice(0, 1000), events: [], ...(regional.length ? { regions: Object.fromEntries(regional) } : {}) };
+    notes: `${outcome.dataTailwind.reason}. ${outcome.sectorRotationIntoGrowth.reason}`.slice(0, 1000), events: [], releases, ...(regional.length ? { regions: Object.fromEntries(regional) } : {}) };
   const items = [...outcome.evidence.dataTailwind, ...outcome.evidence.sectorRotationIntoGrowth];
   const client = await pool.connect();
   try {
@@ -174,8 +175,9 @@ export async function runMacro(pool: pg.Pool, asOf: string, options: { fetch?: b
   const tickers = options.tickers ?? symbols;
   const regions = await loadRegions(pool, asOf, tickers);
   const outcome = evaluateMacro(await loadInputs(pool, asOf, tickers, regions), asOf, config);
-  const rows = await writeMacro(pool, asOf, outcome, config, tickers, regions);
-  return { asOf, rows, failures, dataTailwind: outcome.dataTailwind, sectorRotationIntoGrowth: outcome.sectorRotationIntoGrowth, regions: outcome.regions ?? {} };
+  const releases = await macroReleaseFacts(pool, asOf);
+  const rows = await writeMacro(pool, asOf, outcome, config, tickers, regions, releases);
+  return { asOf, rows, failures, releases, dataTailwind: outcome.dataTailwind, sectorRotationIntoGrowth: outcome.sectorRotationIntoGrowth, regions: outcome.regions ?? {} };
 }
 
 async function main() {
