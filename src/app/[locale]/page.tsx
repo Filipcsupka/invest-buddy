@@ -16,6 +16,8 @@ import { stateKey } from "@/i18n/score-text";
 import { stateOrder, type StateKey } from "@/i18n/rules";
 import { resolveSource } from "@/waitlist/source";
 import { resolveLocale, type LocaleParams } from "./locale";
+import { headers } from "next/headers";
+import { ownerAuthorized } from "./owner/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +32,9 @@ async function Home({ params, searchParams }: HomeProps) {
   const locale = await resolveLocale(params);
   const m = getMessages(locale);
   const k = getKitMessages(locale);
-  const [data, moved] = await Promise.all([latestScores(), latestStateChanges()]);
+  // The landing remains public, but a private scoring run must not put vendor-derived figures in it.
+  const privateVisitor = process.env.EODHD_PRIVATE_USE === "on" && !ownerAuthorized((await headers()).get("authorization"), process.env.OWNER_RESEARCH_PASSWORD);
+  const [data, moved] = privateVisitor ? [{ rows: [], sample: false, lastUpdated: null, stale: false }, []] : await Promise.all([latestScores(), latestStateChanges()]);
   const rows = data.rows;
   const ranked = [...rows].sort((a, b) => Number(b.result.state === "Setup met (>=18)") - Number(a.result.state === "Setup met (>=18)") || b.result.total - a.result.total || a.instrument.ticker.localeCompare(b.instrument.ticker));
   const waitlist = flags().WAITLIST;

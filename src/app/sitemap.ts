@@ -21,6 +21,10 @@ function entries(paths: { path: string; lastModified?: string }[]): MetadataRout
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  if (process.env.EODHD_PRIVATE_USE === "on") {
+    const publicRoutes = ["", "/methodology", "/legal/privacy", "/legal/terms", "/legal/disclaimer", ...(flags().ADVICE_OUTPUT ? ["/sizing"] : []), ...(flags().WAITLIST ? ["/pricing"] : [])];
+    return entries(publicRoutes.map((path) => ({ path })));
+  }
   const base = flags().INSIDERS_PAGE ? [...routes, "/insiders"] : routes;
   const withSizing = flags().ADVICE_OUTPUT ? [...base, "/sizing"] : base;
   const visible = flags().WAITLIST ? [...withSizing, "/pricing"] : withSizing;
