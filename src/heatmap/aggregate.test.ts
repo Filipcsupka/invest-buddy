@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { aggregateSectors, intensity, parseMetric, priceChange, rulesShare, type HeatInput } from "./aggregate";
+import { aggregateSectors, intensity, parseHeatSort, parseMetric, priceChange, rulesShare, sortHeatCells, summarizeHeatmap, type HeatInput } from "./aggregate";
 
 const bars = (closes: number[]) => closes.map((close) => ({ close }));
 const row = (ticker: string, sector: string, closes: number[], hits: [boolean, boolean?][] = [], state = "Watch"): HeatInput => ({
@@ -76,5 +76,24 @@ describe("intensity", () => {
     expect(intensity("rules", 0)).toBe(0);
     expect(intensity("rules", 59)).toBe(2);
     expect(intensity("rules", 100)).toBe(4);
+  });
+});
+
+describe("heatmap summary and sorting", () => {
+  it("ranks sectors with data and counts breadth without converting missing values to zero", () => {
+    const rows = [row("UP", "Tech", ramp(22)), row("NONE", "Tech", []), row("DOWN", "Bio", ramp(22, 200, -1))];
+    const sectors = aggregateSectors(rows, "1m");
+    expect(summarizeHeatmap(sectors, rows)).toMatchObject({ strongest: { sector: "Tech" }, weakest: { sector: "Bio" }, coverageSector: { sector: "Tech" }, up: 1, down: 1, flat: 0, counted: 2, total: 3 });
+  });
+  it("counts only known rules from scored rows", () => {
+    const rows = [row("A", "Tech", [], [[true], [false], [true, true]]), row("B", "Bio", [], [[true]], "Insufficient/invalid data")];
+    expect(summarizeHeatmap(aggregateSectors(rows, "rules"), rows)).toMatchObject({ metRules: 1, knownRules: 2, counted: 1, total: 2 });
+  });
+  it("sorts numeric values descending and missing values last, with alphabetical fallback", () => {
+    const cells = [{ ticker: "Z", name: "Z", value: null }, { ticker: "B", name: "B", value: -2 }, { ticker: "A", name: "A", value: 3 }];
+    expect(parseHeatSort("value")).toBe("value");
+    expect(parseHeatSort(["value", "alpha"])).toBe("alpha");
+    expect(sortHeatCells(cells, "value").map((cell) => cell.ticker)).toEqual(["A", "B", "Z"]);
+    expect(sortHeatCells(cells, "alpha")).toBe(cells);
   });
 });

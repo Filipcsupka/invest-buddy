@@ -1,5 +1,5 @@
 {
-  "note": "Offline fallback for the scanner. Runtime jobs and ingest read the editable instruments table. Add names there for live use.",
+  "note": "Offline scanner fallback with legacy US ticker keys. Runtime market selection reads symbols, stored EODHD bars and fundamentals, and ECB FX. European instrument keys use exchange suffixes such as SAP.XETRA.",
   "instruments": [
     {"symbol":"NVDA","name":"NVIDIA","sector":"AI & semiconductors","tier":1},
     {"symbol":"AMD","name":"AMD","sector":"AI & semiconductors","tier":null},

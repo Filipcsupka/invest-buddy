@@ -10,6 +10,59 @@ export const windowSessions = { "1m": 21, "3m": 63 } as const;
 export type HeatInput = { instrument: { ticker: string; name: string; sector: string }; result: Pick<ScoreResult, "state" | "ruleHits"> & { inputs: { bars: { close: number }[] } } };
 export type HeatCell = { ticker: string; name: string; value: number | null };
 export type HeatSector = { sector: string; cells: HeatCell[]; average: number | null; counted: number };
+export type HeatSort = "alpha" | "value";
+
+export function parseHeatSort(value: string | string[] | undefined): HeatSort {
+  return value === "value" ? "value" : "alpha";
+}
+
+export function sortHeatCells(cells: HeatCell[], sort: HeatSort): HeatCell[] {
+  if (sort === "alpha") return cells;
+  return [...cells].sort((a, b) => {
+    if (a.value === null) return b.value === null ? a.ticker.localeCompare(b.ticker) : 1;
+    if (b.value === null) return -1;
+    return b.value - a.value || a.ticker.localeCompare(b.ticker);
+  });
+}
+
+export function sectorId(sector: string): string {
+  return `sector-${sector.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
+}
+
+export type HeatSummary = {
+  strongest: HeatSector | null;
+  weakest: HeatSector | null;
+  coverageSector: HeatSector | null;
+  breadthSector: HeatSector | null;
+  up: number;
+  down: number;
+  flat: number;
+  metRules: number;
+  knownRules: number;
+  counted: number;
+  total: number;
+};
+
+/** Summary uses the same scored cells as the grid; unknown rule hits never enter the denominator. */
+export function summarizeHeatmap(sectors: HeatSector[], rows: HeatInput[]): HeatSummary {
+  const withAverage = sectors.filter((s) => s.average !== null);
+  const ranked = [...withAverage].sort((a, b) => b.average! - a.average! || a.sector.localeCompare(b.sector));
+  const cells = sectors.flatMap((s) => s.cells);
+  const knownHits = rows.flatMap((row) => row.result.state === "Insufficient/invalid data" ? [] : row.result.ruleHits.filter((hit) => !hit.unknown));
+  return {
+    strongest: ranked[0] ?? null,
+    weakest: ranked.at(-1) ?? null,
+    coverageSector: [...sectors].sort((a, b) => (a.counted / a.cells.length) - (b.counted / b.cells.length) || a.sector.localeCompare(b.sector))[0] ?? null,
+    breadthSector: [...sectors].sort((a, b) => b.counted - a.counted || a.sector.localeCompare(b.sector))[0] ?? null,
+    up: cells.filter((cell) => cell.value !== null && cell.value > 0).length,
+    down: cells.filter((cell) => cell.value !== null && cell.value < 0).length,
+    flat: cells.filter((cell) => cell.value === 0).length,
+    metRules: knownHits.filter((hit) => hit.matched).length,
+    knownRules: knownHits.length,
+    counted: cells.filter((cell) => cell.value !== null).length,
+    total: cells.length,
+  };
+}
 
 /** Reads `?metric=`. Anything unknown, repeated or missing falls back to the default. */
 export function parseMetric(value: string | string[] | undefined): HeatMetric {

@@ -54,10 +54,18 @@ The pool has no price data. Step 2 fetches bars for the pool within the Twelve D
 
 ### Pool bars (step 2) and refresh
 
-`npm run pool-bars -- --limit 250` fetches 260 daily bars per pool name into `discovery_price_bars` (one request each, 7 a minute, ledger job `pool-bars`). A name is skipped when it has at least 200 bars and the newest is at most 5 days old. 2026-10-18 result: 297 of 300 covered, 3 rejected by Twelve Data (`PHXE-P`, `HGIT`, `ZARE`). The pool changes each quarter after the SEC frames and selection needs bars at most 5 days old, so a weekly refresh is proposed: `deploy/gitops/gitops/apps/invest-buddy/base/pool-bars-cronjob.yaml` (suspended, Sunday 10:00 Bratislava, 300 requests, about 43 minutes).
+`npm run pool-bars -- --limit 250` fetches 260 daily bars per pool name into `discovery_price_bars` (one request each, 7 a minute, ledger job `pool-bars`). A name is skipped when it has at least 200 bars and the newest is at most 5 days old. 2026-10-18 result: 297 of 300 covered, 3 rejected by Twelve Data (`PHXE-P`, `HGIT`, `ZARE`). The pool changes each quarter after the SEC frames and selection needs bars at most 5 days old, so the CronJob `deploy/gitops/gitops/apps/invest-buddy/base/pool-bars-cronjob.yaml` runs daily at 12:30 Bratislava with `--limit 500 --size 3200`: the whole pool (570 names for CY2026Q2), at most 500 requests a run (see `docs/data.md`, Pool bars).
 
 `pool-bars` skips `PHXE-P`, `HGIT` and `ZARE` (Twelve Data: not found) and `SUNC` (`NOT_FOUND_SYMBOLS` in `src/universe/pool.ts`, `DUPLICATE_FILERS`).
 
 ## Collect-only list
 
 Names added with `--list extended` are collected and priced but not scored, not shown on any page or in the sitemap, and not sent to extract or judge, until they are promoted (10 clean sessions, D16) to `core`. See `docs/d36-approval.md`. The 2026-10-18 selection rerun (150 names, 114 adds) is documented there.
+
+### Promotion to core
+
+`node dist/jobs/universe-promote.js` (`npm run universe:promote`, `--dry-run` writes nothing, `--cap N` overrides the cap) promotes `extended` names to `core`. A name qualifies after 10 clean sessions in a row (D16): for each of the last 10 completed sessions, all on or after the day the name joined `extended`, its bar is stored in `daily_bars` and the D16 price checks (`src/jobs/dq.ts`, run as of that session) give no `fail`. History fetched before the name joined does not count. The check runs on the bars directly, because the `dq` job has no CronJob and `dq_results` is empty.
+
+At most 10 names are promoted a week (`PROMOTE.weeklyCap` in `src/universe/promote.ts`, Monday to Sunday, counting rows added by `universe-promote`). The cap is there for AI cost: a core name is scored and shown, and its filings go to extract and judge. Eligible names go in the selection order: growth, then 50-day dollar volume, then ticker. The change is the one `universe-change` makes for a remove and an add, in one transaction: `valid_to` on the extended row, a new `core` row from the same date with `added_by` `universe-promote` and the criteria version, and the instrument source set to `guide`. A rerun on the same day changes nothing.
+
+CronJob `invest-buddy-universe-promote` (Sunday 15:00 Bratislava) runs weekly since 2026-10-19. The 114 names added on 2026-10-18 can first qualify after the session of 2026-10-30, so the first run that could promote is Sunday 2026-11-01.

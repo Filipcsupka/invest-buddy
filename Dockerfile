@@ -1,4 +1,4 @@
-FROM node:22-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402 AS deps
+FROM node:22-alpine@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc60cddf1e844699914 AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts
@@ -7,7 +7,7 @@ COPY . .
 RUN npm run build
 RUN npm run build:jobs \
     && test -f dist/jobs/horizon-labels.js && test -f dist/jobs/reconcile.js && test -f dist/jobs/daily.js && test -f dist/jobs/prices.js && test -f dist/jobs/digest.js && test -f dist/jobs/weekly.js && test -f dist/jobs/portfolio.js \
-    && test -f dist/jobs/collect.js && test -f dist/jobs/detect.js && test -f dist/jobs/retention.js && test -f dist/jobs/discovery.js && test -f dist/jobs/backfill.js && test -f dist/jobs/companyfacts.js && test -f dist/jobs/earnings-calendar.js && test -f dist/jobs/master-refresh.js && test -f dist/jobs/thirteenf.js
+    && test -f dist/jobs/collect.js && test -f dist/jobs/detect.js && test -f dist/jobs/retention.js && test -f dist/jobs/discovery.js && test -f dist/jobs/backfill.js && test -f dist/jobs/companyfacts.js && test -f dist/jobs/earnings-calendar.js && test -f dist/jobs/macro-calendar.js && test -f dist/jobs/master-refresh.js && test -f dist/jobs/thirteenf.js
 RUN ./node_modules/.bin/esbuild scripts/migrate.ts --bundle --platform=node --format=cjs --target=node22 --packages=external --outfile=dist/migrate.js \
     && printf '%s\n' \
       'const { migrate } = require("./migrate.js");' \
@@ -15,7 +15,7 @@ RUN ./node_modules/.bin/esbuild scripts/migrate.ts --bundle --platform=node --fo
       'if (!url) throw new Error("DATABASE_URL is required");' \
       'migrate(url).catch((error) => { console.error(error); process.exitCode = 1; });' \
       > dist/migrate-runner.js
-FROM node:22-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402 AS runtime
+FROM node:22-alpine@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc60cddf1e844699914 AS runtime
 WORKDIR /app
 ENV NODE_ENV=production PORT=3000 HOSTNAME=0.0.0.0
 RUN apk add --no-cache postgresql-client restic openssh-client

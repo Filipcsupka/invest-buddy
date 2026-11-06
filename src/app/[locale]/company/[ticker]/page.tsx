@@ -4,9 +4,11 @@ import type { ReactNode } from "react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Chart } from "@/components/chart";
-import { ResultMark, RuleRow, RuleTable, ScoreDial, SectionHead, StateChip, kitState } from "@/components/kit";
+import { ResultMark, RuleRow, RuleScan, RuleTable, SectionHead, StateChip, kitState } from "@/components/kit";
 import { OperatorDisclosure, SampleStamp } from "@/components/operator-disclosure";
 import { getCompanyMessages } from "@/i18n/company-messages";
+import { getKitMessages } from "@/i18n/kit-messages";
+import { CORE_RULES } from "@/engine/display-score";
 import { PaidPart } from "./paid-part";
 import { TabBar } from "./tab-bar";
 import "./company.css";
@@ -31,6 +33,9 @@ import { datasetFreshness } from "@/data/data-freshness-store";
 import { coverageOf } from "@/data/data-freshness";
 import { publicHorizons } from "@/data/public-horizons";
 import { ProfileBlock } from "@/components/public-profile";
+import { CatalystCalendar } from "@/components/catalyst-calendar";
+import { storedMacroEvents } from "@/data/macro-calendar-store";
+import { publicEarningsDate } from "@/data/catalyst-calendar-store";
 export const dynamic = "force-dynamic";
 import { fill, formatDate, formatPercent, formatPrice, getMessages, isLocale, type Locale } from "@/i18n";
 import { pageMetadata } from "@/i18n/metadata";
@@ -116,6 +121,8 @@ async function Company({ params }: Params) {
   const interest = await storedInterestFacts(instrument.ticker);
   const flagResults = companyFlags({ bars: result.inputs.bars, shares: await storedShareCounts(instrument.ticker), operatingIncome: interest.operatingIncome, interestExpense: interest.interestExpense, shortInterestPercent: null });
   const horizons = await publicHorizons();
+  const today = new Date().toISOString().slice(0, 10);
+  const [macroSchedule, earningsDate] = await Promise.all([storedMacroEvents(today), publicEarningsDate(instrument.ticker, today)]);
   const index = instruments.findIndex((item) => item.ticker === instrument.ticker);
   const prev = instruments[(index - 1 + instruments.length) % instruments.length];
   const next = instruments[(index + 1) % instruments.length];
@@ -186,15 +193,20 @@ async function Company({ params }: Params) {
           <TickerSeoSummary locale={locale} ticker={instrument.ticker} name={instrument.name} result={result} />
         </div>
         <div className="co-hero-dial">
-          <ScoreDial
+          <RuleScan
+            title={getKitMessages(locale).scan.title}
+            rows={CORE_RULES.map((rule) => {
+              const hit = hits.get(rule.id);
+              const res = !hit || hit.unknown ? "none" : hit.matched ? "pass" : "fail";
+              return { id: rule.id, name: m.status.ruleShort[rule.id] ?? rule.id, max: rule.points, result: res, word: res === "pass" ? m.common.met : res === "fail" ? m.common.notMet : m.status.noData } as const;
+            })}
             percent={view.display.state === "broken" || !scored ? null : view.display.percent ?? null}
-            state={kitState(state, pullback)}
-            stateLabel={dialLabel}
             locale={locale}
-            size="lg"
-            motion="load"
+            stateLabel={dialLabel}
+            caption={view.display.state === "broken" ? m.status.pointsNotCountedPlain : getKitMessages(locale).scan.caption}
+            noDataLabel={m.status.noData}
             describedBy="score-disclaimer"
-            caption={view.display.state === "broken" ? m.status.pointsNotCountedPlain : undefined}
+            state={kitState(state, pullback)}
           />
         </div>
         <div className="co-hero-foot">
@@ -202,12 +214,22 @@ async function Company({ params }: Params) {
         </div>
       </header>
 
+      <section className="co-card co-chart co-chart-top" aria-labelledby="chart" data-o="2">
+        <SectionHead id="chart" title={data.sample ? m.company.chartTitle : m.company.chartTitleLive} lede={data.sample ? m.company.chartNote : undefined} meta={data.sample ? <SampleStamp text={m.common.sample} /> : undefined} rule="quiet" />
+        <Chart
+          bars={result.inputs.bars}
+          locale={locale}
+          zoneTag={c.zoneTag}
+          labels={{ name: instrument.ticker, aria: m.chart.label, close: m.chart.close, ma50: m.chart.ma50, ma200: m.chart.ma200, dip: m.chart.dip, last: m.chart.last }}
+        />
+      </section>
+
       <TabBar label={c.tabsLabel} tabs={tabs} />
 
-      <div className="co-layout" id="overview">
+      <div id="overview">
         <StatusPanel
-          className="co-card co-summary"
-          variant="rail"
+          className="co-bento"
+          variant="bento"
           locale={locale}
           view={view}
           m={m}
@@ -220,17 +242,11 @@ async function Company({ params }: Params) {
           coreMet={coreRulesMet(result.ruleHits)}
           disclaimer={<OperatorDisclosure text={m.common.operatorDisclosure} />}
         />
+      </div>
+
+      <div className="co-layout">
 
         <div className="co-main">
-          <section className="co-card co-chart" aria-labelledby="chart" data-o="2">
-            <SectionHead id="chart" title={data.sample ? m.company.chartTitle : m.company.chartTitleLive} lede={data.sample ? m.company.chartNote : undefined} meta={data.sample ? <SampleStamp text={m.common.sample} /> : undefined} rule="quiet" />
-            <Chart
-              bars={result.inputs.bars}
-              locale={locale}
-              zoneTag={c.zoneTag}
-              labels={{ name: instrument.ticker, aria: m.chart.label, close: m.chart.close, ma50: m.chart.ma50, ma200: m.chart.ma200, dip: m.chart.dip, last: m.chart.last }}
-            />
-          </section>
 
           <section className="co-card co-rules" aria-labelledby="rules" data-o="3">
             <SectionHead
@@ -375,6 +391,8 @@ async function Company({ params }: Params) {
               ))}
             </dl>
           </section>
+
+          <CatalystCalendar locale={locale} today={today} macro={macroSchedule} earnings={earningsDate} />
 
           {sources ? (
             <section className="co-card co-sources" aria-labelledby="sources" data-o="10">

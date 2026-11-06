@@ -12,7 +12,8 @@ afterEach(() => {
   shares.mockReset();
 });
 const render = async (locale: string, query: Record<string, string> = {}) => renderToStaticMarkup(await Scanner({ params: Promise.resolve({ locale }), searchParams: Promise.resolve(query) }));
-const rowCount = (html: string) => (html.match(/<tbody>.*<\/tbody>/)?.[0] ?? "").split("</tr>").filter((r) => r.includes("<tr")).length;
+const rowCount = (html: string) => [...html.matchAll(/<tbody>(.*?)<\/tbody>/g)]
+  .flatMap((match) => match[1].split("</tr>").filter((row) => row.includes("data-state="))).length;
 
 describe("scanner floor page", () => {
   it.each([

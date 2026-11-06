@@ -1,0 +1,4 @@
+[
+  { "ticker": "ASML", "observedOn": "2026-09-21", "reportDate": "2026-10-27", "fiscalDateEnding": "2026-09-30", "estimate": 1.00, "sourceId": "eodhd" },
+  { "ticker": "ASML", "observedOn": "2026-10-20", "reportDate": "2026-10-27", "fiscalDateEnding": "2026-09-30", "estimate": 1.10, "sourceId": "eodhd" }
+]

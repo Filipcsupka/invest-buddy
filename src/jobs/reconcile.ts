@@ -85,7 +85,9 @@ export async function reconcileField(symbol: string, field: string, asOf: string
   if (deterministic !== undefined) {
     const conflict = values.some((v) => v !== null && v !== deterministic);
     agreement = conflict ? "xbrl_override" : agreement === "agree" ? "agree" : "xbrl_override";
-    value = deterministic; verified = true; reason = conflict ? `SEC revenue facts override agent claim for ${sec?.period}` : `SEC revenue facts confirm ${sec?.period}`;
+    value = deterministic; verified = true;
+    const revenueSource = sec?.source.includes("eodhd.com") ? "EODHD" : "SEC";
+    reason = conflict ? `${revenueSource} revenue facts override agent claim for ${sec?.period}` : `${revenueSource} revenue facts confirm ${sec?.period}`;
     if (sec) evidenceRefs.push({ claim: `fundamentals.${field}`, url: sec.source, publishedAt: asOf, fiscalPeriod: sec.period, quote: `Revenue growth ${sec.currentGrowth.toFixed(2)}% versus ${sec.priorGrowth.toFixed(2)}%` });
   }
   if (field === "insiderOrInstitutionalBuying" && insider && insider.value !== null) {

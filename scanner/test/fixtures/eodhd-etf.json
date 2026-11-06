@@ -1,0 +1,10 @@
+{
+  "General": { "Code": "VTI", "Type": "ETF", "CurrencyCode": "USD" },
+  "ETF_Data": {
+    "ISIN": "US9229087690", "Company_Name": "Vanguard", "Domicile": "United States",
+    "Index_Name": "CRSP US Total Market Index", "NetExpenseRatio": "0.0003",
+    "TotalAssets": "1800000000000", "Holdings_Count": 3600,
+    "Asset_Allocation": { "Stock US": { "Net_Assets_%": "98.72" }, "Cash": { "Net_Assets_%": "0.62" } },
+    "World_Regions": { "North America": { "Equity_%": "98.5" } }
+  }
+}

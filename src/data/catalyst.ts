@@ -1,7 +1,11 @@
 import { freshnessDays, stripMarkup, type EvidenceRef } from "./evidence";
+import { daysBetween } from "./catalyst-calendar";
+import type { EodhdCatalystFact } from "./eodhd-catalyst";
 
 /** Fact written by collect from stored SEC 8-K text, read by reconcile. */
 export const CATALYST_FACT_KEY = "catalyst_8k";
+/** EODHD earnings and news facts live under their own key, so they never overwrite an SEC fact dated the same day. The reader takes the best of both. */
+export const CATALYST_EODHD_FACT_NAME = "catalyst_8k_eodhd";
 export const CATALYST_WINDOW_DAYS = freshnessDays.productCatalyst;
 /** Collect runs after the session it describes; a "none found" fact may be dated a few days after the scoring date. */
 export const CATALYST_FACT_LEAD_DAYS = 3;
@@ -91,6 +95,21 @@ const dayShift = (date: string, days: number) => new Date(Date.parse(`${date}T00
  * A fact is usable when it is not older than the 90-day window and does not point past the scoring date.
  */
 export function catalystFromFact(fact: { asOf: string; value: unknown } | null, asOf: string): CatalystResult | null {
+  const vendor = fact?.value as Partial<EodhdCatalystFact> | null | undefined;
+  if (vendor?.source === "eodhd") {
+    if (!fact || fact.asOf > asOf || vendor.present !== true || !vendor.observedOn ||
+      (vendor.kind !== "earnings_revision" && vendor.kind !== "news_cluster") || vendor.observedOn > asOf) return null;
+    if (vendor.kind === "earnings_revision") {
+      const observedAge = daysBetween(vendor.observedOn, asOf);
+      const untilReport = vendor.reportDate ? daysBetween(asOf, vendor.reportDate) : Number.NaN;
+      if (!Number.isFinite(observedAge) || observedAge < 0 || observedAge > 7 ||
+        !Number.isFinite(untilReport) || untilReport < 0 || untilReport > 14) return null;
+      return { value: true, reason: "EODHD calendar shows an upcoming earnings report with rising estimates", refs: [] };
+    }
+    const newsAge = daysBetween(fact.asOf, asOf);
+    if (!Number.isFinite(newsAge) || newsAge < 0 || newsAge > 7) return null;
+    return { value: true, reason: "EODHD news shows a recent positive catalyst cluster", refs: [] };
+  }
   const v = fact?.value as Partial<CatalystFactValue> | null | undefined;
   if (!fact || !v || typeof v.present !== "boolean") return null;
   if (v.present) {
@@ -108,8 +127,10 @@ type Queryable = { query: (sql: string, params: unknown[]) => Promise<{ rows: Re
 /** Newest fact for the date, a qualifying one first: a filing inside the window stays valid while a later "none found" row exists for another day. */
 export async function loadCatalyst(pool: Queryable, symbol: string, asOf: string): Promise<CatalystResult | null> {
   const { rows } = await pool.query(`SELECT as_of::text AS as_of, value FROM collected_facts
-    WHERE symbol=$1 AND fact_key=$2 AND as_of <= $3::date + $5::int AND as_of > $3::date - $4::int
-    ORDER BY (value->>'present')='true' DESC, as_of DESC LIMIT 5`, [symbol, CATALYST_FACT_KEY, asOf, CATALYST_WINDOW_DAYS, CATALYST_FACT_LEAD_DAYS]);
+    WHERE symbol=$1 AND fact_key = ANY($2::text[]) AND as_of <= $3::date + $5::int AND as_of > $3::date - $4::int
+      AND (source_id IS DISTINCT FROM 'eodhd' OR computed_at::date <= $3::date)
+    ORDER BY (value->>'present')='true' DESC, as_of DESC LIMIT 10`, [symbol, [CATALYST_FACT_KEY, CATALYST_EODHD_FACT_NAME], asOf, CATALYST_WINDOW_DAYS, CATALYST_FACT_LEAD_DAYS]);
+  // A qualifying fact from either source beats a "none found" row; an SEC "none found" is the answer only when nothing qualifies.
   for (const row of rows) { const result = catalystFromFact({ asOf: String(row.as_of), value: row.value }, asOf); if (result) return result; }
   return null;
 }

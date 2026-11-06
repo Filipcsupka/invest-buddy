@@ -62,7 +62,7 @@ IBKR launched an MCP server on 2026-07-28 (`https://api.ibkr.com/v1/api/mcp-publ
 | Portfolio baseline (positions, cash, P&L) | Yes | Replaces the manual screenshot baseline. Read-only. |
 | Prices | Probably | `get_price_snapshot` and `get_price_history` are listed in third-party summaries only. Depends on market-data entitlements. Unverified. |
 | Placing orders | No | The AI can only draft instructions. The user must turn them into orders in the IBKR platform. |
-| Fundamentals, news, earnings calendar, scanners | Not verified | AI Screeners, Themes and news summaries exist as in-platform features. No evidence that the MCP exposes them. |
+| Fundamentals, news, earnings calendar, scanners | Not verified | No evidence that the MCP exposes these features. |
 | Headless or cron use | Unknown | Login is an interactive OAuth flow for one account. Token lifetime and refresh are unverified. |
 
 Use: an interactive session fetches the portfolio baseline into a small file or table that the judgement step reads. Do not build a cron job on it until headless auth is confirmed.

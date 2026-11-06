@@ -6,7 +6,7 @@ const db = vi.fn();
 const labels = vi.fn();
 vi.mock("@/config/flags", () => ({ flags: () => ({ OWNER_VIEW: enabled() }) }));
 vi.mock("next/headers", () => ({ headers: async () => ({ get: () => "Basic test" }) }));
-vi.mock("../research/auth", () => ({ ownerResearchAuthorized: () => auth() }));
+vi.mock("../auth", () => ({ ownerAuthorized: () => auth() }));
 vi.mock("@/db/pool", () => ({ getPool: () => db() }));
 vi.mock("@/db/horizon-labels", () => ({ latestHorizonLabels: () => labels() }));
 import Page, * as route from "./page";

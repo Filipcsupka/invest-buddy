@@ -34,6 +34,10 @@ const en = {
     valueText: "{percent} of the points with data, {state}",
     ofData: "of the points with data",
   },
+  scan: {
+    title: "Rule scan",
+    caption: "of the points with data",
+  },
   strip: {
     label: "State changes, {date}",
     pause: "Pause",
@@ -145,6 +149,10 @@ const sk: typeof en = {
     noScore: "Bez skóre",
     valueText: "{percent} bodov s údajmi, {state}",
     ofData: "z bodov s údajmi",
+  },
+  scan: {
+    title: "Sken pravidiel",
+    caption: "z bodov s údajmi",
   },
   strip: {
     label: "Zmeny stavov, {date}",

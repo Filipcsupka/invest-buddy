@@ -1,10 +1,20 @@
 import { MIN_REVENUE, type Growth } from "../collectors/sources/frames";
+import { failedCriterion, UNIVERSE_CRITERIA, type Candidate } from "./select";
 
 /** Market-wide growth pool: ranking and CSV for the D35 candidate list. */
 export interface PoolRow extends Growth { ticker: string; rank: number }
 
 /** Pool symbols Twelve Data answers with "not found" (checked 2026-10-18). Pool-bars does not ask for them again. */
 export const NOT_FOUND_SYMBOLS: ReadonlySet<string> = new Set(["PHXE-P", "HGIT", "ZARE"]);
+
+/** Ranked stored EODHD listings for weekly discovery. Qualified symbols keep same-code exchanges distinct. */
+export function rankStoredPool(rows: Candidate[], held: ReadonlySet<string>, size: number): Candidate[] {
+  return rows.filter((row) => row.vendorSymbol && !row.core && !held.has(row.ticker) && !((row.exchange ?? "US") === "US" && held.has(row.ticker.replace(/\.US$/, "")))
+    && !failedCriterion(row, UNIVERSE_CRITERIA))
+    .sort((a, b) => (b.yoyGrowthPct ?? 0) - (a.yoyGrowthPct ?? 0)
+      || (b.avgDollarVolume50 ?? 0) * (b.usdPerUnit ?? 0) - (a.avgDollarVolume50 ?? 0) * (a.usdPerUnit ?? 0)
+      || a.ticker.localeCompare(b.ticker)).slice(0, size);
+}
 
 export function rankPool(growth: Growth[], tickerByCik: Map<number, string>, held: ReadonlySet<string>, opts: { minYoy: number; minPriorYoy?: number; size: number }): PoolRow[] {
   return growth

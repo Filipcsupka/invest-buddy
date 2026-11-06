@@ -1,5 +1,6 @@
 import { expect, it } from "vitest";
 import pg from "pg";
+import { readFileSync } from "node:fs";
 import { drawdownHit, gateSymbols, insiderCluster, parseArgs, persistGate, relevantFiling, valuationHit } from "./detect";
 
 it("gates 8-K items, 10-Q, 10-K and amendments, ignoring other forms", () => {
@@ -65,4 +66,12 @@ it("gates a newly verified research document once its extraction is due", () => 
   const base = { today: "2026-10-11", filings: [], insiders: [], drawdowns: [], valuations: [] };
   expect(gateSymbols({ ...base, researchDocuments: [{ symbol: "NVDA", id: 42 }] }, ["NVDA"]))
     .toEqual({ symbols: ["NVDA"], reasons: { NVDA: ["verified research document 42"] } });
+});
+
+it("keeps macro_release findings out of the research document extraction trigger", () => {
+  // The query runs inside main(); a verified MACRO page must never queue an extract call.
+  const source = readFileSync(new URL("./detect.ts", import.meta.url), "utf8");
+  const query = source.match(/const researchDocuments = [\s\S]*?\[since\]\);/)?.[0] ?? "";
+  expect(query).toContain("d.doc_type='research_page'");
+  expect(query).toContain("f.kind <> 'macro_release'");
 });

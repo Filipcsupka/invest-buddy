@@ -677,3 +677,5 @@
     translate: 0 calc(-100% - 0.5rem);
   }
 }
+
+.co-chart-top { margin-block: var(--s5) var(--s4); }

@@ -80,8 +80,10 @@ describe("buildBundle", () => {
     const bundle = await buildBundle(pool, "NVDA", 100, new Date("2026-10-05T12:00:00Z"), undefined, "2026-10-05");
     expect(calls[0].sql).toContain("ORDER BY published_at DESC, id");
     expect(calls[0].sql).toContain("published_at < ($3::date + 1)");
+    expect(calls[0].sql).toContain("source <> 'eodhd'");
     expect(calls[0].params).toEqual(["NVDA", "2026-06-27", "2026-10-05"]);
     expect(calls[1].sql).toContain("as_of <= $2::date");
+    expect(calls[1].sql).toContain("source_id IS DISTINCT FROM 'eodhd'");
     expect(bundle.documents.map((d) => [d.id, d.displayAllowed])).toEqual([[1, true], [3, false]]);
     expect(bundle.facts).toEqual([{ key: "insider_net_buy_90d", asOf: "2026-10-04", value: 1, documentIds: [1] }]);
   });

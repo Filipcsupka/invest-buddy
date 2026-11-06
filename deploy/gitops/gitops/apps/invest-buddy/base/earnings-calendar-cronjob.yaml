@@ -4,8 +4,8 @@ metadata:
   name: invest-buddy-earnings-calendar
   namespace: invest
 spec:
-  # Suspended until the owner confirms the Alpha Vantage key still works and approves the first run (D27).
-  suspend: true
+  # Enabled by the owner 2026-10-19 after a manual run (1 request, 612 dates) (D27).
+  suspend: false
   # One EARNINGS_CALENDAR request a day (12 month horizon). 06:45 is after the judge and before the 07:30 digest.
   # Free key: 25 requests a day, shared with collect-alphavantage on Saturday (20); the job also stops at the data_sources cap.
   schedule: "45 6 * * 0-6"

@@ -109,17 +109,41 @@ function windowReturn(bars: Bar[], asOf: string, n: number): { percent: number; 
   return first.close > 0 && last.close > 0 ? { percent: (last.close / first.close - 1) * 100, last: last.date, first: first.date } : null;
 }
 
-export function evaluateSectorRotation(universe: Record<string, Bar[]>, spy: Bar[] | null, asOf: string, config: MacroConfig = DEFAULT_MACRO_CONFIG): MacroResult {
+/** `benchmark` only names the series in the reason; the US call keeps SPY, so its text is unchanged. */
+export function evaluateSectorRotation(universe: Record<string, Bar[]>, spy: Bar[] | null, asOf: string, config: MacroConfig = DEFAULT_MACRO_CONFIG, benchmark = "SPY", version = MACRO_RULES_VERSION): MacroResult {
   const bench = spy ? windowReturn(spy, asOf, config.windowSessions) : null;
-  if (!bench) return unknown("SPY bars are missing or too short");
-  if (ageDays(bench.last, asOf) > config.maxAgeDays) return unknown(`SPY bars are stale (newest ${bench.last}, limit ${config.maxAgeDays} days)`);
+  if (!bench) return unknown(`${benchmark} bars are missing or too short`);
+  if (ageDays(bench.last, asOf) > config.maxAgeDays) return unknown(`${benchmark} bars are stale (newest ${bench.last}, limit ${config.maxAgeDays} days)`);
   const symbols = Object.keys(universe);
-  // Only tickers priced on the same last session as SPY count, so the two returns cover the same days.
+  // Only tickers priced on the same last session as the benchmark count, so the two returns cover the same days.
   const returns = symbols.flatMap((symbol) => { const r = windowReturn(universe[symbol], asOf, config.windowSessions); return r && r.last === bench.last ? [r.percent] : []; });
   if (!symbols.length || returns.length / symbols.length < config.minCoverage) return unknown(`only ${returns.length} of ${symbols.length} universe tickers have bars through ${bench.last}`);
   const average = returns.reduce((n, v) => n + v, 0) / returns.length;
   const spread = r2(average - bench.percent);
   const value = spread > config.rotationMargin;
   return { value, evidenceDates: [bench.last],
-    reason: `${value ? "Rotation" : "No rotation"}: universe average ${config.windowSessions}-session return ${r2(average)}% (${returns.length} tickers) minus SPY ${r2(bench.percent)}% = ${spread} pp, ${value ? "above" : "not above"} ${config.rotationMargin} pp (${bench.first} to ${bench.last}). Placeholder rule ${MACRO_RULES_VERSION}` };
+    reason: `${value ? "Rotation" : "No rotation"}: universe average ${config.windowSessions}-session return ${r2(average)}% (${returns.length} tickers) minus ${benchmark} ${r2(bench.percent)}% = ${spread} pp, ${value ? "above" : "not above"} ${config.rotationMargin} pp (${bench.first} to ${bench.last}). Placeholder rule ${version}` };
+}
+
+/** Version of the rules used for European listings. The US rules above keep MACRO_RULES_VERSION. */
+export const REGIONAL_MACRO_RULES_VERSION = "macro-regional-v1";
+/** Sessions in the benchmark trend average. A 90-day bar window holds about 62 sessions, so 50 fits with room for holidays. */
+export const BENCHMARK_TREND_SESSIONS = 50;
+
+/**
+ * dataTailwind for a region without its own stored rates and inflation data (Europe: no ECB rate or HICP series is collected).
+ * PLACEHOLDER: true when the regional benchmark's last close is above its average close over the last BENCHMARK_TREND_SESSIONS sessions.
+ * Missing, short or stale benchmark bars are unknown.
+ */
+export function evaluateBenchmarkTrend(bars: Bar[] | null, asOf: string, benchmark: string, config: MacroConfig = DEFAULT_MACRO_CONFIG): MacroResult {
+  const upTo = (bars ?? []).filter((b) => b.date <= asOf && b.close > 0).sort((a, b) => a.date.localeCompare(b.date));
+  const last = upTo.at(-1);
+  if (!last) return unknown(`${benchmark} bars are missing`);
+  if (ageDays(last.date, asOf) > config.maxAgeDays) return unknown(`${benchmark} bars are stale (newest ${last.date}, limit ${config.maxAgeDays} days)`);
+  if (upTo.length < BENCHMARK_TREND_SESSIONS) return unknown(`${benchmark} has ${upTo.length} bars, ${BENCHMARK_TREND_SESSIONS} needed`);
+  const window = upTo.slice(-BENCHMARK_TREND_SESSIONS);
+  const average = window.reduce((n, b) => n + b.close, 0) / window.length;
+  const value = last.close > average;
+  return { value, evidenceDates: [last.date],
+    reason: `${value ? "Tailwind" : "No tailwind"}: ${benchmark} close ${last.date} ${r2(last.close)} ${value ? "above" : "not above"} its ${BENCHMARK_TREND_SESSIONS}-session average ${r2(average)} (${window[0].date} to ${last.date}); no regional rate or inflation data is collected. Placeholder rule ${REGIONAL_MACRO_RULES_VERSION}` };
 }

@@ -191,12 +191,12 @@ describe("company page", () => {
       return renderToStaticMarkup(await Company(props(row.instrument.ticker, opts.locale)));
     }
 
-    it("puts the status panel before the chart and drops Buy zone with the flag off", async () => {
+    it("puts the chart under the header, then the status panel, and drops Buy zone with the flag off", async () => {
       for (const [locale, off, on] of [["en", "Conditions met", "Buy zone"], ["sk", "Podmienky splnené", "Zóna nákupu"]]) {
         const html = await renderStatus({ locale, advice: false });
         expect(html.indexOf('aria-labelledby="status-title"')).toBeGreaterThan(-1);
-        expect(html.indexOf('id="status-title"')).toBeLessThan(html.indexOf('id="chart"'));
-        expect(html.indexOf('id="chart"')).toBeLessThan(html.indexOf('id="rules"'));
+        expect(html.indexOf('id="chart"')).toBeLessThan(html.indexOf('id="status-title"'));
+        expect(html.indexOf('id="status-title"')).toBeLessThan(html.indexOf('id="rules"'));
         expect(html).toContain(off);
         expect(html).not.toContain(on);
         expect((await renderStatus({ locale, advice: true }))).not.toContain(on);

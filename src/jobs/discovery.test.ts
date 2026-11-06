@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import pg from "pg";
 import { describe, expect, it } from "vitest";
-import { edgarCandidates, frameCandidates, managerHoldingChanges, moverCandidates, nonCommonStockReason, ownershipCandidates, parse13fHoldings, preScreenMa200, rankCandidates, reviewCandidate, saveCandidates, saveDiscoveryPriceBars, screenCandidates, shortlistCandidates, sourceSummary, screenDiscoveryShortlist, themeCandidates, weekStart, type DiscoveryCandidate } from "./discovery";
+import { candidateMacro, edgarCandidates, frameCandidates, loadKnownDiscoverySymbols, managerHoldingChanges, moverCandidates, nonCommonStockReason, ownershipCandidates, parse13fHoldings, preScreenMa200, rankCandidates, reviewCandidate, saveCandidates, saveDiscoveryPriceBars, screenCandidates, shortlistCandidates, sourceSummary, screenDiscoveryShortlist, themeCandidates, weekStart, type DiscoveryCandidate } from "./discovery";
 import { DailyLimitError, SymbolNotFoundError } from "../data/twelvedata";
 import type { OHLCV } from "../engine/types";
 import { loadUniverse } from "../db/universe";
@@ -11,6 +11,36 @@ import { loadUniverse } from "../db/universe";
 const filingFeed = readFileSync(join(process.cwd(), "src/collectors/sources/fixtures/sec_getcurrent_8k.xml"), "utf8");
 
 describe("weekly discovery", () => {
+  it("screens pending names again in their week but excludes reviewed and older names", async () => {
+    const query = async (sql: string, params: unknown[]) => {
+      expect(params).toEqual(["2026-10-21", "2026-10-19"]);
+      expect(sql).toContain("status='approved' OR (status='pending' AND week_start <> $2::date)");
+      return { rows: [{ ticker: "TRACKED" }, { ticker: "REVIEWED" }, { ticker: "OLD_PENDING" }] };
+    };
+    expect(await loadKnownDiscoverySymbols({ query } as unknown as pg.Pool, "2026-10-21", "2026-10-19"))
+      .toEqual(new Set(["TRACKED", "REVIEWED", "OLD_PENDING"]));
+  });
+
+  it("refreshes fresh-screened pending rows without changing reviewed rows or their first-seen time", async () => {
+    const candidate = (symbol: string): DiscoveryCandidate => ({ symbol, name: `${symbol} new`, sector: "Growth", theme: null, score: 3,
+      ruleScore: 14, ruleState: "Watch", signalDate: "2026-10-21", benchmarkClose: 500, sources: [{ kind: "pool", url: "https://sec.gov/x", detail: "growth" }] });
+    const statements: { sql: string; params?: unknown[] }[] = [];
+    const client = { query: async (sql: string, params?: unknown[]) => {
+      statements.push({ sql, params });
+      if (sql.startsWith("SELECT symbol,status FROM discovery_candidates")) return { rows: [
+        { symbol: "PENDING", status: "pending" }, { symbol: "APPROVED", status: "approved" }, { symbol: "REJECTED", status: "rejected" },
+      ] };
+      return { rows: [] };
+    }, release: () => undefined };
+    const db = { connect: async () => client } as unknown as pg.Pool;
+    const saved = await saveCandidates(db, "2026-10-19", [candidate("NEW"), candidate("APPROVED"), candidate("REJECTED"), candidate("PENDING"), candidate("SECOND_NEW")], 4);
+    expect(saved.map((row) => row.symbol)).toEqual(["NEW"]);
+    const updates = statements.filter((statement) => statement.sql.startsWith("UPDATE discovery_candidates"));
+    expect(updates).toHaveLength(1);
+    expect(updates[0].params?.slice(0, 2)).toEqual(["2026-10-19", "PENDING"]);
+    expect(updates[0].sql).toContain("status='pending'");
+    expect(updates[0].sql).not.toContain("created_at");
+  });
   it("filters current 8-Ks to Items 1.01 and 2.02 using submissions, with filing links", async () => {
     const get = async (url: string) => {
       if (url.includes("getcurrent")) return filingFeed;
@@ -122,6 +152,28 @@ describe("weekly discovery", () => {
     expect(notPassed).toHaveLength(1);
     expect(notPassed[0].symbol).toBe(row.symbol);
     expect(notPassed[0].reason).toMatch(/^(rejected|invalid data|score \d+ below 12)/);
+  });
+
+  it("scores European candidates with the regional macro outcome and US candidates with the US one", async () => {
+    const stored = { dataTailwind: true, sectorRotationIntoGrowth: true, regions: { Europe: { dataTailwind: false, sectorRotationIntoGrowth: null } } };
+    const macro = candidateMacro(stored);
+    const us = { symbol: "NEW", name: "New", sector: "Tech", theme: null, score: 1, sources: [] };
+    expect(macro(us)).toEqual({ dataTailwind: true, growthSectorRotation: true });
+    expect(macro({ ...us, symbol: "BRK.B", exchange: "US" })).toEqual({ dataTailwind: true, growthSectorRotation: true });
+    expect(macro({ ...us, symbol: "SAP.XETRA", exchange: "XETRA" })).toEqual({ dataTailwind: false, growthSectorRotation: null });
+    expect(macro({ ...us, symbol: "ASML", exchange: "AS" })).toEqual({ dataTailwind: false, growthSectorRotation: null });
+    // Without a regional outcome a European name is unknown; it never borrows the US values.
+    expect(candidateMacro({ dataTailwind: true, sectorRotationIntoGrowth: true })({ ...us, symbol: "SAP.XETRA", exchange: "XETRA" })).toEqual({ dataTailwind: null, growthSectorRotation: null });
+    expect(candidateMacro(undefined)(us)).toEqual({ dataTailwind: null, growthSectorRotation: null });
+
+    const bars = Array.from({ length: 220 }, (_, i) => ({ date: new Date(Date.UTC(2026, 0, 1 + i)).toISOString().slice(0, 10), open: 100 + i, high: 101 + i, low: 99 + i, close: 100 + i, volume: i % 2 ? 100 : 200 }));
+    const row = frameCandidates([{ ticker: "NEW", name: "New Corp", yoyPercent: 40, priorYoyPercent: 20, accelerationPp: 20, revenue: 90_000_000 }], "https://data.sec.gov/x")[0];
+    const notPassed: { symbol: string; reason: string }[] = [];
+    const both = await screenCandidates([row, { ...row, symbol: "NEW.XETRA", exchange: "XETRA" }], "2026-08-08", async () => bars, macro, 500, notPassed);
+    const usScore = (await screenCandidates([row], "2026-08-08", async () => bars, { growthSectorRotation: true, dataTailwind: true }, 500))[0].ruleScore!;
+    expect(both.map((item) => [item.symbol, item.ruleScore])).toEqual([["NEW", usScore]]);
+    // The European name loses both US macro points (rotation 2, data 3) that it would have borrowed before.
+    expect(notPassed).toEqual([{ symbol: "NEW.XETRA", reason: `score ${usScore - 5} below 12` }]);
   });
 
   it.skipIf(!process.env.TEST_DATABASE_URL)("promotes a reviewed name outside the original universe into the same runtime universe", async () => {

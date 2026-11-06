@@ -8,7 +8,7 @@ const files = kustomized;
 const docs = files.flatMap((file) => readFileSync(join(base, file), "utf8").split(/^---$/m)).filter((doc) => /kind: CronJob/.test(doc));
 const job = (name: string) => docs.find((doc) => new RegExp(`name: invest-buddy-${name}\\n`).test(doc)) ?? "";
 const minutes = (name: string) => {
-  const m = /schedule: "(\d+) (\d+) \* \* ([\d,-]+)"/.exec(job(name));
+  const m = /schedule: "(\d+) (\d+) \* \* ([\d,*-]+)"/.exec(job(name));
   if (!m) throw new Error(`no schedule for ${name}`);
   return { at: Number(m[2]) * 60 + Number(m[1]), days: m[3] };
 };
@@ -34,14 +34,38 @@ describe("daily pipeline order", () => {
     for (const text of ["runAsNonRoot: true", "automountServiceAccountToken: false", "allowPrivilegeEscalation: false", "readOnlyRootFilesystem: true", 'drop: ["ALL"]', "type: RuntimeDefault", "concurrencyPolicy: Forbid"]) expect(doc).toContain(text);
     expect(readFileSync(join(base, "kustomization.yaml"), "utf8")).toContain("- master-refresh-cronjob.yaml");
   });
-  it("keeps the weekly pool-bars refresh suspended, on Sunday, after the Saturday discovery and before the Sunday summary", () => {
+  it("runs pool-bars daily outside every other Twelve Data job's window, within the ledger share", () => {
     const doc = job("pool-bars");
-    expect(minutes("pool-bars").days).toBe("0");
-    expect(doc).toContain("suspend: true");
-    expect(doc).toContain('command: ["node", "dist/jobs/pool-bars.js", "--limit", "350"]');
+    expect(minutes("pool-bars").days).toBe("0-6");
+    expect(doc).toContain("suspend: false");
+    expect(doc).toContain('command: ["node", "dist/jobs/pool-bars.js", "--limit", "500", "--size", "3200"]');
     for (const name of ["DATABASE_URL", "SEC_USER_AGENT", "TWELVE_DATA_API_KEY"]) expect(doc).toContain(`name: ${name}`);
-    expect(minutes("pool-bars").at + startWindow("pool-bars") + deadline("pool-bars")).toBeLessThanOrEqual(minutes("weekly").at);
+    const window = (name: string) => ({ from: minutes(name).at, to: minutes(name).at + startWindow(name) + deadline(name) });
+    const pool = window("pool-bars");
+    const others = docs.filter((other) => other.includes("TWELVE_DATA_API_KEY")).map((other) => /name: invest-buddy-([\w-]+)\n/.exec(other)![1]).filter((name) => name !== "pool-bars");
+    expect(others).toEqual(expect.arrayContaining(["prices", "discovery"]));
+    for (const name of others) {
+      const other = window(name);
+      expect(pool.to <= other.from || pool.from >= other.to, `pool-bars overlaps ${name}`).toBe(true);
+    }
+    // The run limit at 7 a minute fits the deadline, and with discovery's 60 on Saturday stays inside the 700 a day jobs other than prices may use.
+    const limit = Number(/"--limit", "(\d+)"/.exec(doc)?.[1]);
+    expect(deadline("pool-bars")).toBeGreaterThanOrEqual(limit / 7);
+    expect(limit + 60).toBeLessThanOrEqual(700);
+    expect(pool.to).toBeLessThanOrEqual(24 * 60);
     expect(readFileSync(join(base, "kustomization.yaml"), "utf8")).toContain("- pool-bars-cronjob.yaml");
+  });
+  it("runs the weekly universe promotion on Sunday after pool-bars, database only", () => {
+    const doc = job("universe-promote");
+    expect(minutes("universe-promote")).toEqual({ at: 15 * 60, days: "0" });
+    expect(doc).toContain("suspend: false");
+    expect(doc).toContain('command: ["node", "dist/jobs/universe-promote.js"]');
+    expect(doc).toContain("name: DATABASE_URL");
+    for (const key of ["TWELVE_DATA_API_KEY", "INGEST_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"]) expect(doc).not.toContain(key);
+    expect(minutes("pool-bars").at + startWindow("pool-bars") + deadline("pool-bars")).toBeLessThanOrEqual(minutes("universe-promote").at);
+    expect(minutes("universe-promote").at + startWindow("universe-promote") + deadline("universe-promote")).toBeLessThanOrEqual(minutes("weekly").at);
+    for (const text of ["runAsNonRoot: true", "automountServiceAccountToken: false", "allowPrivilegeEscalation: false", "readOnlyRootFilesystem: true", 'drop: ["ALL"]', "type: RuntimeDefault", "concurrencyPolicy: Forbid"]) expect(doc).toContain(text);
+    expect(readFileSync(join(base, "kustomization.yaml"), "utf8")).toContain("- universe-promote-cronjob.yaml");
   });
   it("keeps the weekly Telegram summary suspended, Sunday 18:00 Bratislava, after the Sunday master refresh", () => {
     const doc = job("weekly");
@@ -144,7 +168,7 @@ describe("daily pipeline order", () => {
   });
   it("keeps Saturday's weekly jobs after the weekday chain without overlap", () => {
     expect(minutes("collect-alphavantage")).toEqual({ at: 8 * 60, days: "6" });
-    expect(minutes("discovery")).toEqual({ at: 9 * 60 + 30, days: "6" });
+    expect(minutes("discovery")).toEqual({ at: 9 * 60 + 30, days: "0-6" });
     expect(minutes("collect-alphavantage").at + startWindow("collect-alphavantage") + deadline("collect-alphavantage")).toBeLessThanOrEqual(minutes("discovery").at);
     expect(minutes("judge").at + startWindow("judge") + deadline("judge")).toBeLessThanOrEqual(minutes("collect-alphavantage").at);
   });
@@ -177,10 +201,12 @@ describe("Monday catch-up", () => {
     const m = /schedule: "\d+ \d+ \* \* ([\d,*-]+)"/.exec(doc);
     return name && m ? [{ name, days: days(m[1]), active: !/^\s{2}suspend: true\b/m.test(doc) }] : [];
   });
-  it("runs only the store-only collect on Monday", () => {
+  it("runs the store-only collect on Monday alongside independent jobs", () => {
     // Detect writes a gate per date and extract reads one pending gate per run, so a Monday gate would push Tuesday's gate to Wednesday.
     // A Monday extract is judged on Tuesday against Friday's scores, and Tuesday's detect skips filings already extracted.
-    expect(scheduled.filter((job) => job.active && job.days.includes(1)).map((job) => job.name)).toEqual(["collect"]);
+    // These jobs do not open a stock gate. ETF research runs its own weekly model pass; ETF outcomes reads price bars.
+    const daily = ["pool-bars", "earnings-calendar", "retention", "discovery-auto-promote", "discovery", "etf-research", "etf-outcomes"];
+    expect(scheduled.filter((job) => job.active && job.days.includes(1) && !daily.includes(job.name)).map((job) => job.name)).toEqual(["collect"]);
     for (const name of ["prices", "watch", "detect", "extract", "macro", "reconcile", "daily", "judge", "digest"]) expect(days(minutes(name).days), name).not.toContain(1);
   });
   it("ends Monday's collect before any later Monday job and keeps it free of AI and price keys", () => {
@@ -194,9 +220,9 @@ describe("Monday catch-up", () => {
 });
 
 describe("earnings calendar", () => {
-  it("is suspended, daily after the judge and before the digest, hardened like collect", () => {
+  it("runs daily after the judge and before the digest, hardened like collect", () => {
     const doc = job("earnings-calendar");
-    expect(doc).toMatch(/^\s{2}suspend: true$/m);
+    expect(doc).toMatch(/^\s{2}suspend: false$/m);
     expect(minutes("earnings-calendar").days).toBe("0-6");
     expect(minutes("judge").at + startWindow("judge") + deadline("judge")).toBeLessThanOrEqual(minutes("earnings-calendar").at);
     expect(minutes("earnings-calendar").at + startWindow("earnings-calendar") + deadline("earnings-calendar")).toBeLessThanOrEqual(minutes("digest").at);
@@ -204,6 +230,21 @@ describe("earnings calendar", () => {
     expect(doc).toContain("name: ALPHA_VANTAGE_API_KEY");
     expect(doc).toContain("backoffLimit: 0");
     for (const text of ["runAsNonRoot: true", "automountServiceAccountToken: false", "allowPrivilegeEscalation: false", "readOnlyRootFilesystem: true", 'drop: ["ALL"]', "type: RuntimeDefault", "concurrencyPolicy: Forbid"]) expect(doc).toContain(text);
+  });
+});
+
+describe("macro calendar", () => {
+  it("runs on weekdays before the judge that reads it, with the contact User-Agent and no metered key", () => {
+    const doc = job("macro-calendar");
+    expect(doc).toMatch(/^\s{2}suspend: false$/m);
+    expect(minutes("macro-calendar").days).toBe("2-6");
+    expect(minutes("macro-calendar").at + startWindow("macro-calendar") + deadline("macro-calendar")).toBeLessThanOrEqual(minutes("judge").at);
+    expect(doc).toContain('command: ["node", "dist/jobs/macro-calendar.js"]');
+    for (const name of ["DATABASE_URL", "SEC_USER_AGENT"]) expect(doc).toContain(`name: ${name}`);
+    for (const key of ["TWELVE_DATA_API_KEY", "ALPHA_VANTAGE_API_KEY", "INGEST_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"]) expect(doc).not.toContain(key);
+    expect(doc).toContain("backoffLimit: 0");
+    for (const text of ["runAsNonRoot: true", "automountServiceAccountToken: false", "allowPrivilegeEscalation: false", "readOnlyRootFilesystem: true", 'drop: ["ALL"]', "type: RuntimeDefault", "concurrencyPolicy: Forbid", "timeZone: Europe/Bratislava"]) expect(doc).toContain(text);
+    expect(readFileSync(join(base, "kustomization.yaml"), "utf8")).toContain("- macro-calendar-cronjob.yaml");
   });
 });
 
@@ -237,53 +278,35 @@ describe("GDELT collector proposal", () => {
   });
 });
 
-describe("RS5 research schedule", () => {
-  const names = ["weekly", "daily", "verify", "pipeline-early", "pipeline", "notify", "deepdive"];
-  it("keeps every research CronJob suspended with bounded jobs", () => {
-    for (const name of names) {
-      const doc = job(`research-${name}`);
-      expect(doc, name).toContain("suspend: true");
-      expect(doc, name).toContain("concurrencyPolicy: Forbid");
-      expect(doc, name).toContain("backoffLimit: 1");
-      expect(deadline(`research-${name}`), name).toBeLessThanOrEqual(["weekly", "daily", "deepdive"].includes(name) ? 40 : 20);
-      expect(doc, name).toContain("timeZone: Europe/Bratislava");
+describe("ETF research and outcomes", () => {
+  it("syncs global listings before enrichment and keeps separate model settings", () => {
+    expect(minutes("etf-catalog-sync")).toEqual({ at: 5 * 60 + 10, days: "0" });
+    expect(minutes("etf-enrich")).toEqual({ at: 5 * 60 + 40, days: "0" });
+    expect(minutes("etf-catalog-sync").at + startWindow("etf-catalog-sync") + deadline("etf-catalog-sync")).toBeLessThanOrEqual(minutes("etf-enrich").at);
+    expect(job("etf-catalog-sync")).toContain('command: ["node", "dist/jobs/etf-catalog.js"]');
+    expect(job("etf-catalog-sync")).not.toContain("CODEX_ACCESS_TOKEN");
+    expect(job("etf-enrich")).toContain("run-etf-enrich.mjs");
+    expect(deadline("etf-enrich")).toBeGreaterThanOrEqual(24 * 60);
+    for (const name of ["etf-enrich", "etf-research"]) {
+      expect(job(name)).toContain("name: RESEARCH_CODEX_MODEL");
+      expect(job(name)).toContain('value: ""');
+      expect(job(name)).toContain("name: RESEARCH_ENABLED");
     }
+    expect(deadline("etf-research")).toBeGreaterThanOrEqual(6 * 30);
   });
-  it("passes the kill switch to each model runner", () => {
-    for (const name of ["weekly", "daily", "deepdive"]) {
-      const doc = job(`research-${name}`);
-      expect(doc).toContain("run-research.mjs");
-      expect(doc).toContain("name: RESEARCH_ENABLED");
-      expect(doc).toContain("key: RESEARCH_ENABLED");
-      expect(doc).toContain("key: AI_DAILY_TOKEN_CEILING");
+  it("runs ETF research weekly after the daily price outcome pass", () => {
+    expect(minutes("etf-research")).toEqual({ at: 7 * 60 + 40, days: "1" });
+    expect(minutes("etf-outcomes")).toEqual({ at: 6 * 60 + 50, days: "*" });
+    expect(job("etf-research")).toContain("run-etf-research.mjs");
+    expect(job("etf-research")).toContain("name: CODEX_ACCESS_TOKEN");
+    expect(job("etf-research")).toContain("name: RESEARCH_ENABLED");
+    expect(job("etf-research")).not.toContain("AI_DAILY_TOKEN_CEILING");
+    expect(job("etf-outcomes")).toContain('command: ["node", "dist/jobs/etf-outcomes.js"]');
+    expect(job("etf-outcomes")).not.toContain("CODEX_ACCESS_TOKEN");
+    for (const name of ["etf-research", "etf-outcomes"]) {
+      const doc = job(name);
+      for (const item of ["concurrencyPolicy: Forbid", "timeZone: Europe/Bratislava", "runAsNonRoot: true", "automountServiceAccountToken: false", "readOnlyRootFilesystem: true", 'drop: ["ALL"]']) expect(doc).toContain(item);
     }
-    expect(job("research-weekly")).toContain("--timeout-s 700");
-  });
-  it("orders the research work around daily score, judge and digest", () => {
-    const order = ["research-daily", "research-verify", "research-pipeline-early", "daily", "research-pipeline", "judge", "research-notify", "digest"];
-    for (let i = 1; i < order.length; i++) expect(minutes(order[i]).at, order[i]).toBeGreaterThan(minutes(order[i - 1]).at);
-    expect(minutes("research-weekly")).toEqual({ at: 60, days: "0" });
-    expect(minutes("research-daily")).toEqual({ at: 160, days: "2-6" });
-    expect(minutes("research-verify").days).toBe("0-6");
-    expect(job("research-deepdive")).toContain('schedule: "0 0 1 1 *"');
-  });
-  it("limits the verifier policy to the verifier pod", () => {
-    const policy = readFileSync(join(base, "research-verify-networkpolicy.yaml"), "utf8");
-    expect(policy).toContain("kind: NetworkPolicy");
-    expect(policy).toContain("app.kubernetes.io/component: research-verify");
-    expect(policy).toContain("app: invest-buddy-postgres");
-    expect(policy).toContain("port: 5432");
-    expect(job("research-verify")).toContain("app.kubernetes.io/component: research-verify");
-    for (const name of names.filter((name) => name !== "verify")) expect(job(`research-${name}`)).not.toContain("app.kubernetes.io/component: research-verify");
-  });
-  it("uses the owner chat for the suspended notify template", () => {
-    const doc = job("research-notify");
-    expect(doc).toContain("name: TELEGRAM_OWNER_CHAT_ID");
-    expect(doc).toContain("name: invest-buddy-telegram-owner");
-    expect(doc).toContain("name: TELEGRAM_CARD_MODE");
-    expect(doc).toContain("value: owner");
-    expect(doc).toContain("name: RESEARCH_PUBLIC_CARDS");
-    expect(doc).not.toContain("name: TELEGRAM_CHAT_ID");
   });
 });
 

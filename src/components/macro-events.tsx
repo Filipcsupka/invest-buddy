@@ -1,4 +1,4 @@
-import { upcomingMacroEvents } from "@/data/macro-calendar";
+import { upcomingMacroEvents, type MacroEvent } from "@/data/macro-calendar";
 import { fill, formatDate, getMessages, intlTag, type Locale } from "@/i18n";
 import styles from "./macro-events.module.css";
 
@@ -8,10 +8,10 @@ const calendar = (
   </svg>
 );
 
-/** Informational list of the next US data releases and Fed decisions. It never changes a score or a signal. */
-export function MacroEvents({ locale, today = new Date().toISOString().slice(0, 10), horizonSessions = 10 }: { locale: Locale; today?: string; horizonSessions?: number }) {
+/** Informational list of the next US data releases and Fed decisions. It never changes a score or a signal. `schedule` is the stored calendar (storedMacroEvents); the fallback list when left out. */
+export function MacroEvents({ locale, today = new Date().toISOString().slice(0, 10), horizonSessions = 10, schedule }: { locale: Locale; today?: string; horizonSessions?: number; schedule?: readonly MacroEvent[] }) {
   const m = getMessages(locale).common.macroEvents;
-  const events = upcomingMacroEvents(today, horizonSessions);
+  const events = upcomingMacroEvents(today, horizonSessions, [], schedule);
   if (!events.length) return null;
   const part = (iso: string, options: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat(intlTag[locale], { ...options, timeZone: "UTC" }).format(new Date(`${iso}T00:00:00Z`));
   return (

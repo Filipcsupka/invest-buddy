@@ -84,6 +84,36 @@ describe("scanner route", () => {
     }
   });
 
+  it("keeps search and floor parameters in state summary links", async () => {
+    const saved = process.env.DATA_MODE;
+    process.env.DATA_MODE = "fixture";
+    try {
+      const markup = renderToStaticMarkup(await Scanner({ params: Promise.resolve({ locale: "en" }), searchParams: Promise.resolve({ q: "NVDA", floor: "off", state: "watch" }) }));
+      expect(markup).toContain('href="/en/scanner?q=NVDA&amp;state=watch&amp;floor=off#scanner-group-watch"');
+      expect(markup).toMatch(/aria-label="Show \d+ tickers in Watching"/);
+      expect(markup).toContain('id="scanner-group-watch"');
+    } finally {
+      if (saved === undefined) delete process.env.DATA_MODE; else process.env.DATA_MODE = saved;
+    }
+  });
+
+  it("uses the displayed rule state for summary counts", async () => {
+    const saved = process.env.DATA_MODE;
+    process.env.DATA_MODE = "fixture";
+    try {
+      const markup = renderToStaticMarkup(await Scanner({ params: Promise.resolve({ locale: "en" }), searchParams: Promise.resolve({}) }));
+      for (const state of ["setup", "watch", "wait", "ignore", "broken"]) {
+        const tile = markup.match(new RegExp(`<a[^>]+data-state="${state}"[^>]*>(.*?)</a>`))?.[1];
+        const group = markup.match(new RegExp(`id="scanner-group-${state}".*?</summary>`))?.[0];
+        expect(tile).toBeDefined();
+        expect(group).toBeDefined();
+        expect(tile?.match(/kit-count-final">(\d+)/)?.[1]).toBe(group?.match(/groupCount_[^\"]*">(\d+)/)?.[1]);
+      }
+    } finally {
+      if (saved === undefined) delete process.env.DATA_MODE; else process.env.DATA_MODE = saved;
+    }
+  });
+
   it("shows the streak column and presets with rule counts, and keeps a status on every row, EN and SK", async () => {
     const paywall = process.env.PAYWALL;
     const mode = process.env.DATA_MODE;
@@ -97,8 +127,8 @@ describe("scanner route", () => {
         expect(out[locale]).toContain('name="preset" value="trend-volume"');
         expect(out[locale]).toContain('aria-current="true"');
         expect(out[locale]).toMatch(/\d+ (of|z) 10/);
-        const body = out[locale].match(/<tbody>.*<\/tbody>/)?.[0] ?? "";
-        const rowsShown = body.split("</tr>").filter((r) => r.includes("<tr"));
+        const rowsShown = [...out[locale].matchAll(/<tbody>(.*?)<\/tbody>/g)]
+          .flatMap((match) => match[1].split("</tr>").filter((r) => r.includes("data-state=")));
         expect(rowsShown.length).toBeGreaterThan(0);
         for (const r of rowsShown) expect(r).toMatch(/\d+ (of|z) 10/);
       }

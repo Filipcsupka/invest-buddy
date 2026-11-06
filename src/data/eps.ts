@@ -23,16 +23,17 @@ const age = (from: string, to: string) => (Date.parse(`${to}T00:00:00Z`) - Date.
  */
 export function epsFromFact(fact: { asOf: string; value: unknown } | null, documentUrl: string | null, asOf: string, minSurprisePct = DEFAULT_EPS_BEAT_MIN_SURPRISE_PCT): EpsResult | null {
   if (!fact) return null;
-  const v = fact.value as Partial<EpsSurpriseFact> | null;
+  const v = fact.value as (Partial<EpsSurpriseFact> & { source?: string }) | null;
+  const sourceName = v?.source === "eodhd" ? "EODHD" : EPS_SOURCE_NAME;
   const reported = typeof v?.reportedDate === "string" ? v.reportedDate : fact.asOf;
   const days = age(reported, asOf);
   if (!Number.isFinite(days) || days < 0) return null;
-  if (days > freshnessDays.epsBeat) return { value: null, reason: `${EPS_SOURCE_NAME} EPS data: latest report ${reported} is older than ${freshnessDays.epsBeat} days`, refs: [] };
+  if (days > freshnessDays.epsBeat) return { value: null, reason: `${sourceName} EPS data: latest report ${reported} is older than ${freshnessDays.epsBeat} days`, refs: [] };
   const surprise = v?.surprisePercent;
-  if (typeof surprise !== "number" || !Number.isFinite(surprise)) return { value: null, reason: `${EPS_SOURCE_NAME} EPS data: no estimate or surprise for the report of ${reported}`, refs: [] };
+  if (typeof surprise !== "number" || !Number.isFinite(surprise)) return { value: null, reason: `${sourceName} EPS data: no estimate or surprise for the report of ${reported}`, refs: [] };
   const refs: EvidenceRef[] = documentUrl ? [{ claim: "fundamentals.epsBeat", url: documentUrl, publishedAt: reported, fiscalPeriod: v?.fiscalDateEnding ? `quarter ended ${v.fiscalDateEnding}` : `reported ${reported}` }] : [];
   const threshold = minSurprisePct === 0 ? "the estimate" : `the estimate by more than ${minSurprisePct}%`;
   return surprise > minSurprisePct
-    ? { value: true, reason: `${EPS_SOURCE_NAME} EPS data: reported EPS above ${threshold} for the report of ${reported}`, refs }
-    : { value: false, reason: `${EPS_SOURCE_NAME} EPS data: reported EPS not above ${threshold} for the report of ${reported}`, refs };
+    ? { value: true, reason: `${sourceName} EPS data: reported EPS above ${threshold} for the report of ${reported}`, refs }
+    : { value: false, reason: `${sourceName} EPS data: reported EPS not above ${threshold} for the report of ${reported}`, refs };
 }

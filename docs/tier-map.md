@@ -29,7 +29,7 @@ Legal and owner gates are separate from tiers and do not change:
 | Gate | What it holds back | Effect |
 | --- | --- | --- |
 | `ADVICE_OUTPUT` (off) | Action labels, size tiers, plans, `/sizing`, `/ideas` (see `docs/wording-gate.md`) | 404 or evidence-only card for every tier |
-| `OWNER_VIEW` (off) | Owner EUR amounts, `/owner-allocation`, owner cash, `/owner/research` | 404 for every tier |
+| `OWNER_VIEW` (off) | Owner EUR amounts, `/owner-allocation`, owner cash, `/owner/horizons` | 404 for every tier |
 | `IDEAS_PAGE` | `/ideas` list | 404 for every tier |
 
 Order of checks: the proxy and the page apply the legal and owner gates first and never read the viewer. The tier check runs only on content that passed those gates. `admin` does not bypass any of them. Owner pages are outside the tier map; their sections carry no tier and no badge. `WAITLIST` and `INSIDERS_PAGE` stay product switches and are not tiers either.
@@ -120,7 +120,7 @@ Owner 2026-10-16: the whole record is free. Publishing the misses is product pri
 
 ### Owner (outside tiers)
 
-`/owner-allocation` (`owner-cash`, `owner-suggestions`) and `/owner/research/[symbol]` stay behind `OWNER_VIEW` and basic auth. They get no tier and no badge, and `admin` does not open them.
+`/owner-allocation` (`owner-cash`, `owner-suggestions`) and `/owner/horizons` stay behind `OWNER_VIEW` and basic auth. They get no tier and no badge, and `admin` does not open them.
 
 ## 3. Free-tier depth
 

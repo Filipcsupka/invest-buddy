@@ -4,7 +4,6 @@ import pg from "pg";
 import { z } from "zod";
 import { dailyTokenUsage, finishCall, reserveCall } from "../../../../db/ai-budget";
 import { usageReport, recordUsageSample } from "../../../../db/ai-usage-report";
-import { researchCapUsage } from "../../../../db/research-caps";
 import { readBoundedBody } from "../read-bounded-body";
 
 export const runtime = "nodejs";
@@ -27,7 +26,6 @@ async function getHandler(request: Request) {
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
   try {
     if (new URL(request.url).searchParams.get("report") === "daily") return Response.json({ tokens: await dailyTokenUsage(pool) });
-    if (new URL(request.url).searchParams.get("report") === "research-caps") return Response.json(await researchCapUsage(pool));
     return Response.json(await usageReport(pool));
   }
   catch (error) { recordIngestError(request, error); return Response.json({ error: "Budget unavailable" }, { status: 503 }); }

@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { RecordCard, RecordHead } from "@/components/record-parts";
 import "@/components/record-pages.css";
 import { MacroEvents } from "@/components/macro-events";
+import { storedMacroEvents } from "@/data/macro-calendar-store";
 import { Disclaimer } from "@/components/disclaimer";
 import { IdeaCard } from "@/components/idea-card";
 import { SampleStamp } from "@/components/operator-disclosure";
@@ -30,6 +31,7 @@ async function Ideas({ params }: LocaleParams) {
   const m = getMessages(locale);
   const viewer = await getViewer();
   const data = await latestIdeas();
+  const macroSchedule = await storedMacroEvents(new Date().toISOString().slice(0, 10));
   return (
     <div className="frame page">
       <RecordHead
@@ -38,7 +40,7 @@ async function Ideas({ params }: LocaleParams) {
         stamp={data.sample && <SampleStamp text={m.common.sample} />}
         meta={<><span className="rp-pill">{m.ideas.rulesNote}</span><Disclaimer text={m.common.disclaimer} /></>}
       />
-      <MacroEvents locale={locale} />
+      <MacroEvents locale={locale} schedule={macroSchedule} />
       <PaywallSegment id="ideas-list" viewer={viewer} locale={locale} detail={data.rows.length ? ideasCountText(locale, data.rows.length) : undefined}>
         <RecordCard id="ideas-feed" title={m.ideas.listLabel} meta={data.rows.length ? ideasCountText(locale, data.rows.length) : undefined} className="rp-bare">
           {data.rows.length ? (

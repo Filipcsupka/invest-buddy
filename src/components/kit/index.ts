@@ -2,6 +2,7 @@
 export { StateChip, type StateChipProps } from "./state-chip";
 export { ScoreBar, ScoreDial, bandTicks, splitUnit, type ScoreProps } from "./score";
 export { RuleRow, RuleTable, type RuleResult, type RuleRowProps, type RuleTableProps } from "./rule-row";
+export { RuleScan, type RuleScanProps, type RuleScanRow } from "./rule-scan";
 export { CountUp, type CountUpProps } from "./count-up";
 export { Reveal, type RevealProps } from "./reveal";
 export { StateStrip, type StateChange, type StateStripProps } from "./state-strip";

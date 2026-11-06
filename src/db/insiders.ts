@@ -39,7 +39,7 @@ export async function insiderEvents(ticker?: string, db: Pick<pg.Pool, "query"> 
        (t.shares * t.price)::text AS value, ids.cik::text AS cik
      FROM insider_transactions t
      LEFT JOIN instrument_ids ids ON ids.ticker = t.ticker AND ids.valid_to IS NULL
-     WHERE t.display_allowed = true
+     WHERE t.display_allowed = true AND t.source_id = 'sec'
        AND EXISTS (SELECT 1 FROM data_sources s WHERE s.id = 'sec' AND s.display_allowed = true)
        AND EXISTS (SELECT 1 FROM universe_membership m WHERE m.ticker = t.ticker
          AND ${scoredMember()} AND m.valid_from <= CURRENT_DATE

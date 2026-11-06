@@ -51,13 +51,6 @@ describe("formatIdeaCard", () => {
     expect(text).toContain("<b>Invalidation:</b>");
   });
 
-  it("filters research text that contains owner wording from public mode", () => {
-    const text = formatIdeaCard({ ...base, research: { coverage: "START_READY EUR 200", history: "ADD_READY", evidence: [
-      { url: "https://example.com/buy", label: "Buy XYZ" }, { url: "https://example.com/ir", label: "Company IR" }] } });
-    expect(text).not.toMatch(/START_READY|ADD_READY|EUR 200|Buy XYZ/);
-    expect(text).toContain("Company IR");
-  });
-
   it("public mode with ADVICE_OUTPUT off keeps only state, evidence, links and the disclaimer", () => {
     const text = formatIdeaCard({ ...base, adviceOutput: false });
     for (const heading of ["What happened", "Why it matters", "Setup", "Numbers", "Plan"]) expect(text).not.toContain(`<b>${heading}</b>`);

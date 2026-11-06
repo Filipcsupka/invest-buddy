@@ -12,28 +12,28 @@ const same = (a: EpsQuarter, b: EpsQuarter) => a.reportedDate === b.reportedDate
  * Stores the whole answer in the raw store, then one eps_history row per quarter whose values differ from the newest stored row
  * for that quarter. A revised estimate adds a row; the old row stays. Returns the rows written.
  */
-export async function insertEpsHistory(db: Pick<pg.Pool, "query"> | pg.Pool, batch: EpsHistoryBatch): Promise<number> {
-  if (!("connect" in db) || typeof db.connect !== "function") return insertEpsHistoryOn(db, batch);
+export async function insertEpsHistory(db: Pick<pg.Pool, "query"> | pg.Pool, batch: EpsHistoryBatch, sourceId = EPS_HISTORY_SOURCE): Promise<number> {
+  if (!("connect" in db) || typeof db.connect !== "function") return insertEpsHistoryOn(db, batch, sourceId);
   const client = await db.connect();
   try {
     await client.query("BEGIN");
-    const written = await insertEpsHistoryOn(client, batch);
+    const written = await insertEpsHistoryOn(client, batch, sourceId);
     await client.query("COMMIT");
     return written;
   } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
 }
 
 /** The raw snapshot and the history rows, on one connection. insertEpsHistory wraps this in a transaction, so a failed insert leaves no snapshot behind. */
-async function insertEpsHistoryOn(db: Pick<pg.Pool, "query">, batch: EpsHistoryBatch): Promise<number> {
-  const raw = await putSnapshot(db, { sourceId: EPS_HISTORY_SOURCE, key: epsRawKey(batch.ticker), body: batch.rawBody, contentType: "application/json", fetchedAt: new Date(batch.fetchedAt), meta: { quarters: batch.quarters.length } });
+async function insertEpsHistoryOn(db: Pick<pg.Pool, "query">, batch: EpsHistoryBatch, sourceId: string): Promise<number> {
+  const raw = await putSnapshot(db, { sourceId, key: epsRawKey(batch.ticker), body: batch.rawBody, contentType: "application/json", fetchedAt: new Date(batch.fetchedAt), meta: { quarters: batch.quarters.length } });
   const q = batch.quarters;
   const result = await db.query(`INSERT INTO eps_history (ticker,fiscal_date_ending,reported_date,reported_eps,estimated_eps,surprise_pct,observed_at,source_id,raw_snapshot_id)
     SELECT $1, v.f, v.rd, v.re, v.ee, v.sp, $2::timestamptz, $3, $4
     FROM unnest($5::date[],$6::date[],$7::numeric[],$8::numeric[],$9::numeric[]) AS v(f,rd,re,ee,sp)
-    WHERE NOT EXISTS (SELECT 1 FROM (SELECT * FROM eps_history h WHERE h.ticker=$1 AND h.fiscal_date_ending=v.f ORDER BY h.observed_at DESC LIMIT 1) n
+    WHERE NOT EXISTS (SELECT 1 FROM (SELECT * FROM eps_history h WHERE h.ticker=$1 AND h.source_id=$3 AND h.fiscal_date_ending=v.f ORDER BY h.observed_at DESC LIMIT 1) n
       WHERE n.reported_date IS NOT DISTINCT FROM v.rd AND n.reported_eps IS NOT DISTINCT FROM v.re AND n.estimated_eps IS NOT DISTINCT FROM v.ee AND n.surprise_pct IS NOT DISTINCT FROM v.sp)
     ON CONFLICT (ticker,fiscal_date_ending,observed_at) DO NOTHING`,
-    [batch.symbol, batch.fetchedAt, EPS_HISTORY_SOURCE, raw.id, q.map((x) => x.fiscalDateEnding), q.map((x) => x.reportedDate), q.map((x) => x.reportedEps), q.map((x) => x.estimatedEps), q.map((x) => x.surprisePct)]);
+    [batch.symbol, batch.fetchedAt, sourceId, raw.id, q.map((x) => x.fiscalDateEnding), q.map((x) => x.reportedDate), q.map((x) => x.reportedEps), q.map((x) => x.estimatedEps), q.map((x) => x.surprisePct)]);
   return result.rowCount ?? 0;
 }
 

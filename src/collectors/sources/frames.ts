@@ -1,7 +1,7 @@
 import type { CollectedDocument } from "../types";
 import type { SourceHttp } from "./client";
 import { isoDate, LICENSES, parseJson, PING_REQUEST, round, runPing, sourceDocument, type PendingFact, type PingResult, type SourceContext, type SourceOutput, type Env } from "./common";
-import { loadTickers, universeByCik } from "./sec";
+import { loadTickers, universeByCik, type TickerMap } from "./sec";
 import { defaultHttp } from "./client";
 import { REVENUE_CONCEPTS } from "../../engine/revenue-concepts";
 export { REVENUE_CONCEPTS } from "../../engine/revenue-concepts";
@@ -65,7 +65,7 @@ const signed = (value: number) => `${value >= 0 ? "+" : ""}${value}`;
 const line = (growth: Growth) => `revenue ${money(growth.revenue)}, YoY ${signed(growth.yoyPercent)}%, prior-quarter YoY ${signed(growth.priorYoyPercent)}%, acceleration ${signed(growth.accelerationPp)} pp, QoQ ${signed(growth.qoqPercent)}%`;
 
 /** The SEC returns 404 for a concept with no filers in a quarter (SalesRevenueNet was retired). That is an empty frame, not a failed source. */
-export async function fetchFrame(ctx: SourceContext, concept: string, quarter: Quarter) {
+export async function fetchFrame(ctx: Pick<SourceContext, "http">, concept: string, quarter: Quarter) {
   try { return parseFrame(await ctx.http.get(frameUrl(concept, quarter), { maxBytes: 60 * 1024 * 1024 })); }
   catch (error) {
     if (error instanceof Error && /^HTTP 404 at /.test(error.message)) return new Map<number, FrameValue>();
@@ -73,7 +73,9 @@ export async function fetchFrame(ctx: SourceContext, concept: string, quarter: Q
   }
 }
 
-export async function collectFrames(ctx: SourceContext): Promise<SourceOutput> {
+/** One read of the revenue frames and the SEC ticker list. Discovery shares it between the frames ranking and the growth pool. */
+export interface GrowthSnapshot { quarter: Quarter; growth: Growth[]; tickers: TickerMap }
+export async function loadGrowth(ctx: Pick<SourceContext, "http" | "now">): Promise<GrowthSnapshot> {
   const quarter = latestQuarter(ctx.now);
   const labels = [quarter, shift(quarter, -1), shift(quarter, -4), shift(quarter, -5)];
   const byConcept = new Map<string, Map<string, Map<number, FrameValue>>>();
@@ -82,9 +84,12 @@ export async function collectFrames(ctx: SourceContext): Promise<SourceOutput> {
     for (const wanted of labels) frames.set(label(wanted), await fetchFrame(ctx, concept, wanted));
     byConcept.set(concept, frames);
   }
-  const tickers = await loadTickers(ctx.http);
+  return { quarter, growth: computeGrowth(byConcept, quarter), tickers: await loadTickers(ctx.http) };
+}
+
+export async function collectFrames(ctx: SourceContext, snapshot?: GrowthSnapshot): Promise<SourceOutput> {
+  const { quarter, growth, tickers } = snapshot ?? await loadGrowth(ctx);
   const universe = universeByCik(ctx.companies, tickers);
-  const growth = computeGrowth(byConcept, quarter);
   const eligible = growth.filter((row) => row.revenue >= MIN_REVENUE && row.yoyPercent > 0 && (tickers.byCik.has(row.cik) || universe.has(row.cik)))
     .sort((a, b) => b.accelerationPp - a.accelerationPp || b.revenue - a.revenue);
   const rank = new Map(eligible.map((row, index) => [row.cik, index + 1]));

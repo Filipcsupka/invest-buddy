@@ -12,7 +12,10 @@ resources:
   - review-calendar-cronjob.yaml
   - macro-cronjob.yaml
   - earnings-calendar-cronjob.yaml
+  - macro-calendar-cronjob.yaml
   - pool-bars-cronjob.yaml
+  - universe-promote-cronjob.yaml
+  - discovery-auto-promote-cronjob.yaml
   - dq-corporate-actions-cronjob.yaml
   - holder-events-cronjob.yaml
   - thirteenf-cronjob.yaml
@@ -22,5 +25,5 @@ resources:
   - weekly-cronjob.yaml
   - watchdog-cronjob.yaml
   - backup-cronjob.yaml
-  - research-cronjobs.yaml
-  - research-verify-networkpolicy.yaml
+  - etf-cronjobs.yaml
+  - research-config.yaml

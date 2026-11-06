@@ -5,6 +5,19 @@ import { collectEarningsCalendar, KEY_VARIABLE } from "../collectors/sources/alp
 import { PostgresUsageLedger } from "../data/usage";
 import { runLoggedJob } from "./job-log";
 
+/** Include stored pool names, the latest private baseline, and research still under review. */
+export async function loadAdditionalCalendarSymbols(db: Pick<pg.Pool, "query">, asOf: string): Promise<string[]> {
+  const result = await db.query<{ symbol: string }>(`SELECT DISTINCT symbol FROM (
+    SELECT symbol FROM discovery_price_bars
+    UNION ALL SELECT symbol FROM discovery_candidates WHERE status IN ('pending', 'approved')
+    UNION ALL SELECT p.value->>'symbol' AS symbol FROM portfolio_baseline b
+      CROSS JOIN LATERAL jsonb_array_elements(b.positions) AS p(value)
+      WHERE b.as_of = (SELECT max(as_of) FROM portfolio_baseline WHERE as_of <= $1::date)
+    UNION ALL SELECT symbol FROM research_candidates WHERE state <> 'DROPPED'
+  ) selected WHERE symbol IS NOT NULL AND symbol <> '' ORDER BY symbol`, [asOf]);
+  return result.rows.map((row) => row.symbol);
+}
+
 export function parseCalendarArgs(args: string[]) {
   const options = { dryRun: false, force: false };
   for (const arg of args) {
@@ -21,11 +34,13 @@ async function main() {
   const options = parseCalendarArgs(process.argv.slice(2));
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
   try {
-    const universe = (await loadUniverse(pool, undefined, { collect: true })).map((row) => row.symbol);
-    const result = await collectEarningsCalendar(pool, defaultHttp(), new PostgresUsageLedger(pool), { key: process.env[KEY_VARIABLE], universe, ...options });
+    const asOf = new Date().toISOString().slice(0, 10);
+    const universe = (await loadUniverse(pool, asOf, { collect: true })).map((row) => row.symbol);
+    const additionalSymbols = await loadAdditionalCalendarSymbols(pool, asOf);
+    const result = await collectEarningsCalendar(pool, defaultHttp(), new PostgresUsageLedger(pool), { key: process.env[KEY_VARIABLE], universe, additionalSymbols, ...options });
     process.stdout.write(result.skipped ? `earnings-calendar: skip, ${result.skipped}\n`
-      : `earnings-calendar: ${result.rows} rows, ${result.universeRows} universe, ${result.inserted} inserted${options.dryRun ? " (dry run)" : ""}\n`);
-    return { requests: result.requests, rows: result.rows, universeRows: result.universeRows, inserted: result.inserted, skipped: !!result.skipped };
+      : `earnings-calendar: ${result.rows} rows, ${result.universeRows} universe, ${result.coveredRows} covered, ${result.inserted} inserted${options.dryRun ? " (dry run)" : ""}\n`);
+    return { requests: result.requests, rows: result.rows, universeRows: result.universeRows, coveredRows: result.coveredRows, inserted: result.inserted, skipped: !!result.skipped };
   } finally { await pool.end(); }
 }
 

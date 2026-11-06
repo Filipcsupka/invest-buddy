@@ -1,6 +1,6 @@
 # Task board
 
-Updated 2026-10-16. One table per state. A PR that finishes a task moves it to Done in the same PR or the next status PR; "implemented" means merged with CI green. Live notes say what was checked on the cluster. Detail per task is in the lane files and in `docs/tasks-open.md` section J.
+Updated 2026-10-19. One table per state. A PR that finishes a task moves it to Done in the same PR or the next status PR; "implemented" means merged with CI green. Live notes say what was checked on the cluster. Detail per task is in the lane files and in `docs/tasks-open.md` section J.
 
 ## Done (merged, CI green)
 
@@ -13,9 +13,11 @@ Updated 2026-10-16. One table per state. A PR that finishes a task moves it to D
 | D20b | Insider flag computed from stored Form 4 | #129 | 34 tickers have `insider_net_buy_90d` |
 | D21 | 13D, 13G and 8-K holder events | #128 | migration 047 applied, job suspended |
 | D22 | 13F quarterly holdings job | #148 | migration 050, job suspended, first run planned 2026-11-20 |
-| D27 | Earnings calendar snapshot | #117 | migration 046, job suspended |
+| D27 | Earnings calendar snapshot | #117, #251, #253 | CronJob on 2026-10-19 (infra #51); manual run: 612 dates; shown on company pages since `PUBLIC_EARNINGS_DATES` on (infra #50) |
 | D31 | News sources, GDELT hardening | #108 | migration 042 |
-| D35 | Universe criteria and selection script | #146, #157 | script only |
+| D35 | Universe criteria, selection script, pool bars | #146, #157, #248 | pool-bars daily 12:30, 500 a run (infra #48); manual run 2026-10-19: pool of 437 covered, 626 symbols with bars |
+| D36 | Roll out 150 names, collect-only list, promotion | #249, #253 | 114 `extended` names added 2026-10-18; `universe-promote` on (Sunday 15:00, 10 a week); first possible promotion 2026-11-01 |
+| P1 | Macro calendar (BLS, Fed) in `macro_events` | #251, #253 | migration 090 applied; CronJob on (infra #51); manual run: 44 dates on dashboard and company pages |
 | D43 | History read model | #116 | used by W33 |
 | D10 refresh | Security master refresh in the image | #130 | run once: 36 of 37 CIKs filled |
 | EN3, EN27, EN40 | Thresholds, outcomes at 1/5/20/60 days, macro inflation | #107, #120, #113, #122 | |
@@ -46,12 +48,13 @@ Updated 2026-10-16. One table per state. A PR that finishes a task moves it to D
 | RS2 | Source verifier | #162 | not run live |
 | RS3 | Research tables and pipeline state machine | #164 | migration 052 |
 | RS4 | Judge integration and fact feed | #165 | migration 053 |
-| RS5 | Research CronJobs, caps and kill switch | #167 | jobs suspended, owner unsuspends after RS8 |
+| RS5 | Research CronJobs, caps and kill switch | #167, #254 | on since 2026-10-19 by owner decision, before RS8 (infra #52, `RESEARCH_ENABLED=on`); notify waits for the owner Telegram secret; deepdive manual |
 | RS6 | Private research cards, materiality and owner page | #166 | not run live |
 | RS8 (offline) | Old-sample fixture (6 cards), `research:eval` script, `docs/research-eval.md` template | #170 | live run not done |
 | RS7 (code) | Codex adapter, strict schema, Codex caps | #172 | owner chose `CODEX_ACCESS_TOKEN`; local codex-cli 0.163.0 JSON run reported no rate limit or cost field |
 | Test fix | Research runner test used a fixed date | #171 | |
-| RS5 (infra) | 7 research CronJobs synced to the cluster, all suspended, `RESEARCH_ENABLED=off` | infra #42 | Argo synced |
+| RS5 (infra) | 7 research CronJobs synced to the cluster | infra #42, #52 | 5 on, notify and deepdive suspended |
+| D5 (live) | Retention runs daily 03:00 | #254 | on since 2026-10-19 (infra #52); dry run: 1 fact archived, nothing deleted; portfolio, trade and track record tables not touched |
 | RS8 (override) | Opt-in Claude quota-unknown override (`RESEARCH_QUOTA_UNKNOWN_OVERRIDE=on`, 403 only), hard call caps in the reserve transaction | #175 | not run live |
 | PM1 | Primary sources for position rules checked | #174 | `docs/research-sources.md` |
 | W3, W5 | Perf probe and budget; public reads cached 300 s with tag purge | #176 | daily job purge needs `WEB_BASE_URL` and `INGEST_TOKEN` in infra |
@@ -101,9 +104,9 @@ Detail: `lane-engine.md` (EN48) and `lane-positions.md` (PM2, PM4).
 
 1. RS8 live run on the six old cards (offline harness is in; RS0 to RS6 are merged). RS7 adapter code is in; its token secret and cluster run remain open.
 2. Web: W23 native Slovak review, W32 tier map, W35 CSV export (paid tier, deferred).
-3. Data: D36 roll out 150 names (after D35 criteria).
+3. Data: D36 promotion runs weekly from 2026-11-01 (10 a week); widening the pool past 437 names is an owner call.
 3a. Waitlist launch: W12 mailer provider (parked, emails not needed now), W18 operator details and legal check (owner), W26 launch checklist, W8 and W9 (Playwright, staging), W4 second replica, W23 native SK review. PL22 to PL24 backup target, script, restore test. PL2 to PL5 CI and deploy tooling. EN6, EN8 to EN10 (EN9 needs a rethink after DEEP_ADD removal), EN12 to EN20, EN33, EN34.
-4. Infra sync: copy the new suspended CronJobs from the app mirror to infra (D19, D22, D35, DS1, EN28 outcomes, dq-corporate-actions) and the daily job env for the cache purge (`WEB_BASE_URL`, `INGEST_TOKEN`) and un-suspend one by one after a test run, with owner approval.
+4. Infra sync: the CronJobs are in infra since 2026-10-19 (infra #48, #49). Still open: the daily job env for the cache purge (`WEB_BASE_URL`, `INGEST_TOKEN`, in neither repo) and the discovery Telegram env (mirror only, owner call).
 5. Last: membership, billing, client work (W27 to W45) stay deferred by owner decision.
 
 ## Waiting on the owner

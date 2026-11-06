@@ -1,3 +1,4 @@
+import { CountUp } from "@/components/kit/count-up";
 import type { ReactNode } from "react";
 import { fill, formatScorePercent, type Locale, type Messages } from "@/i18n";
 import { type StateKey } from "@/i18n/rules";
@@ -168,7 +169,7 @@ export interface StatusPanelProps {
   /** Core rules met, for the "Meets n of m rules" line. Omitted: no line. */
   coreMet?: number;
   /** "rail" drops the dial (the page head shows it) and stacks the track, for a narrow side column. */
-  variant?: "panel" | "rail";
+  variant?: "panel" | "rail" | "bento";
   /** Extra global classes for the section, for example the page's card class. */
   className?: string;
 }
@@ -183,6 +184,45 @@ export function StatusPanel({ view, m, locale, adviceOutput, asOf, methodHref, r
   const broken = view.display.state === "broken";
   const dialState = kitState(view.display.state, Boolean(pullbackLabel));
   const rail = variant === "rail";
+  if (variant === "bento") {
+    return (
+      <section className={[styles.bento, className ?? ""].filter(Boolean).join(" ")} data-state={view.display.state} aria-labelledby="status-title">
+        <div className={`${styles.tile} ${styles.tState}`}>
+          <h2 id="status-title" className={styles.label} aria-describedby={describedBy}>
+            <StatusIcon state={view.display.state} />
+            <span className={styles.labelText}>{label}</span>
+            {pullbackLabel ? <span className={styles.qualifier}>{pullbackLabel}</span> : null}
+          </h2>
+          {asOf ? <p className={styles.sub}><span>{fill(m.status.asOf, { date: asOf })}</span></p> : null}
+          <p className="visually-hidden" id="status-summary">{summarySentence(view, m, adviceOutput, locale)}</p>
+          <StatusTrack view={view} m={m} adviceOutput={adviceOutput} />
+          {coreMet !== undefined && scored && !broken ? <p className={styles.cutoffs} data-cutoffs="">{m.status.cutoffs}</p> : null}
+          {reasons.length > 0 && (broken || !scored) ? <p className={styles.because}>{fill(broken ? m.status.brokenBecause : m.status.insufficientBecause, { reasons: reasons.join("; ") })}</p> : null}
+        </div>
+        <div className={`${styles.tile} ${styles.tRules}`}>
+          {scored && coreMet !== undefined ? <>
+            <p className={styles.bigNum} aria-hidden="true"><CountUp value={coreMet} locale={locale} motion="load" /><span>/ {view.display.coreTotal}</span></p>
+            <span className={styles.bigMeter} aria-hidden="true"><i style={{ width: `${Math.round((100 * coreMet) / Math.max(1, view.display.coreTotal))}%` }} /></span>
+          </> : null}
+          {scored ? <div className={styles.facts}>
+            {coreMet === undefined ? null : <RulesMet view={view} m={m} coreMet={coreMet} cutoffs={false} />}
+            <StatusCoverage view={view} m={m} adviceOutput={adviceOutput} />
+          </div> : null}
+        </div>
+        <div className={`${styles.tile} ${styles.tBonus}`}>
+          {scored ? <BonusBlock view={view} m={m} /> : null}
+        </div>
+        <div className={`${styles.tile} ${styles.tConfirm}`}>
+          <ConfirmationChips view={view} m={m} />
+        </div>
+        <div className={`${styles.tile} ${styles.tNote}`}>
+          <a className={styles.methodLink} href={methodHref}>{m.status.methodLink}</a>
+          <AdrLine text={m.common.disclaimer} id="score-disclaimer" />
+          {disclaimer}
+        </div>
+      </section>
+    );
+  }
   return (
     <section className={[styles.panel, rail ? styles.rail : "", className ?? ""].filter(Boolean).join(" ")} data-state={view.display.state} aria-labelledby="status-title">
       {rail ? null : (

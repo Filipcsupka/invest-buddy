@@ -14,6 +14,11 @@ describe("MacroEvents", () => {
     expect(html).toContain("Rozhodnutie Fedu o sadzbách");
     expect(html).toContain("dnes");
   });
+  it("lists the stored schedule when it is passed", () => {
+    const html = renderToStaticMarkup(<MacroEvents locale="en" today="2027-01-11" schedule={[{ date: "2027-01-13", kind: "CPI", label: "CPI (December)" }]} />);
+    expect(html).toContain('dateTime="2027-01-13"');
+    expect(html).toContain("in 2 trading days");
+  });
   it("renders nothing when no event is near", () => {
     expect(renderToStaticMarkup(<MacroEvents locale="en" today="2027-03-01" />)).toBe("");
   });

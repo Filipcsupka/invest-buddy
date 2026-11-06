@@ -14,3 +14,29 @@ const SIC_SECTOR = new Map(BY_SIC.flatMap(([sector, codes]) => codes.map((code) 
 export function sectorFromSic(sic: number | null | undefined): string {
   return sic === null || sic === undefined ? UNCLASSIFIED : SIC_SECTOR.get(sic) ?? UNCLASSIFIED;
 }
+
+/**
+ * EODHD `General.Industry` names that match the SIC groups above, compared case-insensitively. UNVERIFIED: the industry vocabulary is
+ * taken from EODHD sample responses, not a published list; an unmatched or missing industry stays `Unclassified`. No model fills it.
+ */
+const BY_EODHD_INDUSTRY: [string, string[]][] = [
+  ["Biotech", ["Biotechnology", "Drug Manufacturers - General", "Drug Manufacturers - Specialty & Generic", "Diagnostics & Research"]],
+  ["AI & semiconductors", ["Semiconductors", "Semiconductor Equipment & Materials", "Computer Hardware"]],
+  ["Cloud & SaaS", ["Software - Application", "Software - Infrastructure", "Information Technology Services"]],
+  ["Fintech", ["Credit Services"]],
+  ["Energy & EV", ["Auto Manufacturers", "Solar", "Oil & Gas E&P", "Oil & Gas Drilling", "Oil & Gas Equipment & Services", "Oil & Gas Integrated",
+    "Oil & Gas Midstream", "Oil & Gas Refining & Marketing", "Utilities - Regulated Electric", "Utilities - Regulated Gas", "Utilities - Renewable",
+    "Utilities - Diversified", "Electrical Equipment & Parts"]],
+];
+const EODHD_INDUSTRY_SECTOR = new Map(BY_EODHD_INDUSTRY.flatMap(([sector, names]) => names.map((name) => [name.toLowerCase(), sector] as const)));
+
+/** Maps an EODHD industry to an existing sector name. The vendor sector alone is too broad (Technology covers both chips and software). */
+export function sectorFromEodhd(industry: string | null | undefined): string {
+  return industry ? EODHD_INDUSTRY_SECTOR.get(industry.trim().toLowerCase()) ?? UNCLASSIFIED : UNCLASSIFIED;
+}
+
+/** Trimmed General.Sector and General.Industry from an EODHD fundamentals payload; blank or non-string values are null. */
+export function eodhdClassification(general: { Sector?: unknown; Industry?: unknown } | undefined): { sector: string | null; industry: string | null } {
+  const text = (value: unknown) => typeof value === "string" && value.trim() ? value.trim().slice(0, 200) : null;
+  return { sector: text(general?.Sector), industry: text(general?.Industry) };
+}

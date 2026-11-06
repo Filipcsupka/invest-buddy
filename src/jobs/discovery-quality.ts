@@ -14,32 +14,34 @@ const NAME_RULES: { pattern: RegExp; reason: string }[] = [
 ];
 
 /** First matching exclusion for an issuer name, or null. Covers warrants, units, rights, preferreds and trusts through the D35 common-stock check. */
-export function nameExclusion(symbol: string, name: string): string | null {
+export function nameExclusion(symbol: string, name: string, exchange = "US"): string | null {
   for (const { pattern, reason } of NAME_RULES) if (pattern.test(name)) return reason;
-  if (!isCommonStock({ ticker: symbol, name })) return "not common stock (warrant, unit, right, preferred, notes, ETF or trust)";
+  if (!isCommonStock({ ticker: symbol, name, exchange })) return "not common stock (warrant, unit, right, preferred, notes, ETF or trust)";
   return null;
 }
 
 export interface SecProfile { name: string | null; sic: string | null; sicDescription: string | null; forms: string[]; sharesOutstanding: number | null }
 
 /** Exclusion from the SEC submissions facts: SIC code, foreign filer (20-F, 40-F, 6-K only) and the SEC registered name. */
-export function profileExclusion(symbol: string, profile: SecProfile, k: Pick<QualityCriteria, "excludedSic"> = DISCOVERY): string | null {
+export function profileExclusion(symbol: string, profile: SecProfile, k: Pick<QualityCriteria, "excludedSic"> = DISCOVERY, exchange = "US"): string | null {
   if (profile.sic && k.excludedSic.includes(profile.sic)) return `SIC ${profile.sic}${profile.sicDescription ? ` ${profile.sicDescription}` : ""}`;
-  if (filerType(profile.forms) === "foreign") return "foreign filer (ADR or foreign issuer)";
-  return profile.name ? nameExclusion(symbol, profile.name) : null;
+  if (exchange === "US" && filerType(profile.forms) === "foreign") return "foreign filer (ADR or foreign issuer)";
+  return profile.name ? nameExclusion(symbol, profile.name, exchange) : null;
 }
 
 const usd = (value: number) => `$${(value / 1e6).toFixed(1)}M`;
 
 /** Market cap (last close times shares outstanding) and average dollar volume floors. Returns the first failed floor, or null. */
-export function liquidityReason(bars: OHLCV[], sharesOutstanding: number | null, k: QualityCriteria = DISCOVERY): string | null {
+export function liquidityReason(bars: OHLCV[], sharesOutstanding: number | null, k: QualityCriteria = DISCOVERY,
+  conversion = 1, marketCapUsd: number | null = null): string | null {
   const recent = bars.slice(-k.avgDollarVolumeDays);
   const last = recent.at(-1);
   if (!last) return "no price bars";
-  if (sharesOutstanding === null || !(sharesOutstanding > 0)) return "market cap unknown (no shares outstanding in SEC data)";
-  const marketCap = last.close * sharesOutstanding;
+  if (!Number.isFinite(conversion) || conversion <= 0) return "FX unavailable";
+  if (marketCapUsd === null && (sharesOutstanding === null || !(sharesOutstanding > 0))) return "market cap unknown (no shares outstanding in SEC data)";
+  const marketCap = marketCapUsd ?? last.close * sharesOutstanding! * conversion;
   if (marketCap < k.minMarketCapUsd) return `market cap ${usd(marketCap)} below ${usd(k.minMarketCapUsd)}`;
-  const avg = recent.reduce((sum, bar) => sum + bar.close * bar.volume, 0) / recent.length;
+  const avg = recent.reduce((sum, bar) => sum + bar.close * bar.volume * conversion, 0) / recent.length;
   if (avg < k.minAvgDollarVolumeUsd) return `average dollar volume ${usd(avg)} below ${usd(k.minAvgDollarVolumeUsd)}`;
   return null;
 }

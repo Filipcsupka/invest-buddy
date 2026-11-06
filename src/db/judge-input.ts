@@ -4,7 +4,7 @@ import { computeSignals, SIGNAL_RULES, type Signal, type SignalSymbolInput } fro
 import { computeTechnicals, type Bar, type Technicals } from "../data/technicals";
 import { freshnessDays } from "../data/evidence";
 import { CITABLE_AGREEMENTS, SEC_PUBLIC_URL } from "../data/sources";
-import { eventNote, upcomingMacroEvents } from "../data/macro-calendar";
+import { eventNote, loadMacroEvents, upcomingMacroEvents } from "../data/macro-calendar";
 import { latestBaseline, type Baseline } from "./portfolio-baseline";
 import { scoredMember } from "./universe";
 import { latestIdeaPerSymbol, ideaSignature, type IdeaAction, type Idea, type SizeTier } from "./ideas";
@@ -166,10 +166,11 @@ export async function buildJudgeInput(pool: Pick<pg.Pool, "query">, asOf: string
   for (const b of barRows.rows) (bars.get(b.ticker) ?? bars.set(b.ticker, []).get(b.ticker)!).push({ date: b.bar_date, open: Number(b.open), high: Number(b.high), low: Number(b.low), close: Number(b.close), volume: Number(b.volume) });
   const invested = (baseline?.positions ?? []).reduce((sum, p) => sum + p.valueEur, 0);
   const portfolio: JudgeInput["portfolio"] = baseline ? { asOf: baseline.asOf, source: baseline.source, currency: "EUR", cashEur: baseline.cashEur, monthlyContributionEur: baseline.monthlyContributionEur ?? null, investedEur: round(invested), positions: baseline.positions.map((p) => ({ symbol: p.symbol, valueEur: p.valueEur })) } : null;
+  const macroEvents = await loadMacroEvents(pool, asOf);
   const symbols = picked.map((r) => shapeSymbol(r, consensus.rows.filter((c) => c.symbol === r.ticker), baseline, invested, computeTechnicals(bars.get(r.ticker) ?? [], bars.get(BENCH_SPY) ?? null), displayUrls, primaryFor(r.ticker), researchFacts.get(r.ticker) ?? []));
   return {
     asOf, generatedAt: now.toISOString(), ruleConfigVersion: SIGNAL_RULES.version, benchmark: BENCHMARK, portfolio, symbols,
-    signals: signalsFor(symbols, portfolio, eventNote(upcomingMacroEvents(asOf))),
+    signals: signalsFor(symbols, portfolio, eventNote(upcomingMacroEvents(asOf, undefined, [], macroEvents))),
     previousIdeas: previous.map((p) => ({ symbol: p.symbol, asOf: p.asOf, action: p.action, setup: p.setup, signature: p.signature, sizeTier: p.sizeTier })),
   };
 }

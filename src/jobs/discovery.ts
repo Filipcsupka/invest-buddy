@@ -7,7 +7,8 @@ import { parseFeed, feedUrl } from "../collectors/sources/getcurrent";
 import { getText } from "../collectors/http";
 import { requireSecUserAgent } from "../collectors/sec-user-agent";
 import { isIsoDate } from "../db/iso-date";
-import { collectFrames } from "../collectors/sources/frames";
+import { collectFrames, frameUrl, loadGrowth, label, type GrowthSnapshot, type Quarter } from "../collectors/sources/frames";
+import { rankPool, rankStoredPool, type PoolRow } from "../universe/pool";
 import { collectClinicalTrials } from "../collectors/sources/clinicaltrials";
 import { defaultHttp } from "../collectors/sources/client";
 import { normalizeIssuer } from "../collectors/sources/thirteenf";
@@ -23,12 +24,16 @@ import { PostgresDeliveryLog } from "../db/notifications";
 import { telegramFromEnv } from "../notify/telegram";
 import { deliverNewCandidates, loadWeekCandidates } from "../notify/discovery";
 import { flags } from "../config/flags";
+import { loadCandidates } from "../universe/candidates";
+import { knownUsdPerUnit } from "../universe/market";
+import { instrumentRegion } from "../universe/region";
 
-export interface CandidateSource { kind: "edgar" | "price_volume" | "theme" | "frames" | "clinical_trial" | "ownership" | "thirteenf"; url: string; detail: string; growth?: { current: number; prior: number } }
+export interface CandidateSource { kind: "edgar" | "price_volume" | "theme" | "frames" | "pool" | "eodhd" | "clinical_trial" | "ownership" | "thirteenf"; url: string; detail: string; growth?: { current: number; prior: number } }
 /** Returns why a name fails the quality floor (market cap, dollar volume), or null. */
 export type QualityCheck = (row: DiscoveryCandidate, bars: OHLCV[]) => string | null | undefined;
 export interface DiscoveryCandidate { symbol: string; name: string; sector: string; theme: string | null; score: number; sources: CandidateSource[];
-  growth?: { current: number; prior: number }; ruleScore?: number; ruleState?: string; signalDate?: string; benchmarkClose?: number | null }
+  growth?: { current: number; prior: number }; ruleScore?: number; ruleState?: string; signalDate?: string; benchmarkClose?: number | null;
+  exchange?: string; currency?: string; usdPerUnit?: number | null; marketCapUsd?: number | null }
 export const weekStart = (date: string): string => {
   const day = new Date(`${date}T00:00:00Z`);
   if (!isIsoDate(date) || Number.isNaN(day.valueOf())) throw new Error("date must be YYYY-MM-DD");
@@ -92,11 +97,74 @@ export function frameCandidates(items: { ticker?: string | null; name: string; y
 }
 
 /** SEC frames covers US filers outside the tracked universe; its collector already makes a bounded, revenue-qualified ranking. */
-export async function marketwideGrowthCandidates(now: Date, knownCompanies: { symbol: string; name: string }[]): Promise<DiscoveryCandidate[]> {
-  const output = await collectFrames({ http: defaultHttp(), companies: knownCompanies, symbols: [], since: now.toISOString().slice(0, 10), now, env: process.env });
+export async function marketwideGrowthCandidates(now: Date, knownCompanies: { symbol: string; name: string }[], snapshot?: Promise<GrowthSnapshot>): Promise<DiscoveryCandidate[]> {
+  const output = await collectFrames({ http: defaultHttp(), companies: knownCompanies, symbols: [], since: now.toISOString().slice(0, 10), now, env: process.env }, snapshot && await snapshot);
   const doc = output.documents.find((item) => item.meta.kind === "discovery");
   if (!doc) return [];
   return frameCandidates(doc.meta.items as Parameters<typeof frameCandidates>[0], doc.url);
+}
+
+export interface StoredBars { count: number; newest: string | null }
+
+/** Stored bars are enough to screen without a request: at least 200 bars and the newest no more than maxAgeDays before the run date. */
+export function hasStoredBars(bars: StoredBars | undefined, date: string, maxAgeDays: number = DISCOVERY.poolBarMaxAgeDays): boolean {
+  if (!bars || bars.count < 200 || !bars.newest || bars.newest > date) return false;
+  return Date.parse(`${date}T00:00:00Z`) - Date.parse(`${bars.newest}T00:00:00Z`) <= maxAgeDays * 86400000;
+}
+
+/** Pool names with stored bars, in pool rank order. Names without stored bars are left out: screening them would cost a Twelve Data request. */
+export function poolCandidates(ranked: PoolRow[], stored: Map<string, StoredBars>, date: string, quarter: Quarter, maxAgeDays: number = DISCOVERY.poolBarMaxAgeDays): DiscoveryCandidate[] {
+  return ranked.filter((row) => hasStoredBars(stored.get(row.ticker), date, maxAgeDays)).map((row) => {
+    const growth = { current: row.yoyPercent, prior: row.priorYoyPercent };
+    return { symbol: row.ticker, name: row.name, sector: "Growth", theme: null, score: 3, growth,
+      sources: [{ kind: "pool" as const, url: `${frameUrl(row.concept, quarter)}#pool-${row.ticker}`, detail: `SEC growth pool rank ${row.rank}, ${label(quarter)}`, growth }] };
+  });
+}
+
+/** The growth pool ranked as pool-bars ranks it (held names out, same size and growth floor), cut to the names with stored bars. */
+export async function growthPoolCandidates(db: Pick<pg.Pool, "query">, snapshot: Promise<GrowthSnapshot>, date: string): Promise<DiscoveryCandidate[]> {
+  const { quarter, growth, tickers } = await snapshot;
+  const held = new Set((await db.query<{ ticker: string }>("SELECT DISTINCT ticker FROM universe_membership WHERE valid_to IS NULL")).rows.map((r) => r.ticker));
+  const ranked = rankPool(growth, new Map([...tickers.byCik].map(([cik, row]) => [cik, row.ticker])), held, { minYoy: DISCOVERY.poolMinYoyPct, size: DISCOVERY.poolSize });
+  const stored = await db.query<{ symbol: string; count: string; newest: string | null }>(`SELECT symbol, count(*)::text AS count, max(bar_date)::text AS newest
+    FROM discovery_price_bars WHERE symbol = ANY($1) AND bar_date <= $2::date GROUP BY symbol`, [ranked.map((r) => r.ticker), date]);
+  return poolCandidates(ranked, new Map(stored.rows.map((r) => [r.symbol, { count: Number(r.count), newest: r.newest }])), date, quarter);
+}
+
+/** Stored EODHD listings with point-in-time revenue, shares, bars and ECB rates. No vendor request. */
+export async function eodhdPoolCandidates(db: Pick<pg.Pool, "query">, date: string, held: ReadonlySet<string> = new Set()): Promise<DiscoveryCandidate[]> {
+  const rows = await loadCandidates(db, date);
+  return rankStoredPool(rows, held, DISCOVERY.poolSize)
+    .map((row) => ({ symbol: row.ticker, name: row.name, sector: row.sector, theme: null, score: 3,
+      exchange: row.exchange, currency: row.currency, usdPerUnit: row.usdPerUnit, marketCapUsd: row.marketCapUsd,
+      growth: row.priorYoyGrowthPct === null || row.priorYoyGrowthPct === undefined ? undefined :
+        { current: row.yoyGrowthPct!, prior: row.priorYoyGrowthPct },
+      sources: [{ kind: "eodhd" as const, url: `https://eodhd.com/api/fundamentals/${encodeURIComponent(row.vendorSymbol!)}`, detail: `Stored EODHD listing ${row.exchange}` }] }));
+}
+
+/**
+ * Splits the growth pool off the feed rows. Feed rows for a pool name are merged into it (score, sources, theme), so the name is screened once on
+ * its stored bars. Known names and non-common securities are skipped; the lane keeps pool rank order and is cut to `limit`.
+ */
+export function poolLane(pool: DiscoveryCandidate[], feed: DiscoveryCandidate[], known: Set<string>, limit: number = DISCOVERY.poolScreenLimit) {
+  const skipped: { symbol: string; reason: string }[] = [];
+  const lane: DiscoveryCandidate[] = [];
+  for (const row of pool) {
+    if (known.has(row.symbol) || lane.length >= limit || lane.some((item) => item.symbol === row.symbol)) continue;
+    const reason = nonCommonStockReason(row.symbol, row.exchange) ?? nameExclusion(row.symbol, row.name, row.exchange);
+    if (reason) { skipped.push({ symbol: row.symbol, reason }); continue; }
+    lane.push({ ...row, sources: [...row.sources] });
+  }
+  const bySymbol = new Map(lane.map((row) => [row.symbol, row]));
+  const rest: DiscoveryCandidate[] = [];
+  for (const row of feed) {
+    const target = bySymbol.get(row.symbol);
+    if (!target) { rest.push(row); continue; }
+    target.score += row.score;
+    target.sources.push(...row.sources);
+    target.theme ??= row.theme;
+  }
+  return { lane, feed: rest, skipped };
 }
 
 /** Recent Phase 2/3 study updates from any sponsor, mapped conservatively to exact SEC issuer names. */
@@ -227,7 +295,7 @@ export async function saveDiscoveryPriceBars(db: Pick<pg.Pool, "query">, row: Pi
 export function rankCandidates(rows: DiscoveryCandidate[], known: Set<string>, limit: number = DISCOVERY.maxCandidatesPerWeek): DiscoveryCandidate[] {
   const grouped = new Map<string, DiscoveryCandidate>();
   for (const row of rows) {
-    if (known.has(row.symbol) || !/^[A-Z][A-Z0-9.-]{0,9}$/.test(row.symbol)) continue;
+    if (known.has(row.symbol) || !/^[A-Z][A-Z0-9.-]{0,15}$/.test(row.symbol)) continue;
     const previous = grouped.get(row.symbol);
     if (previous) {
       previous.score += row.score;
@@ -242,11 +310,12 @@ export function rankCandidates(rows: DiscoveryCandidate[], known: Set<string>, l
 }
 
 /** SEC tickers can include a security class. Skip explicit preferred, warrant, unit and right suffixes; plain symbols remain eligible. */
-export function nonCommonStockReason(symbol: string): string | null {
-  if (/[.-]P(?:R)?[A-Z]?$/.test(symbol)) return "preferred-share symbol";
-  if (/[.-]W(?:S|T)?$/.test(symbol) || /^[A-Z]{4}W$/.test(symbol)) return "warrant symbol";
-  if (/[.-]U$/.test(symbol) || /^[A-Z]{4}U$/.test(symbol)) return "unit symbol";
-  if (/[.-]R$/.test(symbol) || /^[A-Z]{4}R$/.test(symbol)) return "rights symbol";
+export function nonCommonStockReason(symbol: string, exchange = "US"): string | null {
+  const code = symbol.endsWith(`.${exchange}`) ? symbol.slice(0, -(exchange.length + 1)) : symbol;
+  if (/[.-]P(?:R)?[A-Z]?$/.test(code)) return "preferred-share symbol";
+  if (/[.-]W(?:S|T)?$/.test(code) || /^[A-Z]{4}W$/.test(code)) return "warrant symbol";
+  if (/[.-]U$/.test(code) || /^[A-Z]{4}U$/.test(code)) return "unit symbol";
+  if (/[.-]R$/.test(code) || /^[A-Z]{4}R$/.test(code)) return "rights symbol";
   return null;
 }
 
@@ -267,11 +336,11 @@ export async function profileFilter(rows: DiscoveryCandidate[], ciks: Map<string
   for (const row of rows) {
     const cik = ciks.get(row.symbol);
     let profile: SecProfile | null = null;
-    if (cik !== undefined) {
+    if (cik !== undefined && (row.exchange ?? "US") === "US") {
       try { profile = await loadSecProfile(cik, get); } catch (error) { process.stderr.write(`${row.symbol}: SEC profile failed: ${error instanceof Error ? error.message : String(error)}\n`); }
     }
     profiles.set(row.symbol, profile);
-    const reason = profile ? profileExclusion(row.symbol, profile) : null;
+    const reason = profile ? profileExclusion(row.symbol, profile, DISCOVERY, row.exchange) : null;
     if (reason) excluded.push({ symbol: row.symbol, reason }); else kept.push(row);
   }
   return { kept, excluded, profiles };
@@ -286,7 +355,7 @@ export function sourceSummary(results: { name: string; rows?: DiscoveryCandidate
 export function shortlistCandidates(rows: DiscoveryCandidate[], known: Set<string>, limit: number = DISCOVERY.maxCandidatesPerWeek) {
   const skipped = new Map<string, string>();
   const common = rows.filter((row) => {
-    const reason = known.has(row.symbol) ? null : nonCommonStockReason(row.symbol) ?? nameExclusion(row.symbol, row.name);
+    const reason = known.has(row.symbol) ? null : nonCommonStockReason(row.symbol, row.exchange) ?? nameExclusion(row.symbol, row.name, row.exchange);
     if (reason) skipped.set(row.symbol, reason);
     return !reason;
   });
@@ -328,8 +397,26 @@ export async function preScreenMa200(rows: DiscoveryCandidate[], date: string, b
   return { kept: kept.slice(0, limit), dropped, skipped, calls, stoppedByLimit: stopped };
 }
 
+export interface DiscoveryMacro { growthSectorRotation: boolean | null; dataTailwind: boolean | null }
+type StoredMacroValues = { dataTailwind?: unknown; sectorRotationIntoGrowth?: unknown };
+/** macro_findings.data: the top-level values are the US outcome, `regions` holds the others (src/jobs/macro.ts). */
+export type StoredMacro = StoredMacroValues & { regions?: Record<string, StoredMacroValues | undefined> | null };
+
+/**
+ * Macro inputs per candidate from the latest stored macro_findings data. US listings read the top-level (US) values; any other region
+ * reads its own regional outcome, and is unknown when there is none. It never borrows the US values.
+ */
+export function candidateMacro(data: StoredMacro | null | undefined): (row: DiscoveryCandidate) => DiscoveryMacro {
+  const bool = (value: unknown) => typeof value === "boolean" ? value : null;
+  return (row) => {
+    const region = instrumentRegion(row.symbol, row.exchange);
+    const values = region === "US" ? data : data?.regions?.[region];
+    return { growthSectorRotation: bool(values?.sectorRotationIntoGrowth), dataTailwind: bool(values?.dataTailwind) };
+  };
+}
+
 export async function screenCandidates(rows: DiscoveryCandidate[], date: string, barsFor: (symbol: string) => Promise<OHLCV[]>,
-  macro: { growthSectorRotation: boolean | null; dataTailwind: boolean | null }, benchmarkClose: number | null | ((date: string) => Promise<number | null>),
+  macro: DiscoveryMacro | ((row: DiscoveryCandidate) => DiscoveryMacro), benchmarkClose: number | null | ((date: string) => Promise<number | null>),
   notPassed: { symbol: string; reason: string }[] = [], reject?: QualityCheck): Promise<DiscoveryCandidate[]> {
   const screened: DiscoveryCandidate[] = [];
   for (const row of rows) {
@@ -342,7 +429,7 @@ export async function screenCandidates(rows: DiscoveryCandidate[], date: string,
       revenueAccelerating: growth ? growth.current > growth.prior : null, revenueDeclining: growth ? growth.current < 0 : null,
       epsBeat: null, guidanceRaised: null, earningsMissAndGuidanceCut: null, productCatalyst: null,
       insiderOrInstitutionalAccumulation: null, noRevenue: growth ? false : null, memePump: null,
-    }, macro });
+    }, macro: typeof macro === "function" ? macro(row) : macro });
     if (result.invalidReasons.length) { notPassed.push({ symbol: row.symbol, reason: `invalid data: ${result.invalidReasons.join("; ")}` }); continue; }
     if (result.rejectionReasons.length) { notPassed.push({ symbol: row.symbol, reason: `rejected: ${result.rejectionReasons.join("; ")}` }); continue; }
     if (result.total < 12) { notPassed.push({ symbol: row.symbol, reason: `score ${result.total} below 12` }); continue; }
@@ -356,7 +443,7 @@ export async function screenCandidates(rows: DiscoveryCandidate[], date: string,
 }
 
 export async function screenDiscoveryShortlist(rows: DiscoveryCandidate[], date: string, barsFor: (symbol: string) => Promise<OHLCV[]>,
-  macro: { growthSectorRotation: boolean | null; dataTailwind: boolean | null }, benchmarkClose: number | null | ((date: string) => Promise<number | null>), reject?: QualityCheck) {
+  macro: DiscoveryMacro | ((row: DiscoveryCandidate) => DiscoveryMacro), benchmarkClose: number | null | ((date: string) => Promise<number | null>), reject?: QualityCheck) {
   const screened: DiscoveryCandidate[] = [];
   const skipped: { symbol: string; reason: string }[] = [];
   const failures: { symbol: string; reason: string }[] = [];
@@ -373,14 +460,30 @@ export async function screenDiscoveryShortlist(rows: DiscoveryCandidate[], date:
   return { screened, skippedCount: skipped.length, skipped, notPassed, failureCount: failures.length, failures };
 }
 
+export async function loadKnownDiscoverySymbols(db: pg.Pool, date: string, week: string): Promise<Set<string>> {
+  const result = await db.query<{ ticker: string }>(`SELECT ticker FROM universe_membership WHERE list <> 'benchmark'
+    AND valid_from <= $1::date AND (valid_to IS NULL OR valid_to > $1::date)
+    UNION SELECT symbol AS ticker FROM discovery_candidates
+    WHERE status='approved' OR (status='pending' AND week_start <> $2::date)`, [date, week]);
+  return new Set(result.rows.map((row) => row.ticker));
+}
+
 export async function saveCandidates(db: pg.Pool, week: string, rows: DiscoveryCandidate[], max: number = DISCOVERY.maxCandidatesPerWeek): Promise<DiscoveryCandidate[]> {
   const client = await db.connect();
   try {
     await client.query("BEGIN");
     await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`discovery:${week}`]);
-    const existing = await client.query<{ symbol: string }>("SELECT symbol FROM discovery_candidates WHERE week_start=$1", [week]);
+    const existing = await client.query<{ symbol: string; status: string }>("SELECT symbol,status FROM discovery_candidates WHERE week_start=$1", [week]);
     const slots = Math.max(0, max - existing.rows.length);
-    const seen = new Set(existing.rows.map((r) => r.symbol));
+    const status = new Map(existing.rows.map((row) => [row.symbol, row.status]));
+    for (const row of rows.filter((candidate) => status.get(candidate.symbol) === "pending")) {
+      if (row.ruleScore === undefined || !row.ruleState || !row.signalDate) throw new Error(`Candidate ${row.symbol} lacks rule screening`);
+      await client.query(`UPDATE discovery_candidates SET name=$3,sector=$4,theme=$5,score=$6,rule_score=$7,
+        rule_state=$8,signal_date=$9,benchmark_close=$10,sources=$11::jsonb
+        WHERE week_start=$1 AND symbol=$2 AND status='pending'`,
+      [week, row.symbol, row.name, row.sector, row.theme, row.score, row.ruleScore, row.ruleState, row.signalDate, row.benchmarkClose ?? null, JSON.stringify(row.sources)]);
+    }
+    const seen = new Set(existing.rows.map((row) => row.symbol));
     const selected = rows.filter((row) => !seen.has(row.symbol)).slice(0, slots);
     for (const row of selected) {
       if (row.ruleScore === undefined || !row.ruleState || !row.signalDate) throw new Error(`Candidate ${row.symbol} lacks rule screening`);
@@ -406,8 +509,10 @@ export async function reviewCandidate(db: pg.Pool, symbol: string, approve: bool
       await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`universe:${symbol}`]);
       await client.query(`INSERT INTO instruments (ticker,name,sector,tier,source) VALUES ($1,$2,$3,NULL,'discovery')
         ON CONFLICT (ticker) DO UPDATE SET name=EXCLUDED.name,sector=EXCLUDED.sector`, [symbol, row.rows[0].name, row.rows[0].sector]);
-      await client.query(`INSERT INTO universe_membership(ticker,list,tier,valid_from,reason,criteria_version,added_by)
-        SELECT $1,'discovery',NULL,CURRENT_DATE,'Approved discovery candidate','discovery-v1','discovery-review'
+      // A stored EODHD candidate keeps its listing exchange; SEC lane symbols are US listings.
+      await client.query(`INSERT INTO universe_membership(ticker,list,tier,valid_from,reason,criteria_version,added_by,exchange)
+        SELECT $1,'discovery',NULL,CURRENT_DATE,'Approved discovery candidate','discovery-v1','discovery-review',
+          COALESCE((SELECT exchange FROM symbols WHERE vendor_symbol=$1 AND exchange<>'US' LIMIT 1),'US')
         WHERE NOT EXISTS (SELECT 1 FROM universe_membership WHERE ticker=$1 AND (valid_to IS NULL OR valid_to > CURRENT_DATE))`, [symbol]);
     }
     if (row.rows[0].status === "pending") await client.query("UPDATE discovery_candidates SET status=$1,reviewed_at=now() WHERE week_start=$2 AND symbol=$3", [approve ? "approved" : "rejected", row.rows[0].week_start, symbol]);
@@ -437,54 +542,78 @@ async function main() {
   const args = process.argv.slice(2);
   const arg = (flag: string) => { const i = args.indexOf(flag); return i < 0 ? undefined : args[i + 1]; };
   const approve = arg("--approve"), reject = arg("--reject"), explicitDate = arg("--date"), date = explicitDate ?? previousTradingDay(), output = arg("--output");
-  if ((approve && reject) || (output && !approve) || !isIsoDate(date)) throw new Error("Usage: discovery [--date YYYY-MM-DD] | --approve SYMBOL [--output gate.json] | --reject SYMBOL");
+  const eodhdOnly = args.includes("--eodhd-stored-only");
+  if ((approve && reject) || (output && !approve) || !isIsoDate(date) || (eodhdOnly && (approve || reject))) throw new Error("Usage: discovery [--date YYYY-MM-DD] [--eodhd-stored-only] | --approve SYMBOL [--output gate.json] | --reject SYMBOL");
   if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required");
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
   try {
     if (approve || reject) {
       const symbol = (approve ?? reject)!.toUpperCase();
-      if (!/^[A-Z][A-Z0-9.-]{0,9}$/.test(symbol)) throw new Error("Invalid symbol");
+      if (!/^[A-Z][A-Z0-9.-]{0,15}$/.test(symbol)) throw new Error("Invalid symbol");
       await reviewCandidate(pool, symbol, !!approve, output);
       process.stdout.write(`${symbol}: ${approve ? "approved" : "rejected"}\n`);
       return;
     }
-    requireSecUserAgent(process.env.SEC_USER_AGENT);
+    if (!eodhdOnly) requireSecUserAgent(process.env.SEC_USER_AGENT);
     const week = weekStart(explicitDate ?? new Date().toISOString().slice(0, 10));
-    const known = new Set((await pool.query<{ ticker: string }>(`SELECT ticker FROM universe_membership WHERE list <> 'benchmark'
-      AND valid_from <= CURRENT_DATE AND (valid_to IS NULL OR valid_to > CURRENT_DATE)
-      UNION SELECT symbol AS ticker FROM discovery_candidates WHERE status IN ('approved','pending')`)).rows.map((r) => r.ticker));
+    const known = await loadKnownDiscoverySymbols(pool, date, week);
     const previousWeek = new Date(`${week}T00:00:00Z`);
     previousWeek.setUTCDate(previousWeek.getUTCDate() - 7);
     const since = previousWeek.toISOString().slice(0, 10);
-    const companies = (await pool.query<{ ticker: string; name: string }>(`SELECT i.ticker,i.name FROM instruments i
+    const companies = eodhdOnly ? [] : (await pool.query<{ ticker: string; name: string }>(`SELECT i.ticker,i.name FROM instruments i
       JOIN universe_membership m ON m.ticker=i.ticker WHERE m.list <> 'benchmark'
-        AND m.valid_from <= CURRENT_DATE AND (m.valid_to IS NULL OR m.valid_to > CURRENT_DATE)`)).rows.map((r) => ({ symbol: r.ticker, name: r.name }));
-    const names = ["growth-frames", "edgar-8k", "ownership", "13f", "biotech", "movers"];
-    const gathered = await Promise.allSettled([
-      marketwideGrowthCandidates(new Date(`${date}T12:00:00Z`), companies),
+        AND m.valid_from <= $1::date AND (m.valid_to IS NULL OR m.valid_to > $1::date)`, [date])).rows.map((r) => ({ symbol: r.ticker, name: r.name }));
+    const names = ["growth-frames", "edgar-8k", "ownership", "13f", "biotech", "movers", "growth-pool"];
+    const runAt = new Date(`${date}T12:00:00Z`);
+    // One read of the SEC revenue frames serves both the frames ranking and the growth pool.
+    const growth = eodhdOnly ? null : loadGrowth({ http: defaultHttp(), now: runAt });
+    growth?.catch(() => undefined);
+    const gathered = eodhdOnly ? [] : await Promise.allSettled([
+      marketwideGrowthCandidates(runAt, companies, growth!),
       edgarCandidates(getText, since), ownershipCandidates(getText, since), manager13fCandidates(getText, date, since),
-      biotechCandidates(since, new Date(`${date}T12:00:00Z`)), moverCandidates(pool, date),
+      biotechCandidates(since, runAt), moverCandidates(pool, date), growthPoolCandidates(pool, growth!, date),
     ]);
-    const themes = themeCandidates();
+    const themes = eodhdOnly ? [] : themeCandidates();
     const sources = [...themes];
+    const poolRows: DiscoveryCandidate[] = [];
     const summary = [{ name: "themes", rows: themes.length }];
     gathered.forEach((result, index) => {
-      if (result.status === "fulfilled") { sources.push(...result.value); summary.push(...sourceSummary([{ name: names[index], rows: result.value }])); }
+      if (result.status === "fulfilled") {
+        (names[index] === "growth-pool" ? poolRows : sources).push(...result.value);
+        summary.push(...sourceSummary([{ name: names[index], rows: result.value }]));
+      }
       else {
         const message = result.reason instanceof Error ? result.reason.message : String(result.reason);
         process.stderr.write(`Discovery source failed: ${message}\n`);
         summary.push(...sourceSummary([{ name: names[index], error: message }]));
       }
     });
+    try {
+      const storedEodhd = await eodhdPoolCandidates(pool, date, known);
+      poolRows.push(...storedEodhd);
+      summary.push({ name: "eodhd-stored", rows: storedEodhd.length });
+    } catch (error) {
+      if (eodhdOnly) throw error;
+      process.stderr.write(`Stored EODHD pool failed: ${error instanceof Error ? error.message : String(error)}\n`);
+      summary.push({ name: "eodhd-stored", rows: 0 });
+    }
     const preScreen = DISCOVERY.preScreenMa200;
-    const { shortlist: rankedAll, skipped: filtered } = shortlistCandidates(sources, known, preScreen ? Math.max(DISCOVERY.preScreenTopK, DISCOVERY.maxScreenedPerWeek) : DISCOVERY.maxScreenedPerWeek);
-    const profiled = await profileFilter(rankedAll, await tickerCiks(getText), getText);
+    // Pool names are screened on stored bars; only the feed names below spend Twelve Data requests.
+    const lane = poolLane(poolRows, sources, known);
+    const covered = new Set(poolRows.filter((row) => row.sources.some((source) => source.kind === "pool")).map((row) => row.symbol));
+    const eodhdCovered = new Set(poolRows.filter((row) => row.sources.some((source) => source.kind === "eodhd")).map((row) => row.symbol));
+    const { shortlist: rankedAll, skipped: filtered } = shortlistCandidates(lane.feed, known, preScreen ? Math.max(DISCOVERY.preScreenTopK, DISCOVERY.maxScreenedPerWeek) : DISCOVERY.maxScreenedPerWeek);
+    filtered.push(...lane.skipped);
+    const ciks = eodhdOnly ? new Map<string, number>() : await tickerCiks(getText);
+    const profiled = await profileFilter(rankedAll, ciks, getText);
     const ranked = profiled.kept;
     filtered.push(...profiled.excluded);
-    const quality: QualityCheck = (row, bars) => liquidityReason(bars, profiled.profiles.get(row.symbol)?.sharesOutstanding ?? null);
-    if (!process.env.TWELVE_DATA_API_KEY) throw new Error("TWELVE_DATA_API_KEY is required to apply the scoring rules to discovery candidates");
-    const usage = new PostgresUsageLedger(pool);
-    const provider = new TwelveDataProvider({ apiKey: process.env.TWELVE_DATA_API_KEY, reserve: () => usage.reserve("twelvedata", 1, { job: "discovery", credits: 1 }) });
+    const profiles = new Map(profiled.profiles);
+    const quality: QualityCheck = (row, bars) => liquidityReason(bars, profiles.get(row.symbol)?.sharesOutstanding ?? null,
+      DISCOVERY, knownUsdPerUnit(row) ?? NaN, row.marketCapUsd ?? null);
+    if (!eodhdOnly && !process.env.TWELVE_DATA_API_KEY) throw new Error("TWELVE_DATA_API_KEY is required to apply the scoring rules to discovery candidates");
+    const usage = eodhdOnly ? null : new PostgresUsageLedger(pool);
+    const provider = eodhdOnly ? null : new TwelveDataProvider({ apiKey: process.env.TWELVE_DATA_API_KEY!, reserve: () => usage!.reserve("twelvedata", 1, { job: "discovery", credits: 1 }) });
     const bySymbol = new Map(ranked.map((row) => [row.symbol, row]));
     const fresh = (bars: OHLCV[]) => bars.length >= 200 && bars.at(-1) && Date.parse(`${date}T00:00:00Z`) - Date.parse(`${bars.at(-1)!.date}T00:00:00Z`) <= 4 * 86400000;
     const stored = async (table: "daily_bars" | "discovery_price_bars", symbol: string): Promise<OHLCV[]> => {
@@ -495,10 +624,13 @@ async function main() {
     };
     const cache = new Map<string, Promise<OHLCV[]>>();
     const fetchBars = async (symbol: string): Promise<OHLCV[]> => {
+      if (covered.has(symbol)) return stored("discovery_price_bars", symbol);
       const live = await stored("daily_bars", symbol);
+      if (eodhdCovered.has(symbol)) return live;
       if (fresh(live)) return live;
       const discovered = await stored("discovery_price_bars", symbol);
       if (fresh(discovered)) return discovered;
+      if (!provider) throw new Error(`${symbol}: no stored EODHD bars`);
       const bars = await provider.bars(symbol);
       await saveDiscoveryPriceBars(pool, bySymbol.get(symbol)!, bars);
       return bars;
@@ -507,32 +639,39 @@ async function main() {
       if (!cache.has(symbol)) cache.set(symbol, fetchBars(symbol));
       return cache.get(symbol)!;
     };
-    const macroRow = await pool.query<{ data_tailwind: boolean | null; rotation: boolean | null }>(`SELECT (data->>'dataTailwind')::boolean AS data_tailwind,
-      (data->>'sectorRotationIntoGrowth')::boolean AS rotation FROM macro_findings WHERE as_of <= $1::date ORDER BY as_of DESC LIMIT 1`, [date]);
-    const macro = { growthSectorRotation: macroRow.rows[0]?.rotation ?? null, dataTailwind: macroRow.rows[0]?.data_tailwind ?? null };
+    const macroRow = await pool.query<{ data: StoredMacro }>("SELECT data FROM macro_findings WHERE as_of <= $1::date ORDER BY as_of DESC LIMIT 1", [date]);
+    const macro = candidateMacro(macroRow.rows[0]?.data);
     const benchmarkClose = async (signalDate: string) => {
       const row = await pool.query<{ close: string }>("SELECT close FROM daily_bars WHERE ticker='SPY' AND bar_date=$1::date", [signalDate]);
       return row.rows[0] ? Number(row.rows[0].close) : null;
     };
     let shortlist = ranked.slice(0, DISCOVERY.maxScreenedPerWeek);
     let preScreened: { preScreened: number; dropped: { symbol: string; reason: string }[]; apiRequests: number } | null = null;
-    if (preScreen) {
-      const before = provider.requests;
+    if (preScreen && !eodhdOnly) {
+      const before = provider!.requests;
       const pre = await preScreenMa200(ranked, date, barsFor, DISCOVERY.maxScreenedPerWeek, quality);
       shortlist = pre.kept;
       filtered.push(...pre.skipped);
-      preScreened = { preScreened: pre.calls, dropped: pre.dropped, apiRequests: provider.requests - before };
+      preScreened = { preScreened: pre.calls, dropped: pre.dropped, apiRequests: provider!.requests - before };
       process.stderr.write(`Discovery pre-screen: ${pre.calls} of ${ranked.length} ranked names checked, ${pre.dropped.length} dropped under MA200, ${shortlist.length} go to the full screen, ${preScreened.apiRequests} Twelve Data requests${pre.stoppedByLimit ? " (daily limit reached, rest passed through)" : ""}\n`);
     }
-    const result = await screenDiscoveryShortlist(shortlist, date, barsFor, macro, benchmarkClose, quality);
+    // Growth pool lane: MA200 on stored bars first, then the SEC profile reads only for the names left. No Twelve Data request.
+    const poolBefore = provider?.requests ?? 0;
+    const poolPre = await preScreenMa200(lane.lane, date, barsFor, lane.lane.length);
+    const poolProfiled = await profileFilter(poolPre.kept, ciks, getText);
+    filtered.push(...poolPre.skipped, ...poolProfiled.excluded);
+    for (const [symbol, profile] of poolProfiled.profiles) profiles.set(symbol, profile);
+    const poolSummary = { withStoredBars: poolRows.length, lane: lane.lane.length, preScreenDropped: poolPre.dropped.length, screened: poolProfiled.kept.length, apiRequests: (provider?.requests ?? 0) - poolBefore };
+    process.stderr.write(`Discovery growth pool: ${poolRows.length} names with stored bars, ${lane.lane.length} in the lane, ${poolPre.dropped.length} dropped under MA200, ${poolProfiled.excluded.length} excluded by SEC profile, ${poolProfiled.kept.length} go to the full screen, ${poolSummary.apiRequests} Twelve Data requests\n`);
+    const result = await screenDiscoveryShortlist([...shortlist, ...poolProfiled.kept], date, barsFor, macro, benchmarkClose, quality);
     const { screened, failureCount, failures } = result;
     const skipped = [...filtered, ...result.skipped];
     const skippedCount = skipped.length;
     for (const failure of failures) process.stderr.write(`${failure.symbol}: screening failed: ${failure.reason}\n`);
-    const selected = screened.sort((a, b) => (b.ruleScore ?? 0) - (a.ruleScore ?? 0) || b.score - a.score || a.symbol.localeCompare(b.symbol)).slice(0, DISCOVERY.maxCandidatesPerWeek);
-    const saved = await saveCandidates(pool, week, selected);
+    const rankedScreened = screened.sort((a, b) => (b.ruleScore ?? 0) - (a.ruleScore ?? 0) || b.score - a.score || a.symbol.localeCompare(b.symbol));
+    const saved = await saveCandidates(pool, week, rankedScreened);
     const telegram = await notifyWeek(pool, week);
-    process.stdout.write(`${JSON.stringify({ weekStart: week, sourceRows: summary, uniqueSymbols: new Set(sources.map((row) => row.symbol)).size, ranked: ranked.length, preScreened: preScreened?.preScreened ?? 0, preScreenDropped: preScreened?.dropped.length ?? 0, preScreenDroppedNames: preScreened?.dropped ?? [], telegram, twelveDataRequests: provider.requests, screened: shortlist.length, shortlisted: shortlist.length, candidates: saved, notPassed: result.notPassed, skippedCount, skipped, failureCount, failures })}\n`);
+    process.stdout.write(`${JSON.stringify({ weekStart: week, sourceRows: summary, uniqueSymbols: new Set([...sources, ...poolRows].map((row) => row.symbol)).size, ranked: ranked.length, preScreened: preScreened?.preScreened ?? 0, preScreenDropped: preScreened?.dropped.length ?? 0, preScreenDroppedNames: preScreened?.dropped ?? [], telegram, twelveDataRequests: provider?.requests ?? 0, pool: poolSummary, screened: shortlist.length + poolProfiled.kept.length, shortlisted: shortlist.length, candidates: saved, notPassed: result.notPassed, skippedCount, skipped, failureCount, failures })}\n`);
   } finally { await pool.end(); }
 }
 if (/(?:^|[/\\])discovery\.(?:ts|js)$/.test(process.argv[1] ?? "")) main().catch((error) => { console.error(error instanceof Error ? error.message : error); process.exitCode = 1; });

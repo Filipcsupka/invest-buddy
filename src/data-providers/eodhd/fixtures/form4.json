@@ -1,0 +1,9 @@
+{
+  "data": [
+    { "accession_number": "0001104659-26-062860", "filed_at": "2026-05-15", "period_of_report": "2026-05-13", "non_derivative": [
+      { "reporting_owner_cik": "0001771340", "reporting_owner_name": "Taneja Vaibhav", "is_director": false, "is_officer": true, "is_ten_percent_owner": false, "is_other": false, "officer_title": "Chief Financial Officer", "other_text": null, "security_title": "Common Stock", "transaction_date": "2026-05-13T00:00:00+00:00", "transaction_code": "S", "acquired_or_disposed": "D", "shares_amount": 3000, "price_per_share": 450, "shares_owned_after": 18106.5, "total_value": 1350000, "footnote_ids": ["F1"], "footnote_refs": { "shares_owned_after": ["F1"] } }
+    ], "derivative": [], "footnotes": [] }
+  ],
+  "meta": { "total": 594, "page": { "offset": 0, "limit": 20 } },
+  "links": { "next": "/api/sec-filings/AAPL.US/form4?page%5Boffset%5D=20&page%5Blimit%5D=20" }
+}

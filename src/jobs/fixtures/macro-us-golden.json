@@ -1,0 +1,254 @@
+{
+ "asOf": "2026-10-02",
+ "source": "evaluateMacro on origin/main before regional macro",
+ "scenarios": {
+  "base": {
+   "dataTailwind": {
+    "value": true,
+    "reason": "Tailwind: 10-year yield 2026-09-12 4.3379 to 2026-10-02 4.2 (change -0.14 pp, at or below 0.25); VIX 2026-10-02 18 (below 25); inflation fallback to rates and VIX: CPIAUCSL newest none (missing, stale or lacks YoY history); PPIACO newest none (missing, stale or lacks YoY history). Placeholder rule macro-rules-v2",
+    "evidenceDates": [
+     "2026-10-02",
+     "2026-10-02"
+    ]
+   },
+   "sectorRotationIntoGrowth": {
+    "value": true,
+    "evidenceDates": [
+     "2026-10-02"
+    ],
+    "reason": "Rotation: universe average 20-session return 4.39% (6 tickers) minus SPY 1.37% = 3.02 pp, above 2 pp (2026-09-12 to 2026-10-02). Placeholder rule macro-rules-v2"
+   },
+   "evidence": {
+    "dataTailwind": [
+     {
+      "claim": "macro.dataTailwind",
+      "url": "https://fred.stlouisfed.org/series/DGS10",
+      "publishedAt": "2026-10-02"
+     },
+     {
+      "claim": "macro.dataTailwind",
+      "url": "https://www.cboe.com/tradable_products/vix/vix_historical_data/#VIX",
+      "publishedAt": "2026-10-02"
+     }
+    ],
+    "sectorRotationIntoGrowth": []
+   }
+  },
+  "noRotation": {
+   "dataTailwind": {
+    "value": true,
+    "reason": "Tailwind: 10-year yield 2026-09-12 4.3379 to 2026-10-02 4.2 (change -0.14 pp, at or below 0.25); VIX 2026-10-02 18 (below 25); inflation fallback to rates and VIX: CPIAUCSL newest none (missing, stale or lacks YoY history); PPIACO newest none (missing, stale or lacks YoY history). Placeholder rule macro-rules-v2",
+    "evidenceDates": [
+     "2026-10-02",
+     "2026-10-02"
+    ]
+   },
+   "sectorRotationIntoGrowth": {
+    "value": false,
+    "evidenceDates": [
+     "2026-10-02"
+    ],
+    "reason": "No rotation: universe average 20-session return 0.69% (6 tickers) minus SPY 1.37% = -0.68 pp, not above 2 pp (2026-09-12 to 2026-10-02). Placeholder rule macro-rules-v2"
+   },
+   "evidence": {
+    "dataTailwind": [
+     {
+      "claim": "macro.dataTailwind",
+      "url": "https://fred.stlouisfed.org/series/DGS10",
+      "publishedAt": "2026-10-02"
+     },
+     {
+      "claim": "macro.dataTailwind",
+      "url": "https://www.cboe.com/tradable_products/vix/vix_historical_data/#VIX",
+      "publishedAt": "2026-10-02"
+     }
+    ],
+    "sectorRotationIntoGrowth": []
+   }
+  },
+  "risingYields": {
+   "dataTailwind": {
+    "value": false,
+    "reason": "No tailwind: 10-year yield 2026-09-12 4.1552 to 2026-10-02 4.5 (change 0.34 pp, above 0.25); VIX 2026-10-02 18 (below 25); inflation fallback to rates and VIX: CPIAUCSL newest none (missing, stale or lacks YoY history); PPIACO newest none (missing, stale or lacks YoY history). Placeholder rule macro-rules-v2",
+    "evidenceDates": [
+     "2026-10-02",
+     "2026-10-02"
+    ]
+   },
+   "sectorRotationIntoGrowth": {
+    "value": true,
+    "evidenceDates": [
+     "2026-10-02"
+    ],
+    "reason": "Rotation: universe average 20-session return 4.39% (6 tickers) minus SPY 1.37% = 3.02 pp, above 2 pp (2026-09-12 to 2026-10-02). Placeholder rule macro-rules-v2"
+   },
+   "evidence": {
+    "dataTailwind": [
+     {
+      "claim": "macro.dataTailwind",
+      "url": "https://fred.stlouisfed.org/series/DGS10",
+      "publishedAt": "2026-10-02"
+     },
+     {
+      "claim": "macro.dataTailwind",
+      "url": "https://www.cboe.com/tradable_products/vix/vix_historical_data/#VIX",
+      "publishedAt": "2026-10-02"
+     }
+    ],
+    "sectorRotationIntoGrowth": []
+   }
+  },
+  "highVix": {
+   "dataTailwind": {
+    "value": false,
+    "reason": "No tailwind: 10-year yield 2026-09-12 4.3379 to 2026-10-02 4.2 (change -0.14 pp, at or below 0.25); VIX 2026-10-02 31 (not below 25); inflation fallback to rates and VIX: CPIAUCSL newest none (missing, stale or lacks YoY history); PPIACO newest none (missing, stale or lacks YoY history). Placeholder rule macro-rules-v2",
+    "evidenceDates": [
+     "2026-10-02",
+     "2026-10-02"
+    ]
+   },
+   "sectorRotationIntoGrowth": {
+    "value": true,
+    "evidenceDates": [
+     "2026-10-02"
+    ],
+    "reason": "Rotation: universe average 20-session return 4.39% (6 tickers) minus SPY 1.37% = 3.02 pp, above 2 pp (2026-09-12 to 2026-10-02). Placeholder rule macro-rules-v2"
+   },
+   "evidence": {
+    "dataTailwind": [
+     {
+      "claim": "macro.dataTailwind",
+      "url": "https://fred.stlouisfed.org/series/DGS10",
+      "publishedAt": "2026-10-02"
+     },
+     {
+      "claim": "macro.dataTailwind",
+      "url": "https://www.cboe.com/tradable_products/vix/vix_historical_data/#VIX",
+      "publishedAt": "2026-10-02"
+     }
+    ],
+    "sectorRotationIntoGrowth": []
+   }
+  },
+  "inflation": {
+   "dataTailwind": {
+    "value": false,
+    "reason": "No tailwind: 10-year yield 2026-09-12 4.3379 to 2026-10-02 4.2 (change -0.14 pp, at or below 0.25); VIX 2026-10-02 18 (below 25); CPIAUCSL YoY 2026-10-01 17.03% (base 2025-10-01) vs 2026-07-01 16.67% (base 2025-07-01; higher); PPIACO YoY 2026-10-01 12.23% (base 2025-10-01) vs 2026-07-01 11.54% (base 2025-07-01; higher). Placeholder rule macro-rules-v2",
+    "evidenceDates": [
+     "2026-10-02",
+     "2026-10-02",
+     "2026-10-01",
+     "2026-10-01"
+    ]
+   },
+   "sectorRotationIntoGrowth": {
+    "value": true,
+    "evidenceDates": [
+     "2026-10-02"
+    ],
+    "reason": "Rotation: universe average 20-session return 4.39% (6 tickers) minus SPY 1.37% = 3.02 pp, above 2 pp (2026-09-12 to 2026-10-02). Placeholder rule macro-rules-v2"
+   },
+   "evidence": {
+    "dataTailwind": [
+     {
+      "claim": "macro.dataTailwind",
+      "url": "https://fred.stlouisfed.org/series/DGS10",
+      "publishedAt": "2026-10-02"
+     },
+     {
+      "claim": "macro.dataTailwind",
+      "url": "https://www.cboe.com/tradable_products/vix/vix_historical_data/#VIX",
+      "publishedAt": "2026-10-02"
+     },
+     {
+      "claim": "macro.dataTailwind",
+      "url": "https://fred.stlouisfed.org/series/CPIAUCSL",
+      "publishedAt": "2026-10-01"
+     },
+     {
+      "claim": "macro.dataTailwind",
+      "url": "https://fred.stlouisfed.org/series/PPIACO",
+      "publishedAt": "2026-10-01"
+     }
+    ],
+    "sectorRotationIntoGrowth": []
+   }
+  },
+  "staleSpy": {
+   "dataTailwind": {
+    "value": true,
+    "reason": "Tailwind: 10-year yield 2026-09-12 4.3379 to 2026-10-02 4.2 (change -0.14 pp, at or below 0.25); VIX 2026-10-02 18 (below 25); inflation fallback to rates and VIX: CPIAUCSL newest none (missing, stale or lacks YoY history); PPIACO newest none (missing, stale or lacks YoY history). Placeholder rule macro-rules-v2",
+    "evidenceDates": [
+     "2026-10-02",
+     "2026-10-02"
+    ]
+   },
+   "sectorRotationIntoGrowth": {
+    "value": null,
+    "reason": "Unknown: SPY bars are stale (newest 2026-09-23, limit 5 days)",
+    "evidenceDates": []
+   },
+   "evidence": {
+    "dataTailwind": [
+     {
+      "claim": "macro.dataTailwind",
+      "url": "https://fred.stlouisfed.org/series/DGS10",
+      "publishedAt": "2026-10-02"
+     },
+     {
+      "claim": "macro.dataTailwind",
+      "url": "https://www.cboe.com/tradable_products/vix/vix_historical_data/#VIX",
+      "publishedAt": "2026-10-02"
+     }
+    ],
+    "sectorRotationIntoGrowth": []
+   }
+  },
+  "lowCoverage": {
+   "dataTailwind": {
+    "value": true,
+    "reason": "Tailwind: 10-year yield 2026-09-12 4.3379 to 2026-10-02 4.2 (change -0.14 pp, at or below 0.25); VIX 2026-10-02 18 (below 25); inflation fallback to rates and VIX: CPIAUCSL newest none (missing, stale or lacks YoY history); PPIACO newest none (missing, stale or lacks YoY history). Placeholder rule macro-rules-v2",
+    "evidenceDates": [
+     "2026-10-02",
+     "2026-10-02"
+    ]
+   },
+   "sectorRotationIntoGrowth": {
+    "value": null,
+    "reason": "Unknown: only 3 of 6 universe tickers have bars through 2026-10-02",
+    "evidenceDates": []
+   },
+   "evidence": {
+    "dataTailwind": [
+     {
+      "claim": "macro.dataTailwind",
+      "url": "https://fred.stlouisfed.org/series/DGS10",
+      "publishedAt": "2026-10-02"
+     },
+     {
+      "claim": "macro.dataTailwind",
+      "url": "https://www.cboe.com/tradable_products/vix/vix_historical_data/#VIX",
+      "publishedAt": "2026-10-02"
+     }
+    ],
+    "sectorRotationIntoGrowth": []
+   }
+  },
+  "missing": {
+   "dataTailwind": {
+    "value": null,
+    "reason": "Unknown: no 10-year yield observation on or before the date",
+    "evidenceDates": []
+   },
+   "sectorRotationIntoGrowth": {
+    "value": null,
+    "reason": "Unknown: SPY bars are missing or too short",
+    "evidenceDates": []
+   },
+   "evidence": {
+    "dataTailwind": [],
+    "sectorRotationIntoGrowth": []
+   }
+  }
+ }
+}

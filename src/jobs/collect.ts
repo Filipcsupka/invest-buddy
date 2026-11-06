@@ -110,6 +110,7 @@ async function runLegacyCollect(repository: CollectorRepository, symbols: string
         ids.set(doc.url, stored.id);
         if (stored.written) run.documentsWritten++;
       }
+      if (!options.dryRun && sources.includes("edgar") && cik) await repository.markSecInsiderChecked?.(symbol, now.toISOString());
       const facts = await deriveFacts(symbol, docs, ids, repository, asOf);
       factsComputed += facts.length;
       if (!options.dryRun) for (const fact of facts) if (await repository.upsertFact(fact)) run.factsWritten++;
@@ -139,6 +140,7 @@ export async function deriveFacts(symbol: string, docs: CollectedDocument[], ids
   if (stored) {
     make("insider_net_buy_90d", { netShares: stored.netShares, netDollars: stored.netDollars, ...(stored.dollarsComplete ? {} : { dollarsComplete: false }) }, [], asOf);
     facts[facts.length - 1].documentIds = stored.documentIds;
+    if (stored.sourceId) facts[facts.length - 1].sourceId = stored.sourceId;
   } else {
     const trades = docs.filter((doc) => doc.docType === "4" && doc.publishedAt.slice(0, 10) >= daysAgo(new Date(`${asOf}T00:00:00Z`), 90));
     if (trades.length) {

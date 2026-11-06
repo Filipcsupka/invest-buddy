@@ -2,7 +2,7 @@ import type pg from "pg";
 import { DEFAULT_SYMBOL_MAP } from "./twelvedata";
 
 /** Vendors that key on a ticker. Names match the keys of `instrument_ids.vendor_symbols`. */
-export type Vendor = "twelvedata" | "sec";
+export type Vendor = "twelvedata" | "sec" | "eodhd";
 
 type Db = Pick<pg.Pool, "query">;
 const UNDEFINED_TABLE = "42P01";
@@ -16,7 +16,7 @@ async function queryOrNull<T extends pg.QueryResultRow>(db: Db, sql: string): Pr
 /** Our ticker to the vendor's symbol. Rows from `instrument_ids` win; the constant fills in where a row has none or the table is missing. */
 export async function loadVendorSymbols(db: Db, vendor: Vendor): Promise<Record<string, string>> {
   const rows = await queryOrNull<{ ticker: string; vendor_symbols: Record<string, unknown> }>(db, "SELECT ticker, vendor_symbols FROM instrument_ids WHERE valid_to IS NULL");
-  const out: Record<string, string> = { ...DEFAULT_SYMBOL_MAP };
+  const out: Record<string, string> = vendor === "eodhd" ? {} : { ...DEFAULT_SYMBOL_MAP };
   for (const row of rows ?? []) {
     const symbol = row.vendor_symbols?.[vendor];
     if (typeof symbol === "string" && symbol) out[row.ticker] = symbol;

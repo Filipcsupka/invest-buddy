@@ -11,7 +11,7 @@ const day = (date: string) => Date.parse(`${date}T00:00:00Z`) / 86_400_000;
 const duration = (fact: SecFact) => fact.start ? day(fact.end) - day(fact.start) : NaN;
 const valid = (fact: SecFact, asOf: string) => fact.filed <= asOf && fact.end <= asOf && Number.isFinite(fact.val) && fact.val > 0 &&
   Number.isInteger(fact.fy) && Number.isFinite(day(fact.end)) && Number.isFinite(day(fact.filed));
-const fiscalQuarter = (fact: SecFact) => /^Q[1-4]$/.test(fact.fp) && ["10-Q", "10-K"].includes(fact.form) && duration(fact) >= 70 && duration(fact) <= 105;
+const fiscalQuarter = (fact: SecFact) => /^Q[1-4]$/.test(fact.fp) && ["10-Q", "10-K", "EODHD"].includes(fact.form) && duration(fact) >= 70 && duration(fact) <= 105;
 const annual = (fact: SecFact) => fact.form === "10-K" && fact.fp === "FY" && duration(fact) >= 350 && duration(fact) <= 380;
 const nineMonths = (fact: SecFact) => fact.form === "10-Q" && fact.fp === "Q3" && duration(fact) >= 250 && duration(fact) <= 300;
 
@@ -33,7 +33,7 @@ function newer(fact: SecFact, old?: SecFact) {
 function quarters(facts: SecFact[], asOf: string): Map<string, RevenueQuarter> {
   const eligible = facts.filter((fact) => valid(fact, asOf));
   const byPeriod = new Map<string, RevenueQuarter>();
-  for (const fact of latestByFiling(eligible, (item) => fiscalQuarter(item) && item.form === "10-Q")) {
+  for (const fact of latestByFiling(eligible, (item) => fiscalQuarter(item) && (item.form === "10-Q" || item.form === "EODHD"))) {
     const key = `${fact.fy}:${fact.fp}`;
     if (newer(fact, byPeriod.get(key))) byPeriod.set(key, fact);
   }
@@ -145,8 +145,33 @@ export async function secRevenueStored(db: Queryable, symbol: string, asOf: stri
   return result ? { ...result, source: companyfactsSource(cik) } : null;
 }
 
-/** Stored SEC facts first; `fallback` (live SEC fetch) only when the store gives no answer. */
+/** Stored EODHD facts, then SEC facts; live SEC is the last fallback. */
+export async function eodhdRevenueStored(db: Queryable, symbol: string, asOf: string): Promise<RevenueResult | null> {
+  const from = new Date(`${asOf}T00:00:00Z`);
+  from.setUTCFullYear(from.getUTCFullYear() - HISTORY_YEARS);
+  const result = await db.query<{ unit: string; period_start: string; period_end: string; value: string; accession: string; fy: number; fp: string; filed: string }>(
+    `SELECT unit,period_start::text,period_end::text,value::text,accession,fy,fp,filed::text
+       FROM fundamentals_pit WHERE ticker=$1 AND source_id='eodhd' AND concept='Revenues'
+         AND filed BETWEEN $2::date AND $3::date AND period_end <= $3::date
+         AND first_seen_at::date <= $3::date
+       ORDER BY filed DESC, id DESC`, [symbol, from.toISOString().slice(0, 10), asOf]);
+  const byUnit = new Map<string, SecFact[]>();
+  for (const row of result.rows) {
+    const list = byUnit.get(row.unit) ?? [];
+    list.push({ start: row.period_start, end: row.period_end, val: Number(row.value), accn: row.accession,
+      fy: row.fy, fp: row.fp, form: "EODHD", filed: row.filed });
+    byUnit.set(row.unit, list);
+  }
+  for (const facts of byUnit.values()) {
+    const value = revenueFromCompanyFacts({ facts: { "us-gaap": { Revenues: { units: { USD: facts } } } } }, asOf);
+    if (value) return { ...value, period: `quarter ended ${[...facts].sort((a, b) => b.end.localeCompare(a.end))[0].end}`,
+      source: "https://eodhd.com/financial-apis/stock-etfs-fundamental-data-feeds" };
+  }
+  return null;
+}
+
 export function revenueLookup(db: Queryable, fallback?: (symbol: string, asOf: string) => Promise<RevenueResult | null>) {
   return async (symbol: string, asOf: string): Promise<RevenueResult | null> =>
+    (await eodhdRevenueStored(db, symbol, asOf).catch(() => null)) ??
     (await secRevenueStored(db, symbol, asOf).catch(() => null)) ?? (fallback ? fallback(symbol, asOf) : null);
 }

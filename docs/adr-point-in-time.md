@@ -157,7 +157,7 @@ Class: **A** append-only revision or history table added (D-task builds it); **I
 - **Never delete:** public SEC filings, bar and score and consensus revisions, score input snapshots, universe membership, security master, corporate actions, `record_*`, estimates and earnings snapshots, discovery screens.
 - **Keep, no purge job:** run logs and cost ledgers. If one grows large, summarise before deleting, in its own task.
 - **Expire:** display-restricted or internal-only raw text (30 days as today); `extraction_runs` and `judge_runs` (30 days); `trade_ideas` (90 days) unless the owner decides otherwise.
-- `src/jobs/retention.ts` stays suspended (`invest-buddy-retention`) until D5 changes its delete rules. Any new table in the never-delete class needs a test that the retention job does not touch it (the test D12 and D14 add).
+- `src/jobs/retention.ts` (`invest-buddy-retention`) runs daily since 2026-10-19; D5 archives public SEC rows instead of deleting them. Any new table in the never-delete class needs a test that the retention job does not touch it (the test D12 and D14 add).
 
 ## Consequences
 

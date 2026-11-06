@@ -1,5 +1,7 @@
 # Lane RESEARCH: research engine (IDs RS0 to RS8)
 
+Closed on 2026-10-21. The owner decided against AI collection, and P8 removed the code. This file is kept as history; paths below may no longer exist.
+
 Added 2026-10-11 from the owner's request to replace the ChatGPT automation. The design is `docs/research-engine.md` and the decision is `docs/adr-research-engine.md`. RS0 (this lane, the design, the schema `scanner/schema/research-output.schema.json` and `src/research/types.ts`) is the first task. The rules in `docs/roadmap/README.md` sections e and h apply: one writer per file, one task per PR, migration numbers taken when the PR opens.
 
 ## Order

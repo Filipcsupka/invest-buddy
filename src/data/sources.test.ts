@@ -69,3 +69,11 @@ describe("fieldSourcesFor", () => {
     expect(calls).toHaveLength(0);
   });
 });
+
+describe("EODHD source classification", () => {
+  it("labels a derived vendor signal without exposing an unlicensed link", () => {
+    const source = classifyRef({ url: "https://eodhd.com/api/v1.1/fundamentals/AAPL.US#2025-10-15", publishedAt: "2025-10-15" },
+      { docType: "EPS surprise", publishedAt: "2025-10-15", displayAllowed: false });
+    expect(source).toEqual({ kind: "eodhd", publishedAt: "2025-10-15", href: null });
+  });
+});

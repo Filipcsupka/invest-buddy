@@ -1,6 +1,140 @@
 # Open tasks
 
+## When the EODHD key arrives (start here)
+
+1. Do E1 below: create secret `invest-buddy-eodhd` (key `api-key`) in namespace `invest`, export `EODHD_API_KEY` in the local shell only, call `/api/user`, write plan and daily call limit into `docs/eodhd.md`.
+2. Do E2: one real call per UNVERIFIED item, save trimmed fixtures, fix parsers, one PR.
+3. Then E3 to E9 in order. Each real DB write and each un-suspend of an `invest-buddy-eodhd-*` CronJob needs the owner's yes. Edit `suspend` in the infra manifest, never `kubectl patch`.
+4. If the plan gives a different data set than ALL-IN-ONE (for example no fundamentals or no Form 4), list which of the five scoring inputs lose coverage before E3 and ask the owner.
+
+## Status 2026-11-04
+
+Waiting on the EODHD key (E1). Everything that needs real vendor responses (E2 to E9) stays blocked until it is bought.
+
+Done since 2026-10-21:
+- Infra #61 merged: five EODHD CronJobs added (suspended), ETF enrich reads `invest-buddy-eodhd` key `api-key`, research CronJobs and the verify NetworkPolicy removed. The `invest-buddy-research-config` ConfigMap stays. All EODHD CronJobs stay suspended until the secret exists and a dry run looks right (E7).
+- Production dependency audit clean: Next 16.4.5 and Vite 7.3.7 (#296). Dev audit still lists ESLint/minimatch and Vitest/tinypool findings that need major toolchain upgrades.
+- S6 fixed (#297): a later discovery run refreshes pending rows of the same week; approved and rejected rows stay snapshots.
+- Dependabot #292, #294, #295 merged.
+
+Corrections to the list below:
+- Open item 1 (slow Codex ETF enrich) no longer applies: the Codex path is gone (#289). Re-check speed and call cost in E9.
+- Open item 6 (remove research CronJobs) is done (infra #61).
+- E12 must keep `scanner/run-scan.mjs` and the SEC and Alpha Vantage collectors until their readers are replaced: the scanner is still the Docker entrypoint and judge and ETF runners import it, and current jobs and pages read the SEC and research tables. Remove only what grep shows unused.
+
+Not started, needs an owner decision: index funds second tier (fee source), non-US benchmark source for ETF outcomes, E10 and E11 sign-offs.
+
+## Status 2026-10-21 (end of day)
+
+Owner decision 2026-10-21: remove the AI screen and AI data gathering. Use EODHD ALL-IN-ONE for stock inputs, with AI only as judge. The ETF catalog and weekly ETF picks remain separate.
+
+### EODHD data layer (2026-10-21)
+Owner decisions: no AI scraping or collection. EODHD ALL-IN-ONE supplies every input. No AI token spend until EODHD data is live; the AI role (judge or other) is decided afterwards.
+
+Done:
+- AI screen removed (#278). Suspended AI research stack removed (#286).
+- EODHD client and symbols table (#279), price bars (#280), fundamentals and earnings (#282), Form 4 insider fallback (#283), earnings and news catalyst (#284), US plus Europe universe (#285), regional macro and sector (#288).
+- ETF enrichment from EODHD (#281). Codex path dropped (#289).
+- Infra #60: AI CronJobs suspended (extract, judge, review-calendar, etf-enrich, etf-research).
+- The research CronJobs removal and the new EODHD CronJobs (suspended) are on local infra branch `feat/invest-eodhd-cronjobs`, not pushed.
+- Nothing runs against EODHD yet. There is no key and all tests use recorded fixtures.
+
+Next tasks (follow in this order). Each has depends-on, steps and a definition of done (DoD). "Approval" means the owner says yes first. Commands run with `KUBECONFIG=~/.kube/khtz`, namespace `invest`. Production is read-only unless the step says otherwise.
+
+E1. EODHD key and plan (owner, approval)
+- Depends on: nothing.
+- Do: buy EODHD ALL-IN-ONE (about 100 USD a month). Create the secret: `kubectl -n invest create secret generic invest-buddy-eodhd --from-literal=api-key=<KEY>`. Export the key in the local shell only for the dry runs (`export EODHD_API_KEY=...`), never in a file or commit.
+- DoD: `kubectl -n invest get secret invest-buddy-eodhd` exists. `curl "https://eodhd.com/api/user?api_token=$EODHD_API_KEY"` returns the plan and the daily call limit. Write plan name and limit into `docs/eodhd.md`.
+
+E2. Verify vendor behaviour with real responses
+- Depends on: E1.
+- Do: run each UNVERIFIED item once with one real call and save a trimmed fixture: exchange codes PA, AS, SW, PR, MI, MC, ST, OL, CO, HE, VI, BR, LS in `/exchanges-list`; the quarterly income statement filter path (`Financials::Income_Statement::quarterly`); ETF fields (`NetExpenseRatio`, `TotalAssets`, `Holdings_Count`, UCITS funds on XETRA); LSE price unit (GBX or GBP) for 3 names; `EXSA.XETRA` price history; news call cost (check the usage counter before and after); bulk endpoint cost; All-In-One call limit.
+- DoD: every UNVERIFIED line in `docs/eodhd.md` and `docs/eodhd-universe.md` is replaced by a verified fact or a stated failure. Parsers and fixtures match the real responses. One PR with the fixes, tests green, merged.
+
+E3. Symbols sync
+- Depends on: E2.
+- Do: `npm run symbols:sync -- --dry-run`, check the exchange list and counts, then run it for real (manual Job from the image, or locally against a port-forward only if the owner approves a DB write).
+- DoD: `symbols` table holds rows for US, XETRA, LSE, PA, AS, SW and the other verified exchanges. A query by exchange shows counts. `job_runs` shows a successful run. Approval: first real DB write.
+
+E4. Price bars
+- Depends on: E3.
+- Do: `npm run prices:eodhd -- --mode backfill --only AAPL,MSFT,SAP.XETRA,ASML.AS,NESN.SW --dry-run`, then for real. Compare closes with the old price source for the same days (US names). Then backfill the whole universe and run daily mode once.
+- DoD: each tracked name has at least 200 bars with currency set. For the 5 comparison names the close matches the old source within rounding on at least 20 sessions (splits aside). Universe backfill reports zero unresolved symbols or lists them. Estimated calls are below the daily limit from E1.
+
+E5. Fundamentals and earnings
+- Depends on: E3.
+- Do: `npm run fundamentals:eodhd -- --dry-run --only AAPL.US,SAP.XETRA`, then for real on 10 names, then the universe in batches (`--max-symbols`).
+- DoD: `fundamentals_pit` has eodhd rows with report dates for the batch. Revenue acceleration and EPS beat match SEC and Alpha Vantage for 5 US names (document any difference). `earnings_calendar_snapshots` has eodhd rows. No row has a first-seen date after its report date by mistake.
+
+E6. Catalyst and insider
+- Depends on: E4 and E5.
+- Do: run `catalyst:eodhd` and the insider job on 10 names with `--dry-run`, then for real.
+- DoD: catalyst facts exist with the `catalyst_8k_eodhd` name for names with an event in the window and none for the rest. Insider rows for US names do not double count against EDGAR (same accession counted once). News call count per run is written in the job log and stays inside the daily limit.
+
+E7. Infra CronJobs
+- Depends on: E2 and E3.
+- Do: push local infra branch `feat/invest-eodhd-cronjobs` (it adds the EODHD CronJobs suspended and removes the old research CronJobs, keeps `invest-buddy-research-config`), open PR, merge. Un-suspend one CronJob at a time in this order: symbols-sync, prices, fundamentals, catalyst, insider. Edit `suspend` in the manifest, never `kubectl patch`.
+- DoD: all five CronJobs exist in the cluster and run once on schedule with a successful Job each. `kubectl get cronjob -n invest` shows the old research CronJobs gone. Approval: infra push and merge, each un-suspend.
+
+E8. Stock screen on EODHD data
+- Depends on: E4, E5, E6.
+- Do: run `daily` and `reconcile` manually once and compare the scores for the 36 current names with the previous run. Run the universe selection for US plus Europe in dry run.
+- DoD: scores for US names match the previous run except where an input changed on purpose (list those). A dry-run universe lists names per exchange, none selected from LSE until the pence unit is confirmed in E2. Selected set size is written down against the 500, 2,000 and 5,000 targets.
+
+E9. ETF enrichment live run
+- Depends on: E2 (ETF fields).
+- Do: `npm run etf:enrich -- --limit 100 --dry-run`, then for real, then un-suspend `invest-buddy-etf-enrich` (weekly, Sunday).
+- DoD: at least 90 of 100 top-scored funds have status `ok` with TER and AUM filled or a stated reason. The shortlist holds 150 funds. Calls used are below the call cap and the daily limit. Weekly job completes one run.
+
+E10. Decide the AI role (owner)
+- Depends on: E8.
+- Do: pick what AI runs on top of EODHD data and with which provider (for example judge on structured data only, no web search; ETF picks judge on enriched rows). Extract stays off unless a rule still needs it.
+- DoD: decision written in this file and in `~/Documents/ops-brain/projects/investing-platform/`. Then one task per run to re-enable `judge` and `etf-research`, each with an expected tokens per run and a monthly cap.
+
+E11. Scoring sign-off (owner)
+- Depends on: E8.
+- Do: review three open choices: European macro uses a STOXX 600 ETF price trend (no ECB series collected); US rotation averages US names only; the traded-value floor counts primary-venue volume for European names. Thresholds in `docs/eodhd-universe.md` are provisional.
+- DoD: each choice is accepted or a change task is created. Accepted choices are noted in `docs/data.md`.
+
+E12. Cleanup
+- Depends on: E8 and E10.
+- Do: back up `ai_cards` and the `research_*` tables (`pg_dump` of those tables to a file outside the repo). Then one migration dropping `research_runs`, `research_findings`, `research_candidates`, `research_events` and `ai_cards`. Remove the SEC and Alpha Vantage collectors that EODHD replaced and `scanner/run-scan.mjs`.
+- DoD: backup file exists and restores in a scratch database. Migration applied, app and jobs run, no references left (`grep` clean), tests green. Approval: the drop.
+
+E13. Forward-return comparison against the old ChatGPT picks
+- Depends on: E12 backup of `ai_cards`, at least 20 picks per side.
+- Do: build the comparison (30, 60, 90 day horizons, benchmark) per `~/Documents/ops-brain/projects/investing-platform/research/old-automation-vs-pipeline.md`.
+- DoD: report with picks, entry price, return per horizon and benchmark, and the verdict rule applied as written before the results.
+
+### Done today
+- Promotion fix (#264): the pipeline read `e.status` but evidence stores `verify.status`, so nothing was proposed. CGNX, COF, ROK, SYM, VRT, COHR, NOVT now in the scored universe (6 of 7 score Criteria broken, ROK Ignore; real rule results).
+- Own-domain sources (#265): `sources.json` `ir` now covers SIE, 3687, HEXA-B, COHR, NOVT, ROK, ABBN. `npm run research:reclassify` (dry-run default, `-- --apply` writes) regraded 7 findings. Foreign-exchange names stay research-only (WATCH, never scored or promoted).
+- Research gates removed (#266): no live quota check, no 90% stops, no budget skip, no single-run lock. Only `RESEARCH_ENABLED=off` stops a run.
+- Original stock screen is free data plus judge: infra #58 suspended nine research CronJobs (weekly, daily, verify, verify-pm, pipeline, pipeline-early, pipeline-pm, scout, notify). Extract, judge, discovery and the ETF track stay on.
+- ETF track (#268, #269, #270, #272, #274, #275, infra #57 and #59): migration 092 and 094, runner, ingest with server-side quote check, outcomes job, CronJobs (catalog-sync Sun 05:10, enrich Sun 05:40, research Mon 07:40, outcomes daily 06:50), prompt, `/etf` with picks and a global catalog (Xetra list plus Nasdaq Trader ETF lists, 9,386 listings loaded). Catalog is global, no filter by where a fund can be bought.
+- Docs and sources checked: free price sources for non-US (none confirmed), paid options (EODHD, Twelve Data commercial, quotes not confirmed), index funds (SEC `company_tickers_mf.json` works, FRED SP500 works, Stooq bot-gated).
+
+### Open, in order
+1. **ETF enrichment was too slow (Codex path, now removed).** `etf-enrich-manual-1` finished batch 1 of 470 (20 funds) in about 6 minutes, so a sequential run would take about two days. 20 of 9,386 rows enriched; the shortlist also shows 20, matching the 20 enriched rows (cause not checked). Fix: run batches in parallel (several Jobs or workers over disjoint ISIN ranges), raise the batch size, or pre-filter to funds worth enriching (for example drop ETNs, leveraged and tiny funds first). Check cost after the first hour. Job is still running.
+2. **Weekly ETF picks need the shortlist.** Until step 1 is done the Monday run reviews almost nothing. Only the test pick FTSS exists. Review the quality of the first full weekly run before trusting calls.
+3. **Old automation log.** Historical `ai_cards` rows remain in the database. The forward-return comparison against the pipeline and a benchmark is not built.
+4. **S3** (scout chain on 2026-10-21): closed. P8 removed the research stack, scout included.
+5. **S1** (non-US scoring): still no free source with display rights; names stay research-only. Twelve Data Basic is internal use only per its pricing page and covers the US bars we already use; owner to review. Paid options are EODHD (about 20 to 100 USD a month personal, commercial quote needed) or Twelve Data commercial (Enterprise 499 USD a month, 70+ markets, external display).
+6. **Telegram research cards**: removed with `research-notify` in P8. The suspended research CronJobs still need removing from `~/moje/infra` (owner approval).
+7. **ETF measurement** (`etf_outcomes`) is empty: it needs picks entered at BUY_ZONE and 30 days. No benchmark price source for non-US funds yet.
+8. **Index funds** (research done): add US index mutual funds from the SEC ticker file as a second tier after the ETF catalog is stable; fees need a separate source. Use FRED for S&P 500 and Nasdaq reference levels. Not started.
+9. **Extract** is still on (it feeds the rules and the judge). Owner can turn it off if the stock screen should be strictly free data plus judge.
+10. **S5, S6, S7**: moot or low value while research jobs are suspended. S7 (`discovery-manual-20261020`) and S6 (stale weekly discovery score rows) apply to the discovery job, which is still on.
+11. **S8** judge timeout of 2026-10-19: cause not confirmed, job events are gone; scheduled run of 2026-10-21 took 89 s. Reopen if it recurs.
+12. **Tooling lessons:** the scanner image copies an explicit file list (a new runner must be added to `scanner/Dockerfile`; the first ETF run failed on that). New CronJobs reach the cluster only through the infra repo, not through `deploy/gitops` here. Nav labels must not contain plus signs (heatmap test). Orca worker release does not delete worktrees; remove them with `orca worktree rm` after merge.
+
+- P3 catalyst calendar (no migration): owner-side read model in `src/data/catalyst-calendar.ts` and `src/db/catalyst-calendar.ts` with next earnings and time of day per ticker, future verified research dates, and a pre-earnings flag for held and START_READY names (7-day window, placeholder). Not wired to cards or pages yet (P7).
+- P5 (open; no migration): forward EPS estimate revision over 30, 60 and 90 days for the next report, read from `earnings_calendar_snapshots` (`src/data/estimate-revisions.ts`, `src/db/estimate-revisions.ts`). Report only, 0 points, owner view only (Alpha Vantage is internal_only). The live table had 0 rows on 2026-10-19; scoring needs an owner decision.
+- P7 owner wiring (no migration): the research card, the owner idea card and `/owner/research/[symbol]` show the next catalyst, the next macro event, the EN/SK graduation line and the estimate revision, owner only and read from stored rows.
 - EN46-display (#169): public score shown as a core-rule percentage with a separate catalyst bonus, EN/SK methodology and rule labels. No stored rows rescored.
+- P1 macro calendar (PR pending; migration 090): the `macro-calendar` job stores BLS CPI, PPI and jobs report dates and FOMC decision days in `macro_events`; the buy-signal event note and the macro events card read it, with the static list as fallback. The CronJob is suspended until the owner applies 090 and approves the first run.
+- P8 (open; no migration): the company page lists upcoming BLS and Fed release dates (`src/components/catalyst-calendar.tsx`); the next earnings date shows only with `PUBLIC_EARNINGS_DATES=on`, off until the owner confirms Alpha Vantage display rights.
+- P9 macro consensus: daily research may add a `macro_release` finding (symbol MACRO) with a quoted consensus and actual; owner context only, no extra model call. Open: licence for quoting press consensus.
 
 State on 2026-10-09. Live state was read from khtz on 2026-10-09; see the open list in section H. A1 to A7 are done (see the notes under each). Each task can be picked up alone or given to one agent. "Approval" means the owner must say yes before the step runs (cluster, push, secrets, money). Pick the lowest open task in a group whose dependencies are done. Tick the box and add one line on what changed.
 
@@ -339,6 +473,12 @@ Evidence: `kubectl -n invest get cronjob,jobs`, `judge_runs`, `scheduled_gates` 
 Owner decision 2026-10-09: the weeks to 2026-12-31 go to collecting data so history accumulates, owner portfolio features, a finished web with free and paid tiers built and tested (payment off), and a marketing and waitlist launch at the end of the year. This replaces the earlier plan to open a waitlist first (PR #83, closed). The plan, owner decisions, schedule and gates are in `docs/roadmap/README.md`; the tasks (D, W, EN, PL) are in the lane files next to it. After each merged roadmap task, add one status line here with the task ID, the PR and the live proof.
 
 ### Progress log
+- Research and retention on (2026-10-19, owner): `RESEARCH_ENABLED=on`; research weekly, daily, verify, pipeline-early and pipeline run on schedule within `AI_DAILY_TOKEN_CEILING` (1,200,000). Notify waits for the `invest-buddy-telegram-owner` secret; deepdive stays manual. Retention runs daily at 03:00; it never touches portfolio, trade or track record tables. Expired trade idea cards (90 days) and judge runs (30 days) are deleted.
+- D36 promote (no migration): `universe-promote` moves `extended` names with 10 clean sessions (D16 checks on stored bars) to `core`, at most 10 a week in growth order, to cap AI cost. CronJob on since 2026-10-19, Sunday 15:00. The macro-calendar and earnings-calendar CronJobs are on since the same day.
+- D35 pool-bars daily (no migration): the pool-bars CronJob runs daily at 12:30 with `--limit 500 --size 3200` and covers the whole SEC growth pool (570 names for CY2026Q2) in two runs, then refreshes about 115 names a day. The mirror keeps it suspended; the infra repo holds the live state.
+- P6 (no migration): `src/engine/graduation.ts` returns the code-written graduation line for a START_POSITION (STARTER to STANDARD to FULL) from `startTiers` and the open rule hits. Owner view only; card wiring is P7. Local tests passed.
+- Discovery growth pool (open PR; no migration): weekly discovery also screens the SEC growth pool (`rankPool`, 300 names) on bars stored by `pool-bars`, with no Twelve Data request for those names; the SEC frames are read once for both growth sources. `preScreenTopK` goes from 60 to 100, which the 30-minute job deadline allows. DS1 filters and the 10 candidates a week stay. Tests written; CI result pending. Open: the newest pool bar is about 7 days old at the Saturday run while pool-bars runs on Sunday.
+- D35 pool-bars daily (no migration): the pool-bars CronJob runs daily at 12:30 with `--limit 500 --size 3200` and covers the whole SEC growth pool (570 names for CY2026Q2) in two runs, then refreshes about 115 names a day. Live and enabled since 2026-10-19 (infra #48).
 - RS5 (#167; no migration): research CronJobs are suspended pending RS8 and owner approval. The caps and kill switch gate model calls; the verifier has a scoped egress policy. Local validation covers the schedule, caps and rendered manifests.
 - DOC1 (#160; docs only): `docs/architecture.md` maps the current system, schedules and suspended jobs, data and status flows, Telegram, planned RS work, CI, pages and key tables from code and manifests.
 - RS0 (#161; docs, schema and types only, no migration): research engine design in `docs/research-engine.md`, ADR in `docs/adr-research-engine.md`, tasks RS1 to RS8 in `docs/roadmap/lane-research.md`, output schema `scanner/schema/research-output.schema.json` with types and a validator in `src/research/types.ts`. Tests written; CI result pending. No schedule or cluster change.
@@ -414,6 +554,7 @@ Owner decision 2026-10-09: the weeks to 2026-12-31 go to collecting data so hist
 - W33 (#123, merged; no migration): score history per ticker on the company page, read through D43 `scoreHistory` (segment `score-history`, chart plus table, EN and SK). Implemented: tests and CI passed. No free-depth limit until W30 sets N.
 
 - D27 (#117, merged; migration 046): stores the Alpha Vantage earnings calendar for universe names every day. Implemented: tests and CI passed. The CronJob is suspended and the live migration needs owner approval.
+- P4 (migration 090): calendar observations now cover stored pool names, extended names, baseline holdings, and open research candidates from the same daily CSV.
 - D11 (#110, merged; migration 043): dated universe membership and a change script. Implemented: tests and CI passed. The live migration needs owner approval.
 - Fixes (merged, tests and CI passed): #113 and #122 EN40 macro tailwind with inflation and a 75 day window for monthly CPI and PPI; #114 revenue from SEC companyfacts for Q4 and fiscal-year periods; #115 accumulation volume point in the score; #119 catalyst sources (90 day window, stored GDELT headlines, 7.01 and 8.01 triggers, six-symbol nightly review cap, suspended GDELT CronJob in the GitOps mirror).
 - P2: store CPI and PPI release-day actual, prior and index-point change from FRED observations in the macro run data. Showing it in the private owner digest is still open.

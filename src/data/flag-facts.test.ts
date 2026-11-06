@@ -1,10 +1,21 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { FundamentalsHistoryRow } from "../db/history";
 import { companyFlags } from "../engine/flags";
 import { FUNDAMENTALS_CONCEPTS, INTEREST_EXPENSE_CONCEPTS } from "./fundamentals-concepts";
-import { pickInterestFacts } from "./flag-facts";
+import { latestShareCounts, pickInterestFacts } from "./flag-facts";
 import realCases from "../collectors/sources/fixtures/sec-real-collector-cases.json";
 import { parseCompanyfacts } from "../collectors/sources/companyfacts";
+
+const query = vi.hoisted(() => vi.fn());
+vi.mock("../db/pool", () => ({ getPool: () => ({ query }) }));
+
+it("reads public share counts only from display-allowed source rows", async () => {
+  query.mockResolvedValueOnce({ rows: [{ ticker: "AAPL", value: "100" }] });
+  expect(await latestShareCounts(["AAPL"])).toEqual({ AAPL: 100 });
+  const sql = String(query.mock.calls.at(-1)?.[0]);
+  expect(sql).toMatch(/s\.id\s*=\s*f\.source_id/);
+  expect(sql).toMatch(/s\.display_allowed/);
+});
 
 const row = (concept: string, value: number, over: Partial<FundamentalsHistoryRow> = {}): FundamentalsHistoryRow => ({
   concept, unit: "USD", periodStart: "2025-01-01", periodEnd: "2025-12-31", fy: 2025, fp: "FY", form: "10-K", filed: "2026-02-15", accession: "a-1", value, ...over,

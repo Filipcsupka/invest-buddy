@@ -11,6 +11,7 @@ import { DataTable, DataTableEmpty } from "@/components/kit/data-table";
 import { IconLock } from "@/components/kit/kit-icons";
 import { ScoreBar } from "@/components/kit/score";
 import { StateChip } from "@/components/kit/state-chip";
+import { ScannerBento } from "@/components/scanner-bento";
 import { kitState } from "@/components/kit/types";
 import { getViewer } from "@/viewer/get-viewer";
 import type { Viewer } from "@/viewer/viewer";
@@ -29,12 +30,14 @@ import { ruleGroups, stateOrder } from "@/i18n/rules";
 import { sectorLabel } from "@/i18n/score-text";
 import { resolveLocale, type LocaleParams } from "../locale";
 import { getScannerFloorMessages, hiddenText } from "@/i18n/scanner-floor-messages";
+import { getScannerBentoMessages } from "@/i18n/scanner-bento-messages";
 import { latestShareCounts } from "@/data/flag-facts";
 import { filterScores, filtersHref, parseFilters, type Query, type ScannerFilters } from "./filters";
 import { floorMetrics, floorState, SCANNER_FLOOR } from "./floor";
 import { ruleCountLabel, streakText } from "./format";
 import { matchesPreset, presetById, presets } from "./presets";
 import { isChangePreset, limitFiltersFor } from "./access";
+import { ScannerGroup } from "./group";
 import styles from "./scanner.module.css";
 
 export const dynamic = "force-dynamic";
@@ -124,6 +127,7 @@ async function Scanner({ params, searchParams }: Props) {
   const fl = getScannerFloorMessages(locale);
   const million = (usd: number) => fl.millions.replace("{n}", new Intl.NumberFormat(intlTag[locale]).format(usd / 1_000_000));
   const unfloored = filterScores(data.rows, { ...filters, floor: false }, held, locale, streaks, floorData, horizons);
+  const stateBase = filterScores(data.rows, { ...filters, state: "" }, held, locale, streaks, floorData, horizons);
   const visible = filterScores(data.rows, filters, held, locale, streaks, floorData, horizons).map((row) => toRow(locale, row)).sort((a, b) => {
     if (filters.sort === "score") return byScore(a, b);
     const field = { f: "fundamentals", t: "technical", m: "macro", ticker: "ticker", sector: "sector", state: "state" } as const;
@@ -135,6 +139,13 @@ async function Scanner({ params, searchParams }: Props) {
   const s = m.scanner;
   const sc = getScreenMessages(locale);
   const h = getHeatmapMessages(locale);
+  const bento = getScannerBentoMessages(locale);
+  const stateLabels = Object.fromEntries(stateOrder.map((state) => [state, statusLabel(m, state, flags().ADVICE_OUTPUT)])) as Record<(typeof stateOrder)[number], string>;
+  const stateRows = stateBase.map((row) => toRow(locale, row));
+  const stateCounts = Object.fromEntries(stateOrder.map((state) => [state, stateRows.filter((row) => row.state === state).length])) as Record<(typeof stateOrder)[number], number>;
+  const nonEmptyStates = stateOrder.filter((state) => visible.some((row) => row.state === state));
+  const shownStates = filters.state ? [filters.state] : nonEmptyStates.length ? nonEmptyStates : [stateOrder[0]];
+  const firstNonEmpty = shownStates.find((state) => visible.some((row) => row.state === state));
   return <div className={appPageClass}>
     <AppPageHead title={m.scanner.title} sample={data.sample} sampleText={m.common.sample} lede={m.meta.scannerDescription}
       meta={<DataStatus locale={locale} lastUpdated={data.lastUpdated} stale={data.stale} />}
@@ -144,6 +155,8 @@ async function Scanner({ params, searchParams }: Props) {
     <div className={styles.wrap}><div className={styles.layout}>
     <aside className={styles.rail} aria-label={sc.filters}><FilterForm locale={locale} filters={filters} sectors={sectors} viewer={viewer} /></aside>
     <div className={styles.results}>
+    <ScannerBento locale={locale} counts={stateCounts} total={stateBase.length} labels={stateLabels}
+      href={(state) => `${filtersHref(locale, { ...filters, state }, filters.floor)}#scanner-group-${state}`} />
     <div className={styles.toolbar}>
       <p className={styles.summary} aria-live="polite">{fill(filters.floor ? fl.result : fl.resultOff, { count: visible.length, total: data.rows.length })}{" "}
         <Link className={styles.floorLink} href={filtersHref(locale, filters, !filters.floor)}>{filters.floor ? fl.remove : fl.apply}</Link></p>
@@ -153,25 +166,31 @@ async function Scanner({ params, searchParams }: Props) {
         <PaywallSegment id="scanner-streak" viewer={viewer} locale={locale}><p>{getTierListsMessages(locale).streakNote}</p></PaywallSegment>
       </div>
     </div>
-    <PaywallSegment id="scanner-rows-full" viewer={viewer} locale={locale}><section aria-label={m.scanner.title}>
-      <DataTable label={m.scanner.title} density="compact" describedBy="scanner-disclaimer" stickyFirst>
-        <caption className="visually-hidden">{m.scanner.title}</caption>
+    <PaywallSegment id="scanner-rows-full" viewer={viewer} locale={locale}><section className={styles.groups} aria-label={m.scanner.title}>
+      {shownStates.map((state) => {
+        const groupRows = visible.filter((row) => row.state === state);
+        return <ScannerGroup key={state} state={state} label={stateLabels[state]} count={groupRows.length} range={bento[state]} first={state === firstNonEmpty} selected={filters.state === state}>
+          <DataTable label={`${stateLabels[state]} · ${m.scanner.title}`} density="compact" describedBy="scanner-disclaimer" stickyFirst className={styles.groupTable}>
+        <caption className="visually-hidden">{stateLabels[state]}</caption>
+        <colgroup><col className={styles.companyCol} /><col className={styles.sectorCol} /><col className={styles.scoreCol} /><col className={styles.rulesCol} /><col className={styles.stateCol} /></colgroup>
         <thead><tr><th scope="col">{sc.rankShort} · {m.table.ticker}</th><th scope="col" className={`col-sector ${styles.colSector}`}>{m.table.sector}</th><th scope="col">{m.table.score}</th><th scope="col">{s.rulesMet}</th><th scope="col">{m.status.columns.status}</th></tr></thead>
-        <tbody>{visible.length ? visible.map((row, index) => {
+        <tbody>{groupRows.length ? groupRows.map((row, index) => {
           const chipState = kitState(row.state, Boolean(row.pullbackLabel));
           const stateText = row.pullbackLabel ?? row.stateLabel;
           return <tr key={row.ticker} data-state={row.state}>
             <th scope="row" className={`col-company ${styles.company}`}><span className={styles.rank} aria-label={`${sc.rank} ${index + 1}`}>{index + 1}</span><span className={styles.who}><Link className="ticker" href={`/${locale}/company/${row.ticker}`}>{row.ticker}</Link><span className="company-name">{row.name}{held.has(row.ticker) ? <span className="tag">{m.portfolio.held}</span> : null}{floorState(floorData[row.ticker]) === "unknown" ? <span className="tag" title={fl.noDataNote}>{fl.noData}</span> : null}</span></span></th>
-            <td className={`col-sector muted ${styles.colSector}`}>{row.sector}</td>
+            <td className={`col-sector muted ${styles.colSector}`}><span className={styles.mobileLabel}>{m.table.sector}</span>{row.sector}</td>
             <td className={styles.score}>
+              <span className={styles.mobileLabel}>{m.table.score}</span>
               <ScoreBar size="sm" percent={row.percent} state={chipState} stateLabel={stateText} locale={locale} label={row.ticker} describedBy="scanner-disclaimer" />
               {row.percent === null ? null : <span className={`muted ${styles.coverage}`}>{`${row.bonusLabel} · ${fill(m.status.coreData, { known: row.pointsKnown, total: row.coreTotal })}`}</span>}
             </td>
-            <td className="num">{rulesMetCell(locale, row.matched, streaks[row.ticker])}</td>
-            <td><StateChip state={chipState} label={stateText} size="sm" describedBy="scanner-disclaimer" /></td>
+            <td className="num"><span className={styles.mobileLabel}>{s.rulesMet}</span>{rulesMetCell(locale, row.matched, streaks[row.ticker])}</td>
+            <td><span className={styles.mobileLabel}>{m.status.columns.status}</span><StateChip state={chipState} label={stateText} size="sm" describedBy="scanner-disclaimer" /></td>
           </tr>;
         }) : <DataTableEmpty colSpan={5}>{filters.preset && presetById(filters.preset)?.kind === "profile" && !Object.keys(horizons).length ? profileCopy[locale].notComputed : c.empty}</DataTableEmpty>}</tbody>
-      </DataTable>
+      </DataTable></ScannerGroup>;
+      })}
     </section></PaywallSegment>
     <p className="disclaimer is-compact" id="scanner-disclaimer">{m.common.disclaimer}</p>
     </div></div></div>

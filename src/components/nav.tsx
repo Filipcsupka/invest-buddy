@@ -37,9 +37,11 @@ export function Nav({ locale }: { locale: Locale }) {
         <MenuToggle openLabel={kit.shell.openMenu} closeLabel={kit.shell.closeMenu} />
       </div>
       <div className="side-panel" id="side-panel">
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "grid", alignContent: "start", gap: "0.75rem" }}>
         <NavLinks
           locale={locale}
-          label={m.nav.label}
+          label={m.nav.stocks}
+          sectionLabel={m.nav.stocks}
           items={[
             { href: "/dashboard", text: m.nav.dashboard, icon: "dashboard" },
             { href: "/scanner", text: m.nav.scanner, icon: "scanner" },
@@ -53,6 +55,11 @@ export function Nav({ locale }: { locale: Locale }) {
             ...(flags().WAITLIST ? [{ href: "/pricing", text: getLaunchMessages(locale).pricing.title, icon: "pricing" }] : []),
           ]}
         />
+        <NavLinks locale={locale} label={m.nav.etfs} sectionLabel={m.nav.etfs} items={[
+          { href: "/etf", text: m.nav.etfResearch, icon: "scanner" },
+          { href: "/etf/track-record", text: m.nav.etfTrackRecord, icon: "track" },
+        ]} />
+        </div>
         <div className="side-foot">
           {flags().WAITLIST && (
             <Link className="button cta side-cta" href={`/${locale}/pricing`}>

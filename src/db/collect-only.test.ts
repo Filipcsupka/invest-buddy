@@ -59,7 +59,7 @@ describe("collect-only list (extended)", () => {
 });
 
 /** Guard: every SQL that decides what is scored, shown or sent to a model uses the gate. Only these files may filter on benchmark alone. */
-const BENCHMARK_ONLY_ALLOWED = new Set(["src/db/universe.ts", "src/jobs/discovery.ts", "src/collectors/sources/alphavantage-calendar.test.ts"]);
+const BENCHMARK_ONLY_ALLOWED = new Set(["src/db/universe.ts", "src/jobs/discovery.ts", "src/universe/candidates.ts", "src/collectors/sources/alphavantage-calendar.test.ts"]);
 function walk(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
     const path = join(dir, name);

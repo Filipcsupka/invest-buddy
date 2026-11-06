@@ -223,3 +223,30 @@
 .panel.rail .stepLabel, .panel.rail .range { display: block; }
 .panel.rail .step .caption { position: static; width: auto; max-width: none; transform: none; text-align: left; }
 .rail .cutoffs { max-width: none; }
+
+/* Bento variant: the same parts as the panel, in tiles across the page width. */
+.bento { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: var(--s4, 1rem); margin-block: var(--s5, 1.25rem); }
+.bento .tile { min-width: 0; padding: var(--s5, 1.25rem); border: 1px solid var(--rule); border-radius: var(--radius-lg, 16px); background: var(--sheet); box-shadow: var(--shadow-1), var(--edge-light); display: grid; align-content: start; gap: var(--s3, .75rem); }
+.bento .tState { grid-column: span 5; background: radial-gradient(120% 100% at 0% 0%, color-mix(in srgb, var(--c, var(--st-watch)) 14%, transparent), transparent 65%), var(--sheet); }
+.bento .tRules { grid-column: span 3; }
+.bento .tBonus { grid-column: span 4; }
+.bento .tConfirm { grid-column: span 8; }
+.bento .tNote { grid-column: span 4; align-content: space-between; }
+.bento[data-state="setup"] .tState { --c: var(--st-setup); }
+.bento[data-state="watch"] .tState { --c: var(--st-watch); }
+.bento[data-state="wait"] .tState { --c: var(--st-wait); }
+.bento[data-state="ignore"] .tState { --c: var(--st-ignore); }
+.bento[data-state="broken"] .tState { --c: var(--st-broken); }
+.bento[data-state="broken"] .label { color: var(--st-broken); }
+.bento[data-state="ignore"] .label { color: var(--st-ignore); }
+.bento[data-state="wait"] .label { color: var(--st-wait); }
+.bento[data-state="watch"] .label { color: var(--st-watch); }
+.bento[data-state="setup"] .label { color: var(--st-setup); }
+.bento .label { font-size: var(--t-h2, 1.6rem); }
+@media (max-width: 1100px) { .bento .tState { grid-column: span 7; } .bento .tRules { grid-column: span 5; } .bento .tBonus { grid-column: span 6; } .bento .tConfirm { grid-column: span 6; } .bento .tNote { grid-column: span 12; } }
+@media (max-width: 720px) { .bento > .tile { grid-column: span 12 !important; } }
+.bigNum { margin: 0; display: flex; align-items: baseline; gap: .4rem; font-size: 3.2rem; font-weight: 800; letter-spacing: -0.04em; line-height: 1; font-variant-numeric: tabular-nums; }
+.bigNum span { font-size: 1.3rem; font-weight: 700; color: var(--muted); letter-spacing: 0; }
+.bigMeter { display: block; height: .5rem; border-radius: 999px; background: color-mix(in srgb, var(--text) 10%, transparent); overflow: hidden; }
+.bigMeter i { display: block; height: 100%; border-radius: inherit; background: var(--c, var(--st-setup)); }
+.bento[data-state="setup"] .tRules { --c: var(--st-setup); } .bento[data-state="watch"] .tRules { --c: var(--st-watch); } .bento[data-state="wait"] .tRules { --c: var(--st-wait); } .bento[data-state="ignore"] .tRules { --c: var(--st-ignore); } .bento[data-state="broken"] .tRules { --c: var(--st-broken); }
