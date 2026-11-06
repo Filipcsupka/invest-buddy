@@ -9,14 +9,17 @@ import { RecordHead, RecordCard } from "@/components/record-parts";
 import { signedPercent } from "@/components/etf/format";
 import s from "@/components/etf/etf.module.css";
 import { resolveLocale, type LocaleParams } from "../../locale";
+import { requireEtfDataAccess } from "../../owner/data/access";
 
 export const dynamic = "force-dynamic";
 export async function generateMetadata({ params }: LocaleParams): Promise<Metadata> {
+  await requireEtfDataAccess();
   const locale = await resolveLocale(params);
   const m = getEtfMessages(locale);
   return pageMetadata(locale, "/etf/track-record", m.recordTitle, m.recordLede);
 }
 async function EtfTrackRecord({ params }: LocaleParams) {
+  await requireEtfDataAccess();
   const locale = await resolveLocale(params);
   const m = getEtfMessages(locale);
   const { outcomes, sample } = await etfOutcomes();

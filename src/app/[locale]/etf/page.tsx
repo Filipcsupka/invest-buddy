@@ -10,17 +10,20 @@ import { RecordHead } from "@/components/record-parts";
 import { CallBadge, VerificationBadge, amount, displayedDate, percent } from "@/components/etf/format";
 import s from "@/components/etf/etf.module.css";
 import { resolveLocale } from "../locale";
+import { requireEtfDataAccess } from "../owner/data/access";
 
 export const dynamic = "force-dynamic";
 type Props = { params: Promise<{ locale: string }>; searchParams?: Promise<CatalogFilters & { call?: string }> };
 const classes: EtfAssetClass[] = ["equity", "bond", "commodity", "multi_asset", "other"];
 const calls: EtfCall[] = ["BUY_ZONE", "WATCH", "AVOID"];
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  await requireEtfDataAccess();
   const locale = await resolveLocale(params);
   const m = getEtfMessages(locale);
   return pageMetadata(locale, "/etf", m.title, m.lede);
 }
 async function EtfPage({ params, searchParams }: Props) {
+  await requireEtfDataAccess();
   const locale = await resolveLocale(params);
   const m = getEtfMessages(locale);
   const query = await searchParams ?? {};
