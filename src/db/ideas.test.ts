@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { hasOkJudge, ideaSchema, ideaSignature, ideasPostSchema, listIdeas, recordJudge, mapIdea } from "./ideas";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { hasOkJudge, ideaSchema, ideaSignature, ideasPostSchema, ideasForDate, listIdeas, recordJudge, mapIdea } from "./ideas";
 import { sampleIdeas } from "../ideas/fixtures";
 import { RULESET_VERSION } from "../config/rules";
 
@@ -152,4 +152,17 @@ describe("trade_ideas in Postgres (migration 011)", () => {
       expect((await insert(null, "2026-10-03")).rows[0]).toEqual({ amount_min_eur: "0.00", amount_max_eur: "0.00", size_tier: null });
     } finally { await clean(); await pool.end(); }
   });
+});
+
+afterEach(() => vi.unstubAllEnvs());
+it.each(["off", "on"])("passes private EODHD evidence permission to owner and digest queries (%s)", async (mode) => {
+  vi.stubEnv("EODHD_PRIVATE_USE", mode);
+  const p = fakePool();
+  await listIdeas(p, 10);
+  await ideasForDate(p, "2026-10-05");
+  expect(p.calls.map((c) => c.params)).toEqual([[10, mode === "on"], ["2026-10-05", mode === "on"]]);
+  for (const { sql } of p.calls) {
+    expect(sql).toContain("AND NOT ($2::boolean AND ref->>'url' LIKE 'https://eodhd.com/%')");
+    expect(sql).toContain("d.meta->>'display_allowed' = 'true'");
+  }
 });

@@ -1,5 +1,5 @@
 import pg from "pg";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { loadEpsSurprise, PostgresCollectorRepository } from "./collectors";
 import { EPS_FACT_KEY } from "../data/eps";
 
@@ -9,7 +9,24 @@ async function inRollback(fn: (pool: pg.Pool) => Promise<void>) {
   try { await pool.query("BEGIN"); await fn(pool); } finally { await pool.query("ROLLBACK"); await pool.end(); }
 }
 
+afterEach(() => vi.unstubAllEnvs());
+
 describe("collector tables (Postgres)", () => {
+  it.skipIf(!process.env.TEST_DATABASE_URL)("uses AV history when an EODHD fact masks AV and is excluded by the switch or PIT", () => inRollback(async (pool) => {
+    const repo = new PostgresCollectorRepository(pool);
+    const fact = { symbol: "NVDA", key: EPS_FACT_KEY, asOf: "2026-09-01", value: { reportedDate: "2026-09-01", surprisePercent: -5, source: "eodhd" }, documentIds: [], sourceId: "eodhd" };
+    await repo.upsertFact(fact);
+    expect(await repo.upsertFact({ ...fact, sourceId: "alphavantage", value: { ...fact.value, source: "alphavantage", surprisePercent: 5 } })).toBe(false);
+    await pool.query("UPDATE collected_facts SET computed_at='2026-10-06' WHERE symbol='NVDA' AND fact_key=$1 AND as_of=$2", [EPS_FACT_KEY, fact.asOf]);
+    await pool.query(`INSERT INTO eps_history (ticker,fiscal_date_ending,reported_date,surprise_pct,observed_at,source_id)
+      VALUES ('NVDA','2026-07-31','2026-09-01',5,'2026-09-01','alphavantage'),
+             ('NVDA','2026-07-31','2026-09-01',-10,'2026-10-07','alphavantage')`);
+    vi.stubEnv("EODHD_PRIVATE_USE", "off");
+    expect(await loadEpsSurprise(pool, "NVDA", "2026-10-05")).toMatchObject({ value: true, reason: expect.stringContaining("Alpha Vantage") });
+    vi.stubEnv("EODHD_PRIVATE_USE", "on");
+    expect(await loadEpsSurprise(pool, "NVDA", "2026-10-05")).toMatchObject({ value: true, reason: expect.stringContaining("Alpha Vantage") });
+    expect(await loadEpsSurprise(pool, "NVDA", "2026-10-06")).toMatchObject({ value: false, reason: expect.stringContaining("EODHD") });
+  }));
   it.skipIf(!process.env.TEST_DATABASE_URL)("stores fact expiry, metered request counts and reads the EPS fact back", () => inRollback(async (pool) => {
     const repo = new PostgresCollectorRepository(pool);
     const url = "https://www.alphavantage.co/query?function=EARNINGS&symbol=NVDA#2026-08-27";

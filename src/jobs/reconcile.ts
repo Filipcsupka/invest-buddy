@@ -1,3 +1,4 @@
+import { eodhdPrivateUse } from "../data/eodhd-private-use";
 import { runLoggedJob } from "./job-log";
 import pg from "pg";
 import { liveVerifier, offVerifier, fixtureVerifier, freshnessDays, type EvidenceRef, type EvidenceVerifier } from "../data/evidence";
@@ -94,7 +95,7 @@ export async function reconcileField(symbol: string, field: string, asOf: string
     // Stored Form 4 lines decide, like SEC revenue facts. A conflicting agent claim is overridden and the reason says so. The page names the source SEC Form 4.
     const conflict = values.some((v) => v !== null && v !== insider.value);
     agreement = conflict ? "xbrl_override" : agreement === "agree" ? "agree" : "xbrl_override";
-    value = insider.value; verified = true; reason = conflict ? `${insider.reason}; overrides agent claim` : `${insider.reason}; confirmed by SEC data`;
+    value = insider.value; verified = true; reason = conflict ? `${insider.reason}; overrides agent claim` : insider.reason.startsWith("EODHD Form 4") ? insider.reason : `${insider.reason}; confirmed by SEC data`;
     evidenceRefs.splice(0, evidenceRefs.length, ...insider.refs);
   }
   if (field === "epsBeat" && extras.eps && extras.eps.value !== null) {
@@ -168,8 +169,8 @@ export async function runReconcile(pool: pg.Pool, asOf: string, verify: Evidence
     const eps = await epsLookup(symbol, asOf);
     const catalyst = await catalystLookup(symbol, asOf);
     for (const field of fields) {
-      // Reconcile writes its own productCatalyst data_rule rows, so a rerun may refresh them; macro rows stay untouched.
-      if (ruleRows.has(`${symbol}:${field}`) && field !== "productCatalyst") continue;
+      // Private mode recomputes non-macro rules; otherwise preserve existing data_rule rows except productCatalyst.
+      if (ruleRows.has(`${symbol}:${field}`) && (eodhdPrivateUse() ? MACRO_FIELDS.has(field) : field !== "productCatalyst")) continue;
       const item = await reconcileField(symbol, field, asOf, MACRO_FIELDS.has(field) ? macroFindings : findings, verify, sec, insider, { storedVerify: extras.storedVerify, eps, catalyst, research: researchBySymbol.get(symbol) });
       pending.push(item);
     }

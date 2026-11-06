@@ -1,10 +1,11 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { pgDocumentLookup, storedFirstVerifier, storedOnlyVerifier, type StoredDocumentLookup } from "./stored-evidence";
 import type { EvidenceRef } from "./evidence";
 
 const entry = (over: Partial<EvidenceRef> = {}): EvidenceRef => ({ claim: "fundamentals.epsBeat", url: "https://www.sec.gov/ex99.htm", publishedAt: "2026-09-20", fiscalPeriod: "Q2 FY2027", quote: "Revenue was $46.7 billion, up 56%", ...over });
 const stored = (body: string, publishedAt = "2026-09-20T00:00:00.000Z"): StoredDocumentLookup => async () => ({ body, publishedAt });
 const live = () => vi.fn(async () => false);
+afterEach(() => vi.unstubAllEnvs());
 
 describe("storedFirstVerifier", () => {
   it("verifies against the stored text and never fetches a stored url", async () => {
@@ -47,6 +48,13 @@ describe("storedFirstVerifier", () => {
 });
 
 describe("pgDocumentLookup", () => {
+  it("lets a private verifier use EODHD text without changing its stored display flag", async () => {
+    const query = async () => ({ rows: [{ body: "Revenue was $46.7 billion, up 56%", published_at: "2026-09-20T00:00:00Z", source: "eodhd", meta: { display_allowed: false } }] });
+    vi.stubEnv("EODHD_PRIVATE_USE", "off");
+    expect(await storedOnlyVerifier(pgDocumentLookup({ query }))(entry(), "2026-10-05")).toBe(false);
+    vi.stubEnv("EODHD_PRIVATE_USE", "on");
+    expect(await storedOnlyVerifier(pgDocumentLookup({ query }))(entry(), "2026-10-05")).toBe(true);
+  });
   it("reads each url once and maps the row", async () => {
     const query = vi.fn(async (_sql: string, params: unknown[]) => ({ rows: params[0] === "https://a" ? [{ body: "text", published_at: new Date("2026-09-20T00:00:00Z") }] : [] }));
     const lookup = pgDocumentLookup({ query });

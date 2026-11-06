@@ -5,17 +5,19 @@ import type { UniverseProvider, Instrument } from "./providers";
 import { fieldSourcesFor, type SourceItem } from "./sources";
 import { scoredMember } from "../db/universe";
 import { carryForwardEnabled, carryState, type ConsensusRow } from "./carry-forward";
+import { eodhdPrivateUse } from "./eodhd-private-use";
 
 type CarryRow = ConsensusRow & { field: string };
 export { CONFIRMED_FUNDAMENTAL_AGREEMENTS };
 const confirmedFundamental = (row: { verified: boolean; agreement: string }) => row.verified && CONFIRMED_FUNDAMENTAL_AGREEMENTS.includes(row.agreement);
 const SEC_REVENUE_URL = /^https:\/\/data\.sec\.gov\/api\/xbrl\/companyfacts\/CIK\d{10}\.json$/;
+const EODHD_REVENUE_URL = "https://eodhd.com/financial-apis/stock-etfs-fundamental-data-feeds";
 const SEC_GROWTH_QUOTE = /^Revenue growth (-?\d+(?:\.\d+)?)% versus (-?\d+(?:\.\d+)?)%$/;
 function revenueGrowth(rows: ({ verified: boolean; agreement: string; evidence_refs: { url: string; quote?: string }[] } | undefined)[]) {
   for (const row of rows) {
     if (!row?.verified || !["xbrl_override", "agree"].includes(row.agreement)) continue;
     for (const ref of row.evidence_refs) {
-      if (!SEC_REVENUE_URL.test(ref.url)) continue;
+      if (!SEC_REVENUE_URL.test(ref.url) && !(eodhdPrivateUse() && ref.url === EODHD_REVENUE_URL)) continue;
       const values = SEC_GROWTH_QUOTE.exec(ref.quote ?? "");
       if (!values) continue;
       const current = Number(values[1]), prior = Number(values[2]);
