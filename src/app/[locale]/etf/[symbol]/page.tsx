@@ -9,10 +9,12 @@ import { RecordCard, RecordHead } from "@/components/record-parts";
 import { CallBadge, VerificationBadge, amount, displayedDate, percent, signedPercent } from "@/components/etf/format";
 import s from "@/components/etf/etf.module.css";
 import { resolveLocale } from "../../locale";
+import { requireEtfDataAccess } from "../../owner/data/access";
 
 export const dynamic = "force-dynamic";
 type Props = { params: Promise<{ locale: string; symbol: string }> };
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  await requireEtfDataAccess();
   const locale = await resolveLocale(params);
   const { symbol } = await params;
   const detail = await etfDetail(symbol.toUpperCase());
@@ -20,6 +22,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return pageMetadata(locale, `/etf/${encodeURIComponent(detail.pick.symbol)}`, `${detail.pick.symbol}, ${detail.pick.name}`, detail.pick.thesis);
 }
 async function EtfDetailPage({ params }: Props) {
+  await requireEtfDataAccess();
   const locale = await resolveLocale(params);
   const { symbol } = await params;
   if (!/^[A-Za-z0-9.-]{1,12}$/.test(symbol)) notFound();

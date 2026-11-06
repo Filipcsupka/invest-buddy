@@ -6,6 +6,7 @@ import { getPool } from "@/db/pool";
 import { latestHorizonLabels } from "@/db/horizon-labels";
 import { pageMetadata } from "@/i18n/metadata";
 import { ownerAuthorized } from "../auth";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 type Props = { params: Promise<{ locale: string }> };
@@ -25,7 +26,7 @@ export default async function OwnerHorizonsPage({ params }: Props) {
   const value = (v: number | string | null | undefined) => v == null ? "—" : String(v);
   return <article className="frame page">
     <header className="page-head"><h1 className="title">{sk ? "Horizontové profily" : "Horizon profiles"}</h1>
-      <p className="lede">{sk ? "Súkromný prehľad uložených profilov a vstupov." : "Private view of stored profiles and inputs."}</p></header>
+      <p className="lede">{sk ? "Súkromný prehľad uložených profilov a vstupov." : "Private view of stored profiles and inputs."}</p><Link href={`/${locale}/owner/data`}>{sk ? "Údaje zo zdrojov" : "Source data"}</Link></header>
     <section className="sheet-section" aria-label={sk ? "Profily" : "Profiles"}>
       <div className="table-wrap"><table><thead><tr>
         <th scope="col">Ticker</th><th scope="col">{sk ? "Dátum" : "As of"}</th><th scope="col">{sk ? "Profil" : "Profile"}</th>

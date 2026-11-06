@@ -3,13 +3,22 @@ import sitemap, { dynamic } from "./sitemap";
 import { instruments } from "@/data/fixtures";
 
 describe("sitemap", () => {
-  const original = { advice: process.env.ADVICE_OUTPUT, mode: process.env.DATA_MODE };
-  beforeEach(() => { process.env.DATA_MODE = "fixture"; });
+  const original = { advice: process.env.ADVICE_OUTPUT, mode: process.env.DATA_MODE, privateUse: process.env.EODHD_PRIVATE_USE };
+  beforeEach(() => { process.env.DATA_MODE = "fixture"; process.env.EODHD_PRIVATE_USE = "off"; });
   afterEach(() => {
     if (original.advice === undefined) delete process.env.ADVICE_OUTPUT; else process.env.ADVICE_OUTPUT = original.advice;
     if (original.mode === undefined) delete process.env.DATA_MODE; else process.env.DATA_MODE = original.mode;
+    if (original.privateUse === undefined) delete process.env.EODHD_PRIVATE_USE; else process.env.EODHD_PRIVATE_USE = original.privateUse;
   });
   it("reads the legal flag at request time", () => expect(dynamic).toBe("force-dynamic"));
+  it("lists only static public pages in private mode", async () => {
+    process.env.EODHD_PRIVATE_USE = "on";
+    const entries = await sitemap();
+    const urls = entries.map((entry) => entry.url);
+    expect(urls).toContainEqual(expect.stringMatching(/\/en\/methodology$/));
+    expect(urls.some((url) => /\/(?:dashboard|company|etf|scanner|portfolio)(?:\/|$)/.test(url))).toBe(false);
+    expect(entries.every((entry) => entry.lastModified === undefined)).toBe(true);
+  });
   it("lists the dashboard, scanner and heat map in both locales", async () => {
     const urls = (await sitemap()).map((entry) => entry.url);
     for (const path of ["dashboard", "scanner", "heatmap"]) {
