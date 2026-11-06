@@ -53,7 +53,7 @@ describe("market EODHD endpoints", () => {
     expect(urls.map((url) => url.pathname)).toEqual(["/api/sentiments", "/api/congressional-trades", "/api/ust/yield-rates"]);
     expect(urls[1].searchParams.get("page[limit]")).toBe("2");
     expect(urls[2].searchParams.get("filter[year]")).toBe("2026");
-    expect(api.getCallCosts()).toMatchObject({ sentiments: 1, "congressional-trades": 10, "ust/yield-rates": 1 });
+    expect(api.getCallCosts()).toMatchObject({ sentiments: 5, "congressional-trades": 10, "ust/yield-rates": 1 });
   });
 
   it("routes remaining collectors and accounts for request costs", async () => {

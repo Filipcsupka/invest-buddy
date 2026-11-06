@@ -129,15 +129,20 @@ export class EodhdClient {
     return this.fundamentals<T>(symbol, `ETF_Data::${filter}`);
   }
   economicEvents(options: { country?: string; from?: string; to?: string; limit?: number; offset?: number } = {}): Promise<EconomicEvent[]> { return this.get("economic-events", "economic-events", options); }
-  sentiments(symbol: string, options: { from?: string; to?: string } = {}): Promise<Sentiments> {
-    // UNVERIFIED: the billed cost of /sentiments; one request is counted as one until the vendor ledger confirms it.
-    return this.get("sentiments", "sentiments", { s: symbol, ...options });
+  sentiments(symbols: string | string[], options: { from?: string; to?: string } = {}): Promise<Sentiments> {
+    // A two-symbol request advanced the account counter by 10 on 2026-11-06; counted as 5 per symbol, as the news docs state.
+    const list = Array.isArray(symbols) ? symbols : [symbols];
+    if (list.length === 0) throw new Error("EODHD sentiments needs at least one symbol");
+    return this.get("sentiments", "sentiments", { s: list.join(","), ...options }, 5 * list.length);
   }
   historicalMarketCap(symbol: string, options: { from?: string; to?: string } = {}): Promise<HistoricalMarketCap> { return this.get("historical-market-cap", `historical-market-cap/${encodeURIComponent(symbol)}`, options, 10); }
   screener(options: { sort?: string; limit?: number; offset?: number; filters?: string } = {}): Promise<ScreenerPage> { return this.get("screener", "screener", options, 5); }
-  congressionalTrades(options: { symbol?: string; chamber?: string; type?: string; offset?: number; limit?: number } = {}): Promise<CongressionalTradesPage> {
+  congressionalTrades(options: { symbol?: string; chamber?: string; type?: string; bioguideId?: string; transactionDateFrom?: string; transactionDateTo?: string; disclosureDateFrom?: string; disclosureDateTo?: string; offset?: number; limit?: number } = {}): Promise<CongressionalTradesPage> {
     if (options.limit !== undefined && (options.limit < 1 || options.limit > 100)) throw new Error("EODHD congressional limit must be 1–100");
-    return this.get("congressional-trades", "congressional-trades", { symbol: options.symbol, chamber: options.chamber, type: options.type, "page[offset]": options.offset, "page[limit]": options.limit }, 10);
+    // The vendor reference names the type filter transaction_type; date filters were checked with one live request on 2026-11-06.
+    return this.get("congressional-trades", "congressional-trades", { symbol: options.symbol, chamber: options.chamber, transaction_type: options.type,
+      bioguide_id: options.bioguideId, transaction_date_from: options.transactionDateFrom, transaction_date_to: options.transactionDateTo,
+      disclosure_date_from: options.disclosureDateFrom, disclosure_date_to: options.disclosureDateTo, "page[offset]": options.offset, "page[limit]": options.limit }, 10);
   }
   ustRates(kind: "bill" | "long-term" | "yield" | "real-yield", year?: number): Promise<UstRatePage> {
     // UNVERIFIED: live shapes for bill, long-term and real-yield; yield returned meta/data/links.

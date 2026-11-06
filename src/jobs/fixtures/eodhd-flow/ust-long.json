@@ -1,0 +1,46 @@
+{
+  "meta": {
+    "total": 6
+  },
+  "data": [
+    {
+      "date": "2026-11-04",
+      "rate_type": "BC_20year",
+      "rate": 5.3,
+      "extrapolation_factor": null
+    },
+    {
+      "date": "2026-11-04",
+      "rate_type": "Over_10_Years",
+      "rate": 5.26,
+      "extrapolation_factor": null
+    },
+    {
+      "date": "2026-11-04",
+      "rate_type": "Real_Rate",
+      "rate": 3.06,
+      "extrapolation_factor": null
+    },
+    {
+      "date": "2026-11-05",
+      "rate_type": "BC_20year",
+      "rate": 5.27,
+      "extrapolation_factor": null
+    },
+    {
+      "date": "2026-11-05",
+      "rate_type": "Over_10_Years",
+      "rate": 5.23,
+      "extrapolation_factor": null
+    },
+    {
+      "date": "2026-11-05",
+      "rate_type": "Real_Rate",
+      "rate": 3.04,
+      "extrapolation_factor": null
+    }
+  ],
+  "links": {
+    "next": null
+  }
+}

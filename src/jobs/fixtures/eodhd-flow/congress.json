@@ -1,0 +1,119 @@
+{
+  "data": [
+    {
+      "chamber": "house",
+      "member": {
+        "bioguide_id": "S000250",
+        "first_name": "Pete",
+        "last_name": "Sessions",
+        "full_name": "Pete Sessions",
+        "office": null,
+        "state": "TX",
+        "party": null,
+        "district": 17
+      },
+      "asset": {
+        "symbol": "DIS",
+        "description": "Walt Disney Company",
+        "asset_type": "Stock"
+      },
+      "transaction": {
+        "type": "sale",
+        "transaction_date": "2026-10-28",
+        "disclosure_date": "2026-10-27",
+        "owner": "Self",
+        "amount_range": "$1,001 - $15,000",
+        "amount_low": 1001,
+        "amount_high": 15000,
+        "days_to_disclose": 1,
+        "is_late": false,
+        "comment": null
+      },
+      "source": {
+        "filing_url": "https://disclosures-clerk.house.gov/public_disc/ptr-pdfs/2026/20035563.pdf",
+        "source_system": "house",
+        "filing_identifier": "20035563"
+      }
+    },
+    {
+      "chamber": "house",
+      "member": {
+        "bioguide_id": "S000250",
+        "first_name": "Pete",
+        "last_name": "Sessions",
+        "full_name": "Pete Sessions",
+        "office": null,
+        "state": "TX",
+        "party": null,
+        "district": 17
+      },
+      "asset": {
+        "symbol": "MCD",
+        "description": "McDonald's Corporation Common",
+        "asset_type": "Stock"
+      },
+      "transaction": {
+        "type": "sale",
+        "transaction_date": "2026-10-27",
+        "disclosure_date": "2026-10-27",
+        "owner": "Spouse",
+        "amount_range": "$1,001 - $15,000",
+        "amount_low": 1001,
+        "amount_high": 15000,
+        "days_to_disclose": 0,
+        "is_late": false,
+        "comment": null
+      },
+      "source": {
+        "filing_url": "https://disclosures-clerk.house.gov/public_disc/ptr-pdfs/2026/20035563.pdf",
+        "source_system": "house",
+        "filing_identifier": "20035563"
+      }
+    },
+    {
+      "chamber": "house",
+      "member": {
+        "bioguide_id": "S000250",
+        "first_name": "Pete",
+        "last_name": "Sessions",
+        "full_name": "Pete Sessions",
+        "office": null,
+        "state": "TX",
+        "party": null,
+        "district": 17
+      },
+      "asset": {
+        "symbol": "AMZN",
+        "description": "Amazon.com, Inc. - Common Stock",
+        "asset_type": "Stock"
+      },
+      "transaction": {
+        "type": "sale",
+        "transaction_date": "2026-10-27",
+        "disclosure_date": "2026-10-27",
+        "owner": "Self",
+        "amount_range": "$15,001 - $50,000",
+        "amount_low": 15001,
+        "amount_high": 50000,
+        "days_to_disclose": 0,
+        "is_late": false,
+        "comment": null
+      },
+      "source": {
+        "filing_url": "https://disclosures-clerk.house.gov/public_disc/ptr-pdfs/2026/20035563.pdf",
+        "source_system": "house",
+        "filing_identifier": "20035563"
+      }
+    }
+  ],
+  "meta": {
+    "total": 85,
+    "page": {
+      "offset": 0,
+      "limit": 3
+    }
+  },
+  "links": {
+    "next": "/api/congressional-trades?transaction_date_to=2026-11-06&disclosure_date_from=2026-10-20&page%5Boffset%5D=3&page%5Blimit%5D=3"
+  }
+}

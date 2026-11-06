@@ -1,0 +1,50 @@
+[
+  {
+    "type": "Business Inventories",
+    "comparison": "mom",
+    "period": "Sep",
+    "country": "US",
+    "date": "2026-11-17 15:00:00",
+    "actual": null,
+    "previous": 0.4,
+    "estimate": 0.2,
+    "change": 0,
+    "change_percentage": 0
+  },
+  {
+    "type": "Baker Hughes Oil Rig Count",
+    "comparison": null,
+    "period": "Nov/20",
+    "country": "US",
+    "date": "2026-11-20 18:00:00",
+    "actual": null,
+    "previous": null,
+    "estimate": null,
+    "change": 0,
+    "change_percentage": 0
+  },
+  {
+    "type": "Central Bank Balance Sheet",
+    "comparison": null,
+    "period": "Nov/18",
+    "country": "US",
+    "date": "2026-11-19 21:30:00",
+    "actual": null,
+    "previous": null,
+    "estimate": null,
+    "change": 0,
+    "change_percentage": 0
+  },
+  {
+    "type": "10-Year TIPS Auction",
+    "comparison": null,
+    "period": null,
+    "country": "US",
+    "date": "2026-11-19 18:00:00",
+    "actual": null,
+    "previous": null,
+    "estimate": null,
+    "change": 0,
+    "change_percentage": 0
+  }
+]
