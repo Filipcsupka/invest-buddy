@@ -1,7 +1,8 @@
 import { displayAllowedFor } from "../db/bundle";
+import { eodhdPrivateUse } from "./eodhd-private-use";
 import { freshnessDays, normalize, stripMarkup, type EvidenceRef, type EvidenceVerifier } from "./evidence";
 
-/** `displayAllowed` follows `meta.display_allowed` (rows without it: true for edgar only), the same rule the bundle uses. */
+/** `displayAllowed` follows the bundle's private-use rule. Stored display metadata is unchanged. */
 export interface StoredDocument { body: string; publishedAt: string; displayAllowed?: boolean }
 /** Finds the stored document for a url, or null when the collectors never stored it (or retention removed it). */
 export type StoredDocumentLookup = (url: string) => Promise<StoredDocument | null>;
@@ -56,7 +57,7 @@ export function pgDocumentLookup(pool: { query: (sql: string, params: unknown[])
     if (cache.has(url)) return cache.get(url) ?? null;
     const { rows } = await pool.query("SELECT body, published_at, source, meta FROM source_documents WHERE url = $1", [url]);
     const row = rows[0];
-    const found = row ? { body: row.body, publishedAt: new Date(row.published_at).toISOString(), displayAllowed: displayAllowedFor(row.source ?? "", row.meta) } : null;
+    const found = row ? { body: row.body, publishedAt: new Date(row.published_at).toISOString(), displayAllowed: displayAllowedFor(row.source ?? "", row.meta, eodhdPrivateUse()) } : null;
     cache.set(url, found);
     return found;
   };

@@ -115,8 +115,13 @@ describe("EODHD catalyst job", () => {
       { as_of: "2026-10-21", value: { present: false, checked: 3 } },
     ];
     let params: unknown[] = [];
-    const pool = { query: async (_sql: string, values: unknown[]) => { params = values; return { rows: stored }; } };
+    const pool = { query: async (_sql: string, values: unknown[]) => { params = values; return { rows: (values[1] as string[]).includes("catalyst_8k_eodhd") ? stored : stored.slice(1) }; } };
+    vi.stubEnv("EODHD_PRIVATE_USE", "on");
     expect(await loadCatalyst(pool, "ASML", "2026-10-21")).toMatchObject({ value: true });
     expect(params[1]).toEqual(["catalyst_8k", "catalyst_8k_eodhd"]);
+    vi.stubEnv("EODHD_PRIVATE_USE", "off");
+    expect(await loadCatalyst(pool, "ASML", "2026-10-21")).toMatchObject({ value: false });
+    expect(params[1]).toEqual(["catalyst_8k"]);
+    vi.unstubAllEnvs();
   });
 });

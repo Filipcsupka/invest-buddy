@@ -10,6 +10,7 @@ import { freshnessDays } from "../data/evidence";
 import { insiderFromFact, netBuyFromTransactions, INSIDER_WINDOW_DAYS, type InsiderNetBuy, type InsiderTxRow, DEFAULT_INSIDER_MIN_NET_BUY_USD, INSIDER_FACT_DAYS, INSIDER_FACT_LEAD_DAYS, type InsiderDocument, type InsiderResult } from "../data/insider";
 import { FACT_SOURCE_IDS, licenceClassFor, sourceIdFor } from "../data/sources-registry";
 import { DEFAULT_EPS_BEAT_MIN_SURPRISE_PCT, EPS_FACT_KEY, epsFromFact, type EpsResult } from "../data/eps";
+import { eodhdPrivateUse } from "../data/eodhd-private-use";
 
 export interface StoredDocument extends CollectedDocument { id: number }
 /** `expiresAt` (ISO date or timestamp) replaces the default 30-day fact expiry. */
@@ -104,22 +105,36 @@ export class MemoryCollectorRepository implements CollectorRepository {
 }
 /** Reads the newest eps_surprise_latest fact on or before asOf (also a stale one, so the reason can say so). null when there is none. */
 export async function loadEpsSurprise(pool: pg.Pool, symbol: string, asOf: string, minSurprisePct = DEFAULT_EPS_BEAT_MIN_SURPRISE_PCT): Promise<EpsResult | null> {
-  const fact = await pool.query<{ as_of: string; value: unknown; url: string | null }>(`SELECT f.as_of::text,f.value,
+  // EODHD can occupy the shared fact key before AV runs. AV's append-only history still keeps its answer.
+  const fact = await pool.query<{ as_of: string; value: unknown; url: string | null }>(`SELECT as_of,value,url FROM (
+    SELECT f.as_of::text,f.value,f.computed_at AS observed_at,
       (SELECT d.url FROM source_documents d WHERE d.id = ANY(f.document_ids) ORDER BY d.id DESC LIMIT 1) AS url
-    FROM collected_facts f WHERE f.symbol=$1 AND f.fact_key=$2 AND f.as_of <= $3::date AND (f.source_id <> 'eodhd' OR f.computed_at::date <= $3::date) ORDER BY f.as_of DESC LIMIT 1`, [symbol, EPS_FACT_KEY, asOf]);
+    FROM collected_facts f WHERE f.symbol=$1 AND f.fact_key=$2 AND f.as_of <= $3::date
+      AND (f.source_id IS DISTINCT FROM 'eodhd' OR ($4::boolean AND f.computed_at::date <= $3::date))
+    UNION ALL
+    SELECT h.reported_date::text,jsonb_build_object('reportedDate',h.reported_date,'fiscalDateEnding',h.fiscal_date_ending,
+      'surprisePercent',h.surprise_pct,'source','alphavantage'),h.observed_at,
+      (SELECT d.url FROM source_documents d WHERE d.symbol=h.ticker AND d.source_id='alphavantage'
+        AND d.doc_type='EPS surprise' AND d.published_at::date=h.reported_date ORDER BY d.id DESC LIMIT 1) AS url
+    FROM eps_history h WHERE h.ticker=$1 AND h.source_id='alphavantage' AND h.reported_date <= $3::date
+      AND h.observed_at::date <= $3::date
+      AND EXISTS (SELECT 1 FROM collected_facts f WHERE f.symbol=h.ticker AND f.fact_key=$2
+        AND f.as_of=h.reported_date AND f.source_id='eodhd' AND (NOT $4::boolean OR f.computed_at::date > $3::date))
+    ) candidates ORDER BY as_of DESC,observed_at DESC LIMIT 1`, [symbol, EPS_FACT_KEY, asOf, eodhdPrivateUse()]);
   const row = fact.rows[0];
   return row ? epsFromFact({ asOf: row.as_of, value: row.value }, row.url, asOf, minSurprisePct) : null;
 }
 /** Reads the newest fresh insider_net_buy_90d fact and the display-allowed Form 4 documents behind it. null when there is no usable fact. */
 export async function loadInsider(pool: pg.Pool, symbol: string, asOf: string, minNetBuy = DEFAULT_INSIDER_MIN_NET_BUY_USD): Promise<InsiderResult | null> {
-  const fact = await pool.query<{ as_of: string; value: unknown; document_ids: string[] }>(`SELECT as_of::text,value,document_ids FROM collected_facts
-    WHERE symbol=$1 AND fact_key='insider_net_buy_90d' AND source_id <> 'eodhd'
-      AND as_of <= $2::date + $4::int AND as_of > $2::date - $3::int ORDER BY as_of DESC LIMIT 1`, [symbol, asOf, INSIDER_FACT_DAYS, INSIDER_FACT_LEAD_DAYS]);
+  const fact = await pool.query<{ as_of: string; value: unknown; document_ids: string[]; source_id: string }>(`SELECT as_of::text,value,document_ids,source_id FROM collected_facts
+    WHERE symbol=$1 AND fact_key='insider_net_buy_90d'
+      AND (source_id IS DISTINCT FROM 'eodhd' OR ($5::boolean AND computed_at::date <= $2::date))
+      AND as_of <= $2::date + $4::int AND as_of > $2::date - $3::int ORDER BY as_of DESC LIMIT 1`, [symbol, asOf, INSIDER_FACT_DAYS, INSIDER_FACT_LEAD_DAYS, eodhdPrivateUse()]);
   const row = fact.rows[0];
   if (!row) return null;
   const docs = await pool.query<{ url: string; published: string; meta: { trades?: InsiderDocument["trades"] } }>(`SELECT url,to_char(published_at AT TIME ZONE 'UTC','YYYY-MM-DD') AS published,meta FROM source_documents
     WHERE id = ANY($1::bigint[]) AND symbol=$2 AND doc_type='4' AND meta->>'display_allowed'='true' ORDER BY published_at DESC`, [row.document_ids, symbol]);
-  return insiderFromFact({ asOf: row.as_of, value: row.value }, docs.rows.map((doc) => ({ url: doc.url, publishedAt: doc.published, trades: Array.isArray(doc.meta.trades) ? doc.meta.trades : [] })), asOf, minNetBuy);
+  return insiderFromFact({ asOf: row.as_of, value: row.value, sourceId: row.source_id }, docs.rows.map((doc) => ({ url: doc.url, publishedAt: doc.published, trades: Array.isArray(doc.meta.trades) ? doc.meta.trades : [] })), asOf, minNetBuy);
 }
 export class PostgresCollectorRepository implements CollectorRepository {
   constructor(private readonly pool: pg.Pool) {}

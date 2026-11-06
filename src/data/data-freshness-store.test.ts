@@ -5,10 +5,9 @@ import { getDataStatusMessages } from "../i18n/data-status-messages";
 describe("freshness query", () => {
   const part = (dataset: string) => FRESHNESS_SQL.split("UNION ALL").find((p) => p.includes(`'${dataset}'`)) ?? "";
 
-  it("counts macro and news rows only from sources with display_allowed", () => {
-    for (const dataset of ["macro", "news"]) {
-      expect(part(dataset)).toMatch(/JOIN data_sources s ON s\.id = \w\.(?:source_id|source) AND s\.display_allowed/);
-    }
+  it("keeps macro public and admits EODHD news dates only in private mode", () => {
+    expect(part("macro")).toMatch(/JOIN data_sources s ON s\.id = m\.source_id AND s\.display_allowed/);
+    expect(part("news")).toContain("s.display_allowed OR ($2::boolean AND d.source_id = 'eodhd')");
   });
 
   it("does not name a single vendor for the macro dataset", () => {

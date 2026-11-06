@@ -12,7 +12,7 @@ export const insiderMinNetBuyUsd = (env: Record<string, string | undefined> = pr
   return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_INSIDER_MIN_NET_BUY_USD;
 };
 
-export interface InsiderFact { asOf: string; value: unknown }
+export interface InsiderFact { asOf: string; value: unknown; sourceId?: string }
 export interface InsiderDocument { url: string; publishedAt: string; trades: { date: string; code: string; shares: number }[] }
 export interface InsiderResult { value: boolean | null; reason: string; refs: EvidenceRef[] }
 
@@ -40,11 +40,13 @@ export function insiderFromFact(fact: InsiderFact | null, documents: InsiderDocu
     });
   const net = `net $${Math.round(v.netDollars)} (${v.netShares} shares) over 90 days to ${fact.asOf}`;
   if (v.netDollars > minNetBuy) {
+    if (fact.sourceId === "eodhd") return { value: true, reason: `EODHD Form 4 net buying above $${minNetBuy} over 90 days to ${fact.asOf}`, refs: [] };
     if (!refs.length) return { value: null, reason: `Form 4 ${net} but no purchase filing within ${freshnessDays.insiderOrInstitutionalBuying} days to cite`, refs: [] };
     return { value: true, reason: `Form 4 data: ${net}, above $${minNetBuy}`, refs };
   }
   // Below the threshold or net selling. Unpriced trades make netDollars a lower bound, so net buying that is not clearly small stays unknown.
   if (!complete && v.netShares > 0) return { value: null, reason: `Form 4 ${net}, some trades have no price`, refs: [] };
+  if (fact.sourceId === "eodhd") return { value: false, reason: v.netDollars <= 0 ? `EODHD Form 4: no net buying over 90 days to ${fact.asOf}` : `EODHD Form 4: net buying below $${minNetBuy} over 90 days to ${fact.asOf}`, refs: [] };
   return { value: false, reason: v.netDollars <= 0 ? `Form 4 data: ${net}, no net buying` : `Form 4 data: ${net}, below $${minNetBuy}`, refs };
 }
 
