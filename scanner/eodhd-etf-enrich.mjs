@@ -8,8 +8,9 @@ function expensePercent(etf) {
   const ratioPct = ratio !== null && ratio >= 0 && ratio <= 0.1 ? ratio * 100 : null;
   const ongoingPct = ongoing !== null && ongoing >= 0 && ongoing <= 10 ? ongoing : null;
   if (ratio !== null && ongoing !== null) return ratioPct !== null && ongoingPct !== null && Math.abs(ratioPct - ongoingPct) <= 0.01 ? ongoingPct : null;
-  // A lone ratio of 1–10% may be a fraction or an already-percent value.
-  if (ratio !== null) return ratio < 0.01 ? ratioPct : null;
+  // EODHD mixes units: SPY.US sent 0.0009 (a fraction), QHY.US 0.381 (a percent). Below 0.01 is read as a fraction; above 0.1 a
+  // fraction would mean a TER over 10%, so it is read as a percent. Values from 0.01 to 0.1 fit both and stay unknown.
+  if (ratio !== null) return ratio < 0.01 ? ratioPct : ratio > 0.1 && ratio <= 10 ? ratio : null;
   // A tiny lone ongoing charge may also be a fraction sent in a percent field.
   return ongoingPct === 0 || (ongoingPct !== null && ongoingPct >= 0.01) ? ongoingPct : null;
 }
