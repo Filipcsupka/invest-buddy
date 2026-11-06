@@ -89,7 +89,7 @@ export async function runEodhdInsider(db: Pick<pg.Pool, "query"> | null, api: In
   const picked = due.slice(0, options.maxSymbols ?? 10);
   if (!api) return { universe: subjects.length, due: due.length, planned: picked.length, estimatedCalls: picked.length * 10, refreshed: 0, rows: 0, failures: [] as string[], incomplete: [] as string[] };
   let refreshed = 0, rows = 0;
-  const failures: string[] = [], incomplete: string[] = [];
+  const failures: string[] = [], incomplete: string[] = [], notFound: string[] = [];
   const cutoff = shift(today, -90);
   for (const subject of picked) {
     try {
@@ -129,6 +129,14 @@ export async function runEodhdInsider(db: Pick<pg.Pool, "query"> | null, api: In
       refreshed++;
       rows += parsed.reduce((n, filing) => n + filing.lines.length, 0);
     } catch (error) {
+      // EODHD answers 404 for a US symbol it has no Form 4 filings for (seen for SLDE.US); back off like an empty result.
+      if (error instanceof EodhdHttpError && error.status === 404) {
+        if (db && !options.dryRun) await db.query(`INSERT INTO eodhd_insider_refresh (ticker,attempted_at,empty) VALUES ($1,now(),$2)
+          ON CONFLICT (ticker) DO UPDATE SET attempted_at=EXCLUDED.attempted_at, empty=EXCLUDED.empty`, [subject.ticker, true]);
+        notFound.push(subject.ticker);
+        refreshed++;
+        continue;
+      }
       failures.push(subject.ticker);
       const reason = error instanceof EodhdHttpError ? `HTTP ${error.status}` : error instanceof Error ? error.message : "error";
       process.stderr.write(`${JSON.stringify({ event: "eodhd_insider_symbol_failed", ticker: subject.ticker, reason })}\n`);
@@ -136,7 +144,7 @@ export async function runEodhdInsider(db: Pick<pg.Pool, "query"> | null, api: In
     }
   }
   return { universe: subjects.length, due: due.length, planned: picked.length,
-    estimatedCalls: picked.length * 10, refreshed, rows, failures, incomplete, calls: api.getCallCosts()["sec-filings/form4"] ?? 0 };
+    estimatedCalls: picked.length * 10, refreshed, rows, failures, incomplete, notFound, calls: api.getCallCosts()["sec-filings/form4"] ?? 0 };
 }
 
 export function parseArgs(args: string[]) {

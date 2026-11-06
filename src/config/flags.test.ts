@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { designViewEnabled, flags } from "./flags";
 
-const NAMES = ["PAYWALL", "AUTH", "BILLING", "WAITLIST", "ADVICE_OUTPUT", "OWNER_VIEW", "DESIGN_VIEW", "PUBLIC_EARNINGS_DATES"] as const;
+const NAMES = ["PAYWALL", "AUTH", "BILLING", "WAITLIST", "ADVICE_OUTPUT", "OWNER_VIEW", "DESIGN_VIEW", "PUBLIC_EARNINGS_DATES", "MARKETS_VIEWS"] as const;
 
 describe("flags", () => {
   it("defaults everything off when unset", () => {
-    expect(flags({})).toEqual({ PAYWALL: false, AUTH: false, BILLING: false, WAITLIST: false, ADVICE_OUTPUT: false, IDEAS_PAGE: false, INSIDERS_PAGE: true, OWNER_VIEW: false, DESIGN_VIEW: false, PUBLIC_EARNINGS_DATES: false });
+    expect(flags({})).toEqual({ PAYWALL: false, AUTH: false, BILLING: false, WAITLIST: false, ADVICE_OUTPUT: false, IDEAS_PAGE: false, INSIDERS_PAGE: true, OWNER_VIEW: false, DESIGN_VIEW: false, PUBLIC_EARNINGS_DATES: false, MARKETS_VIEWS: false });
   });
 
   for (const name of NAMES) {

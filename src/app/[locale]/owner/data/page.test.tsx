@@ -25,7 +25,7 @@ it("shows the owner every data family and its stored date", async () => {
   auth.mockReturnValue(true);
   pool.mockReturnValue({});
   overview.mockResolvedValue({
-    sources: [{ family: "Daily bars", records: 5, latest: "2026-11-05" }], usage: [], exchanges: [], universe: [], etfs: [], macro: [], jobs: [],
+    sources: [{ family: "Daily bars", records: 5, latest: "2026-11-05" }], usage: [], callLog: [], exchanges: [], universe: [], etfs: [], macro: [], jobs: [], assets: [],
   });
   const html = renderToStaticMarkup(await Page(props));
   expect(html).toContain("Daily bars");

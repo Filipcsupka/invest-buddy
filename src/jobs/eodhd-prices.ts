@@ -106,20 +106,21 @@ export async function runEodhdPrices(client: EodhdPricesClient, repository: Pric
       succeeded++;
     } catch (error) { failures.push({ ticker: symbol.ticker, reason: error instanceof Error ? error.message : "invalid bars" }); }
   };
+  const single = async (symbol: PriceSymbol) => {
+    try {
+      const from = new Date(Date.parse(startedAt) - 14 * 86_400_000).toISOString().slice(0, 10);
+      const rows = await client.eod(symbol.vendorSymbol, { period: "d", order: "d", from });
+      const day = rows[0]?.date;
+      if (!day) throw new Error("empty EODHD daily response");
+      await save(symbol, [rows[0]], await client.splits(symbol.vendorSymbol, { from: day, to: day }));
+    } catch (error) { failures.push({ ticker: symbol.ticker, reason: error instanceof Error ? error.message : "daily request failed" }); }
+  };
   if (options.mode === "daily") {
     const exchanges = [...new Set(symbols.map((symbol) => symbol.exchange))];
     for (const exchange of exchanges) {
       const group = symbols.filter((symbol) => symbol.exchange === exchange);
       if (group.length < 100) {
-        for (const symbol of group) {
-          try {
-            const from = new Date(Date.parse(startedAt) - 14 * 86_400_000).toISOString().slice(0, 10);
-            const rows = await client.eod(symbol.vendorSymbol, { period: "d", order: "d", from });
-            const day = rows[0]?.date;
-            if (!day) throw new Error("empty EODHD daily response");
-            await save(symbol, [rows[0]], await client.splits(symbol.vendorSymbol, { from: day, to: day }));
-          } catch (error) { failures.push({ ticker: symbol.ticker, reason: error instanceof Error ? error.message : "daily request failed" }); }
-        }
+        for (const symbol of group) await single(symbol);
         continue;
       }
       try {
@@ -132,11 +133,14 @@ export async function runEodhdPrices(client: EodhdPricesClient, repository: Pric
           if (byCode.has(row.code)) throw new Error(`duplicate EODHD bulk code ${row.code}`);
           byCode.set(row.code, row);
         }
+        const missing: PriceSymbol[] = [];
         for (const symbol of group) {
           const row = byCode.get(symbol.code);
-          if (!row) failures.push({ ticker: symbol.ticker, reason: `missing from ${exchange} bulk response` });
+          if (!row) missing.push(symbol);
           else await save(symbol, [row], splitRows.filter((split) => split.code === symbol.code && split.exchange === exchange && split.date === row.date));
         }
+        // The bulk file can omit a listed symbol; its own EOD and splits requests (2 calls) fill the gap.
+        for (const symbol of missing) await single(symbol);
       } catch (error) { for (const symbol of group) failures.push({ ticker: symbol.ticker, reason: error instanceof Error ? error.message : "bulk request failed" }); }
     }
   } else {

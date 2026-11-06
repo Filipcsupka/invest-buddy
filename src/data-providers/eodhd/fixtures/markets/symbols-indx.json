@@ -1,0 +1,11 @@
+[
+  {
+    "Code": "GSPC",
+    "Name": "S&P 500 Index",
+    "Country": "USA",
+    "Exchange": "INDX",
+    "Currency": "USD",
+    "Type": "INDEX",
+    "Isin": "US78378X1072"
+  }
+]

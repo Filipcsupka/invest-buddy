@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import form4 from "../data-providers/eodhd/fixtures/form4.json";
 import realForm4 from "../data-providers/eodhd/fixtures/real/form4-aapl.json";
+import { EodhdHttpError } from "../data-providers/eodhd/client";
 import { dueForInsiderFallback, parseEodhdInsider, parseSharesAfter, runEodhdInsider, type InsiderSubject } from "./eodhd-insider";
 
 const subject = (changes: Partial<InsiderSubject> = {}): InsiderSubject => ({ ticker: "AAPL", vendorSymbol: "AAPL.US",
@@ -45,6 +46,15 @@ describe("EODHD Form 4 fallback", () => {
       getCallCosts: () => ({ "sec-filings/form4": 20 }) };
     const result = await runEodhdInsider(null, api, { dryRun: true, subjects: [subject(), subject({ ticker: "MSFT", vendorSymbol: "MSFT.US" })] });
     expect(result).toMatchObject({ refreshed: 1, failures: ["AAPL"] });
+  });
+
+  it("treats HTTP 404 as no Form 4 coverage and backs off instead of failing", async () => {
+    const writes: unknown[][] = [];
+    const db = { async query(sql: string, params?: unknown[]) { if (sql.includes("eodhd_insider_refresh")) writes.push(params ?? []); return { rows: [], rowCount: 0 }; } };
+    const api = { async form4(): Promise<never> { throw new EodhdHttpError(404, "sec-filings/form4"); }, getCallCosts: () => ({ "sec-filings/form4": 10 }) };
+    const result = await runEodhdInsider(db as never, api, { subjects: [subject({ ticker: "SLDE", vendorSymbol: "SLDE.US" })], today: "2026-11-06" });
+    expect(result).toMatchObject({ refreshed: 1, rows: 0, failures: [], notFound: ["SLDE"] });
+    expect(writes).toEqual([["SLDE", true]]);
   });
 
   it("backs off 30 days per symbol after an empty result", () => {

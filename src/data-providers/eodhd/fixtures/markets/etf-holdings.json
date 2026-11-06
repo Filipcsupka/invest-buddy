@@ -1,0 +1,22 @@
+{
+  "NVDA.US": {
+    "Code": "NVDA",
+    "Exchange": "US",
+    "Name": "NVIDIA Corporation",
+    "Sector": "Technology",
+    "Industry": "Semiconductors",
+    "Country": "United States",
+    "Region": "North America",
+    "Assets_%": 5.6742
+  },
+  "AAPL.US": {
+    "Code": "AAPL",
+    "Exchange": "US",
+    "Name": "Apple Inc.",
+    "Sector": "Technology",
+    "Industry": "Consumer Electronics",
+    "Country": "United States",
+    "Region": "North America",
+    "Assets_%": 5.6304
+  }
+}

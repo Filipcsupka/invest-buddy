@@ -1,0 +1,18 @@
+{
+  "data": [
+    {
+      "code": "AAPL",
+      "name": "Apple Inc",
+      "last_day_data_date": "2026-11-05",
+      "adjusted_close": 275,
+      "refund_1d": 2,
+      "refund_1d_p": 0.7,
+      "refund_5d": 5,
+      "refund_5d_p": 1.8,
+      "exchange": "US",
+      "currency_symbol": "USD",
+      "market_capitalization": 4000000000000,
+      "earnings_share": 7
+    }
+  ]
+}

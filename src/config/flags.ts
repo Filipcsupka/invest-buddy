@@ -5,7 +5,7 @@ import { z } from "zod";
 // so tests and runtime changes to process.env are honoured.
 const onOff = z.enum(["on", "off"]);
 
-export type FlagName = "PAYWALL" | "AUTH" | "BILLING" | "WAITLIST" | "ADVICE_OUTPUT" | "IDEAS_PAGE" | "INSIDERS_PAGE" | "OWNER_VIEW" | "DESIGN_VIEW" | "PUBLIC_EARNINGS_DATES";
+export type FlagName = "PAYWALL" | "AUTH" | "BILLING" | "WAITLIST" | "ADVICE_OUTPUT" | "IDEAS_PAGE" | "INSIDERS_PAGE" | "OWNER_VIEW" | "DESIGN_VIEW" | "PUBLIC_EARNINGS_DATES" | "MARKETS_VIEWS";
 export type Flags = Record<FlagName, boolean>;
 
 function parse(raw: string | undefined, fallback: boolean): boolean {
@@ -27,6 +27,7 @@ export function flags(env: Record<string, string | undefined> = process.env): Fl
     IDEAS_PAGE: fixture || parse(env.IDEAS_PAGE, false),
     INSIDERS_PAGE: parse(env.INSIDERS_PAGE, true),
     OWNER_VIEW: parse(env.OWNER_VIEW, false),
+    MARKETS_VIEWS: parse(env.MARKETS_VIEWS, false),
     // The /design kit review page in production. Off by default.
     DESIGN_VIEW: parse(env.DESIGN_VIEW, false),
     // Alpha Vantage earnings dates on the public company page. Off until the display rights are checked (src/data/sources-registry.ts).

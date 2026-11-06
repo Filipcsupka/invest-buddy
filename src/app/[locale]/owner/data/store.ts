@@ -3,6 +3,12 @@ import type pg from "pg";
 type Db = Pick<pg.Pool, "query">;
 export type DataRow = Record<string, unknown>;
 const rows = async (db: Db, sql: string, values: unknown[] = []): Promise<DataRow[]> => (await db.query(sql, values)).rows;
+const optionalRows = async (db: Db, sql: string): Promise<DataRow[]> => {
+  try { return await rows(db, sql); } catch (error) {
+    if ((error as { code?: string }).code === "42P01") return [];
+    throw error;
+  }
+};
 
 /** All reads are bounded. Dates and source identifiers stay beside their values. */
 export async function ownerDataOverview(db: Db, etfPage = 1) {
@@ -26,7 +32,12 @@ export async function ownerDataOverview(db: Db, etfPage = 1) {
     rows(db, `SELECT DISTINCT ON (series_id) series_id,obs_date::text,value::text,source_id,observed_at::text FROM macro_observations WHERE source_id IN ('eodhd','ecb') ORDER BY series_id,obs_date DESC,observed_at DESC LIMIT 50`),
     rows(db, `SELECT DISTINCT ON (job) job,status,started_at::text,ended_at::text,counts FROM job_runs WHERE job ILIKE '%eodhd%' OR job IN ('symbols-sync','etf-enrich') ORDER BY job,started_at DESC LIMIT 50`),
   ]);
-  return { sources, usage, exchanges, universe, etfs, etfPage: page, etfPages: Math.max(1, Math.ceil(Number(etfCount[0]?.count ?? 0) / 100)), macro, jobs };
+  const [assets, callLog, assetSummary] = await Promise.all([
+    optionalRows(db, `SELECT a.vendor_symbol,a.asset_class,a.name,a.exchange,a.currency,b.bar_date::text,b.close::text,b.volume::text,b.source_id FROM tracked_assets a LEFT JOIN LATERAL (SELECT bar_date,close,volume,source_id FROM asset_bars WHERE vendor_symbol=a.vendor_symbol ORDER BY bar_date DESC LIMIT 1) b ON true WHERE a.enabled ORDER BY a.asset_class,a.sort,a.vendor_symbol LIMIT 100`),
+    optionalRows(db, `SELECT job,run_date::text,calls,source_id FROM eodhd_call_log ORDER BY run_date DESC,job LIMIT 60`),
+    optionalRows(db, `SELECT 'Market asset bars' AS family,count(*)::int AS records,max(bar_date)::text AS latest FROM asset_bars WHERE source_id='eodhd'`),
+  ]);
+  return { sources: [...sources, ...assetSummary], usage, exchanges, universe, etfs, etfPage: page, etfPages: Math.max(1, Math.ceil(Number(etfCount[0]?.count ?? 0) / 100)), macro, jobs, assets, callLog };
 }
 
 export async function ownerTickerData(db: Db, ticker: string) {

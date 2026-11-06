@@ -1,0 +1,11 @@
+[
+  {
+    "Code": "BTC-USD",
+    "Name": "Bitcoin",
+    "Country": "Unknown",
+    "Exchange": "CC",
+    "Currency": "USD",
+    "Type": "Currency",
+    "Isin": null
+  }
+]

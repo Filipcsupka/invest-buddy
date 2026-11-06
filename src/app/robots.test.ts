@@ -7,7 +7,7 @@ afterEach(() => { if (original === undefined) delete process.env.SITE_NOINDEX; e
 
 it("allows public pages, closes the API and owner page, and names the sitemap", () => {
   delete process.env.SITE_NOINDEX;
-  expect(robots()).toEqual({ rules: { userAgent: "*", allow: "/", disallow: ["/api/", "/en/owner-allocation", "/sk/owner-allocation", "/en/owner/", "/sk/owner/"] }, sitemap: `${siteUrl}/sitemap.xml` });
+  expect(robots()).toEqual({ rules: { userAgent: "*", allow: "/", disallow: ["/api/", ...["en", "sk"].flatMap((locale) => [...["owner-allocation", "indices", "forex", "crypto", "economy", "congress", "news", "screener"].map((route) => `/${locale}/${route}`), `/${locale}/owner/`])] }, sitemap: `${siteUrl}/sitemap.xml` });
 });
 
 it("blocks the whole site on staging", () => {

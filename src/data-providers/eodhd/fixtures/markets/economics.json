@@ -1,0 +1,14 @@
+[
+  {
+    "type": "Consumer Price Index",
+    "comparison": "YoY",
+    "period": "Oct",
+    "country": "US",
+    "date": "2026-11-05",
+    "actual": 2.5,
+    "previous": 2.6,
+    "estimate": 2.5,
+    "change": -0.1,
+    "change_percentage": -3.8
+  }
+]
