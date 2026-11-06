@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type pg from "pg";
-import { guardReconcileUserAgent, primaryResearchReadings, reconcileField, selectVerifier, type AgentFinding, type ResearchReading, type ResearchRow } from "./reconcile";
+import { guardReconcileUserAgent, primaryResearchReadings, reconcileField, runReconcile, selectVerifier, type AgentFinding, type ResearchReading, type ResearchRow } from "./reconcile";
 import { fixtureVerifier, liveVerifier, offVerifier } from "../data/evidence";
 import { storedOnlyVerifier } from "../data/stored-evidence";
 import { epsBeatMinSurprisePct, epsFromFact } from "../data/eps";
@@ -137,4 +137,23 @@ it("live reconcile refuses a missing or placeholder SEC_USER_AGENT; off and fixt
     expect(() => guardReconcileUserAgent("fixture", env)).not.toThrow();
   }
   expect(() => guardReconcileUserAgent("live", { SEC_USER_AGENT: "Porgy ops@example.com" })).not.toThrow();
+});
+
+afterEach(() => vi.unstubAllEnvs());
+it.each(["off", "on"])("preserves existing EPS rules off and recomputes them on, always preserving macro rules (%s)", async (mode) => {
+  vi.stubEnv("EODHD_PRIVATE_USE", mode);
+  vi.stubEnv("CARRY_FORWARD", "off");
+  const writes: unknown[][] = [];
+  const query = async (sql: string, params: unknown[] = []) => {
+    if (sql.includes("FROM scan_findings")) return { rows: [{ symbol: "NVDA", run_id: "c1", runner: { name: "claude" }, fundamentals: {}, evidence: { items: [] }, confidence: "high" }] };
+    if (sql.includes("agreement='data_rule'")) return { rows: ["epsBeat", "dataTailwind", "productCatalyst"].map((field) => ({ symbol: "NVDA", field })) };
+    if (sql.includes("INSERT INTO consensus_findings")) writes.push(params);
+    return { rows: [] };
+  };
+  const pool = { query, connect: async () => ({ query, release() {} }) } as unknown as pg.Pool;
+  await runReconcile(pool, "2026-10-05", async () => false, async () => null, async () => null, { epsLookup: async () => null, catalystLookup: async () => null });
+  const writtenFields = writes.map((p) => p[1]);
+  expect(writtenFields.includes("epsBeat")).toBe(mode === "on");
+  expect(writtenFields).not.toContain("dataTailwind");
+  expect(writtenFields).toContain("productCatalyst");
 });

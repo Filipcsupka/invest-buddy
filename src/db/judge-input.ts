@@ -1,3 +1,4 @@
+import { eodhdPrivateUse } from "../data/eodhd-private-use";
 import type pg from "pg";
 import type { ScoreResult } from "../engine";
 import { computeSignals, SIGNAL_RULES, type Signal, type SignalSymbolInput } from "../engine/signals";
@@ -70,7 +71,7 @@ const docLabel = (docType: string): string => (docType === "10-Q" ? "10-Q" : "Ea
 
 /**
  * The links the judge may cite for one symbol: every verified finding's refs (agree, verified_single, xbrl_override, data_rule) whose url is a stored
- * display-allowed document or public SEC XBRL data, plus the symbol's own earnings exhibit and 10-Q. Deduplicated by url, newest first, capped.
+ * display-allowed document or public SEC XBRL data, plus EODHD refs in private mode and the symbol's own earnings exhibit and 10-Q. Deduplicated by url, newest first, capped.
  * Alpha Vantage, FRED and VIX urls are not display-allowed, so they never appear.
  */
 export function collectEvidence(consensus: ConsensusRow[], displayUrls: Set<string>, primaryDocs: PrimaryDoc[] = []): JudgeEvidence[] {
@@ -78,7 +79,7 @@ export function collectEvidence(consensus: ConsensusRow[], displayUrls: Set<stri
   for (const c of [...consensus].sort((x, y) => x.field.localeCompare(y.field))) {
     if (!c.verified || !CITABLE_AGREEMENTS.has(c.agreement)) continue;
     for (const e of c.evidence_refs ?? []) {
-      if (!e.url || !(displayUrls.has(e.url) || SEC_PUBLIC_URL.test(e.url))) continue;
+      if (!e.url || !(displayUrls.has(e.url) || SEC_PUBLIC_URL.test(e.url) || (eodhdPrivateUse() && e.url.startsWith("https://eodhd.com/")))) continue;
       all.push({ url: e.url, field: c.field, label: refLabel(e), publishedAt: e.publishedAt ?? null, quote: e.quote ? e.quote.slice(0, 240) : null });
     }
   }

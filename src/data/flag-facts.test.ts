@@ -1,13 +1,14 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FundamentalsHistoryRow } from "../db/history";
 import { companyFlags } from "../engine/flags";
 import { FUNDAMENTALS_CONCEPTS, INTEREST_EXPENSE_CONCEPTS } from "./fundamentals-concepts";
-import { latestShareCounts, pickInterestFacts } from "./flag-facts";
+import { latestShareCounts, pickInterestFacts, storedShareCounts } from "./flag-facts";
 import realCases from "../collectors/sources/fixtures/sec-real-collector-cases.json";
 import { parseCompanyfacts } from "../collectors/sources/companyfacts";
 
 const query = vi.hoisted(() => vi.fn());
 vi.mock("../db/pool", () => ({ getPool: () => ({ query }) }));
+afterEach(() => vi.unstubAllEnvs());
 
 it("reads public share counts only from display-allowed source rows", async () => {
   query.mockResolvedValueOnce({ rows: [{ ticker: "AAPL", value: "100" }] });
@@ -15,6 +16,25 @@ it("reads public share counts only from display-allowed source rows", async () =
   const sql = String(query.mock.calls.at(-1)?.[0]);
   expect(sql).toMatch(/s\.id\s*=\s*f\.source_id/);
   expect(sql).toMatch(/s\.display_allowed/);
+});
+
+it("admits EODHD share counts to the private scanner floor only when enabled", async () => {
+  query.mockResolvedValue({ rows: [{ ticker: "AAPL", value: "100" }] });
+  vi.stubEnv("EODHD_PRIVATE_USE", "off");
+  await latestShareCounts(["AAPL"]);
+  expect(query.mock.calls.at(-1)?.[1][1]).toBe(false);
+  vi.stubEnv("EODHD_PRIVATE_USE", "on");
+  await latestShareCounts(["AAPL"]);
+  expect(query.mock.calls.at(-1)?.[1][1]).toBe(true);
+});
+
+it("uses EODHD share history in private mode and SEC history when it is absent", async () => {
+  query.mockReset();
+  query.mockImplementation(async (sql: string) => ({ rows: sql.includes("source_id='eodhd'") ? [{ periodEnd: "2026-09-30", value: "120" }] : [{ periodEnd: "2026-06-30", value: "100", cursorKey: "2026-08-01:1" }] }));
+  vi.stubEnv("EODHD_PRIVATE_USE", "off");
+  expect(await storedShareCounts("AAPL")).toEqual([{ periodEnd: "2026-06-30", value: 100 }]);
+  vi.stubEnv("EODHD_PRIVATE_USE", "on");
+  expect(await storedShareCounts("AAPL")).toEqual([{ periodEnd: "2026-09-30", value: 120 }]);
 });
 
 const row = (concept: string, value: number, over: Partial<FundamentalsHistoryRow> = {}): FundamentalsHistoryRow => ({

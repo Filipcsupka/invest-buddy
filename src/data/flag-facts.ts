@@ -2,12 +2,20 @@ import { getPool } from "../db/pool";
 import { fundamentalsHistory, type FundamentalsHistoryRow } from "../db/history";
 import type { ShareCount } from "../engine/flags";
 import { INTEREST_EXPENSE_CONCEPTS } from "./fundamentals-concepts";
+import { eodhdPrivateUse } from "./eodhd-private-use";
 
-/** Reported share counts (SEC cover page) from stored facts. Empty without a database or on any read error: the flag then shows no data. */
+/** Reported share counts from stored facts. EODHD is used in private mode, with SEC as the fallback. */
 export async function storedShareCounts(ticker: string): Promise<ShareCount[]> {
   const db = getPool();
   if (!db) return [];
   try {
+    if (eodhdPrivateUse()) {
+      const vendor = await db.query<{ periodEnd: string; value: string | number }>(`SELECT period_end::text AS "periodEnd", value FROM fundamentals_pit
+        WHERE ticker=$1 AND concept='EntityCommonStockSharesOutstanding' AND source_id='eodhd'
+          AND filed <= CURRENT_DATE AND first_seen_at::date <= CURRENT_DATE
+        ORDER BY period_end DESC, filed DESC, id DESC LIMIT 40`, [ticker]);
+      if (vendor.rows.length) return vendor.rows.map((row) => ({ periodEnd: row.periodEnd, value: Number(row.value) }));
+    }
     const page = await fundamentalsHistory(db, ticker, "EntityCommonStockSharesOutstanding", { limit: 40 });
     return page.rows.map((row) => ({ periodEnd: row.periodEnd, value: row.value }));
   } catch {
@@ -71,8 +79,9 @@ export async function latestShareCounts(tickers: readonly string[]): Promise<Rec
     const result = await db.query<{ ticker: string; value: string | number }>(
       `SELECT DISTINCT ON (f.ticker) f.ticker, f.value FROM fundamentals_pit f
        WHERE f.ticker = ANY($1) AND f.concept = 'EntityCommonStockSharesOutstanding'
-         AND EXISTS (SELECT 1 FROM data_sources s WHERE s.id = f.source_id AND s.display_allowed)
-       ORDER BY f.ticker, f.period_end DESC, f.filed DESC, f.id DESC`, [[...tickers]]);
+         AND (EXISTS (SELECT 1 FROM data_sources s WHERE s.id = f.source_id AND s.display_allowed)
+              OR ($2::boolean AND f.source_id = 'eodhd'))
+       ORDER BY f.ticker, f.period_end DESC, f.filed DESC, f.id DESC`, [[...tickers], eodhdPrivateUse()]);
     return Object.fromEntries(result.rows.map((row) => [row.ticker, Number(row.value)] as const).filter(([, value]) => Number.isFinite(value)));
   } catch {
     return {};

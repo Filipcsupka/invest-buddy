@@ -1,5 +1,5 @@
 import type pg from "pg";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ScoreResult } from "../engine";
 import { ruleDetail } from "../i18n/score-text";
 import { DatabaseUniverseProvider } from "./db-provider";
@@ -15,6 +15,7 @@ const rows = [
   row("insiderOrInstitutionalBuying", "disputed", null, false),
 ];
 const pool = { query: async (sql: string) => ({ rows: sql.includes("FROM consensus_findings") && !sql.includes("field IN") ? rows : [] }) } as unknown as pg.Pool;
+afterEach(() => vi.unstubAllEnvs());
 
 describe("DatabaseUniverseProvider fundamentals", () => {
   for (const carry of [false, true]) {
@@ -50,6 +51,14 @@ describe("DatabaseUniverseProvider fundamentals", () => {
       const badPool = { query: async (sql: string) => ({ rows: sql.includes("FROM consensus_findings") ? badRows : [] }) } as unknown as pg.Pool;
       const provider = new DatabaseUniverseProvider(badPool, "2026-10-05", carry);
       expect(await provider.fundamentals("NVDA")).toMatchObject({ revenueGrowthCurrent: null, revenueGrowthPrior: null });
+    });
+    it(`reads EODHD growth only in private mode (carry ${carry ? "on" : "off"})`, async () => {
+      const eodhdRows = [{ ...row("revenueAccelerating", "xbrl_override", true), evidence_refs: [{ url: "https://eodhd.com/financial-apis/stock-etfs-fundamental-data-feeds", quote: "Revenue growth 25.50% versus 10.25%" }] }];
+      const eodhdPool = { query: async (sql: string) => ({ rows: sql.includes("FROM consensus_findings") ? eodhdRows : [] }) } as unknown as pg.Pool;
+      vi.stubEnv("EODHD_PRIVATE_USE", "off");
+      expect(await new DatabaseUniverseProvider(eodhdPool, "2026-10-05", carry).fundamentals("NVDA")).toMatchObject({ revenueGrowthCurrent: null, revenueGrowthPrior: null });
+      vi.stubEnv("EODHD_PRIVATE_USE", "on");
+      expect(await new DatabaseUniverseProvider(eodhdPool, "2026-10-05", carry).fundamentals("NVDA")).toMatchObject({ revenueGrowthCurrent: 25.5, revenueGrowthPrior: 10.25 });
     });
   }
 

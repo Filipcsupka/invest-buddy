@@ -1,6 +1,7 @@
 import { freshnessDays, stripMarkup, type EvidenceRef } from "./evidence";
 import { daysBetween } from "./catalyst-calendar";
 import type { EodhdCatalystFact } from "./eodhd-catalyst";
+import { eodhdPrivateUse } from "./eodhd-private-use";
 
 /** Fact written by collect from stored SEC 8-K text, read by reconcile. */
 export const CATALYST_FACT_KEY = "catalyst_8k";
@@ -126,10 +127,11 @@ export function catalystFromFact(fact: { asOf: string; value: unknown } | null, 
 type Queryable = { query: (sql: string, params: unknown[]) => Promise<{ rows: Record<string, unknown>[] }> };
 /** Newest fact for the date, a qualifying one first: a filing inside the window stays valid while a later "none found" row exists for another day. */
 export async function loadCatalyst(pool: Queryable, symbol: string, asOf: string): Promise<CatalystResult | null> {
+  const keys = eodhdPrivateUse() ? [CATALYST_FACT_KEY, CATALYST_EODHD_FACT_NAME] : [CATALYST_FACT_KEY];
   const { rows } = await pool.query(`SELECT as_of::text AS as_of, value FROM collected_facts
     WHERE symbol=$1 AND fact_key = ANY($2::text[]) AND as_of <= $3::date + $5::int AND as_of > $3::date - $4::int
-      AND (source_id IS DISTINCT FROM 'eodhd' OR computed_at::date <= $3::date)
-    ORDER BY (value->>'present')='true' DESC, as_of DESC LIMIT 10`, [symbol, [CATALYST_FACT_KEY, CATALYST_EODHD_FACT_NAME], asOf, CATALYST_WINDOW_DAYS, CATALYST_FACT_LEAD_DAYS]);
+      AND (source_id IS DISTINCT FROM 'eodhd' OR ($6::boolean AND computed_at::date <= $3::date))
+    ORDER BY (value->>'present')='true' DESC, as_of DESC LIMIT 10`, [symbol, keys, asOf, CATALYST_WINDOW_DAYS, CATALYST_FACT_LEAD_DAYS, eodhdPrivateUse()]);
   // A qualifying fact from either source beats a "none found" row; an SEC "none found" is the answer only when nothing qualifies.
   for (const row of rows) { const result = catalystFromFact({ asOf: String(row.as_of), value: row.value }, asOf); if (result) return result; }
   return null;

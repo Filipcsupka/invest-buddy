@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import fixture from "./fixtures/sec-companyfacts.json";
 import msft from "./fixtures/sec-msft-synthetic.json";
 import { revenueLookup, secRevenueStored, type CompanyFacts, type SecFact } from "./sec";
@@ -7,6 +7,7 @@ import type { Queryable } from "../db/history";
 
 type Stored = { concept: string; unit: string; periodStart: string | null; periodEnd: string; fy: number | null; fp: string | null; form: string; filed: string; accession: string; value: number };
 const CIK = 1045810;
+afterEach(() => vi.unstubAllEnvs());
 
 /** Rows as fundamentals_pit stores them, built from a companyfacts fixture. */
 function rowsOf(data: CompanyFacts, edit: (fact: SecFact) => SecFact | null = (fact) => fact): Stored[] {
@@ -80,6 +81,21 @@ describe("revenueLookup", () => {
     expect(stored?.period).toBe("Q2 FY2026");
     expect(await revenueLookup(fake([]).db, async () => live)("NVDA", "2025-08-05")).toBe(live);
     expect(await revenueLookup(fake([]).db)("NVDA", "2025-08-05")).toBeNull();
+  });
+  it("reads EODHD revenue only in private mode and keeps the SEC fallback", async () => {
+    const vendor = rowsOf(fixture).filter((row) => row.form === "10-Q" && row.periodStart);
+    const calls: string[] = [];
+    const db: Queryable = { query: async (sql: string) => {
+      calls.push(sql);
+      if (sql.includes("source_id='eodhd'")) return { rows: vendor.map((row) => ({ unit: row.unit, period_start: row.periodStart, period_end: row.periodEnd, value: String(row.value), accession: row.accession, fy: row.fy, fp: row.fp, filed: row.filed })) as never[] };
+      if (sql.includes("FROM instrument_ids")) return { rows: [{ cik: CIK }] as never[] };
+      return { rows: [] };
+    } };
+    vi.stubEnv("EODHD_PRIVATE_USE", "off");
+    expect(await revenueLookup(db)("NVDA", "2025-08-05")).toBeNull();
+    expect(calls.some((sql) => sql.includes("source_id='eodhd'"))).toBe(false);
+    vi.stubEnv("EODHD_PRIVATE_USE", "on");
+    expect(await revenueLookup(db)("NVDA", "2025-08-05")).toMatchObject({ source: "https://eodhd.com/financial-apis/stock-etfs-fundamental-data-feeds", revenueAccelerating: true });
   });
 });
 

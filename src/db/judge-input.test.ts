@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildJudgeInput, collectEvidence, MAX_EVIDENCE_PER_SYMBOL, pickSymbols, shapeSymbol, signalsFor } from "./judge-input";
 import { baselineSchema } from "./portfolio-baseline";
 import { sampleBaseline } from "../ideas/fixtures";
@@ -8,6 +8,8 @@ const bars = Array.from({ length: 30 }, (_, i) => ({ date: `2026-09-${String(i +
 const audit = (state: string, total: number, extra: object = {}) => ({ ticker: "X", asOf: "2026-10-05", technical: 8, fundamentals: 7, macro: 3, total, state, pullbackInUptrend: false, invalidReasons: [], inputs: { bars }, ruleHits: [{ id: "above_ma", matched: true }, { id: "dip", matched: false }], ...extra });
 const row = (ticker: string, state: string, total: number, extra: object = {}) => ({ ticker, name: ticker, sector: "AI", tier: 1, audit: audit(state, total, { ticker, ...extra }) }) as never;
 const c = (field: string, over: object = {}) => ({ symbol: "X", field, value: true, agreement: "agree", verified: true, reason: "r", carried_from: null, evidence_refs: [{ url: `https://sec.gov/${field}`, publishedAt: "2026-10-01", quote: "q" }], ...over }) as never;
+
+afterEach(() => vi.unstubAllEnvs());
 
 describe("judge input", () => {
   it("sends held names, names with an earlier idea and Setup or Watch names only", () => {
@@ -108,4 +110,12 @@ describe("judge input", () => {
     expect(baselineSchema.safeParse({ ...sampleBaseline, positions: [{ symbol: "nvda", valueEur: 1 }] }).success).toBe(false);
     expect(baselineSchema.safeParse({ ...sampleBaseline, accountId: "U1" }).success).toBe(false);
   });
+});
+
+it.each(["off", "on"])("includes EODHD judge evidence only with private use on (%s)", (mode) => {
+  vi.stubEnv("EODHD_PRIVATE_USE", mode);
+  const url = "https://eodhd.com/financial-apis/stock-etfs-fundamental-data-feeds";
+  const spoofed = "https://eodhd.com.evil.test/financial-apis/stock-etfs-fundamental-data-feeds";
+  const evidence = collectEvidence([c("revenueAccelerating", { agreement: "xbrl_override", evidence_refs: [{ url }, { url: spoofed }] })], new Set());
+  expect(evidence.map((e) => e.url)).toEqual(mode === "on" ? [url] : []);
 });

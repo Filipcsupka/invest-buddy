@@ -1,10 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { readFile } from "node:fs/promises";
 import type pg from "pg";
 import { buildBundle, displayAllowedFor, focusExcerpt, selectExcerpts, windowDaysFor, withinWindow, type RawDocument } from "./bundle";
 import { freshnessDays } from "../data/evidence";
 
 const doc = (id: number, docType: string, publishedAt: string, body = "x".repeat(10000)): RawDocument => ({ id, url: `https://example.com/${id}`, source: "edgar", docType, publishedAt, body });
+afterEach(() => vi.unstubAllEnvs());
 
 describe("selectExcerpts", () => {
   it("puts earnings exhibits first, then filings, then newest", () => {
@@ -41,6 +42,8 @@ describe("displayAllowedFor", () => {
     expect(displayAllowedFor("rss", {})).toBe(false);
     expect(displayAllowedFor("gnews", null)).toBe(false);
     expect(displayAllowedFor("edgar", { display_allowed: "yes" })).toBe(true);
+    expect(displayAllowedFor("eodhd", { display_allowed: false })).toBe(false);
+    expect(displayAllowedFor("eodhd", { display_allowed: false }, true)).toBe(true);
   });
 });
 
@@ -81,11 +84,20 @@ describe("buildBundle", () => {
     expect(calls[0].sql).toContain("ORDER BY published_at DESC, id");
     expect(calls[0].sql).toContain("published_at < ($3::date + 1)");
     expect(calls[0].sql).toContain("source <> 'eodhd'");
-    expect(calls[0].params).toEqual(["NVDA", "2026-06-27", "2026-10-05"]);
+    expect(calls[0].params).toEqual(["NVDA", "2026-06-27", "2026-10-05", false]);
     expect(calls[1].sql).toContain("as_of <= $2::date");
     expect(calls[1].sql).toContain("source_id IS DISTINCT FROM 'eodhd'");
     expect(bundle.documents.map((d) => [d.id, d.displayAllowed])).toEqual([[1, true], [3, false]]);
     expect(bundle.facts).toEqual([{ key: "insider_net_buy_90d", asOf: "2026-10-04", value: 1, documentIds: [1] }]);
+  });
+  it("lets EODHD documents and facts into a private bundle without changing stored display rights", async () => {
+    const { calls, pool } = fakePool([row("9", "EPS surprise", "2026-09-30T00:00:00Z", "eodhd", { display_allowed: false })],
+      [{ fact_key: "eps_surprise_latest", as_of: "2026-09-30", value: { source: "eodhd" }, document_ids: ["9"] }]);
+    vi.stubEnv("EODHD_PRIVATE_USE", "on");
+    const bundle = await buildBundle(pool, "NVDA", 100, new Date("2026-10-05T12:00:00Z"), undefined, "2026-10-05");
+    expect(calls.map((call) => call.params.at(-1))).toEqual([true, true]);
+    expect(bundle.documents[0]).toMatchObject({ source: "eodhd", displayAllowed: true });
+    expect(bundle.facts[0]).toMatchObject({ key: "eps_surprise_latest", documentIds: [9] });
   });
 });
 

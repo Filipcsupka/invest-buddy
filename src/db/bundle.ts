@@ -1,5 +1,6 @@
 import type pg from "pg";
 import { freshnessDays } from "../data/evidence";
+import { eodhdPrivateUse } from "../data/eodhd-private-use";
 
 /** Stored text the extractor may read for one ticker. The model never gets web tools; this is its whole world. */
 export interface BundleDocument { id: number; url: string; source: string; docType: string; publishedAt: string; displayAllowed: boolean; excerpt: string }
@@ -11,10 +12,11 @@ export interface BundleLimits { perDocument: number; total: number; maxDocuments
 export const DEFAULT_LIMITS: BundleLimits = { perDocument: 6000, total: 60000, maxDocuments: 24 };
 
 /**
- * Whether a document may back a claim that is shown on the public page. An explicit meta.display_allowed boolean wins.
- * Rows without the key come from the legacy collectors: EDGAR is public data, everything else (rss, unknown) is not cleared.
+ * Whether a document may back an extraction claim. Private EODHD reads are allowed without changing stored display rights.
+ * Otherwise an explicit meta.display_allowed boolean wins. Legacy EDGAR rows are public; other missing flags are not cleared.
  */
-export function displayAllowedFor(source: string, meta: unknown): boolean {
+export function displayAllowedFor(source: string, meta: unknown, privateUse = false): boolean {
+  if (source === "eodhd" && privateUse) return true;
   const flag = meta && typeof meta === "object" ? (meta as { display_allowed?: unknown }).display_allowed : undefined;
   return typeof flag === "boolean" ? flag : source === "edgar";
 }
@@ -106,19 +108,22 @@ export function selectExcerpts(docs: RawDocument[], limits: BundleLimits = DEFAU
  */
 export async function buildBundle(pool: pg.Pool, symbol: string, days = MAX_WINDOW_DAYS, now = new Date(), limits: BundleLimits = DEFAULT_LIMITS, asOf = now.toISOString().slice(0, 10)): Promise<Bundle> {
   const since = new Date(Date.parse(`${asOf}T00:00:00Z`) - days * 86400000).toISOString().slice(0, 10);
+  const privateUse = eodhdPrivateUse();
   const docs = await pool.query<{ id: string; url: string; source: string; doc_type: string; published_at: Date; meta: unknown; body: string }>(
     `SELECT id::text, url, source, doc_type, published_at, meta, body FROM source_documents
-     WHERE (symbol = $1 OR (source IN ('rss', 'gdelt') AND meta->'symbols' ? $1)) AND source <> 'eodhd'
+     WHERE (symbol = $1 OR (source IN ('rss', 'gdelt') AND meta->'symbols' ? $1))
+       AND (source <> 'eodhd' OR ($4::boolean AND fetched_at::date <= $3::date))
        AND published_at >= $2::date AND published_at < ($3::date + 1) AND expires_at > now()
        AND (doc_type <> 'research_page' OR EXISTS (SELECT 1 FROM research_findings f,
          LATERAL jsonb_array_elements(f.evidence) AS item(value) WHERE f.symbol=source_documents.symbol
          AND (item.value->>'documentId')::bigint=source_documents.id AND item.value->>'status'='verified'
          AND f.verification_status='verified' AND NOT f.lead))
-     ORDER BY published_at DESC, id LIMIT 200`, [symbol, since, asOf]);
+     ORDER BY published_at DESC, id LIMIT 200`, [symbol, since, asOf, privateUse]);
   const facts = await pool.query<{ fact_key: string; as_of: string; value: unknown; document_ids: string[] }>(
     `SELECT fact_key, as_of::text AS as_of, value, document_ids::text[] AS document_ids FROM collected_facts
-     WHERE symbol = $1 AND source_id IS DISTINCT FROM 'eodhd' AND as_of <= $2::date AND expires_at > now() ORDER BY as_of DESC, fact_key LIMIT 100`, [symbol, asOf]);
-  const raw: RawDocument[] = docs.rows.map((r) => ({ id: Number(r.id), url: r.url, source: r.source, docType: r.doc_type, publishedAt: new Date(r.published_at).toISOString(), displayAllowed: displayAllowedFor(r.source, r.meta), body: r.body }));
+     WHERE symbol = $1 AND (source_id IS DISTINCT FROM 'eodhd' OR ($3::boolean AND computed_at::date <= $2::date))
+       AND as_of <= $2::date AND expires_at > now() ORDER BY as_of DESC, fact_key LIMIT 100`, [symbol, asOf, privateUse]);
+  const raw: RawDocument[] = docs.rows.map((r) => ({ id: Number(r.id), url: r.url, source: r.source, docType: r.doc_type, publishedAt: new Date(r.published_at).toISOString(), displayAllowed: displayAllowedFor(r.source, r.meta, privateUse), body: r.body }));
   return {
     symbol, generatedAt: now.toISOString(), since,
     documents: selectExcerpts(raw.filter((d) => withinWindow(d, asOf)), limits),

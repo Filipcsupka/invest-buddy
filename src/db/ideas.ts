@@ -4,6 +4,7 @@ import { isoDate } from "./iso-date";
 import { SIZE_TIERS, tierFits, type SizeTier } from "../engine/signals";
 import { judgeSignal } from "../track-record/measure";
 import { RULESET_VERSION } from "../config/rules";
+import { eodhdPrivateUse } from "../data/eodhd-private-use";
 
 export const ACTIONS = ["WATCH", "START_POSITION", "ADD", "HIGH_CONVICTION_ADD", "HOLD", "REDUCE", "THESIS_BROKEN", "CSPX_ALLOCATION"] as const;
 export type IdeaAction = (typeof ACTIONS)[number];
@@ -157,8 +158,9 @@ export async function listIdeas(pool: Pick<pg.Pool, "query">, limit = 50): Promi
   const r = await pool.query<IdeaRow>(`SELECT ${COLUMNS} FROM trade_ideas i WHERE i.expires_at > now()
     AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(i.evidence_urls) ref
       WHERE ref->>'url' NOT LIKE 'https://data.sec.gov/api/xbrl/%'
+        AND NOT ($2::boolean AND ref->>'url' LIKE 'https://eodhd.com/%')
         AND NOT EXISTS (SELECT 1 FROM source_documents d WHERE d.url = ref->>'url' AND d.meta->>'display_allowed' = 'true'))
-    ORDER BY i.as_of DESC, i.id DESC LIMIT $1`, [limit]);
+    ORDER BY i.as_of DESC, i.id DESC LIMIT $1`, [limit, eodhdPrivateUse()]);
   return r.rows.map(mapIdea);
 }
 
@@ -173,7 +175,8 @@ export async function ideasForDate(pool: Pick<pg.Pool, "query">, asOf: string): 
   const r = await pool.query<IdeaRow>(`SELECT DISTINCT ON (symbol) ${COLUMNS} FROM trade_ideas i WHERE i.as_of=$1 AND i.expires_at > now()
     AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(i.evidence_urls) ref
       WHERE ref->>'url' NOT LIKE 'https://data.sec.gov/api/xbrl/%'
+        AND NOT ($2::boolean AND ref->>'url' LIKE 'https://eodhd.com/%')
         AND NOT EXISTS (SELECT 1 FROM source_documents d WHERE d.url = ref->>'url' AND d.meta->>'display_allowed' = 'true'))
-    ORDER BY symbol, id DESC`, [asOf]);
+    ORDER BY symbol, id DESC`, [asOf, eodhdPrivateUse()]);
   return r.rows.map(mapIdea);
 }
