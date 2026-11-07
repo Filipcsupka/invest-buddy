@@ -38,7 +38,7 @@ export function summarizeUsage(rows: Call[]) {
     const at = row.created_at.getTime();
     while (start < window.length && window[start].at <= at - 5 * 3600000) rollingTokens -= window[start++].tokens;
     const components = [row.input_tokens, row.output_tokens, row.cache_read_tokens, row.cache_creation_tokens];
-    const tokens = components.some((n) => n !== null) ? components.reduce<number>((sum, n) => sum + (n ?? 0), 0) : row.agent === null && row.status === "ok" ? row.used_tokens ?? 0 : 0;
+    const tokens = components.some((n) => n !== null) ? components.reduce<number>((sum, n) => sum + (n ?? 0), 0) : row.status === "ok" ? row.used_tokens ?? 0 : 0;
     window.push({ at, tokens }); rollingTokens += tokens;
     if (rollingTokens > peakTokens) { peakTokens = rollingTokens; peakAt = row.created_at.toISOString(); }
     const day = row.created_at.toISOString().slice(0, 10), week = weekKey(row.created_at);
@@ -52,7 +52,7 @@ export function summarizeUsage(rows: Call[]) {
 
 export async function usageReport(db: Pick<pg.Pool, "query">) {
   const result = await db.query<Call>(`SELECT created_at,completed_at,kind,agent,model,status,cutoff_window,reset_at,reset_hint,input_tokens,output_tokens,cache_read_tokens,cache_creation_tokens,used_tokens
-    FROM ai_budget_calls WHERE (auth_source='subscription' OR (auth_source IS NULL AND agent IS NULL AND kind='judge')) AND created_at >= now() - interval '90 days' ORDER BY created_at`);
+    FROM ai_budget_calls WHERE (auth_source IN ('subscription','codex','api') OR (auth_source IS NULL AND agent IS NULL AND kind='judge')) AND created_at >= now() - interval '90 days' ORDER BY created_at`);
   const samples = await db.query<Sample>(`SELECT run_id::text,job,phase,observed_at,five_hour_pct::text,seven_day_pct::text,five_hour_reset_at,seven_day_reset_at FROM ai_quota_samples WHERE observed_at >= now() - interval '90 days' ORDER BY observed_at`);
   return { period: "last 90 days", ...summarizeUsage(result.rows), liveUsage: summarizeSamples(samples.rows) };
 }

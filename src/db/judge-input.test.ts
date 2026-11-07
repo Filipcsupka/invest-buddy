@@ -58,6 +58,27 @@ describe("judge input", () => {
     expect(sig.action).toBe("WATCH");
     expect(sig.signature).toMatch(/^WATCH\|/);
   });
+  it("passes only dated EODHD rows observed by the score date", async () => {
+    vi.stubEnv("EODHD_PRIVATE_USE", "on");
+    const queries: string[] = [];
+    const pool = { query: async (sql: string) => {
+      queries.push(sql);
+      if (sql.includes("FROM portfolio_baseline") || sql.includes("FROM trade_ideas")) return { rows: [] };
+      if (sql.includes("FROM score_results")) return { rows: [row("X", "Watch", 16)] };
+      if (sql.includes("FROM fundamentals_pit")) return { rows: [{ ticker: "X", period_end: "2026-06-30", filed: "2026-08-01", observed_on: "2026-08-02", value: "1250000", unit: "USD", accession: "eodhd:X:2026Q2" }] };
+      if (sql.includes("FROM eps_history")) return { rows: [{ ticker: "X", fiscal_date_ending: "2026-06-30", reported_date: "2026-08-01", observed_on: "2026-08-02", reported_eps: "1.25", estimated_eps: "1.1", surprise_pct: "13.6" }] };
+      if (sql.includes("FROM collected_facts")) return { rows: [{ symbol: "X", fact_key: "catalyst_8k_" + "eodhd", as_of: "2026-10-05", observed_on: "2026-10-05", value: { kind: "earnings_revision" } }] };
+      return { rows: [] };
+    } };
+    const input = await buildJudgeInput(pool as never, "2026-10-05");
+    expect(input.symbols[0].structuredFacts.map((fact) => fact.kind)).toEqual(["revenue", "eps", "catalyst"]);
+    expect(input.symbols[0].structuredFacts[0].provenance).toBe("eodhd:X:2026Q2");
+    expect(input.symbols[0].researchFacts).toEqual([]);
+    expect(queries.find((sql) => sql.includes("FROM fundamentals_pit"))).toContain("first_seen_at::date<=$2::date");
+    expect(queries.find((sql) => sql.includes("FROM fundamentals_pit"))).toContain("period_end<=$2::date");
+    expect(queries.find((sql) => sql.includes("FROM eps_history"))).toContain("fiscal_date_ending<=$2::date");
+    expect(queries.some((sql) => sql.includes("FROM research_findings"))).toBe(false);
+  });
   it("does not pass a display_allowed=false or missing document to the judge", () => {
     const rows = [c("epsBeat", { evidence_refs: [{ url: "https://sec.gov/cleared" }, { url: "https://sec.gov/restricted" }, { url: "https://sec.gov/legacy" }] })];
     const symbol = shapeSymbol(row("X", "Watch", 16), rows, null, 0, null, new Set(["https://sec.gov/cleared"]));

@@ -8,7 +8,7 @@
 // The model never writes to the database or the web. No database credentials here.
 // Usage: node scanner/run-judge.mjs [--dry-run] [--force] [--model sonnet] [--as-of YYYY-MM-DD]
 //        [--max-symbols 12] [--agent-mode] [--max-turns 8] [--base-url URL] [--timeout-s 300] [--input-file judge-input.json]
-//   --dry-run     call the model and write the result file, post nothing, record nothing
+//   --dry-run     plan the run without a model call or ingest write
 //   --force       ignore the one-run-per-day and unchanged-input skips
 //   --agent-mode  the model may read the prepared input files with Read, Grep and Glob (read-only, no web, no shell), within --max-turns and the budget
 //   --input-file  offline: read the judge input from a file instead of the web
@@ -22,6 +22,7 @@ import { extractJson, fill, getToken, lastUsTradingDay, runCli } from "./run-sca
 import { callAgentNoTools, addUsage } from "./run-extract.mjs";
 import { canonical, usageFromEnvelope } from "./extraction-log.mjs";
 import { reserveBudget, finishBudget } from "./ai-budget.mjs";
+import { checkMonthlyBudget, expectedTokens } from "./monthly-budget.mjs";
 import { readGate, consumeGate as consumeGateRaw, gateTradingDay } from "./gate-db.mjs";
 
 const dayBefore = (now) => new Date(now.getTime() - 86400000).toISOString().slice(0, 10);
@@ -188,7 +189,7 @@ export function inventedFigures(texts, inputValue) {
   return [...new Set(bad)];
 }
 export function figureInput(item) {
-  return { ...item, context: { ...item.context, researchFacts: (item.context?.researchFacts ?? []).map((fact) => ({ quote: fact.quote, date: fact.date })) } };
+  return { ...item, context: { ...item.context, structuredFacts: item.context?.structuredFacts ?? [] } };
 }
 export const wording = (i) => [i.verdict, ...i.whatHappened, ...i.whyItMatters, ...i.numbers.flatMap((n) => [n.label, n.value]), ...i.evidence.map((e) => e.label), i.plan.trigger, i.plan.invalidation, i.plan.opportunityCost, i.downgrade?.reason, i.conflict?.reason].filter(Boolean);
 
@@ -214,7 +215,14 @@ export function changedSignals(signals, previous) {
  */
 export function buildModelInput(input, news) {
   const ctx = new Map(input.symbols.map((s) => [s.symbol, s]));
-  const context = (symbol) => { const c = ctx.get(symbol); if (!c) return null; const rest = { ...c }; delete rest.held; return rest; };
+  const context = (symbol) => { const c = ctx.get(symbol); if (!c) return null; return {
+    symbol: c.symbol, name: c.name, sector: c.sector, tier: c.tier,
+    score: c.score, invalidReasons: c.invalidReasons, macroInputs: c.macroInputs,
+    ruleInputs: c.ruleInputs, technicals: c.technicals, matchedRules: c.matchedRules,
+    ruleHits: c.ruleHits, expiredFields: c.expiredFields,
+    evidence: (c.evidence ?? []).map(({ url, label, publishedAt }) => ({ url, label, publishedAt })),
+    structuredFacts: c.structuredFacts ?? [],
+  }; };
   return {
     asOf: input.asOf, ruleConfigVersion: input.ruleConfigVersion, benchmark: input.benchmark,
     items: news.map((s) => ({ signal: { action: s.action, sizeTier: s.sizeTier, size: TIER_TEXT[s.sizeTier] ?? null, ratings: s.ratings, unconfirmed: s.unconfirmed, carriedFrom: s.carriedFrom, reasons: s.reasons, symbol: s.symbol }, context: context(s.symbol) })),
@@ -250,18 +258,18 @@ export function slovakRawCode(texts) {
 function mergeOne(idea, sig, modelInput, notes) {
   {
     const item = modelInput.items.find((i) => i.signal.symbol === idea.symbol);
-    const urls = new Set([...(item?.context?.evidence ?? []), ...(item?.context?.researchFacts ?? [])].map((e) => e.url));
+    const urls = new Set((item?.context?.evidence ?? []).map((e) => e.url));
     const bad = idea.evidence.filter((e) => !urls.has(e.url));
     if (bad.length) throw new Error(`${idea.symbol}: evidence url not in the input: ${bad[0].url}`);
     if (new Set(idea.evidence.map((e) => e.url)).size !== idea.evidence.length) throw new Error(`${idea.symbol}: duplicate evidence url`);
     // Evidence links are pointers to the stored primary sources, not a judgment. When the model cites fewer than two for a buy,
     // the script adds the labelled links from the input (earnings release, 10-Q, Form 4, SEC XBRL), so a short answer does not drop a valid signal.
-    if (idea.evidence.length < 2 && !NO_EVIDENCE_OK.includes(sig.action)) {
+    if (idea.evidence.length < 2 && !NO_EVIDENCE_OK.includes(sig.action) && !(item?.context?.structuredFacts?.length)) {
       const have = new Set(idea.evidence.map((e) => e.url));
       const extra = (item?.context?.evidence ?? []).filter((e) => e.label && !have.has(e.url));
       for (const e of extra) { if (idea.evidence.length >= 3) break; idea.evidence.push({ url: e.url, label: e.label }); idea.sk.evidence.push({ url: e.url, label: { "Earnings release": "Výsledková správa", "SEC XBRL": "Výkaz SEC XBRL" }[e.label] ?? (/^(?:10-[KQ]|8-K|Form 4)$/.test(e.label) ? e.label : "Zdroj") }); notes.push(`${idea.symbol}: evidence link added from the input: ${e.label}`); }
     }
-    if (idea.evidence.length < 2 && !NO_EVIDENCE_OK.includes(sig.action)) throw new Error(`${idea.symbol}: fewer than two evidence links for ${sig.action}`);
+    if (idea.evidence.length < 2 && !NO_EVIDENCE_OK.includes(sig.action) && !(item?.context?.structuredFacts?.length)) throw new Error(`${idea.symbol}: fewer than two evidence links for ${sig.action}`);
     for (const k of ["downgrade", "conflict"]) if (idea[k] && !urls.has(idea[k].evidenceUrl)) throw new Error(`${idea.symbol}: ${k} cites a url not in the input`);
     // English is the canonical text: every figure in it must come from the input. Slovak is checked to carry exactly the same figures as English below, so label forms like 52-týždňový or 60 dní need no separate rule.
     const figures = inventedFigures(wording(idea), { item: figureInput(item) });
@@ -325,7 +333,7 @@ export function agentModeArgs(o) {
 export function writeAgentFiles(dir, input, modelInput) {
   const items = modelInput.items;
   const files = {
-    "facts.json": items.map((i) => ({ symbol: i.signal.symbol, score: i.context?.score, fields: i.context?.fields, expiredFields: i.context?.expiredFields, evidence: i.context?.evidence, researchFacts: i.context?.researchFacts })),
+    "facts.json": items.map((i) => ({ symbol: i.signal.symbol, score: i.context?.score, fields: i.context?.fields, expiredFields: i.context?.expiredFields, evidence: i.context?.evidence, structuredFacts: i.context?.structuredFacts })),
     "technicals.json": items.map((i) => ({ symbol: i.signal.symbol, technicals: i.context?.technicals ?? null })),
     "ideas-history.json": (input.previousIdeas ?? []).map((p) => ({ symbol: p.symbol, asOf: p.asOf, action: p.action, setup: p.setup, sizeTier: p.sizeTier ?? null })),
     "signals.json": items.map((i) => i.signal),
@@ -368,6 +376,7 @@ async function main() {
   if (!token && !offline) token = getToken();
   if (!token && !offline) { log("no INGEST_TOKEN; aborting"); process.exit(2); }
   const record = Boolean(token) && !o.dryRun;
+  if (!offline && process.env.EODHD_PRIVATE_USE !== "on") throw new Error("judge requires EODHD_PRIVATE_USE=on in an owner-private environment");
 
   const input = await loadInput(o, token, asOf, gate);
   if (!input.portfolio) log("no portfolio baseline: signals come from data alone; owner EUR bands stay 0");
@@ -392,6 +401,7 @@ async function main() {
     return fill(prompt, { AS_OF: asOf, INPUT: JSON.stringify(pi) });
   };
   let text = textFor(modelInput.items);
+  if (offline) { log(`offline dry run: ${news.length} signals; expected ${expectedTokens(text.length)} tokens; 0 model calls`); if (!process.env.SCAN_KEEP_WORK) rmSync(work, { recursive: true, force: true }); return; }
   let spent = addUsage({}, {}), cost = 0, calls = 0, model = o.model, rawOutput = null, error = null, cutoff = null, softStop = null;
   const monitor = !offline && !process.env.ANTHROPIC_API_KEY ? createUsageMonitor({ baseUrl: o.baseUrl, ingestToken: token, job: "judge", runId, log }) : null;
   if (monitor) softStop = await monitor.start();
@@ -406,6 +416,9 @@ async function main() {
     try {
       const sub = { ...modelInput, items: modelInput.items.filter((i) => pending.some((s) => s.symbol === i.signal.symbol)) };
       text = textFor(sub.items);
+      const expected = expectedTokens(text.length);
+      const monthly = await checkMonthlyBudget(o.baseUrl, token, expected);
+      log(`monthly tokens ${monthly.used}/${monthly.cap}; expected ${expected} for attempt ${attempt}`);
       const budgetId = token ? await reserveBudget(o.baseUrl, token, "judge", o.model) : null;
       let r, callError;
       try { r = o.agentMode ? await callAgentReadOnly(o, text, work) : await callAgentNoTools({ agent: "claude", model: o.model, timeoutS: o.timeoutS }, text, work); }
@@ -418,6 +431,7 @@ async function main() {
         }
       }
       calls++; spent = addUsage(spent, r.usage); cost += r.costUsd ?? 0; if (r.model) model = r.model;
+      log(`call ${calls} tokens in ${r.usage?.inputTokens ?? "?"} out ${r.usage?.outputTokens ?? "?"} cache read ${r.usage?.cacheReadTokens ?? "?"} cache created ${r.usage?.cacheCreationTokens ?? "?"}`);
       const out = normalizeOutput(extractJson(r.text));
       const errs = validateJudgeOutput(out);
       if (errs.length) throw new Error(`schema: ${errs.slice(0, 5).join("; ")}`);
