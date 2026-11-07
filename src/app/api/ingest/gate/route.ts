@@ -24,9 +24,9 @@ export async function GET(request: Request) {
   try {
     type GateRow = { gate_date: string; symbols: string[]; reasons: Record<string, string[]>; accessions: Record<string, string[]>; extracted_at: Date | null; judged_at: Date | null; revision: number };
     const columns = "gate_date::text,symbols,reasons,accessions,extracted_at,judged_at,revision";
-    // Stored facts are current as of today, so the judge takes the newest pending gate; consuming it supersedes the older ones (POST).
+    // Take the oldest pending work first so a later gate cannot hide an unrelated symbol.
     const pending = url.searchParams.has("date") ? null : await pool.query<GateRow>(
-      `SELECT ${columns} FROM scheduled_gates WHERE gate_date <= $1::date AND ${stage === "extract" ? "extracted_at IS NULL" : judgeFromStoredFacts ? "judged_at IS NULL" : "judged_at IS NULL AND extracted_at IS NOT NULL"} ORDER BY gate_date${judgeFromStoredFacts ? " DESC" : ""} LIMIT 1`, [date]);
+      `SELECT ${columns} FROM scheduled_gates WHERE gate_date <= $1::date AND ${stage === "extract" ? "extracted_at IS NULL" : judgeFromStoredFacts ? "judged_at IS NULL" : "judged_at IS NULL AND extracted_at IS NOT NULL"} ORDER BY gate_date LIMIT 1`, [date]);
     const result = pending?.rows.length ? pending : await pool.query<GateRow>(
       `SELECT ${columns} FROM scheduled_gates WHERE gate_date=$1::date`, [date]);
     if (!result.rows.length) return Response.json({ error: `No detect gate for ${date}` }, { status: 404 });
@@ -46,14 +46,20 @@ export async function POST(request: Request) {
   try { body = raw ? JSON.parse(raw) : null; }
   catch { return Response.json({ error: "Invalid gate request" }, { status: 400 }); }
   if (!body || typeof body !== "object" || !("date" in body) || !("stage" in body) || !("revision" in body) || typeof body.date !== "string" || !isIsoDate(body.date) || typeof body.stage !== "string" || !["extract", "judge"].includes(body.stage) || typeof body.revision !== "number" || !Number.isInteger(body.revision) || body.revision < 1) return Response.json({ error: "Invalid gate request" }, { status: 400 });
+  if (body.stage === "judge" && (!("completedSymbols" in body) || !Array.isArray(body.completedSymbols) || body.completedSymbols.length > 40 || body.completedSymbols.some((symbol) => typeof symbol !== "string" || !/^[A-Z][A-Z0-9.-]{0,9}$/.test(symbol)) || new Set(body.completedSymbols).size !== body.completedSymbols.length)) return Response.json({ error: "Invalid completed symbols" }, { status: 400 });
+  const completedSymbols = "completedSymbols" in body ? body.completedSymbols : undefined;
   const judgeFromStoredFacts = body.stage === "judge" && process.env.EODHD_PRIVATE_USE === "on";
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
   try {
-    const column = body.stage === "extract" ? "extracted_at" : "judged_at";
-    const result = await pool.query(`UPDATE scheduled_gates SET ${column}=COALESCE(${column},now()) WHERE gate_date=$1::date AND revision=$2${body.stage === "judge" && !judgeFromStoredFacts ? " AND extracted_at IS NOT NULL" : ""} RETURNING gate_date`, [body.date, body.revision]);
+    const result = body.stage === "extract"
+      ? await pool.query("UPDATE scheduled_gates SET extracted_at=COALESCE(extracted_at,now()) WHERE gate_date=$1::date AND revision=$2 RETURNING gate_date", [body.date, body.revision])
+      : await pool.query(`UPDATE scheduled_gates SET
+          symbols=ARRAY(SELECT symbol FROM unnest(symbols) WITH ORDINALITY AS remaining(symbol, position) WHERE symbol <> ALL($3::text[]) ORDER BY position),
+          judged_at=CASE WHEN symbols <@ $3::text[] THEN COALESCE(judged_at,now()) ELSE NULL END
+        WHERE gate_date=$1::date AND revision=$2 AND judged_at IS NULL
+          AND $3::text[] <@ symbols AND (cardinality($3::text[]) > 0 OR cardinality(symbols) = 0)
+          ${judgeFromStoredFacts ? "" : "AND extracted_at IS NOT NULL"} RETURNING gate_date`, [body.date, body.revision, completedSymbols]);
     if (!result.rowCount) return Response.json({ error: "Gate unavailable" }, { status: 409 });
-    // Older pending gates are closed without a model call. The row stays; judge_superseded_by records the gate that replaced it.
-    if (judgeFromStoredFacts) await pool.query("UPDATE scheduled_gates SET judged_at=now(),judge_superseded_by=$1::date WHERE gate_date<$1::date AND judged_at IS NULL", [body.date]);
     return Response.json({ recorded: true });
   } finally { await pool.end(); }
 }
