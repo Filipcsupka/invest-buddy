@@ -1,5 +1,24 @@
 # Open tasks
 
+## Baseline 2026-11-07 evening and DoD status
+
+Baseline (read-only query on 2026-11-07): 511 instruments scored for 2026-11-06, up from 77. States: Criteria broken 289, Ignore 133, Watch 60, Wait 25, Insufficient/invalid data 2, Setup met 2. How it got there: `SCORE_EXTENDED=on` (owner-private, only with `EODHD_PRIVATE_USE=on`, #336) lets reconcile and daily score the `extended` list; judge, extract, sitemap and public pages are unchanged (D36 gate kept). The 330 new members were backdated from 2026-11-07 to 2026-11-06 once, through a reviewed Job, so they sit on the latest scan date; this is a deliberate baseline step and not how promotion works. Infra #73 sets the env and purges the web cache after daily; #74 sets the catalyst env. Fixes on the way: reconcile out of memory (#337, SEC companyfacts no longer cached in memory), catalyst covers the scored universe (#338), owner ticker listing for names without an `instrument_ids` row (#339), `EXSA.XETRA` backfilled for the European benchmark.
+
+Not yet checked by a person: the 8-name spot check of owner ticker pages against the database, and the BUY/ADD list for the 511. Check them first next session (`/en/scanner`, `/en/owner/data`, `/en/owner/data/ticker?ticker=...`).
+
+DoD status:
+- E1 done (secret exists, paid monthly plan, 100,000 calls a day). E2 done (#303). E3 done (68,986 symbols on 16 exchanges; MI missing at the vendor).
+- E4 done (closes within 5 bp on 47 sessions for AAPL, MSFT, NVDA, AMZN). E5 done (revenue matches SEC for 5 names; EPS beat matches Alpha Vantage 9/9 on the compared names).
+- E6 partly: insider lines from EODHD are 0 on the owner page because SEC rows replace them for the same filing; catalyst now covers the scored universe (#338). Decide whether EODHD insider stays as a cross-check.
+- E7 done: five EODHD CronJobs, markets and flow CronJobs, judge and ETF enrich un-suspended; research CronJobs removed. `invest-buddy-eodhd-universe-seed` stays suspended.
+- E8 done for the baseline (universe 183 to 513, 511 scored). The traded-value floor and the provisional filer rule still need your decision (E11).
+- E9 partly: 26 of 31 incomplete funds stay incomplete at the vendor; 300 funds tracked with bars; ETF outcomes need picks that are 30 days old.
+- E10 open: judge runs on stored EODHD facts (one real run, 7 ideas); `etf-research` stays suspended (needs Codex auth, separate review).
+- E11 open (owner): filer rule, STOXX 600 trend as European macro, US-only rotation average, primary-venue volume floor, European names in `extended` before promotion.
+- E12 open, not approved. E13 open.
+
+Known gaps: ETF region column is dashes; some economy values are stale (rates date 5 November, German debt shows 1990); `/en/etf/fund/BATS:AVAZ` fixed in #334, recheck after the next rollout; the old failed manual Jobs in the cluster can be deleted.
+
 ## Status 2026-11-07 (EODHD rollout, round 2)
 
 Checked on the cluster on 2026-11-07.
