@@ -1,5 +1,32 @@
 # Open tasks
 
+## Status 2026-11-07 (EODHD rollout, round 2)
+
+Checked on the cluster on 2026-11-07.
+
+Fixes and causes:
+- Failed `eodhd-prices` run: the only scheduled run (2026-11-06 21:30Z) used image `sha-39aa729`, from before #306, and stopped because NLST and REPX were missing from the US bulk file. #306 already falls back to per-symbol requests. A manual Job on `sha-5e6e09b` finished 182 of 182. There was no scheduled run on 2026-11-05; the CronJob was still suspended.
+- Judge: the gate refused to judge without extraction (#324). With stored facts it then took the oldest of 13 pending gates (2026-10-21) and would have judged five stale dates in one run, so #327 makes it take the newest pending gate and mark older pending gates with `judge_superseded_by` (migration 132, rows kept). The next run failed with `judge-input HTTP 400`: the newest gate had 69 symbols and the route accepted at most 40. #328 raises that bound to 500; `maxSymbols` still caps what the model sees.
+
+Universe (E8):
+- #321 puts `select-universe` and `universe-change` in the image, so selection runs as a one-off Job. #323 counts a US candidate without a stored SEC form type as domestic when its EODHD symbols row is Common Stock with country USA (provisional, added to E11). #326 and #329 seed candidates that are not yet members: 915 European listings (13,452 calls; 81 had no usable facts) and 400 US listings (4,900 calls). #333 keeps one listing per company: a US issuer on a European exchange is `secondary_listing`, and a repeat ISIN or, for a non-US line, a repeat company name is `duplicate_listing`. Without it the dry run picked AMD.XETRA and MSF.XETRA next to the core AMD and MSFT.
+- `ECB_FX_ENABLED=on` on the macro CronJob (infra #71). Eight ECB rates are stored through 2026-11-06.
+- Dry run as of 2026-11-07 (2,423 candidates), target 500: 500 selected, 380 US and 120 European (LSE 25, all GBX; XETRA 22, PA 13, WAR 10, CO 8, MC 8, OL 7, SW 7, BR 6, ST 5, AS 4, HE 2, VI 2, LS 1). Targets 2,000 and 5,000 both stop at 765 (before #333). Top exclusions: `no_revenue_history` 896, `below_cut` 253, `growth_not_positive` 221, `no_growth_data` 213, `volume_below_floor` 200, `short_revenue_history` 45, `filer_unknown` 39, `price_below_min` 24, `secondary_listing` 11, `duplicate_listing` 10.
+- Applied on 2026-11-07 (`e8-apply2-1107`, actor `e8-rollout`): 330 names added to `extended`, 93 were already members, none failed. Active universe 183 to 513: core 45, discovery 32, extended 434 (US 314, LSE 25, XETRA 22, PA 13, WAR 10, MC 8, CO 8, SW 7, OL 7, BR 6, ST 5, AS 4, HE 2, VI 2, LS 1), two benchmarks. Extended names are collected but not scored; `universe-promote` moves up to 10 a week to core.
+- Seeded names already have full EODHD history and dated facts. The fundamentals job refreshes 25 due names per run; 14 manual runs refreshed all 331 due names with no failures.
+- Reconcile and daily ran after the apply: 77 scored names, 9 state changes, no failures. Setup met: CRON (20) and REGN (19). The real judge run (`judge-real-1107`, one model call, 13,878 output tokens) stored 7 ideas for 2026-11-06: CRON and REGN `HIGH_CONVICTION_ADD` with `ADD_HALF`, and AMD, AMZN, ASML, TSLA, XNCR `WATCH`. Infra #70 sets the judge's private mode and monthly cap of 2,000,000 tokens, and infra #72 resumes the judge schedule.
+
+Markets, flow and ETFs:
+- Infra #68 enables the six market CronJobs and infra #69 the six economy, news and congress CronJobs. One manual run of each finished ok.
+- E9: of the 31 incomplete funds, 5 are now ok; 26 stay incomplete because the vendor has no TER or AUM, or lists them as Common Stock. `invest-buddy-etf-enrich` is `suspend: false` (infra #67).
+- One manual `eodhd-etf` run filled `etf_tracked` (300 funds, 43 detailed, 37,496 bars, 514 calls). `etf-outcomes` then wrote no rows, because outcomes need picks that are 30 days old.
+
+Row counts, 2026-11-07 morning to afternoon: active universe 183 to 513; `instruments` 183 to 1,498; EODHD `daily_bars` 803,396 to 9,326,873 (182 to 1,497 tickers); EODHD `fundamentals_pit` 12,798 to 160,603 (181 to 1,496 tickers); `eps_history` 15,292 to 41,527; `asset_bars` 89,099 to 126,618; `tracked_assets` 62 to 362; `etf_tracked` 0 to 300; `etf_holdings` 0 to 13,136; `economic_events` 0 to 912; `macro_indicators` 0 to 1,838; `congress_trades` 0 to 193; `news_items` 0 to 200; `macro_observations` 1,105 to 1,625; `trade_ideas` 99 to 106; `judge_runs` 15 to 16. EODHD calls that day: 23,810 of 100,000.
+
+Owner pages (200 with owner auth, 401 without): `/en/owner/data`, `/en/owner/horizons`, `/en/indices`, `/en/forex`, `/en/crypto`, `/en/screener`, `/en/economy`, `/en/news`, `/en/congress`, `/en/etf`, `/en/dashboard`, `/en/insiders`. `/en/ideas` is off by design (`ADVICE_OUTPUT`). Still open: `/en/etf/fund/BATS:AVAZ` answers 200 but renders the 404 fallback on `sha-02f4f41`; Insider lines on `/en/owner/data` show 0 because the SEC collector replaces EODHD fallback lines for the same filing; regional macro needs a European name in the scored set.
+
+Next: decide the per-exchange traded-value floor and the provisional filer rule (E11), review the European names in `extended` before any is promoted, and decide whether to un-suspend `invest-buddy-eodhd-universe-seed` (weekly, 19,000-call cap).
+
 ## Handoff 2026-11-06 (EODHD live, owner review pending)
 
 State at handoff, checked on the cluster that day:
