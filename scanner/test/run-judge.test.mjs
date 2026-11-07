@@ -616,6 +616,20 @@ test("dry run with an input file works offline without a model call", async () =
   assert.equal(s.calls().length, 0);
 });
 
+test("dry run with live input makes no model call or ingest write", async () => {
+  const s = stub();
+  const web = await mockWeb();
+  try {
+    const r = await runJudge(["--as-of", "2026-10-05", "--dry-run", "--base-url", web.base], { s });
+    assert.equal(r.code, 0, r.err);
+    assert.match(r.err, /dry run: 2 signals; expected .*0 model calls/);
+    assert.equal(s.calls().length, 0);
+    assert.ok(web.seen.gets.some((url) => url.startsWith("/api/ingest/judge-input")));
+    assert.equal(web.seen.posts.length, 0);
+    assert.equal(web.seen.budgets.length, 0);
+  } finally { await web.close(); }
+});
+
 test("paired reason and evidence figures must match; identical figures pass", () => {
   const reason = "Guidance fell 7.4 percent.";
   const good = words("NVDA", { conflict: { reason, evidenceUrl: U1 }, evidence: [{ url: U1, label: "Release 7.4 percent" }, { url: U2, label: "10-Q" }] });
