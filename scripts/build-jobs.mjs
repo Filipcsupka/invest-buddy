@@ -47,3 +47,15 @@ await build({
   tsconfig: "tsconfig.json",
   outdir: "dist/jobs",
 });
+// Operator scripts that run as one-off Jobs from the app image (universe selection and changes).
+rmSync("dist/scripts", { recursive: true, force: true });
+await build({
+  entryPoints: ["select-universe.ts", "universe-change.ts"].map((name) => resolve("scripts", name)),
+  bundle: true,
+  platform: "node",
+  format: "cjs",
+  target: "node22",
+  packages: "external",
+  tsconfig: "tsconfig.json",
+  outdir: "dist/scripts",
+});
