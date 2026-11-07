@@ -401,7 +401,7 @@ async function main() {
     return fill(prompt, { AS_OF: asOf, INPUT: JSON.stringify(pi) });
   };
   let text = textFor(modelInput.items);
-  if (offline) { log(`offline dry run: ${news.length} signals; expected ${expectedTokens(text.length)} tokens; 0 model calls`); if (!process.env.SCAN_KEEP_WORK) rmSync(work, { recursive: true, force: true }); return; }
+  if (o.dryRun) { log(`${offline ? "offline " : ""}dry run: ${news.length} signals; expected ${expectedTokens(text.length)} tokens; 0 model calls`); if (!process.env.SCAN_KEEP_WORK) rmSync(work, { recursive: true, force: true }); return; }
   let spent = addUsage({}, {}), cost = 0, calls = 0, model = o.model, rawOutput = null, error = null, cutoff = null, softStop = null;
   const monitor = !offline && !process.env.ANTHROPIC_API_KEY ? createUsageMonitor({ baseUrl: o.baseUrl, ingestToken: token, job: "judge", runId, log }) : null;
   if (monitor) softStop = await monitor.start();
