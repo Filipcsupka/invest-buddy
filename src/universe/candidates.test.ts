@@ -83,7 +83,25 @@ describe("stored market candidate read model", () => {
       const revenue = calls.find((call) => call.statement.includes("concept=ANY($2)"))!;
       expect(revenue.params).toEqual([date, [...REVENUE_CONCEPTS]]);
       expect(calls.filter((call) => call.statement.includes("concept=ANY($2)"))).toHaveLength(1);
-      expect(calls.filter((call) => call !== revenue).every((call) => call.params.length === 1)).toBe(true);
+      const bars = calls.find((call) => call.statement.includes("FROM daily_bars"))!;
+      expect(bars.params).toEqual([date, listings.map((row) => row.ticker)]);
+      expect(bars.statement).toMatch(/row_number\(\) OVER \(PARTITION BY ticker ORDER BY bar_date DESC\)/);
+      expect(bars.statement.match(/rn <= 520/g)).toHaveLength(2);
+      expect(calls.filter((call) => call !== revenue && call !== bars).every((call) => call.params.length === 1)).toBe(true);
     }
+  });
+  it("reads bars in bounded ticker batches", async () => {
+    const calls: Call[] = [];
+    const names = Array.from({ length: 65 }, (_, index) => ({ ...listings[1], ticker: `B${String(index).padStart(2, "0")}` }));
+    const fallback = fakeDb(calls) as { query: (statement: string, params: unknown[]) => Promise<{ rows: unknown[] }> };
+    const db = { query: async (statement: string, params: unknown[] = []) => {
+      if (statement.includes("FROM instruments i")) { calls.push({ statement, params }); return { rows: names }; }
+      if (statement.includes("FROM daily_bars")) { calls.push({ statement, params }); return { rows: [] }; }
+      return fallback.query(statement, params);
+    } } as never;
+    expect(await loadCandidates(db, asOf)).toHaveLength(65);
+    const barReads = calls.filter((call) => call.statement.includes("FROM daily_bars"));
+    expect(barReads.map((call) => (call.params[1] as string[]).length)).toEqual([32, 32, 1]);
+    expect(barReads.flatMap((call) => call.params[1] as string[])).toEqual(names.map((row) => row.ticker));
   });
 });

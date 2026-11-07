@@ -71,22 +71,37 @@ export async function loadCandidates(db: Q, asOf: string, secCik: Map<string, nu
     (SELECT DISTINCT ON (d.symbol) d.symbol,d.name,d.sector,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text FROM discovery_price_bars d
       WHERE NOT EXISTS (SELECT 1 FROM instruments i WHERE i.ticker=d.symbol AND i.source<>'benchmark') ORDER BY d.symbol,d.bar_date DESC)
     ORDER BY 1`, [asOf]);
-  // daily_bars wins over discovery_price_bars on the same date, as in the D35 loader.
-  const bars = await db.query<{ ticker: string; bar_date: string; close: string; volume: string; source_id: string; vendor_symbol: string | null; currency: string | null; origin: string }>(
-    `SELECT ticker,bar_date::text,close,volume,source_id,vendor_symbol,currency,'daily' origin FROM daily_bars WHERE bar_date<=$1::date
-     UNION ALL SELECT symbol,bar_date::text,close,volume,'discovery',NULL,NULL,'discovery' FROM discovery_price_bars WHERE bar_date<=$1::date
-     ORDER BY 1,2,8`, [asOf]);
   const listing = new Map(names.rows.map((row) => [row.ticker, listingFor(row)]));
   const barMap = new Map<string, Bar[]>();
-  let lastDaily = "";
-  for (const b of bars.rows) {
-    const l = listing.get(b.ticker);
-    if (!l) continue;
-    // Rows are ordered by ticker, date and origin, so a daily_bars row directly precedes a discovery row for the same date.
-    if (b.origin === "daily") lastDaily = `${b.ticker}:${b.bar_date}`;
-    else if (!l.us || lastDaily === `${b.ticker}:${b.bar_date}`) continue;
-    if (b.origin === "daily" && !acceptsBar(l, b)) continue;
-    (barMap.get(b.ticker) ?? barMap.set(b.ticker, []).get(b.ticker)!).push({ close: Number(b.close), volume: Number(b.volume), currency: b.currency });
+  // barMetrics and the LSE quote check use only the last 50 accepted bars. Read a generous per-source tail so overlap and rejected
+  // vendor rows do not displace the usable window, and keep each query result small as the market universe grows.
+  for (let offset = 0; offset < names.rows.length; offset += 32) {
+    const tickers = names.rows.slice(offset, offset + 32).map((row) => row.ticker);
+    // daily_bars wins over discovery_price_bars on the same date, as in the D35 loader.
+    const bars = await db.query<{ ticker: string; bar_date: string; close: string; volume: string; source_id: string; vendor_symbol: string | null; currency: string | null; origin: string }>(
+      `SELECT ticker,bar_date::text,close,volume,source_id,vendor_symbol,currency,'daily' origin FROM (
+         SELECT ticker,bar_date,close,volume,source_id,vendor_symbol,currency,
+           row_number() OVER (PARTITION BY ticker ORDER BY bar_date DESC) rn FROM daily_bars
+         WHERE bar_date<=$1::date AND ticker = ANY($2::text[])) daily WHERE rn <= 520
+       UNION ALL
+       SELECT ticker,bar_date::text,close,volume,'discovery',NULL,NULL,'discovery' FROM (
+         SELECT symbol AS ticker,bar_date,close,volume,
+           row_number() OVER (PARTITION BY symbol ORDER BY bar_date DESC) rn FROM discovery_price_bars
+         WHERE bar_date<=$1::date AND symbol = ANY($2::text[])) discovery WHERE rn <= 520
+       ORDER BY 1,2,8`, [asOf, tickers]);
+    let lastDaily = "";
+    for (const b of bars.rows) {
+      const l = listing.get(b.ticker);
+      if (!l) continue;
+      // Rows are ordered by ticker, date and origin, so a daily_bars row directly precedes a discovery row for the same date.
+      if (b.origin === "daily") lastDaily = `${b.ticker}:${b.bar_date}`;
+      else if (!l.us || lastDaily === `${b.ticker}:${b.bar_date}`) continue;
+      if (b.origin === "daily" && !acceptsBar(l, b)) continue;
+      const series = barMap.get(b.ticker) ?? [];
+      series.push({ close: Number(b.close), volume: Number(b.volume), currency: b.currency });
+      if (series.length > 50) series.shift();
+      barMap.set(b.ticker, series);
+    }
   }
   const ids = await db.query<{ ticker: string; cik: string | null }>("SELECT ticker,cik::text FROM instrument_ids WHERE valid_from<=$1::date AND (valid_to IS NULL OR valid_to>$1::date) AND cik IS NOT NULL", [asOf]);
   const cikMap = new Map(ids.rows.map((r) => [r.ticker, Number(r.cik)]));
