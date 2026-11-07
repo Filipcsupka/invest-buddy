@@ -38,6 +38,11 @@ export type Candidate = {
   exchange?: string; currency?: string; vendorSymbol?: string | null; usdPerUnit?: number | null; marketCapUsd?: number | null; securityType?: string | null;
   /** SEC form types seen for this company (filing_watch, fundamentals_pit). */
   forms: string[];
+  /**
+   * US listing whose EODHD symbols row (known by the score date) is Common Stock with country USA. Provisional (E11): it stands in for
+   * the SEC domestic-filer check only when no SEC form type is stored; a stored form type still decides.
+   */
+  eodhdUsDomestic?: boolean;
   core: boolean;
   /** Distinct dated revenue periods (quarters, or half-years when revenuePeriod is "half"). */
   revenueQuarters: number;
@@ -96,7 +101,7 @@ export function failedCriterion(c: Candidate, k: UniverseCriteria): ReasonCode |
     if (DUPLICATE_FILERS[c.ticker.replace(/\.US$/, "")]) return "duplicate_filer";
     const filer = filerType(c.forms);
     if (filer === "foreign") return "foreign_filer";
-    if (filer === "unknown") return "filer_unknown";
+    if (filer === "unknown" && !c.eodhdUsDomestic) return "filer_unknown";
   }
   if (c.revenueQuarters === 0) return "no_revenue_history";
   if (c.revenueQuarters < (c.revenuePeriod === "half" ? k.minRevenueHalfYears : k.minRevenueQuarters)) return "short_revenue_history";
