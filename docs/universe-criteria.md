@@ -46,6 +46,8 @@ npx tsx scripts/select-universe.ts --as-of 2026-11-16 --input candidates.json --
 
 Writes `selected.csv`, `excluded.csv` (with reason codes) and `review.md` (counts, sector spread, proposed adds, file hashes). Same input gives the same hashes. The script opens no write statement; importing is D36 with `scripts/universe-change.ts add ... --list extended --criteria-version d35-2026-10-draft` after the owner approves the list.
 
+In the cluster the image carries the script as `dist/scripts/select-universe.js` (and `dist/scripts/universe-change.js`), so a one-off Job from the app image runs it without a port-forward: `node dist/scripts/select-universe.js --as-of YYYY-MM-DD --target 500 --out /tmp/universe`. Targets from 36 to 5,000 are accepted. Each run prints one JSON line with candidates, selected names and proposed adds per exchange and exclusions by reason. `--apply --actor NAME --reason TEXT --max-adds N [--date YYYY-MM-DD]` adds the proposed names to `extended` (collect only) through the same code as `universe-change add`, in selection order, skipping active members.
+
 ## Candidate pool (step 1, market-wide)
 
 `npm run universe:pool -- --out tmp/universe --held TICKER,TICKER` screens every SEC filer from the quarterly revenue frames (about 3,000 with growth data). A name enters when quarterly revenue is at least 50 million USD, YoY growth is at least 15% and the prior quarter's YoY is at least 10%. Names rank by the weaker of the two growth rates, so a one-quarter spike does not lead. Output is `pool.csv` and `pool.json`, top 300, current universe excluded. SEC only, no database write.
