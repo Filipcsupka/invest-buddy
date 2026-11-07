@@ -51,3 +51,9 @@ GROUP BY series_id ORDER BY series_id;
 ```
 
 The next macro run collects the rates after rollout; an immediate run needs a separate operator action. The operator owns the live rollout and can stop future seeds by leaving the new CronJob suspended. Reverting its manifest removes the seed schedule; removing `ECB_FX_ENABLED` returns the macro collector to its prior setting. Stored candidate data remains private and needs no public route change.
+
+## Baseline backdate (2026-11-07)
+
+The owner approved one deliberate step to get a scored baseline. The 330 names that `e8-apply2-1107` added to `extended` with `valid_from` 2026-11-07 were moved to 2026-11-06, the latest scan date, so they are scored on that date. All 330 have an EODHD bar for 2026-11-06. The change ran as the one-off Jobs `backdate-dry-1107` and `backdate-apply-1107` with `scripts/universe-backdate.ts` (dry run first, then `--apply`); it changed only `valid_from` and appended a note to `reason`. Scoring of `extended` names comes from the owner-private `SCORE_EXTENDED` switch (see [EODHD data access](eodhd.md)).
+
+After macro, reconcile and daily on 2026-11-06: 511 of 511 active names scored (77 before), 120 of them European. Point in time still applies: EPS and revenue facts first observed on 2026-11-07 do not count for 2026-11-06, so many extended names show those rules as no data until the next session is scored.
