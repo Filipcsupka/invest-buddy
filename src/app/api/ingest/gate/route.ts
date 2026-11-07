@@ -19,17 +19,18 @@ export async function GET(request: Request) {
   const date = url.searchParams.get("date") ?? new Date().toISOString().slice(0, 10);
   const stage = url.searchParams.get("stage");
   if (!isIsoDate(date) || !["extract", "judge"].includes(stage ?? "")) return Response.json({ error: "Invalid gate request" }, { status: 400 });
+  const judgeFromStoredFacts = stage === "judge" && process.env.EODHD_PRIVATE_USE === "on";
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
   try {
     type GateRow = { gate_date: string; symbols: string[]; reasons: Record<string, string[]>; accessions: Record<string, string[]>; extracted_at: Date | null; judged_at: Date | null; revision: number };
     const columns = "gate_date::text,symbols,reasons,accessions,extracted_at,judged_at,revision";
     const pending = url.searchParams.has("date") ? null : await pool.query<GateRow>(
-      `SELECT ${columns} FROM scheduled_gates WHERE gate_date <= $1::date AND ${stage === "extract" ? "extracted_at IS NULL" : "judged_at IS NULL AND extracted_at IS NOT NULL"} ORDER BY gate_date LIMIT 1`, [date]);
+      `SELECT ${columns} FROM scheduled_gates WHERE gate_date <= $1::date AND ${stage === "extract" ? "extracted_at IS NULL" : judgeFromStoredFacts ? "judged_at IS NULL" : "judged_at IS NULL AND extracted_at IS NOT NULL"} ORDER BY gate_date LIMIT 1`, [date]);
     const result = pending?.rows.length ? pending : await pool.query<GateRow>(
       `SELECT ${columns} FROM scheduled_gates WHERE gate_date=$1::date`, [date]);
     if (!result.rows.length) return Response.json({ error: `No detect gate for ${date}` }, { status: 404 });
     const row = result.rows[0];
-    if (stage === "judge" && !row.extracted_at) return Response.json({ error: "Extraction has not completed" }, { status: 409 });
+    if (stage === "judge" && !judgeFromStoredFacts && !row.extracted_at) return Response.json({ error: "Extraction has not completed" }, { status: 409 });
     const consumed = stage === "extract" ? Boolean(row.extracted_at) : Boolean(row.judged_at);
     return Response.json({ asOf: row.gate_date, symbols: consumed ? [] : row.symbols, reasons: consumed ? {} : row.reasons, accessions: consumed ? {} : row.accessions, consumed, revision: row.revision });
   } finally { await pool.end(); }
@@ -44,10 +45,11 @@ export async function POST(request: Request) {
   try { body = raw ? JSON.parse(raw) : null; }
   catch { return Response.json({ error: "Invalid gate request" }, { status: 400 }); }
   if (!body || typeof body !== "object" || !("date" in body) || !("stage" in body) || !("revision" in body) || typeof body.date !== "string" || !isIsoDate(body.date) || typeof body.stage !== "string" || !["extract", "judge"].includes(body.stage) || typeof body.revision !== "number" || !Number.isInteger(body.revision) || body.revision < 1) return Response.json({ error: "Invalid gate request" }, { status: 400 });
+  const judgeFromStoredFacts = body.stage === "judge" && process.env.EODHD_PRIVATE_USE === "on";
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
   try {
     const column = body.stage === "extract" ? "extracted_at" : "judged_at";
-    const result = await pool.query(`UPDATE scheduled_gates SET ${column}=COALESCE(${column},now()) WHERE gate_date=$1::date AND revision=$2${body.stage === "judge" ? " AND extracted_at IS NOT NULL" : ""} RETURNING gate_date`, [body.date, body.revision]);
+    const result = await pool.query(`UPDATE scheduled_gates SET ${column}=COALESCE(${column},now()) WHERE gate_date=$1::date AND revision=$2${body.stage === "judge" && !judgeFromStoredFacts ? " AND extracted_at IS NOT NULL" : ""} RETURNING gate_date`, [body.date, body.revision]);
     if (!result.rowCount) return Response.json({ error: "Gate unavailable" }, { status: 409 });
     return Response.json({ recorded: true });
   } finally { await pool.end(); }
