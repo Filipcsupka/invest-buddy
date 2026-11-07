@@ -30,12 +30,14 @@ export type ReasonCode =
   | "no_growth_data" | "growth_not_positive" | "no_price_data" | "short_bar_history" | "price_below_min"
   | "volume_below_floor" | "market_cap_unknown" | "market_cap_below_floor" | "fx_unavailable" | "fx_stale" | "unsupported_exchange"
   | "currency_unverified_gbx" | "listing_not_synced"
-  | "duplicate_filer" | "sector_cap" | "below_cut";
+  | "duplicate_filer" | "secondary_listing" | "duplicate_listing" | "sector_cap" | "below_cut";
 
 export type Candidate = {
   ticker: string; name: string; sector: string; cik: number | null;
   /** Internal instrument key may be exchange-qualified; exchange identifies the actual listing. */
   exchange?: string; currency?: string; vendorSymbol?: string | null; usdPerUnit?: number | null; marketCapUsd?: number | null; securityType?: string | null;
+  /** ISIN of the listing's symbols row, when the vendor gives one. Two lines with one ISIN are one company. */
+  isin?: string | null;
   /** SEC form types seen for this company (filing_watch, fundamentals_pit). */
   forms: string[];
   /**
@@ -97,6 +99,8 @@ export function failedCriterion(c: Candidate, k: UniverseCriteria): ReasonCode |
   if (!isUniverseExchange(exchange)) return "unsupported_exchange";
   if (!isCommonStock(c)) return "not_common_stock";
   if (c.listingIssue) return c.listingIssue;
+  // A US issuer's line on a European exchange is a secondary listing of a US company; the US line is the candidate.
+  if (exchange !== "US" && c.isin?.toUpperCase().startsWith("US")) return "secondary_listing";
   if (exchange === "US") {
     if (DUPLICATE_FILERS[c.ticker.replace(/\.US$/, "")]) return "duplicate_filer";
     const filer = filerType(c.forms);
@@ -138,9 +142,15 @@ export function selectUniverse(input: Candidate[], overrides: Partial<UniverseCr
   const capped = (sector: string) => sector !== UNCLASSIFIED && (sectorCount.get(sector) ?? 0) >= sectorCap;
 
   const selected: Selected[] = [];
+  // One company, one line: an ISIN or (for a non-US line) a normalized company name already taken marks a cross-listing or second share class.
+  const taken = new Set<string>();
+  const keys = (c: Candidate) => [...(c.isin ? [`isin:${c.isin.toUpperCase()}`] : []), `name:${companyKey(c.name)}`];
+  const take = (c: Candidate) => keys(c).forEach((key) => taken.add(key));
+  const duplicate = (c: Candidate) => (c.isin && taken.has(`isin:${c.isin.toUpperCase()}`)) || ((c.exchange ?? "US") !== "US" && taken.has(`name:${companyKey(c.name)}`));
   for (const c of all.filter((x) => x.core)) {
     const failed = failedCriterion(c, k);
     selected.push({ ...c, rank: 0, list: "core", group: "core", notes: failed ? [`kept as core, fails: ${failed}`] : [] });
+    take(c);
     bump(c.sector);
   }
   const excluded: Excluded[] = [];
@@ -156,15 +166,25 @@ export function selectUniverse(input: Candidate[], overrides: Partial<UniverseCr
     || (b.avgDollarVolume50 ?? 0) * (knownUsdPerUnit(b) ?? 0) - (a.avgDollarVolume50 ?? 0) * (knownUsdPerUnit(a) ?? 0)
     || byTicker(a, b));
   for (const c of eligible) {
-    const reason: ReasonCode | null = selected.length >= k.target ? "below_cut"
+    const reason: ReasonCode | null = duplicate(c) ? "duplicate_listing" : selected.length >= k.target ? "below_cut"
       : capped(c.sector) ? "sector_cap" : null;
     if (reason) { excluded.push({ ticker: c.ticker, name: c.name, sector: c.sector, reason }); continue; }
     selected.push({ ...c, rank: 0, list: "extended", group: isGrowth(c) ? "growth" : "other", notes: [] });
+    take(c);
     bump(c.sector);
   }
   selected.forEach((row, i) => { row.rank = i + 1; });
   excluded.sort(byTicker);
   return { criteria: k, selected, excluded, sectorCap };
+}
+
+const LEGAL_WORDS = new Set(["inc", "corp", "corporation", "co", "company", "plc", "ag", "se", "sa", "nv", "ab", "asa", "as", "oyj", "spa", "holding", "holdings",
+  "group", "ltd", "limited", "the", "class", "a", "b", "vna", "on", "reg", "shares", "ordinary", "publ"]);
+/** Company name without legal form, share class or register notes, so "ASML Holding NV" and "ASML Holding N.V." match. */
+export function companyKey(name: string): string {
+  const words = name.toLowerCase().replace(/\([^)]*\)/g, " ").replace(/\./g, "").replace(/[^a-z0-9]+/g, " ").split(" ").filter(Boolean);
+  const kept = words.filter((word) => !LEGAL_WORDS.has(word));
+  return (kept.length ? kept : words).join(" ");
 }
 
 export type QuarterRevenue = { periodEnd: string; value: number };

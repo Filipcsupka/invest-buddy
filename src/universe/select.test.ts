@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { barMetrics, excludedCsv, failedCriterion, filerType, isCommonStock, reviewMarkdown, revenueGrowth, selectedCsv, selectUniverse, sha256, UNIVERSE_CRITERIA, type Candidate } from "./select";
+import { barMetrics, companyKey, excludedCsv, failedCriterion, filerType, isCommonStock, reviewMarkdown, revenueGrowth, selectedCsv, selectUniverse, sha256, UNIVERSE_CRITERIA, type Candidate } from "./select";
 import marketRows from "./fixtures/market-candidates.json";
 import golden from "./fixtures/us-golden-expected.json";
 import { GOLDEN_INPUTS } from "./fixtures/us-golden";
@@ -182,5 +182,22 @@ describe("sector cap and duplicate filers", () => {
     expect(failedCriterion(base, UNIVERSE_CRITERIA)).toBe("filer_unknown");
     expect(failedCriterion({ ...base, eodhdUsDomestic: true }, UNIVERSE_CRITERIA)).toBeNull();
     expect(failedCriterion({ ...base, eodhdUsDomestic: true, forms: ["20-F"] }, UNIVERSE_CRITERIA)).toBe("foreign_filer");
+  });
+  it("keeps one line per company across exchanges and share classes", () => {
+    const eu = (ticker: string, exchange: string, name: string, isin: string | null, volume: number): Candidate => ({ ticker, name, sector: "Energy", cik: null, forms: [],
+      core: false, exchange, currency: "EUR", vendorSymbol: ticker, securityType: "Common Stock", isin, usdPerUnit: 1.1, marketCapUsd: 5e9,
+      revenueQuarters: 6, yoyGrowthPct: 20, lastClose: 50, avgDollarVolume50: volume, barDays: 50 });
+    const core: Candidate = { ticker: "AMD", name: "Advanced Micro Devices Inc", sector: "AI & semiconductors", cik: 2488, forms: ["10-K"], core: true, isin: "US0079031078",
+      revenueQuarters: 6, yoyGrowthPct: 30, lastClose: 150, avgDollarVolume50: 5e9, barDays: 50 };
+    const result = selectUniverse([core,
+      eu("AMD.XETRA", "XETRA", "Advanced Micro Devices Inc", "US0079031078", 5e7),
+      eu("SHEL.LSE", "LSE", "Shell PLC", "GB00BP6MXD84", 9e8), eu("SHELL.AS", "AS", "Shell PLC", "GB00BP6MXD84", 2e8),
+      eu("MAERSK-B.CO", "CO", "A.P. Møller - Mærsk A/S B", "DK0010244508", 3e8), eu("MAERSK-A.CO", "CO", "A.P. Møller - Mærsk A/S A", "DK0010244425", 1e8),
+      eu("SAP.XETRA", "XETRA", "SAP SE", "DE0007164600", 8e8)], { target: 36, sectorCapPct: 100 });
+    expect(result.selected.map((r) => r.ticker)).toEqual(["AMD", "SHEL.LSE", "SAP.XETRA", "MAERSK-B.CO"]);
+    expect(Object.fromEntries(result.excluded.map((e) => [e.ticker, e.reason]))).toEqual({
+      "AMD.XETRA": "secondary_listing", "MAERSK-A.CO": "duplicate_listing", "SHELL.AS": "duplicate_listing" });
+    expect(companyKey("ASML Holding N.V.")).toBe(companyKey("ASML Holding NV"));
+    expect(companyKey("Heineken Holding NV")).toBe("heineken");
   });
 });
