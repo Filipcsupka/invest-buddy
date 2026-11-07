@@ -22,8 +22,8 @@ async function seed(db: pg.Pool) {
     ('ZZG.LSE','ZZG','LSE','ZZ Pound PLC','GBP','Common Stock','2026-01-01','2026-10-21'),
     ('ZZN.XETRA','ZZN','XETRA','ZZ Neu AG','EUR','Common Stock','2026-10-25','2026-10-25')`);
   const bars = (ticker: string, dates: string[], close: number, source: string, vendor: string | null, currency: string | null) => db.query(
-    `INSERT INTO daily_bars (ticker,bar_date,open,high,low,close,volume,source_id,vendor_symbol,currency)
-     SELECT $1,d::date,$3,$3,$3,$3,1000000,$4,$5,$6 FROM unnest($2::text[]) d`, [ticker, dates, close, source, vendor, currency]);
+    `INSERT INTO daily_bars (ticker,bar_date,open,high,low,close,volume,source_id,vendor_symbol,currency,fetched_at)
+     SELECT $1,d::date,$3,$3,$3,$3,1000000,$4,$5,$6,'2026-10-21'::timestamptz FROM unnest($2::text[]) d`, [ticker, dates, close, source, vendor, currency]);
   // ZZUS: 30 stored bars and 50 discovery bars; stored bars win on shared dates.
   await bars("ZZUS", days(30), 20, "twelvedata", "ZZUS", null);
   await db.query(`INSERT INTO discovery_price_bars (symbol,name,sector,bar_date,open,high,low,close,volume)
@@ -56,6 +56,25 @@ async function seed(db: pg.Pool) {
 }
 
 describe("market candidate read model (Postgres)", () => {
+  it.skipIf(!process.env.TEST_DATABASE_URL)("replays only bars and filing forms observed by the score date", () => inRollback(async (db) => {
+    await seed(db);
+    await db.query("UPDATE daily_bars SET fetched_at='2026-10-25' WHERE ticker='ZZH.LSE'");
+    await db.query(`INSERT INTO daily_bar_revisions (ticker,bar_date,observed_at,open,high,low,close,volume,source_id,kind,currency)
+      VALUES ('ZZH.LSE','2026-10-20','2026-10-20',1000,1000,1000,1000,1000000,'eodhd','first','GBX')`);
+    await db.query(`INSERT INTO filing_watch (cik,symbol,accession,form,filed_at,first_seen_at) VALUES
+      (900001,'ZZH.LSE','0000000001-26-000001','10-Q','2026-10-01','2026-10-01'),
+      (900002,'ZZH.LSE','0000000002-26-000001','20-F','2026-10-01','2026-10-25')`);
+    const half = (await loadCandidates(db, asOf)).find((row) => row.ticker === "ZZH.LSE")!;
+    expect(half).toMatchObject({ barDays: 1, lastClose: 1000, forms: ["10-Q"] });
+  }));
+
+  it.skipIf(!process.env.TEST_DATABASE_URL)("does not use symbols changed by a later sync", () => inRollback(async (db) => {
+    await seed(db);
+    await db.query("UPDATE symbols SET last_seen='2026-10-25',currency='USD',type='Equity' WHERE vendor_symbol='ZZH.LSE'");
+    const half = (await loadCandidates(db, asOf)).find((row) => row.ticker === "ZZH.LSE")!;
+    expect(half).toMatchObject({ exchange: "LSE", currency: "", securityType: null, listingIssue: "listing_not_synced", barDays: 0 });
+  }));
+
   it.skipIf(!process.env.TEST_DATABASE_URL)("reads point-in-time bars, revenue, shares and FX", () => inRollback(async (db) => {
     await seed(db);
     const rows = new Map((await loadCandidates(db, asOf)).map((row) => [row.ticker, row]));

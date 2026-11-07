@@ -6,7 +6,7 @@ import { insertFundamentals, type FundamentalRow } from "../collectors/sources/c
 import { PostgresPriceRepository } from "../db/prices";
 import { eodhdClassification } from "../universe/sector";
 import { isCommonStock } from "../universe/select";
-import { normalizeCurrency, UNIVERSE_CURRENCIES, UNIVERSE_EXCHANGES } from "../universe/market";
+import { fxConversion, normalizeCurrency, UNIVERSE_CURRENCIES, UNIVERSE_EXCHANGES, type FxObservation } from "../universe/market";
 import { barsFromHistory, splitActions } from "./eodhd-prices";
 import { storeClassification } from "./eodhd-fundamentals";
 import { runLoggedJob } from "./job-log";
@@ -24,22 +24,25 @@ export interface SeedClient {
 }
 export interface SeedStore {
   readySymbols(): Promise<Set<string>>;
+  fxRates(asOf: string): Promise<ReadonlyMap<string, FxObservation>>;
   save(listing: SeedListing, bars: ReturnType<typeof barsFromHistory>, facts: FundamentalRow[], payload: Fundamentals, today: string): Promise<void>;
 }
 export interface SeedOptions { topPerExchange: number; maxCalls: number; minPrice: number; dryRun?: boolean; today?: string }
 
-/** GBX is pence, so the local floor is expressed in pounds for LSE pence lines. */
-export function rankSeedCandidates(listings: SeedListing[], bulk: BulkLastDayBar[], limit: number, minPrice: number): RankedSeed[] {
+/** Use the selector's dated ECB conversion for both the USD price floor and traded-value ranking. */
+export function rankSeedCandidates(listings: SeedListing[], bulk: BulkLastDayBar[], limit: number, minPrice: number,
+  rates: ReadonlyMap<string, FxObservation>, asOf: string): RankedSeed[] {
   const byCode = new Map(bulk.map((row) => [row.code, row]));
   return listings.flatMap((listing) => {
     if (!isCommonStock({ ticker: listing.vendorSymbol, vendorSymbol: listing.vendorSymbol, exchange: listing.exchange,
       name: listing.name, securityType: listing.type })) return [];
     const row = byCode.get(listing.code);
     const currency = normalizeCurrency(listing.currency);
+    const usdPerUnit = currency ? fxConversion(currency, rates, asOf).usdPerUnit : null;
     if (!currency || !row || typeof row.close !== "number" || !Number.isFinite(row.close) ||
       typeof row.volume !== "number" || !Number.isFinite(row.volume) || row.volume <= 0 ||
-      row.close < minPrice * (currency === "GBX" ? 100 : 1)) return [];
-    return [{ ...listing, tradedValue: row.close * row.volume }];
+      usdPerUnit === null || row.close * usdPerUnit < minPrice) return [];
+    return [{ ...listing, tradedValue: row.close * row.volume * usdPerUnit }];
   }).sort((a, b) => b.tradedValue - a.tradedValue || a.vendorSymbol.localeCompare(b.vendorSymbol)).slice(0, limit);
 }
 
@@ -49,6 +52,8 @@ const fatal = (error: unknown) => error instanceof EodhdHttpError && [401, 402, 
 /** Bulk prices shortlist each exchange; only its top unused names get history and fundamentals. */
 export async function runUniverseSeed(client: SeedClient, store: SeedStore, listings: SeedListing[], options: SeedOptions) {
   const ready = await store.readySymbols();
+  const asOf = options.today ?? new Date().toISOString().slice(0, 10);
+  const rates = await store.fxRates(asOf);
   const eligible = listings.filter((row) => {
     const currency = normalizeCurrency(row.currency);
     return currency !== null && UNIVERSE_CURRENCIES.some((known) => known === currency)
@@ -75,7 +80,7 @@ export async function runUniverseSeed(client: SeedClient, store: SeedStore, list
     }
     used(100);
     if (!Array.isArray(bulk) || !bulk.length) { failures++; continue; }
-    const choices = rankSeedCandidates(pending, bulk, options.topPerExchange, options.minPrice);
+    const choices = rankSeedCandidates(pending, bulk, options.topPerExchange, options.minPrice, rates, asOf);
     ranked += choices.length;
     for (const listing of choices) {
       if (options.dryRun) continue;
@@ -110,6 +115,14 @@ export async function runUniverseSeed(client: SeedClient, store: SeedStore, list
 
 export class PgSeedStore implements SeedStore {
   constructor(private readonly db: pg.Pool) {}
+  async fxRates(asOf: string): Promise<ReadonlyMap<string, FxObservation>> {
+    const result = await this.db.query<{ series_id: string; obs_date: string; value: string }>(
+      `SELECT DISTINCT ON (series_id) series_id,obs_date::text,value::text FROM macro_observations
+       WHERE source_id='ecb' AND obs_date<=$1::date AND realtime_start<=$1::date
+         AND (observed_at AT TIME ZONE 'UTC')::date<=$1::date
+       ORDER BY series_id,obs_date DESC,realtime_start DESC`, [asOf]);
+    return new Map(result.rows.map((row) => [row.series_id, { date: row.obs_date, value: Number(row.value) }]));
+  }
   async readySymbols() {
     const rows = await this.db.query<{ vendor_symbol: string }>("SELECT vendor_symbol FROM eodhd_universe_seed WHERE seeded_at > now() - interval '30 days'");
     return new Set(rows.rows.map((row) => row.vendor_symbol));

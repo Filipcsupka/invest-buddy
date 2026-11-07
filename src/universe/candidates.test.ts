@@ -89,13 +89,22 @@ describe("stored market candidate read model", () => {
       expect(calls).toHaveLength(9);
       for (const call of calls) expect(call.params[0]).toBe(date);
       const revenue = calls.find((call) => call.statement.includes("concept=ANY($2)"))!;
-      expect(revenue.params).toEqual([date, [...REVENUE_CONCEPTS]]);
+      const candidateTickers = [...new Set(listings.flatMap((row) => [row.ticker, row.ticker.endsWith(".US") ? row.ticker.slice(0, -3) : row.ticker]))];
+      expect(revenue.params).toEqual([date, [...REVENUE_CONCEPTS], candidateTickers]);
+      expect(revenue.statement).toContain("WHERE rn<=12");
       expect(calls.filter((call) => call.statement.includes("concept=ANY($2)"))).toHaveLength(1);
       const bars = calls.find((call) => call.statement.includes("FROM daily_bars"))!;
       expect(bars.params).toEqual([date, listings.map((row) => row.ticker)]);
       expect(bars.statement).toMatch(/row_number\(\) OVER \(PARTITION BY ticker ORDER BY bar_date DESC\)/);
       expect(bars.statement.match(/rn <= 520/g)).toHaveLength(2);
-      expect(calls.filter((call) => call !== revenue && call !== bars && !call.statement.includes("country='USA'")).every((call) => call.params.length === 1)).toBe(true);
+      expect(bars.statement).toContain("FROM daily_bar_revisions");
+      expect(bars.statement).toContain("fetched_at AT TIME ZONE 'UTC'");
+      const forms = calls.find((call) => call.statement.includes("FROM filing_watch"))!;
+      expect(forms.params).toEqual([date, candidateTickers]);
+      expect(forms.statement).toContain("first_seen_at AT TIME ZONE 'UTC'");
+      const symbols = calls.find((call) => call.statement.includes("FROM instruments i"))!;
+      expect(symbols.statement).toContain("s.last_seen<=$1::date");
+      expect(calls.filter((call) => call !== revenue && call !== bars && call !== forms && !call.statement.includes("country='USA'")).every((call) => call.params.length === 1)).toBe(true);
     }
   });
   it("reads bars in bounded ticker batches", async () => {

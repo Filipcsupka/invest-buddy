@@ -19,7 +19,7 @@ const SYMBOL_MATCH = `(s.vendor_symbol=ids.vendor_symbols->>'eodhd' OR s.vendor_
 const SYMBOL_ORDER = `CASE WHEN s.vendor_symbol=ids.vendor_symbols->>'eodhd' THEN 0 WHEN s.exchange='US' AND s.code=i.ticker THEN 1 ELSE 2 END, s.vendor_symbol`;
 
 /**
- * Listing for the score date. A symbols row first seen on or before asOf gives the exchange and quote currency. Without one, an
+ * Listing for the score date. A symbols row first seen and last synced on or before asOf gives the exchange and quote currency. Without one, an
  * instrument whose latest symbols row or key suffix names a European exchange fails closed (listing_not_synced): symbols keeps no
  * history, so its exchange and currency on asOf are unknown and it is never treated as a US dollar line. Everything else is a
  * US listing, read as before the market-aware model. A US symbols row without a currency is read the same way.
@@ -63,7 +63,7 @@ export async function loadCandidates(db: Q, asOf: string, secCik: Map<string, nu
   const names = await db.query<NameRow>(`SELECT i.ticker,i.name,i.sector,s.vendor_symbol,s.exchange,s.currency,s.type,cur.exchange current_exchange,s.industry FROM instruments i
     LEFT JOIN instrument_ids ids ON ids.ticker=i.ticker AND ids.valid_from<=$1::date AND (ids.valid_to IS NULL OR ids.valid_to>$1::date)
     LEFT JOIN LATERAL (SELECT vendor_symbol,exchange,currency,type,CASE WHEN s.sector_observed_on<=$1::date THEN s.industry END industry FROM symbols s
-      WHERE s.first_seen<=$1::date AND (NOT s.delisted OR s.last_seen>=$1::date) AND ${SYMBOL_MATCH}
+      WHERE s.first_seen<=$1::date AND s.last_seen<=$1::date AND (NOT s.delisted OR s.last_seen>=$1::date) AND ${SYMBOL_MATCH}
       ORDER BY ${SYMBOL_ORDER} LIMIT 1) s ON true
     LEFT JOIN LATERAL (SELECT exchange FROM symbols s WHERE ${SYMBOL_MATCH} ORDER BY ${SYMBOL_ORDER} LIMIT 1) cur ON true
     WHERE i.source<>'benchmark'
@@ -72,6 +72,7 @@ export async function loadCandidates(db: Q, asOf: string, secCik: Map<string, nu
       WHERE NOT EXISTS (SELECT 1 FROM instruments i WHERE i.ticker=d.symbol AND i.source<>'benchmark') ORDER BY d.symbol,d.bar_date DESC)
     ORDER BY 1`, [asOf]);
   const listing = new Map(names.rows.map((row) => [row.ticker, listingFor(row)]));
+  const candidateTickers = [...new Set(names.rows.flatMap((row) => [row.ticker, row.ticker.endsWith(".US") ? row.ticker.slice(0, -3) : row.ticker]))];
   const barMap = new Map<string, Bar[]>();
   // barMetrics and the LSE quote check use only the last 50 accepted bars. Read a generous per-source tail so overlap and rejected
   // vendor rows do not displace the usable window, and keep each query result small as the market universe grows.
@@ -81,8 +82,21 @@ export async function loadCandidates(db: Q, asOf: string, secCik: Map<string, nu
     const bars = await db.query<{ ticker: string; bar_date: string; close: string; volume: string; source_id: string; vendor_symbol: string | null; currency: string | null; origin: string }>(
       `SELECT ticker,bar_date::text,close,volume,source_id,vendor_symbol,currency,'daily' origin FROM (
          SELECT ticker,bar_date,close,volume,source_id,vendor_symbol,currency,
-           row_number() OVER (PARTITION BY ticker ORDER BY bar_date DESC) rn FROM daily_bars
-         WHERE bar_date<=$1::date AND ticker = ANY($2::text[])) daily WHERE rn <= 520
+           row_number() OVER (PARTITION BY ticker ORDER BY bar_date DESC) rn FROM (
+             SELECT ticker,bar_date,close,volume,source_id,vendor_symbol,currency,
+               row_number() OVER (PARTITION BY ticker,bar_date ORDER BY observed_at DESC, origin_rank DESC) observed_rank FROM (
+                 SELECT ticker,bar_date,close,volume,source_id,vendor_symbol,currency,fetched_at observed_at,1 origin_rank
+                   FROM daily_bars WHERE bar_date<=$1::date AND ticker=ANY($2::text[])
+                     AND fetched_at IS NOT NULL AND (fetched_at AT TIME ZONE 'UTC')::date<=$1::date
+                 UNION ALL
+                 SELECT ticker,bar_date,close,volume,source_id,
+                   CASE WHEN source_id='eodhd' AND ticker LIKE '%.%' THEN ticker ELSE NULL END vendor_symbol,
+                   currency,observed_at,0 origin_rank FROM daily_bar_revisions
+                   WHERE bar_date<=$1::date AND ticker=ANY($2::text[])
+                     AND (observed_at AT TIME ZONE 'UTC')::date<=$1::date
+               ) observations
+           ) versions WHERE observed_rank=1
+         ) daily WHERE rn <= 520
        UNION ALL
        SELECT ticker,bar_date::text,close,volume,'discovery',NULL,NULL,'discovery' FROM (
          SELECT symbol AS ticker,bar_date,close,volume,
@@ -105,18 +119,26 @@ export async function loadCandidates(db: Q, asOf: string, secCik: Map<string, nu
   }
   const ids = await db.query<{ ticker: string; cik: string | null }>("SELECT ticker,cik::text FROM instrument_ids WHERE valid_from<=$1::date AND (valid_to IS NULL OR valid_to>$1::date) AND cik IS NOT NULL", [asOf]);
   const cikMap = new Map(ids.rows.map((r) => [r.ticker, Number(r.cik)]));
-  const forms = await db.query<{ symbol: string; form: string }>("SELECT DISTINCT symbol,form FROM filing_watch WHERE filed_at<=$1::date", [asOf]);
+  const forms = await db.query<{ symbol: string; form: string }>(
+    "SELECT DISTINCT symbol,form FROM filing_watch WHERE filed_at<=$1::date AND (first_seen_at AT TIME ZONE 'UTC')::date<=$1::date AND symbol=ANY($2::text[])",
+    [asOf, candidateTickers]);
   const formMap = new Map<string, string[]>();
   for (const f of forms.rows) (formMap.get(f.symbol) ?? formMap.set(f.symbol, []).get(f.symbol)!).push(f.form);
   // Quarterly (80-100 days) facts for every source; EODHD half-years (170-195 days) for non-US listings that report semi-annually.
   const rev = await db.query<{ ticker: string; concept: string; period: RevenuePeriod; period_end: string; value: string; form: string; taxonomy: string; unit: string; source_id: string }>(
-    `SELECT DISTINCT ON (ticker,source_id,concept,period,period_end) ticker,concept,period,period_end::text,value::text,form,taxonomy,unit,source_id FROM (
-       SELECT f.*,CASE WHEN period_end-period_start BETWEEN 80 AND 100 THEN 'quarter' ELSE 'half' END period FROM fundamentals_pit f
-       WHERE filed<=$1::date AND (first_seen_at AT TIME ZONE 'UTC')::date<=$1::date AND period_start IS NOT NULL
-         AND (period_end-period_start BETWEEN 80 AND 100 OR (source_id='eodhd' AND period_end-period_start BETWEEN 170 AND 195)) AND
-         ((source_id='eodhd' AND taxonomy='eodhd' AND concept='Revenues') OR
-          (source_id='sec' AND taxonomy='us-gaap' AND unit='USD' AND concept=ANY($2)))) f
-     ORDER BY ticker,source_id,concept,period,period_end,filed DESC`, [asOf, [...REVENUE_CONCEPTS]]);
+    `SELECT ticker,concept,period,period_end::text,value::text,form,taxonomy,unit,source_id FROM (
+       SELECT *,row_number() OVER (PARTITION BY ticker,source_id,concept,period,unit ORDER BY period_end DESC) rn FROM (
+         SELECT DISTINCT ON (ticker,source_id,concept,period,period_end) ticker,concept,period,period_end,value,form,taxonomy,unit,source_id FROM (
+           SELECT f.*,CASE WHEN period_end-period_start BETWEEN 80 AND 100 THEN 'quarter' ELSE 'half' END period FROM fundamentals_pit f
+           WHERE ticker=ANY($3::text[]) AND filed<=$1::date AND (first_seen_at AT TIME ZONE 'UTC')::date<=$1::date
+             AND period_start IS NOT NULL AND period_end<=$1::date
+             AND (period_end-period_start BETWEEN 80 AND 100 OR (source_id='eodhd' AND period_end-period_start BETWEEN 170 AND 195))
+             AND ((source_id='eodhd' AND taxonomy='eodhd' AND concept='Revenues') OR
+                  (source_id='sec' AND taxonomy='us-gaap' AND unit='USD' AND concept=ANY($2)))
+         ) f ORDER BY ticker,source_id,concept,period,period_end,filed DESC
+       ) dedup
+     ) ranked WHERE rn<=12
+     ORDER BY ticker,source_id,concept,period,period_end`, [asOf, [...REVENUE_CONCEPTS], candidateTickers]);
   const shares = await db.query<{ ticker: string; value: string; source_id: string }>(
     `SELECT DISTINCT ON (ticker,source_id) ticker,value::text,source_id FROM fundamentals_pit
      WHERE filed<=$1::date AND (first_seen_at AT TIME ZONE 'UTC')::date<=$1::date AND period_end<=$1::date
@@ -140,7 +162,7 @@ export async function loadCandidates(db: Q, asOf: string, secCik: Map<string, nu
   const usCodes = [...new Set(names.rows.map((n) => listing.get(n.ticker)!).filter((l) => l.us).map((l) => (l.row.ticker.endsWith(".US") ? l.row.ticker.slice(0, -3) : l.row.ticker)))];
   const domestic = await db.query<{ code: string }>(
     `SELECT DISTINCT code FROM symbols WHERE exchange='US' AND type='Common Stock' AND country='USA' AND code=ANY($2::text[])
-       AND first_seen<=$1::date AND (NOT delisted OR last_seen>=$1::date)`, [asOf, usCodes]);
+       AND first_seen<=$1::date AND last_seen<=$1::date AND (NOT delisted OR last_seen>=$1::date)`, [asOf, usCodes]);
   const domesticCodes = new Set(domestic.rows.map((r) => r.code));
   const rates = new Map<string, FxObservation>(fx.rows.map((row) => [row.series_id, { value: Number(row.value), date: row.obs_date }]));
   const periodOf = (key: string): RevenuePeriod => (key.endsWith(":half") ? "half" : "quarter");
