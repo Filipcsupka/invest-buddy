@@ -34,6 +34,8 @@ spec:
               image: ghcr.io/filipcsupka/invest-buddy:latest
               command: ["node", "dist/jobs/macro.js"]
               env:
+                - name: ECB_FX_ENABLED
+                  value: "on"
                 - name: DATABASE_URL
                   valueFrom:
                     secretKeyRef:

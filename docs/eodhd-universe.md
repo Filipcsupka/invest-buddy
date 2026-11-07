@@ -26,4 +26,24 @@ npx tsx scripts/select-universe.ts --dry-run --as-of 2026-10-21 --target 36 --in
 
 Selection and the stored discovery lane make **zero EODHD API calls**. Costs arise upstream: `symbols:sync` requests one exchange list and one symbol list per available exchange; `prices:eodhd` uses per-symbol EOD and split requests or 100-call exchange bulk requests; `fundamentals:eodhd` uses one calendar request plus 10 calls per fetched symbol. The collector caps and estimates are in [the EODHD integration notes](eodhd.md). No live promote is part of this change.
 
-On 2026-11-06, `/exchanges-list` included every configured suffix except MI. The LSE symbol list and `General.CurrencyCode` both reported GBX for VOD, HSBA and SHEL; their EOD closes were in pence. SAP and HSBC fundamentals supplied dated European share counts and quarterly revenue, but some `filing_date` fields equaled the period end and HSBC's statement currency differed from its GBX quote. The parser now uses matching earnings report dates, honors later filing dates and rejects revenue without a statement currency. ULVR.LSE showed half-year income periods but no statement currency in the sampled rows, so those rows cannot be used. EXSA.XETRA returned 470 EOD bars from 2025-01-02 through 2026-11-05. Listing discovery only covers instruments whose bars and fundamentals have already been stored; a separate collection path must seed new European instruments before they can qualify. The current account has no demonstrated public display license, so raw EODHD figures remain internal. Public output remains informational screening under ADR-001.
+On 2026-11-06, `/exchanges-list` included every configured suffix except MI. The LSE symbol list and `General.CurrencyCode` both reported GBX for VOD, HSBA and SHEL; their EOD closes were in pence. SAP and HSBC fundamentals supplied dated European share counts and quarterly revenue, but some `filing_date` fields equaled the period end and HSBC's statement currency differed from its GBX quote. The parser now uses matching earnings report dates, honors later filing dates and rejects revenue without a statement currency. ULVR.LSE showed half-year income periods but no statement currency in the sampled rows, so those rows cannot be used. EXSA.XETRA returned 470 EOD bars from 2025-01-02 through 2026-11-05. The current account has no demonstrated public display license, so raw EODHD figures remain internal. Public output remains informational screening under ADR-001.
+
+## Seed European candidates
+
+`npm run universe:seed-eodhd` reads active, common stock listings from `symbols`, excluding the US, unsupported currencies and LSE lines marked GBP rather than GBX. It requests one bulk last-day EOD file per exchange, then ranks each exchange by local traded value after a local price floor of 5. For GBX lines, the floor is 500 pence. It fetches full EOD history, splits and fundamentals for at most 75 names per exchange. It stores them as `discovery` instruments with EODHD provenance in `daily_bars` and dated facts in `fundamentals_pit`; `eodhd_universe_seed` marks completed candidates. The selector can read these names without making vendor calls. A failed symbol does not stop the other symbols, and a rerun skips candidates seeded in the last 30 days. A partial save is safe to retry because bars and facts are upserted. An HTTP 401, 402 or 403 stops the run.
+
+The default first-run ceiling is 16 exchanges × 100 bulk calls plus 16 × 75 × 12 symbol calls, or 16,000 estimated calls. `--max-calls` defaults to 19,000 and cannot exceed 20,000; `--top-per-exchange`, `--min-price` and `--exchanges XETRA,LSE` narrow a run. The client disables retries so the cap covers attempted calls. `--dry-run` still requests bulk files, at 100 calls per exchange, but writes nothing and skips history and fundamentals. Normal runs record counts in `job_runs`. The suspended CronJob is `invest-buddy-eodhd-universe-seed` in this repository's `deploy/gitops/gitops/apps/invest-buddy/base/` proposal. The operator must carry that manifest and the macro env change into the live `~/moje/infra` GitOps repository, deploy the new image and run migration 131. Then the operator can start one bounded run with:
+
+```sh
+KUBECONFIG=~/.kube/khtz kubectl -n invest create job --from=cronjob/invest-buddy-eodhd-universe-seed "eu-universe-seed-$(date -u +%Y%m%d%H%M%S)"
+```
+
+The macro CronJob proposal sets `ECB_FX_ENABLED=on`. It fetches the ECB 90-day reference-rate file on each run. Before selecting, verify `macro_observations` contains recent `source_id='ecb'` rows for the score date:
+
+```sql
+SELECT series_id, max(obs_date) AS latest_date
+FROM macro_observations WHERE source_id='ecb'
+GROUP BY series_id ORDER BY series_id;
+```
+
+The next macro run collects the rates after rollout; an immediate run needs a separate operator action. The operator owns the live rollout and can stop future seeds by leaving the new CronJob suspended. Reverting its manifest removes the seed schedule; removing `ECB_FX_ENABLED` returns the macro collector to its prior setting. Stored candidate data remains private and needs no public route change.
