@@ -121,6 +121,12 @@ export async function loadCandidates(db: Q, asOf: string, secCik: Map<string, nu
     `SELECT DISTINCT ON (series_id) series_id,obs_date::text,value::text FROM macro_observations
      WHERE source_id='ecb' AND obs_date<=$1::date AND realtime_start<=$1::date AND (observed_at AT TIME ZONE 'UTC')::date<=$1::date
      ORDER BY series_id,obs_date DESC,realtime_start DESC`, [asOf]);
+  // Provisional (E11): a US Common Stock with country USA in the symbol master counts as domestic when no SEC form type is stored.
+  const usCodes = [...new Set(names.rows.map((n) => listing.get(n.ticker)!).filter((l) => l.us).map((l) => (l.row.ticker.endsWith(".US") ? l.row.ticker.slice(0, -3) : l.row.ticker)))];
+  const domestic = await db.query<{ code: string }>(
+    `SELECT DISTINCT code FROM symbols WHERE exchange='US' AND type='Common Stock' AND country='USA' AND code=ANY($2::text[])
+       AND first_seen<=$1::date AND (NOT delisted OR last_seen>=$1::date)`, [asOf, usCodes]);
+  const domesticCodes = new Set(domestic.rows.map((r) => r.code));
   const rates = new Map<string, FxObservation>(fx.rows.map((row) => [row.series_id, { value: Number(row.value), date: row.obs_date }]));
   const periodOf = (key: string): RevenuePeriod => (key.endsWith(":half") ? "half" : "quarter");
   const enough = (key: string, count: number) => count >= (periodOf(key) === "half" ? 3 : 4);
@@ -146,7 +152,7 @@ export async function loadCandidates(db: Q, asOf: string, secCik: Map<string, nu
     return { ticker: n.ticker, name: n.name, sector, cik: cikMap.get(n.ticker) ?? secCik.get(n.ticker) ?? secCik.get(usCode) ?? null,
       exchange: l.exchange, currency: quote.currency, vendorSymbol: n.vendor_symbol, securityType: n.type, usdPerUnit: conversion.usdPerUnit,
       marketCapUsd: metrics.lastClose !== null && conversion.usdPerUnit !== null && count ? metrics.lastClose * count * conversion.usdPerUnit : null,
-      forms: formMap.get(n.ticker) ?? formMap.get(usCode) ?? [], core: core.has(n.ticker), revenueQuarters: growth.quarters, yoyGrowthPct: growth.yoyGrowthPct,
+      forms: formMap.get(n.ticker) ?? formMap.get(usCode) ?? [], ...(l.us && domesticCodes.has(usCode) ? { eodhdUsDomestic: true } : {}), core: core.has(n.ticker), revenueQuarters: growth.quarters, yoyGrowthPct: growth.yoyGrowthPct,
       priorYoyGrowthPct, ...metrics,
       ...(key && periodOf(key) === "half" ? { revenuePeriod: "half" as const } : {}),
       ...(listingIssue ? { listingIssue } : {}),

@@ -176,4 +176,11 @@ describe("sector cap and duplicate filers", () => {
   it("keeps a core name even when it is on the duplicate list", () => {
     expect(selectUniverse([base("SUNC", { core: true })]).selected[0]).toMatchObject({ ticker: "SUNC", list: "core" });
   });
+  it("counts a US common stock with country USA as domestic only when no SEC form type is stored", () => {
+    const base: Candidate = { ticker: "NEWCO", name: "NewCo Inc", sector: "Tech", cik: null, forms: [], core: false, revenueQuarters: 6, yoyGrowthPct: 20,
+      lastClose: 20, avgDollarVolume50: 20_000_000, barDays: 50 };
+    expect(failedCriterion(base, UNIVERSE_CRITERIA)).toBe("filer_unknown");
+    expect(failedCriterion({ ...base, eodhdUsDomestic: true }, UNIVERSE_CRITERIA)).toBeNull();
+    expect(failedCriterion({ ...base, eodhdUsDomestic: true, forms: ["20-F"] }, UNIVERSE_CRITERIA)).toBe("foreign_filer");
+  });
 });
