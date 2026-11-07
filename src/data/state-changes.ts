@@ -13,7 +13,9 @@ export function diffStates(rows: readonly Snapshot[], newest: string | null = nu
   for (const row of rows) byTicker.set(row.ticker, [...(byTicker.get(row.ticker) ?? []), row]);
   const out: StateChangeRow[] = [];
   for (const [ticker, list] of byTicker) {
-    const [latest, previous] = [...list].sort((a, b) => b.asOf.localeCompare(a.asOf));
+    const distinctDays = new Map<string, Snapshot>();
+    for (const row of [...list].sort((a, b) => b.asOf.localeCompare(a.asOf))) if (!distinctDays.has(row.asOf)) distinctDays.set(row.asOf, row);
+    const [latest, previous] = [...distinctDays.values()];
     if (!latest || !previous || (newest && latest.asOf !== newest)) continue;
     const to = stateKey(latest.state), from = stateKey(previous.state);
     if (to !== from) out.push({ ticker, from, to, asOf: latest.asOf });

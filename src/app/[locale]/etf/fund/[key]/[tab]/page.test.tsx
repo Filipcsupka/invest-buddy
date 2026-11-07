@@ -30,6 +30,15 @@ it("rejects an unknown tab", async () => {
   await expect(Page(props("scores"))).rejects.toThrow(/404|NOT_FOUND/);
 });
 
+it("opens a fund tab when its colon listing key arrives percent encoded", async () => {
+  process.env.DATA_MODE = "fixture";
+  viewable.mockReturnValue(true);
+  detail.mockResolvedValue(empty);
+  const html = renderToStaticMarkup(await Page({ params: Promise.resolve({ locale: "en", key: "NASDAQ%3AS021", tab: "holdings" }) }));
+  expect(html).toContain("/en/etf/fund/NASDAQ%3AS021/holdings");
+  expect(detail).toHaveBeenCalledWith("NASDAQ:S021", expect.any(Object));
+});
+
 it.each(["en", "sk"])("shows vendor gaps as no data, never zero, in %s", async (locale) => {
   process.env.DATA_MODE = "fixture";
   viewable.mockReturnValue(true);
@@ -49,4 +58,13 @@ it("renders each tab with its empty state", async () => {
   expect(renderToStaticMarkup(await Page(props("exposure")))).toContain("No breakdown stored.");
   expect(renderToStaticMarkup(await Page(props("performance")))).toContain("+12.20 %");
   expect(renderToStaticMarkup(await Page(props("dividends")))).toContain("Accumulating funds pay none.");
+});
+
+it("shows missing multi-year returns as dashes, including stored vendor zeroes", async () => {
+  process.env.DATA_MODE = "fixture";
+  viewable.mockReturnValue(true);
+  detail.mockResolvedValue({ ...empty, stats: { ...stats, ret3yPct: 0, ret5yPct: null, ret10yPct: 0 } });
+  const html = renderToStaticMarkup(await Page(props("performance")));
+  expect(html).not.toContain("0.00 %");
+  expect(html).toMatch(/3 years \(annualised\)<\/th><td class="num">—<\/td>/);
 });

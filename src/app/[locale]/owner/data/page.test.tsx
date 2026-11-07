@@ -33,3 +33,13 @@ it("shows the owner every data family and its stored date", async () => {
   expect(html).toContain("No stored EODHD rows yet");
   expect(html).toContain("EODHD ETF catalog");
 });
+
+it("uses Slovak source and exchange labels", async () => {
+  auth.mockReturnValue(true);
+  pool.mockReturnValue({});
+  overview.mockResolvedValue({ sources: [{ family: "Daily bars", records: 5, latest: "2026-11-05" }], usage: [], callLog: [], exchanges: [{ exchange: "US", active: 1, symbols: 1 }], universe: [], etfs: [], macro: [], jobs: [], assets: [] });
+  const html = renderToStaticMarkup(await Page({ params: Promise.resolve({ locale: "sk" }) }));
+  expect(html).toContain("Denné ceny");
+  expect(html).toContain(">Burza</th>");
+  expect(html).not.toContain("Symbol master by exchange");
+});

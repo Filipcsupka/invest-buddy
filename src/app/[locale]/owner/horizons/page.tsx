@@ -7,6 +7,7 @@ import { latestHorizonLabels } from "@/db/horizon-labels";
 import { pageMetadata } from "@/i18n/metadata";
 import { ownerAuthorized } from "../auth";
 import Link from "next/link";
+import { formatNumber } from "@/i18n";
 
 export const dynamic = "force-dynamic";
 type Props = { params: Promise<{ locale: string }> };
@@ -24,6 +25,7 @@ export default async function OwnerHorizonsPage({ params }: Props) {
   const rows = await latestHorizonLabels(db, new Date().toISOString().slice(0, 10));
   const sk = locale === "sk";
   const value = (v: number | string | null | undefined) => v == null ? "—" : String(v);
+  const money = (v: number | string | null | undefined) => v == null || !Number.isFinite(Number(v)) ? "—" : formatNumber(locale, Number(v));
   return <article className="frame page">
     <header className="page-head"><h1 className="title">{sk ? "Horizontové profily" : "Horizon profiles"}</h1>
       <p className="lede">{sk ? "Súkromný prehľad uložených profilov a vstupov." : "Private view of stored profiles and inputs."}</p><Link href={`/${locale}/owner/data`}>{sk ? "Údaje zo zdrojov" : "Source data"}</Link></header>
@@ -37,8 +39,8 @@ export default async function OwnerHorizonsPage({ params }: Props) {
         <th scope="col">{sk ? "Výnimka" : "Override"}</th>
       </tr></thead><tbody>{rows.map((r) => <tr key={r.ticker}>
         <th scope="row">{r.ticker}</th><td>{r.as_of}</td><td>{r.profile}</td>
-        <td>{[r.input_values.yoyLatest,r.input_values.yoyPrior1,r.input_values.yoyPrior2,r.input_values.yoyOldest].map(value).join(" / ")}</td><td>{value(r.input_values.marketCapUsd)}</td>
-        <td>{value(r.input_values.dollarVolume)}</td><td>{value(r.input_values.atrPercent)}</td>
+        <td>{[r.input_values.yoyLatest,r.input_values.yoyPrior1,r.input_values.yoyPrior2,r.input_values.yoyOldest].map(value).join(" / ")}</td><td>{money(r.input_values.marketCapUsd)}</td>
+        <td>{money(r.input_values.dollarVolume)}</td><td>{value(r.input_values.atrPercent)}</td>
         <td>{value(r.input_values.move5)}</td><td>{value(r.input_values.volumeRatio)}</td>
         <td>{r.candidate_profile ? `${r.candidate_profile} (${r.candidate_sessions}/10)` : "—"}</td>
         <td>{value(r.input_values.tier)}</td><td>{r.reasons.join(", ") || "—"}</td><td>{r.horizon_rules_version}</td><td>{r.override_reason ? `${r.override_date}: ${r.override_reason}` : "—"}</td>

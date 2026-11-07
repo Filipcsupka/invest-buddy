@@ -3,7 +3,7 @@ import type pg from "pg";
 import iwda from "../jobs/fixtures/eodhd-etf/iwda-etf.json";
 import spy from "../jobs/fixtures/eodhd-etf/spy-etf.json";
 import spyDividends from "../jobs/fixtures/eodhd-etf/spy-div.json";
-import { MAX_STORED_HOLDINGS, etfDetailView, etfListStats, parseEtfData, storeEtfDetail, upsertEtfDividends } from "./etf-detail";
+import { MAX_STORED_HOLDINGS, etfDetailView, etfListStats, mapStats, parseEtfData, storeEtfDetail, upsertEtfDividends } from "./etf-detail";
 
 describe("parseEtfData (live responses captured 2026-11-06, trimmed)", () => {
   it("maps SPY.US: fraction expense ratio, percent yield, full holdings count and exposure", () => {
@@ -25,6 +25,13 @@ describe("parseEtfData (live responses captured 2026-11-06, trimmed)", () => {
     // Fixed_Income and Valuations_Growth were all zero or null: no credit rows are invented.
     expect(data.exposure.some((row) => row.kind === "credit")).toBe(false);
     expect(data.exposure.filter((row) => row.kind === "mcap").map((row) => row.label)).toContain("Micro");
+  });
+
+  it("treats missing and zero multi-year returns as unknown", () => {
+    const parsed = parseEtfData({ ETF_Data: { Performance: { Returns_3Y: 0, Returns_5Y: null, Returns_10Y: 8.5 } } })!;
+    expect([parsed.ret3yPct, parsed.ret5yPct, parsed.ret10yPct]).toEqual([null, null, 8.5]);
+    const stored = mapStats({ vendor_symbol: "TEST.US", ret_3y_pct: "0", ret_5y_pct: null, ret_10y_pct: "8.5" });
+    expect([stored.ret3yPct, stored.ret5yPct, stored.ret10yPct]).toEqual([null, null, 8.5]);
   });
 
   it("drops an all-zero map, rejects a response without ETF_Data and caps stored holdings", () => {

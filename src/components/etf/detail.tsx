@@ -98,7 +98,7 @@ export function PerformancePanel({ locale, view }: { locale: Locale; view: EtfDe
     <p className={s.note}>{m.performanceNote}{st ? ` ${m.asOf}: ${dated(locale, st.asOf)}.` : ""}</p>
     <RecordCard id="etf-returns" title={m.returns}>
       <DataTable label={m.returns} bounded={false}><thead><tr><th scope="col">{m.period}</th><th scope="col" className="num">{m.returns}</th></tr></thead>
-        <tbody>{returns.map(([label, value]) => <tr key={label}><th scope="row">{label}</th><td className="num">{signed(locale, value)}</td></tr>)}</tbody></DataTable>
+        <tbody>{returns.map(([label, value], index) => <tr key={label}><th scope="row">{label}</th><td className="num">{index >= 2 && (value === null || value === 0) ? "—" : signed(locale, value)}</td></tr>)}</tbody></DataTable>
     </RecordCard>
     <RecordCard id="etf-risk" title={m.risk}>
       <dl className={s.facts}>

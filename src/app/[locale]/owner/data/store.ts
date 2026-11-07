@@ -24,7 +24,10 @@ export async function ownerDataOverview(db: Db, etfPage = 1) {
       UNION ALL SELECT 'News documents',count(*)::int,max(published_at)::text FROM source_documents WHERE source_id='eodhd'
       UNION ALL SELECT 'Regional macro',count(*)::int,max(obs_date)::text FROM macro_observations WHERE source_id IN ('eodhd','ecb')
       UNION ALL SELECT 'ETF catalog',count(*)::int,max(enriched_at)::text FROM etf_catalog WHERE enrichment_source='eodhd'`),
-    rows(db, `SELECT day::text,job,sum(requests)::int AS requests,sum(credits)::text AS credits FROM api_usage WHERE source_id='eodhd' AND day >= current_date-6 GROUP BY day,job ORDER BY day DESC,job LIMIT 60`),
+    rows(db, `SELECT day::text,job,sum(requests)::int AS requests,sum(credits)::text AS credits FROM (
+      SELECT day,job,requests,credits FROM api_usage WHERE source_id='eodhd' AND day >= current_date-6
+      UNION ALL SELECT run_date AS day,job,NULL::int AS requests,calls::numeric AS credits FROM eodhd_call_log WHERE source_id='eodhd' AND run_date >= current_date-6
+    ) usage_rows GROUP BY day,job ORDER BY day DESC,job LIMIT 60`),
     rows(db, `SELECT exchange,count(*)::int AS symbols,count(*) FILTER (WHERE NOT delisted)::int AS active,max(last_seen)::text AS last_seen FROM symbols GROUP BY exchange ORDER BY exchange`),
     rows(db, `SELECT exchange,list,count(*)::int AS tickers,string_agg(ticker,', ' ORDER BY ticker) AS symbols,max(valid_from)::text AS latest_change FROM universe_membership WHERE valid_to IS NULL GROUP BY exchange,list ORDER BY exchange,list`),
     rows(db, `SELECT listing_key,name,exchange,region,ter_pct::text,aum_usd_m::text,holdings_count,enrichment_status,enriched_at::text,enrichment_source FROM etf_catalog WHERE enrichment_source='eodhd' ORDER BY enriched_at DESC NULLS LAST,listing_key LIMIT 100 OFFSET $1`, [(page - 1) * 100]),
@@ -46,7 +49,7 @@ export async function ownerTickerData(db: Db, ticker: string) {
   const [identity, bars, fundamentals, eps, calendar, catalysts, insiders, documents, actions, refresh] = await Promise.all([
     rows(db, `SELECT i.ticker,i.name,i.sector,s.vendor_symbol,s.exchange,s.currency,s.country,s.sector AS vendor_sector,s.industry,s.sector_observed_on::text,s.last_seen::text,s.delisted FROM instruments i LEFT JOIN instrument_ids ids ON ids.ticker=i.ticker AND ids.valid_to IS NULL LEFT JOIN LATERAL (
       SELECT s.* FROM symbols s WHERE s.vendor_symbol=ids.vendor_symbols->>'eodhd'
-        OR (s.code=split_part(i.ticker,'.',1) AND (s.exchange=ids.exchange OR (ids.exchange IN ('NASDAQ','NYSE') AND s.exchange='US')))
+        OR (s.code=split_part(i.ticker,'.',1) AND (upper(s.exchange)=upper(ids.exchange) OR (upper(ids.exchange) IN ('NASDAQ','NYSE') AND s.exchange='US')))
       ORDER BY COALESCE(s.vendor_symbol=ids.vendor_symbols->>'eodhd',false) DESC,s.delisted,s.last_seen DESC LIMIT 1
     ) s ON true WHERE i.ticker=$1 LIMIT 1`, [ticker]),
     rows(db, `SELECT bar_date::text,open::text,high::text,low::text,close::text,volume::text,currency,vendor_symbol,source_id,fetched_at::text FROM daily_bars WHERE ticker=$1 AND source_id='eodhd' ORDER BY bar_date DESC LIMIT 20`, [ticker]),

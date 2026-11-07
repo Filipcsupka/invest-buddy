@@ -55,6 +55,7 @@ export function StateStrip({ label, changes, empty, pauseLabel, playLabel, secon
       </section>
     );
   }
+  const single = changes.length === 1;
   const items = (copy: boolean) =>
     changes.map((change) => {
       const body = (
@@ -84,15 +85,15 @@ export function StateStrip({ label, changes, empty, pauseLabel, playLabel, secon
     <section ref={ref} className="kit-strip" aria-label={label} data-paused={paused || offscreen ? "" : undefined} style={{ "--strip-duration": `${Math.max(changes.length, 3) * secondsPerItem}s` } as CSSProperties}>
       <div className="kit-strip-head">
         <p className="kit-strip-label">{label}</p>
-        <button type="button" className="kit-strip-toggle" onClick={() => setPaused((p) => !p)}>
+        {!single && <button type="button" className="kit-strip-toggle" onClick={() => setPaused((p) => !p)}>
           {paused ? <IconPlay /> : <IconPause />}
           <span>{paused ? playLabel : pauseLabel}</span>
-        </button>
+        </button>}
       </div>
       <div className="kit-strip-viewport">
-        <div className="kit-strip-rail">
+        <div className="kit-strip-rail" data-static={single ? "" : undefined}>
           <ul className="kit-strip-list">{items(false)}</ul>
-          <ul className="kit-strip-list kit-strip-copy" aria-hidden="true">{items(true)}</ul>
+          {!single && <ul className="kit-strip-list kit-strip-copy" aria-hidden="true">{items(true)}</ul>}
         </div>
       </div>
     </section>

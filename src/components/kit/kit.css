@@ -569,6 +569,9 @@
   width: max-content;
   animation: kit-marquee var(--strip-duration, 40s) linear infinite;
 }
+.kit-strip-rail[data-static] {
+  animation: none;
+}
 .kit-strip:hover .kit-strip-rail,
 .kit-strip:focus-within .kit-strip-rail,
 .kit-strip[data-paused] .kit-strip-rail {

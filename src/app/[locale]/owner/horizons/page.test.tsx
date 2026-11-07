@@ -24,5 +24,5 @@ it("shows the stored profile and inputs for an authorized owner", async () => {
   enabled.mockReturnValue(true); auth.mockReturnValue(true); db.mockReturnValue({});
   labels.mockResolvedValue([{ ticker: "NVDA", as_of: "2026-10-18", profile: "sustained", input_values: { yoyLatest: 26, yoyPrior1: 24, yoyPrior2: 22, yoyOldest: 20, marketCapUsd: 20_000_000_000, dollarVolume: 300_000_000, atrPercent: 2.5, move5: 1, volumeRatio: 1.2, tier: 1 }, reasons: ["sustained_growth"], candidate_profile: null, candidate_sessions: 0, horizon_rules_version: "2026-10-17.1", override_reason: null }]);
   const html = renderToStaticMarkup(await Page(props));
-  expect(html).toContain("NVDA"); expect(html).toContain("sustained"); expect(html).toContain("26 / 24 / 22 / 20"); expect(html).toContain("20000000000");
+  expect(html).toContain("NVDA"); expect(html).toContain("sustained"); expect(html).toContain("26 / 24 / 22 / 20"); expect(html).toContain("20,000,000,000");
 });

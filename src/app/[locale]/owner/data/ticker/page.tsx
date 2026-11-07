@@ -29,7 +29,7 @@ export default async function OwnerTickerPage({ params, searchParams }: Props) {
   const data = await ownerTickerData(db, ticker);
   if (!data.identity) notFound();
   const section = (id: string, title: string, rows: Record<string, unknown>[]) => <section className={s.section} aria-labelledby={id} key={id}>
-    <h2 id={id}>{title}</h2><DataTable rows={rows} columns={rows[0] ? Object.keys(rows[0]).map((key) => ({ key, label: key.replaceAll("_", " ") })) : []} empty={m.empty} />
+    <h2 id={id}>{title}</h2><DataTable rows={rows} columns={rows[0] ? Object.keys(rows[0]).map((key) => ({ key, label: key.replaceAll("_", " ") })) : []} empty={m.empty} locale={locale} />
   </section>;
   return <article className="frame page" data-owner-data=""><div className={s.stack}>
     <header className={s.head}><p><Link href={`/${locale}/owner/data`}>{m.back}</Link></p><h1 className="title">{ticker} · {m.tickerTitle}</h1><p>{m.lede}</p></header>

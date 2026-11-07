@@ -128,12 +128,17 @@ describe("CountUp", () => {
 describe("StateStrip", () => {
   const change = { ticker: "NVDA", from: "watch" as const, to: "setup" as const, fromLabel: "Watching", toLabel: "Conditions met", href: "/en/company/NVDA", sentence: "NVDA: Watching to Conditions met" };
   it("has one real list and a hidden copy that is out of the tab order", () => {
-    const html = renderToStaticMarkup(<StateStrip label="State changes" changes={[change]} empty="None" pauseLabel="Pause" playLabel="Resume" />);
+    const html = renderToStaticMarkup(<StateStrip label="State changes" changes={[change, { ...change, ticker: "AMD" }]} empty="None" pauseLabel="Pause" playLabel="Resume" />);
     expect(html.match(/<ul/g)).toHaveLength(2);
     expect(html).toMatch(/kit-strip-copy" aria-hidden="true"/);
     expect(html).toMatch(/tabindex="-1"/i);
     expect(html).toContain(">Pause<");
     expect(html).toContain("NVDA: Watching to Conditions met");
+  });
+  it("shows a single state change once without a scrolling copy", () => {
+    const html = renderToStaticMarkup(<StateStrip label="State changes" changes={[{ ...change, ticker: "AMD" }]} empty="None" pauseLabel="Pause" playLabel="Resume" />);
+    expect(html.match(/kit-strip-ticker/g)).toHaveLength(1);
+    expect(html).not.toContain("kit-strip-copy");
   });
   it("says so when nothing changed, without a moving rail", () => {
     const html = renderToStaticMarkup(<StateStrip label="State changes" changes={[]} empty="No state changed." pauseLabel="Pause" playLabel="Resume" />);
