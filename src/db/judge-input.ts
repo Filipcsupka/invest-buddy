@@ -32,6 +32,7 @@ export interface JudgeSymbol {
   score: { total: number; technical: number; fundamentals: number; macro: number; state: string; pullbackInUptrend: boolean; asOf: string };
   invalidReasons: string[];
   macroInputs: { growthSectorRotation: boolean | null; dataTailwind: boolean | null } | null;
+  ruleInputs: ScoreResult["inputs"]["fundamentals"] | null;
   /** Derived chart numbers only. The raw price series never leaves the database (Twelve Data free plan terms). */
   technicals: Technicals | null;
   matchedRules: string[];
@@ -104,7 +105,7 @@ export function shapeSymbol(row: ScoreRow, consensus: ConsensusRow[], baseline: 
     symbol: row.ticker, name: row.name, sector: row.sector, tier: row.tier,
     held: pos ? { valueEur: pos.valueEur, weightPercent: invested > 0 ? round((pos.valueEur / invested) * 100, 1) : 0 } : null,
     score: { total: a.total, technical: a.technical, fundamentals: a.fundamentals, macro: a.macro, state: a.state, pullbackInUptrend: a.pullbackInUptrend, asOf: a.asOf },
-    invalidReasons: a.invalidReasons, macroInputs: a.inputs?.macro ?? null, technicals,
+    invalidReasons: a.invalidReasons, macroInputs: a.inputs?.macro ?? null, ruleInputs: a.inputs?.fundamentals ?? null, technicals,
     matchedRules: a.ruleHits.filter((r) => r.matched).map((r) => r.id),
     ruleHits: a.ruleHits.map((r) => ({ id: r.id, points: r.points, matched: r.matched, ...(r.unknown ? { unknown: true } : {}) })),
     fields, expiredFields: [...(a.expiredFields ?? [])].sort(), carriedFrom: carried[0] ?? null,
@@ -138,11 +139,11 @@ export async function buildJudgeInput(pool: Pick<pg.Pool, "query">, asOf: string
     const revenue = await pool.query<{ ticker: string; period_end: string; filed: string; observed_on: string; value: string; unit: string; accession: string }>(
       `SELECT DISTINCT ON (ticker,period_end) ticker,period_end::text,filed::text,first_seen_at::date::text AS observed_on,value::text,unit,accession
        FROM fundamentals_pit WHERE ticker=ANY($1::text[]) AND source_id='eodhd' AND concept='Revenues'
-       AND filed<=$2::date AND first_seen_at::date<=$2::date ORDER BY ticker,period_end,filed DESC,id DESC`, [tickers, asOf]);
+       AND period_end<=$2::date AND filed<=$2::date AND first_seen_at::date<=$2::date ORDER BY ticker,period_end,filed DESC,id DESC`, [tickers, asOf]);
     for (const row of revenue.rows.filter((item, index, all) => all.slice(index + 1).filter((next) => next.ticker === item.ticker).length < 4)) add(row.ticker, { source: "eodhd", kind: "revenue", asOf: row.period_end, observedOn: row.observed_on, value: Number(row.value), unit: row.unit, provenance: row.accession });
     const eps = await pool.query<{ ticker: string; fiscal_date_ending: string; reported_date: string; observed_on: string; reported_eps: string | null; estimated_eps: string | null; surprise_pct: string | null }>(
       `SELECT DISTINCT ON (ticker,fiscal_date_ending) ticker,fiscal_date_ending::text,reported_date::text,observed_at::date::text AS observed_on,reported_eps::text,estimated_eps::text,surprise_pct::text
-       FROM eps_history WHERE ticker=ANY($1::text[]) AND source_id='eodhd' AND reported_date<=$2::date AND observed_at::date<=$2::date
+       FROM eps_history WHERE ticker=ANY($1::text[]) AND source_id='eodhd' AND fiscal_date_ending<=$2::date AND reported_date<=$2::date AND observed_at::date<=$2::date
        ORDER BY ticker,fiscal_date_ending,observed_at DESC`, [tickers, asOf]);
     for (const row of eps.rows.filter((item, index, all) => all.slice(index + 1).filter((next) => next.ticker === item.ticker).length < 4)) add(row.ticker, { source: "eodhd", kind: "eps", asOf: row.reported_date, observedOn: row.observed_on, value: { reported: row.reported_eps === null ? null : Number(row.reported_eps), estimated: row.estimated_eps === null ? null : Number(row.estimated_eps), surprisePct: row.surprise_pct === null ? null : Number(row.surprise_pct) }, provenance: `eps_history:${row.fiscal_date_ending}` });
     const facts = await pool.query<{ symbol: string; fact_key: string; as_of: string; observed_on: string; value: unknown }>(

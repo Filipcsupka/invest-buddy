@@ -75,6 +75,8 @@ describe("judge input", () => {
     expect(input.symbols[0].structuredFacts[0].provenance).toBe("eodhd:X:2026Q2");
     expect(input.symbols[0].researchFacts).toEqual([]);
     expect(queries.find((sql) => sql.includes("FROM fundamentals_pit"))).toContain("first_seen_at::date<=$2::date");
+    expect(queries.find((sql) => sql.includes("FROM fundamentals_pit"))).toContain("period_end<=$2::date");
+    expect(queries.find((sql) => sql.includes("FROM eps_history"))).toContain("fiscal_date_ending<=$2::date");
     expect(queries.some((sql) => sql.includes("FROM research_findings"))).toBe(false);
   });
   it("does not pass a display_allowed=false or missing document to the judge", () => {

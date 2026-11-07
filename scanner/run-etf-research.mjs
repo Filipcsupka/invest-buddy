@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { extractJson, getToken } from "./run-scan.mjs";
+import { inventedFigures } from "./run-judge.mjs";
 import { codexResearchAdapter } from "./research-adapters.mjs";
 import { schemaErrors } from "./research-validate.mjs";
 import { checkMonthlyBudget, expectedTokens } from "./monthly-budget.mjs";
@@ -64,6 +65,9 @@ export function validateEtfOutput(output, asOf, batch = null) {
         if ((candidate.cost[key] ?? null) !== (value ?? null)) errors.push(`$.candidates: cost.${key} differs from stored catalog for ${candidate.symbol}`);
       if (candidate.evidence.length) errors.push(`$.candidates: model must not create evidence for ${candidate.symbol}`);
       if (candidate.price.last !== null || candidate.price.currency !== null || candidate.price.asOf !== null) errors.push(`$.candidates: price must be null until a stored price is supplied for ${candidate.symbol}`);
+      const prose = [candidate.thesis, ...candidate.whatHappened, candidate.whyItMatters, ...Object.values(candidate.plan).filter(Boolean), ...candidate.risks];
+      const figures = inventedFigures(prose, source);
+      if (figures.length) errors.push(`$.candidates: figures not in stored catalog for ${candidate.symbol}: ${figures.join(", ")}`);
     }
   }
   return errors;
@@ -77,6 +81,7 @@ export function buildPrompt(asOf, batch = [], template = readFileSync(promptPath
 export async function execute(opts, { adapter = codexResearchAdapter, env = process.env, request = fetch, post, log = console.log, template } = {}) {
   const send = post || request;
   if (env.RESEARCH_ENABLED === "off") { log("etf-research: skipped by RESEARCH_ENABLED=off"); return { status: "skipped", batches: 0, failed: 0 }; }
+  if (!opts.dryRun && env.EODHD_PRIVATE_USE !== "on") throw new Error("etf-research requires EODHD_PRIVATE_USE=on in an owner-private environment");
   const token = opts.inputFile && opts.dryRun ? null : env.INGEST_TOKEN || getToken();
   if (!token && !(opts.inputFile && opts.dryRun)) throw new Error("INGEST_TOKEN is required");
   if (!opts.dryRun) { const auth = adapter.available?.(env); if (auth && !auth.ok) throw new Error(auth.reason); }

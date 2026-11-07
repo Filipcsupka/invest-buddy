@@ -8,7 +8,7 @@
 // The model never writes to the database or the web. No database credentials here.
 // Usage: node scanner/run-judge.mjs [--dry-run] [--force] [--model sonnet] [--as-of YYYY-MM-DD]
 //        [--max-symbols 12] [--agent-mode] [--max-turns 8] [--base-url URL] [--timeout-s 300] [--input-file judge-input.json]
-//   --dry-run     call the model and write the result file, post nothing, record nothing
+//   --dry-run     plan the run without a model call or ingest write
 //   --force       ignore the one-run-per-day and unchanged-input skips
 //   --agent-mode  the model may read the prepared input files with Read, Grep and Glob (read-only, no web, no shell), within --max-turns and the budget
 //   --input-file  offline: read the judge input from a file instead of the web
@@ -215,7 +215,14 @@ export function changedSignals(signals, previous) {
  */
 export function buildModelInput(input, news) {
   const ctx = new Map(input.symbols.map((s) => [s.symbol, s]));
-  const context = (symbol) => { const c = ctx.get(symbol); if (!c) return null; const rest = { ...c }; delete rest.held; delete rest.researchFacts; return rest; };
+  const context = (symbol) => { const c = ctx.get(symbol); if (!c) return null; return {
+    symbol: c.symbol, name: c.name, sector: c.sector, tier: c.tier,
+    score: c.score, invalidReasons: c.invalidReasons, macroInputs: c.macroInputs,
+    ruleInputs: c.ruleInputs, technicals: c.technicals, matchedRules: c.matchedRules,
+    ruleHits: c.ruleHits, expiredFields: c.expiredFields,
+    evidence: (c.evidence ?? []).map(({ url, label, publishedAt }) => ({ url, label, publishedAt })),
+    structuredFacts: c.structuredFacts ?? [],
+  }; };
   return {
     asOf: input.asOf, ruleConfigVersion: input.ruleConfigVersion, benchmark: input.benchmark,
     items: news.map((s) => ({ signal: { action: s.action, sizeTier: s.sizeTier, size: TIER_TEXT[s.sizeTier] ?? null, ratings: s.ratings, unconfirmed: s.unconfirmed, carriedFrom: s.carriedFrom, reasons: s.reasons, symbol: s.symbol }, context: context(s.symbol) })),

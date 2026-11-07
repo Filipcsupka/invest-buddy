@@ -110,6 +110,9 @@ test("the model input is data only: no portfolio, no EUR band, no held value, th
   const nvda = m.items.find((i) => i.signal.symbol === "NVDA");
   assert.deepEqual([nvda.signal.sizeTier, nvda.signal.size], ["ADD_THIRD", "add about 1/3 of a full position"]);
   assert.ok(!("held" in nvda.context));
+  assert.ok(!("fields" in nvda.context));
+  assert.ok(!("researchFacts" in nvda.context));
+  assert.ok(!("quote" in nvda.context.evidence[0]));
   assert.doesNotThrow(() => merge([words("NVDA", { verdict: "Add about 1/3 of a full position on the dip." }), words("AMD", { evidence: [] })]), "the tier fraction is an input figure");
   assert.throws(() => merge([words("NVDA", { verdict: "NVDA is 17.8 percent of the portfolio." }), words("AMD", { evidence: [] })]), /figures not in the input: 17.8/, "the owner's weight is not in the model input");
 });

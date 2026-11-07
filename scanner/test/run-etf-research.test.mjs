@@ -45,7 +45,7 @@ test("ETF run posts each validated chunk under the monthly guard", async () => {
     const opts = parseArgs(["--as-of", "2026-10-21", "--out-dir", outDir], { INGEST_BASE_URL: "http://localhost" });
     const adapter = { name: "codex", available: () => ({ ok: true }), run: async (args) => { assert.equal(args.schemaName, "root"); assert.equal(args.allowSearch, false); return { text: JSON.stringify(output), usage: { inputTokens: 100 }, webSearches: 0, model: "test-model" }; } };
     const request = async (url, init) => url.endsWith("/shortlist") ? { ok: true, json: async () => ({ items: [item] }) } : url.endsWith("/ai-budget") && !init?.method ? { ok: true, json: async () => ({ tokensPerDayUtc: {} }) } : (url.endsWith("/etf") && posts.push(JSON.parse(init.body)), { ok: true, json: async () => ({ recorded: true }) });
-    const result = await execute(opts, { adapter, env: { INGEST_TOKEN: "token", RESEARCH_ENABLED: "on", RESEARCH_MONTHLY_USD: "0", AI_DAILY_TOKEN_CEILING: "0" },
+    const result = await execute(opts, { adapter, env: { INGEST_TOKEN: "token", RESEARCH_ENABLED: "on", EODHD_PRIVATE_USE: "on", RESEARCH_MONTHLY_USD: "0", AI_DAILY_TOKEN_CEILING: "0" },
       template: "ETF prompt {{shortlist}}", request, log: () => {} });
     assert.equal(result.status, "ok"); assert.equal(posts.length, 1);
     assert.deepEqual(posts[0].output, output);
@@ -60,7 +60,7 @@ test("a failed chunk does not prevent later chunks from posting", async () => {
   try {
     const adapter = { name: "codex", run: async () => { if (++calls === 1) throw new Error("temporary model error"); return { text: JSON.stringify({ ...output, candidates: [{ ...candidate, symbol: "E25" }] }), usage: {} }; } };
     const request = async (url, init) => url.endsWith("/shortlist") ? { ok: true, json: async () => ({ items }) } : url.endsWith("/ai-budget") && !init?.method ? { ok: true, json: async () => ({ tokensPerDayUtc: {} }) } : (url.endsWith("/etf") && posts.push(JSON.parse(init.body)), { ok: true, json: async () => ({ recorded: true }) });
-    const result = await execute(parseArgs(["--as-of", "2026-10-21", "--out-dir", outDir]), { adapter, env: { INGEST_TOKEN: "token" }, request, log: () => {} });
+    const result = await execute(parseArgs(["--as-of", "2026-10-21", "--out-dir", outDir]), { adapter, env: { INGEST_TOKEN: "token", EODHD_PRIVATE_USE: "on" }, request, log: () => {} });
     assert.deepEqual({ batches: result.batches, failed: result.failed }, { batches: 2, failed: 1 });
     assert.equal(posts.length, 1); assert.equal(posts[0].output.candidates[0].symbol, "E25");
   } finally { rmSync(outDir, { recursive: true, force: true }); }
@@ -83,4 +83,13 @@ test("offline dry run reads an enriched shortlist without auth, network or model
 test("ETF output cannot add facts or citations absent from the catalog", () => {
   const changed = { ...candidate, cost: { ...candidate.cost, terPct: 0.01 }, evidence: [{ url: "https://example.com", quote: "Invented expense ratio", claim: "ter" }] };
   assert.match(validateEtfOutput({ ...output, candidates: [changed] }, output.asOf, [item]).join(" "), /cost.terPct differs|must not create evidence/);
+  const invented = { ...candidate, thesis: "Expense ratio is 0.4 percent" };
+  assert.match(validateEtfOutput({ ...output, candidates: [invented] }, output.asOf, [item]).join(" "), /figures not in stored catalog/);
+});
+
+test("live ETF research requires private mode before any network or model call", async () => {
+  await assert.rejects(execute(parseArgs(["--as-of", "2026-10-21"]), {
+    env: { INGEST_TOKEN: "token" }, request: async () => { throw new Error("network called"); },
+    adapter: { run: async () => { throw new Error("model called"); } },
+  }), /EODHD_PRIVATE_USE=on/);
 });

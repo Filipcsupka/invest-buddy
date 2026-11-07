@@ -10,8 +10,8 @@ Input JSON:
 - benchmark: CSPX, the default home for money that has no better use.
 - items: one per symbol whose decision changed since the last stored idea. Each item has:
   - signal: action, sizeTier, size (the tier in words), ratings (company, entry, catalyst), unconfirmed, carriedFrom, reasons. FIXED. Do not restate different values.
-  - context: the rule score (total of 25), reconciled rule fields with agreement, verified and carriedFrom, the regional macro result used by the score, technicals (returns, distance from moving averages, RSI, volume ratio, ATR percent, relative strength against SPY, regime), and traceable structuredFacts from EODHD.
-  - A field with carriedFrom is carried forward from an older scan, not fresh. A name in expiredFields is unknown because it expired.
+  - context: the rule score (total of 25), stored rule inputs, the regional macro result used by the score, technicals (returns, distance from moving averages, RSI, volume ratio, ATR percent, relative strength against SPY, regime), and traceable structuredFacts from EODHD.
+  - A name in expiredFields is unknown because it expired.
   - structuredFacts contain dated EODHD revenue, EPS, insider and catalyst rows. Each has a stored provenance key and an observation date. Use only these figures and the rule and technical results. Do not invent a document citation.
 - If the input lists files, read them with the Read, Grep and Glob tools (read-only, no web, no shell). Otherwise all data is inline.
 
