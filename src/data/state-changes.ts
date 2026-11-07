@@ -2,6 +2,7 @@ import { cache } from "react";
 import type { AlertState } from "@/engine";
 import { stateKey, type StateKey } from "@/i18n/score-text";
 import { getPool } from "../db/pool";
+import { extendedOn, pageScoreRow, scoreExtended } from "../db/universe";
 
 export interface StateChangeRow { ticker: string; from: StateKey; to: StateKey; asOf: string }
 
@@ -30,7 +31,7 @@ async function latestStateChangesUncached(): Promise<StateChangeRow[]> {
   try {
     const result = await db.query<Snapshot>(`SELECT ticker, as_of::text AS "asOf", state FROM (
         SELECT ticker, as_of, state, row_number() OVER (PARTITION BY ticker ORDER BY as_of DESC) AS rn
-        FROM score_results WHERE audit ? 'scanRunId' AND as_of >= CURRENT_DATE - 21) t WHERE rn <= 2`);
+        FROM score_results s WHERE ${pageScoreRow()} AND as_of >= CURRENT_DATE - 21${scoreExtended() ? "" : ` AND NOT ${extendedOn("s.ticker", "CURRENT_DATE")}`}) t WHERE rn <= 2`);
     const newest = result.rows.map((row) => row.asOf).sort().at(-1) ?? null;
     return diffStates(result.rows, newest);
   } catch { return []; }

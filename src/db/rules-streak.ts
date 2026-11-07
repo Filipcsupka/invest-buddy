@@ -2,6 +2,7 @@ import { cache } from "react";
 import { CACHE_TAGS, webCached } from "../data/web-cache";
 import { getPool } from "./pool";
 import { isIsoDate } from "./iso-date";
+import { pageScoreRow } from "./universe";
 import { HITS, ruleState, type RuleHit } from "./rule-changes";
 import type { Queryable } from "./history";
 
@@ -78,10 +79,10 @@ export function streaksFromRows(rows: readonly { ticker: string; asOf: string; h
 /** Streaks of the tickers scored on the newest snapshot, over the last `STREAK_WINDOW_DAYS` days before it. One query. */
 export async function ruleStreaksFromDb(db: Queryable, window = STREAK_WINDOW_DAYS): Promise<Record<string, RuleStreak>> {
   const result = await db.query<{ ticker: string; asOf: string; hits: RuleDay["hits"] }>(
-    `WITH latest AS (SELECT max(as_of) AS d FROM score_results WHERE audit ? 'scanRunId')
+    `WITH latest AS (SELECT max(as_of) AS d FROM score_results l WHERE ${pageScoreRow("l")})
      SELECT s.ticker, s.as_of::text AS "asOf", ${HITS} AS hits FROM score_results s
-     WHERE s.audit ? 'scanRunId' AND s.as_of >= (SELECT d FROM latest) - $1::int
-       AND s.ticker IN (SELECT c.ticker FROM score_results c WHERE c.as_of = (SELECT d FROM latest) AND c.audit ? 'scanRunId')
+     WHERE ${pageScoreRow()} AND s.as_of >= (SELECT d FROM latest) - $1::int
+       AND s.ticker IN (SELECT c.ticker FROM score_results c WHERE c.as_of = (SELECT d FROM latest) AND ${pageScoreRow("c")})
      ORDER BY s.ticker, s.as_of DESC`, [window]);
   return streaksFromRows(result.rows.filter((row) => isIsoDate(row.asOf)));
 }

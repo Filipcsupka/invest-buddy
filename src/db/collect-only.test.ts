@@ -46,6 +46,17 @@ describe("collect-only list (extended)", () => {
     expect(tickers(await new DatabaseUniverseProvider(db, "2026-10-18").instruments())).toEqual(["CORE"]);
   });
 
+  it("SCORE_EXTENDED=on in private mode adds the extended name to scoring only", async () => {
+    const env = { ...process.env };
+    try {
+      process.env.SCORE_EXTENDED = "on"; process.env.EODHD_PRIVATE_USE = "on";
+      expect(tickers(await new DatabaseUniverseProvider(fake().db, "2026-10-18").instruments())).toEqual(["CORE", "NEWX"]);
+      expect(tickers(await loadUniverse(fake().db, undefined, { scoring: true }))).toEqual(["CORE", "NEWX"]);
+      expect(tickers(await loadUniverse(fake().db))).toEqual(["CORE"]);
+      expect(await reviewDueSymbols(fake().db, 30, 10)).toEqual(["CORE"]);
+    } finally { process.env = env; }
+  });
+
   it("AI selection (extract review queue) never returns an extended name", async () => {
     const { db } = fake();
     expect(await reviewDueSymbols(db, 30, 10)).toEqual(["CORE"]);

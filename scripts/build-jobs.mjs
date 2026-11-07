@@ -50,7 +50,7 @@ await build({
 // Operator scripts that run as one-off Jobs from the app image (universe selection and changes).
 rmSync("dist/scripts", { recursive: true, force: true });
 await build({
-  entryPoints: ["select-universe.ts", "universe-change.ts"].map((name) => resolve("scripts", name)),
+  entryPoints: ["select-universe.ts", "universe-change.ts", "universe-backdate.ts"].map((name) => resolve("scripts", name)),
   bundle: true,
   platform: "node",
   format: "cjs",

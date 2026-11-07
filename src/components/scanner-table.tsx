@@ -25,6 +25,8 @@ type Text = {
   sortBy: string;
   disclaimer: string;
   extension: string;
+  /** Badge for collect-only names; defaults to "Extended". */
+  extended?: string;
   noScore: string;
   noRejection: string;
   columns: { ticker: string; sector: string; score: string; rules: string; state: string; data: string; criteria: string; f: string; t: string; m: string; fName: string; tName: string; mName: string };
@@ -131,6 +133,7 @@ export function ScannerTable({ locale, rows, text, heldTickers = [], aside, prof
                 {row.agreementLabel ? <span className="tag">{row.agreementLabel}</span> : null}
                 {text.profileTags && profiles[row.ticker] && profiles[row.ticker] in text.profileTags ? <span className="tag" title={text.profileTags.note}>{text.profileTags[profiles[row.ticker] as "event_driven" | "mixed"]}</span> : null}
                 {row.extension ? <span className="tag">{text.extension}</span> : null}
+                {row.collectOnly ? <span className="tag">{text.extended ?? "Extended"}</span> : null}
                 {held.has(row.ticker) ? <span className="tag">{row.state === "setup" || row.state === "watch" ? text.held : text.heldNoSignal}</span> : null}
               </span>
             </span>

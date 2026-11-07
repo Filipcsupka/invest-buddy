@@ -178,7 +178,7 @@ async function Scanner({ params, searchParams }: Props) {
           const chipState = kitState(row.state, Boolean(row.pullbackLabel));
           const stateText = row.pullbackLabel ?? row.stateLabel;
           return <tr key={row.ticker} data-state={row.state}>
-            <th scope="row" className={`col-company ${styles.company}`}><span className={styles.rank} aria-label={`${sc.rank} ${index + 1}`}>{index + 1}</span><span className={styles.who}><Link className="ticker" href={`/${locale}/company/${row.ticker}`}>{row.ticker}</Link><span className="company-name">{row.name}{held.has(row.ticker) ? <span className="tag">{m.portfolio.held}</span> : null}{floorState(floorData[row.ticker]) === "unknown" ? <span className="tag" title={fl.noDataNote}>{fl.noData}</span> : null}</span></span></th>
+            <th scope="row" className={`col-company ${styles.company}`}><span className={styles.rank} aria-label={`${sc.rank} ${index + 1}`}>{index + 1}</span><span className={styles.who}><Link className="ticker" href={`/${locale}/company/${row.ticker}`}>{row.ticker}</Link><span className="company-name">{row.name}{row.collectOnly ? <span className="tag">{m.common.extended}</span> : null}{held.has(row.ticker) ? <span className="tag">{m.portfolio.held}</span> : null}{floorState(floorData[row.ticker]) === "unknown" ? <span className="tag" title={fl.noDataNote}>{fl.noData}</span> : null}</span></span></th>
             <td className={`col-sector muted ${styles.colSector}`}><span className={styles.mobileLabel}>{m.table.sector}</span>{row.sector}</td>
             <td className={styles.score}>
               <span className={styles.mobileLabel}>{m.table.score}</span>

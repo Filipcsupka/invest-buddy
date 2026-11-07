@@ -6,6 +6,7 @@ import { SCORE_RULES_VERSION } from "../engine/score";
 import { RULESET_VERSION } from "../config/rules";
 import { snapshotFor } from "./score-snapshots";
 import { scoreSignal } from "../track-record/measure";
+import { extendedOn } from "./universe";
 
 export class PostgresScoreRepository implements ScoreRepository {
   constructor(private readonly pool: pg.Pool) {}
@@ -94,7 +95,8 @@ export class PostgresScoreRepository implements ScoreRepository {
 
   async alerts(asOf: string): Promise<AlertChange[]> {
     const result = await this.pool.query<{ ticker: string; as_of: string; previous_state: ScoreResult["state"]; current_state: ScoreResult["state"]; previous_score: number; current_score: number }>(
-      "SELECT ticker,as_of::text,previous_state,current_state,previous_score,current_score FROM alerts WHERE as_of=$1 AND active=true ORDER BY ticker", [asOf]);
+      // The digest sends these; collect-only names (scored only under SCORE_EXTENDED) never go out.
+      `SELECT a.ticker,a.as_of::text,a.previous_state,a.current_state,a.previous_score,a.current_score FROM alerts a WHERE a.as_of=$1 AND a.active=true AND NOT ${extendedOn("a.ticker", "a.as_of")} ORDER BY a.ticker`, [asOf]);
     return result.rows.map((row) => ({ ticker: row.ticker, asOf: row.as_of, previousState: row.previous_state, currentState: row.current_state, previousScore: row.previous_score, currentScore: row.current_score }));
   }
 }

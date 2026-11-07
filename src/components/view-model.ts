@@ -13,6 +13,8 @@ export type ScreenRow = {
   name: string;
   sector: string;
   extension: boolean;
+  /** Collect-only (extended list) name, scored only under the owner-private SCORE_EXTENDED switch. */
+  collectOnly: boolean;
   date: string;
   dateLabel: string;
   total: number;
@@ -56,6 +58,7 @@ export function toRow(locale: Locale, { instrument, result }: { instrument: Inst
     name: instrument.name,
     sector: sectorLabel(locale, instrument.sector),
     extension: instrument.source === "sample extension" && process.env.DATA_MODE === "fixture",
+    collectOnly: instrument.list === "extended",
     date: result.asOf,
     dateLabel: formatDate(locale, result.asOf),
     total: result.total,

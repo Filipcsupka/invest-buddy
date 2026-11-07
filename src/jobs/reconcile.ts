@@ -160,7 +160,7 @@ export async function runReconcile(pool: pg.Pool, asOf: string, verify: Evidence
   for (const symbol of researchBySymbol.keys()) if (!grouped.has(symbol)) grouped.set(symbol, []);
   // Private mode runs the stored-fact rules for every scored universe symbol, also when no extractor or research finding exists.
   const seeded = new Set<string>();
-  if (eodhdPrivateUse()) for (const { symbol } of await loadUniverse(pool, asOf)) if (!grouped.has(symbol)) { grouped.set(symbol, []); seeded.add(symbol); }
+  if (eodhdPrivateUse()) for (const { symbol } of await loadUniverse(pool, asOf, { scoring: true })) if (!grouped.has(symbol)) { grouped.set(symbol, []); seeded.add(symbol); }
   const macros = await pool.query<{ run_id: string; data: Record<string, unknown>; evidence: { items: EvidenceRef[] } }>("SELECT run_id,data,evidence FROM macro_findings WHERE as_of=$1 AND superseded_by IS NULL AND data->>'runnerName' IN ('claude','codex')", [asOf]);
   const macroFindings = macros.rows.map((row) => ({ runId: row.run_id, runner: { name: row.data.runnerName as Agent }, fundamentals: row.data, evidence: row.evidence, confidence: "high" }));
   const pending: ConsensusField[] = [];
