@@ -6,7 +6,7 @@ import { sectorFromEodhd, UNCLASSIFIED } from "./sector";
 
 type Q = Pick<pg.Pool, "query">;
 type NameRow = {
-  ticker: string; name: string; sector: string; vendor_symbol: string | null; exchange: string | null; currency: string | null; type: string | null;
+  ticker: string; name: string; sector: string; vendor_symbol: string | null; exchange: string | null; currency: string | null; type: string | null; isin: string | null;
   /** Exchange of the latest symbols row, whatever its first_seen. symbols is current state, not history. */
   current_exchange: string | null;
   /** EODHD General.Industry of the dated symbols row, only when it was stored by asOf. */
@@ -60,15 +60,15 @@ export async function loadCandidates(db: Q, asOf: string, secCik: Map<string, nu
     "SELECT ticker FROM universe_membership WHERE valid_from<=$1 AND (valid_to IS NULL OR valid_to>$1) AND list<>'benchmark' AND (list<>'extended' OR added_by='seed')", [asOf]);
   const core = new Set(members.rows.map((r) => r.ticker));
   // Discovery-only names (discovery_price_bars without an instruments row) stay candidates, as in the D35 loader.
-  const names = await db.query<NameRow>(`SELECT i.ticker,i.name,i.sector,s.vendor_symbol,s.exchange,s.currency,s.type,cur.exchange current_exchange,s.industry FROM instruments i
+  const names = await db.query<NameRow>(`SELECT i.ticker,i.name,i.sector,s.vendor_symbol,s.exchange,s.currency,s.type,cur.exchange current_exchange,s.industry,s.isin FROM instruments i
     LEFT JOIN instrument_ids ids ON ids.ticker=i.ticker AND ids.valid_from<=$1::date AND (ids.valid_to IS NULL OR ids.valid_to>$1::date)
-    LEFT JOIN LATERAL (SELECT vendor_symbol,exchange,currency,type,CASE WHEN s.sector_observed_on<=$1::date THEN s.industry END industry FROM symbols s
+    LEFT JOIN LATERAL (SELECT vendor_symbol,exchange,currency,type,isin,CASE WHEN s.sector_observed_on<=$1::date THEN s.industry END industry FROM symbols s
       WHERE s.first_seen<=$1::date AND s.last_seen<=$1::date AND (NOT s.delisted OR s.last_seen>=$1::date) AND ${SYMBOL_MATCH}
       ORDER BY ${SYMBOL_ORDER} LIMIT 1) s ON true
     LEFT JOIN LATERAL (SELECT exchange FROM symbols s WHERE ${SYMBOL_MATCH} ORDER BY ${SYMBOL_ORDER} LIMIT 1) cur ON true
     WHERE i.source<>'benchmark'
     UNION ALL
-    (SELECT DISTINCT ON (d.symbol) d.symbol,d.name,d.sector,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text FROM discovery_price_bars d
+    (SELECT DISTINCT ON (d.symbol) d.symbol,d.name,d.sector,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text FROM discovery_price_bars d
       WHERE NOT EXISTS (SELECT 1 FROM instruments i WHERE i.ticker=d.symbol AND i.source<>'benchmark') ORDER BY d.symbol,d.bar_date DESC)
     ORDER BY 1`, [asOf]);
   const listing = new Map(names.rows.map((row) => [row.ticker, listingFor(row)]));
@@ -187,7 +187,7 @@ export async function loadCandidates(db: Q, asOf: string, secCik: Map<string, nu
     // European listings have no SIC code; an Unclassified one takes its sector from the stored EODHD industry. US names are unchanged.
     const sector = !l.us && n.sector === UNCLASSIFIED ? sectorFromEodhd(n.industry) : n.sector;
     return { ticker: n.ticker, name: n.name, sector, cik: cikMap.get(n.ticker) ?? secCik.get(n.ticker) ?? secCik.get(usCode) ?? null,
-      exchange: l.exchange, currency: quote.currency, vendorSymbol: n.vendor_symbol, securityType: n.type, usdPerUnit: conversion.usdPerUnit,
+      exchange: l.exchange, currency: quote.currency, vendorSymbol: n.vendor_symbol, securityType: n.type, isin: n.isin ?? null, usdPerUnit: conversion.usdPerUnit,
       marketCapUsd: metrics.lastClose !== null && conversion.usdPerUnit !== null && count ? metrics.lastClose * count * conversion.usdPerUnit : null,
       forms: formMap.get(n.ticker) ?? formMap.get(usCode) ?? [], ...(l.us && domesticCodes.has(usCode) ? { eodhdUsDomestic: true } : {}), core: core.has(n.ticker), revenueQuarters: growth.quarters, yoyGrowthPct: growth.yoyGrowthPct,
       priorYoyGrowthPct, ...metrics,
