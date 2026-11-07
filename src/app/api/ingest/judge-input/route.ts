@@ -5,6 +5,7 @@ import { isIsoDate } from "../../../../db/iso-date";
 import { buildJudgeInput, DEFAULT_MAX_SYMBOLS } from "../../../../db/judge-input";
 
 export const runtime = "nodejs";
+const MAX_REQUESTED = 500;
 function authorized(header: string | null, token: string) {
   const supplied = header?.startsWith("Bearer ") ? header.slice(7) : "";
   const a = createHash("sha256").update(supplied).digest();
@@ -26,7 +27,8 @@ async function getHandler(request: Request) {
   const max = Number(new URL(request.url).searchParams.get("maxSymbols") ?? DEFAULT_MAX_SYMBOLS);
   if (!Number.isInteger(max) || max < 1 || max > 40) return Response.json({ error: "maxSymbols must be 1-40" }, { status: 400 });
   const requested = new URL(request.url).searchParams.get("symbols")?.split(",").filter(Boolean) ?? [];
-  if (requested.length > 40 || requested.some((symbol) => !/^[A-Z][A-Z0-9.-]{0,9}$/.test(symbol))) return Response.json({ error: "Invalid symbols" }, { status: 400 });
+  // `symbols` is the whole detect gate (69 names on 2026-11-07); it only orders the pick, and maxSymbols still caps what the judge sees.
+  if (requested.length > MAX_REQUESTED || requested.some((symbol) => !/^[A-Z][A-Z0-9.-]{0,9}$/.test(symbol))) return Response.json({ error: "Invalid symbols" }, { status: 400 });
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
   try { return Response.json(await buildJudgeInput(pool, asOf, new Date(), max, requested)); }
   catch (error) { recordIngestError(request, error); return Response.json({ error: "Database unavailable" }, { status: 503 }); }

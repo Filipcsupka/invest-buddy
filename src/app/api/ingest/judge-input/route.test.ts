@@ -26,4 +26,11 @@ describe("judge-input route", () => {
     expect((await GET(req("?asOf=2026-10-05&maxSymbols=0"))).status).toBe(400);
     expect((await GET(req("?asOf=2026-10-05&maxSymbols=8"))).status).toBe(200);
   });
+  it("accepts a whole detect gate as requested symbols (69 on 2026-11-07) and still bounds the list", async () => {
+    const list = (n: number) => Array.from({ length: n }, (_, i) => `S${i}`).join(",");
+    expect((await GET(req(`?asOf=2026-10-05&symbols=${list(69)}`))).status).toBe(200);
+    expect((await GET(req(`?asOf=2026-10-05&symbols=${list(500)}`))).status).toBe(200);
+    expect((await GET(req(`?asOf=2026-10-05&symbols=${list(501)}`))).status).toBe(400);
+    expect((await GET(req("?asOf=2026-10-05&symbols=bad!"))).status).toBe(400);
+  });
 });
