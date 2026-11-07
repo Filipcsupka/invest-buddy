@@ -11,7 +11,7 @@ it.skipIf(!process.env.TEST_DATABASE_URL)("serves and consumes the current gate 
   const date = "2099-08-12";
   const headers = { authorization: "Bearer f3-test-token", "content-type": "application/json" };
   const get = (stage: string) => GET(new Request(`http://local/api/ingest/gate?stage=${stage}&date=${date}`, { headers }));
-  const post = (stage: string, revision: number) => POST(new Request("http://local/api/ingest/gate", { method: "POST", headers, body: JSON.stringify({ stage, date, revision }) }));
+  const post = (stage: string, revision: number) => POST(new Request("http://local/api/ingest/gate", { method: "POST", headers, body: JSON.stringify({ stage, date, revision, ...(stage === "judge" ? { completedSymbols: ["AMD", "NVDA"] } : {}) }) }));
   try {
     const gate = await persistGate(pool, { asOf: date, symbols: ["NVDA"], reasons: { NVDA: ["10-Q"] }, accessions: { NVDA: ["0000000000-99-000001"] } });
     expect((await get("judge")).status).toBe(409);

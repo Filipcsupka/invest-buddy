@@ -31,10 +31,10 @@ export async function readGate(baseUrl, token, stage, date = null) {
   return gate;
 }
 
-export async function consumeGate(baseUrl, token, stage, date, revision) {
+export async function consumeGate(baseUrl, token, stage, date, revision, completedSymbols = undefined) {
   const response = await fetch(`${baseUrl}/api/ingest/gate`, {
     method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ stage, date, revision }), signal: AbortSignal.timeout(30_000),
+    body: JSON.stringify({ stage, date, revision, ...(stage === "judge" ? { completedSymbols } : {}) }), signal: AbortSignal.timeout(30_000),
   });
   if (!response.ok) throw new Error(`gate ${stage} completion HTTP ${response.status}: ${(await response.text()).slice(0, 200)}`);
 }

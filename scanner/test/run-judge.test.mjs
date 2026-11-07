@@ -399,7 +399,7 @@ function mockWeb({ skipDay = false, skipHash = false, inputOverride = null } = {
 function runJudge(args, { s, env = {} }) {
   const out = mkdtempSync(join(tmpdir(), "judge-out-"));
   const gate = join(out, "gate.json"); writeFileSync(gate, JSON.stringify({ symbols: ["NVDA", "AMD"] }));
-  const gatedArgs = args.includes("--symbols-file") || args.includes("--force") ? args : [...args, "--symbols-file", gate];
+  const gatedArgs = args.includes("--symbols-file") || args.includes("--gate-from-db") || args.includes("--force") ? args : [...args, "--symbols-file", gate];
   return new Promise((resolve) => {
     const child = spawn(process.execPath, [SCRIPT, ...gatedArgs], { env: { ...process.env, PATH: `${s.dir}:${process.env.PATH}`, INGEST_TOKEN: "test-token", EODHD_PRIVATE_USE: "on", SCAN_OUT_DIR: out, ...env } });
     let err = ""; child.stderr.on("data", (d) => { err += d; });
@@ -692,4 +692,55 @@ test("run-judge goes on to the next pending gate only while one is open", async 
   // run() consumes nothing here, so the loop stops after one run.
   await runPendingGates(run, ["--gate-from-db"], async () => ({ asOf: gates[1], consumed: false }));
   assert.equal(calls, 1);
+});
+
+test("a 69-symbol gate advances one page at a time and stops at the monthly cap", async () => {
+  const symbols = Array.from({ length: 69 }, (_, i) => `S${String(i).padStart(2, "0")}`);
+  const remaining = [...symbols];
+  const completed = [];
+  const requested = [];
+  let unchanged = false;
+  const s = stub();
+  s.respond(envelope(JSON.stringify({ ideas: symbols.slice(0, 12).map((symbol) => words(symbol)) })));
+  const server = http.createServer((req, res) => {
+    let body = ""; req.on("data", (chunk) => { body += chunk; });
+    req.on("end", () => {
+      const send = (value) => { res.setHeader("content-type", "application/json"); res.end(JSON.stringify(value)); };
+      const url = new URL(req.url, "http://local");
+      if (url.pathname === "/api/ingest/gate" && req.method === "GET") return send({ asOf: "2026-10-05", symbols: remaining, reasons: {}, accessions: {}, revision: 1, consumed: remaining.length === 0 });
+      if (url.pathname === "/api/ingest/gate" && req.method === "POST") {
+        const page = JSON.parse(body).completedSymbols;
+        completed.push(page);
+        remaining.splice(0, page.length);
+        return send({ recorded: true });
+      }
+      if (url.pathname === "/api/ingest/judge-input") {
+        const page = url.searchParams.get("symbols").split(",");
+        requested.push(page);
+        return send(input({ symbols: page.map((symbol) => ctx(symbol, [U1, U2])), signals: page.map((symbol) => sig(symbol)), previousIdeas: unchanged ? page.map((symbol) => ({ symbol, signature: sig(symbol).signature })) : [] }));
+      }
+      if (url.pathname === "/api/ingest/ai-budget" && req.method === "GET") return send({ tokensPerDayUtc: { [new Date().toISOString().slice(0, 10)]: completed.length ? 49000 : 0 } });
+      if (url.pathname === "/api/ingest/ai-budget") return send({ recorded: true });
+      if (url.pathname === "/api/ingest/ideas") return send({ recorded: true });
+      send({ error: "not found" });
+    });
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const result = await runJudge(["--gate-from-db", "--base-url", base], { s, env: { AI_JUDGE_MONTHLY_TOKEN_CAP: "50000", CLAUDE_CODE_OAUTH_TOKEN: "" } });
+    assert.equal(result.code, 1, result.err);
+    assert.deepEqual(requested.map((page) => page.length), [12, 12]);
+    assert.deepEqual(completed, [symbols.slice(0, 12)]);
+    assert.deepEqual(remaining, symbols.slice(12));
+    assert.equal(s.calls().length, 1);
+    assert.match(result.err, /monthly token cap/);
+    assert.match(result.err, /expected .* for attempt 1/);
+    unchanged = true;
+    const resumed = await runJudge(["--gate-from-db", "--base-url", base], { s, env: { AI_JUDGE_MONTHLY_TOKEN_CAP: "50000", CLAUDE_CODE_OAUTH_TOKEN: "" } });
+    assert.equal(resumed.code, 0, resumed.err);
+    assert.deepEqual(completed.map((page) => page.length), [12, 12, 12, 12, 12, 9]);
+    assert.deepEqual(remaining, []);
+    assert.equal(s.calls().length, 1);
+  } finally { await new Promise((resolve) => server.close(resolve)); }
 });
