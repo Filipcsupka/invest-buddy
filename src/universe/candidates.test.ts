@@ -44,6 +44,7 @@ function fakeDb(calls: Call[]) {
       form: "EODHD", taxonomy: "eodhd", unit: item.currency === "GBX" ? "GBP" : item.currency ?? "USD", source_id: "eodhd",
     }))) };
     if (statement.includes("DISTINCT ON (ticker,source_id)")) return { rows: listings.map((item) => ({ ticker: item.ticker, value: "100000000", source_id: "eodhd" })) };
+    if (statement.includes("country='USA'")) return { rows: [{ code: "DISC" }] };
     if (statement.includes("DISTINCT ON (series_id)")) return { rows: [{ series_id: "ECB_EURUSD", obs_date: "2026-10-20", value: "1.16" }, { series_id: "ECB_EURGBP", obs_date: "2026-10-20", value: "0.87" }] };
     throw new Error(`Unexpected SQL: ${statement}`);
   } } as never;
@@ -63,7 +64,14 @@ describe("stored market candidate read model", () => {
     expect(rows.find((row) => row.ticker === "SAP.XETRA")?.marketCapUsd).toBe(11_600_000_000);
     expect(rows.find((row) => row.ticker === "VOD.LSE")).toMatchObject({ currency: "GBX", revenueQuarters: 6 });
     expect(rows.find((row) => row.ticker === "VOD.LSE")?.usdPerUnit).toBeCloseTo(1.16 / 0.87 / 100);
-    expect(rows.find((row) => row.ticker === "DISC")).toMatchObject({ exchange: "US", currency: "USD", barDays: 50, lastClose: 30 });
+    expect(rows.find((row) => row.ticker === "DISC")).toMatchObject({ exchange: "US", currency: "USD", barDays: 50, lastClose: 30, eodhdUsDomestic: true });
+    expect(rows.find((row) => row.ticker === "AI.PA")?.eodhdUsDomestic).toBeUndefined();
+  });
+  it("asks the symbol master only about US codes", async () => {
+    const calls: Call[] = [];
+    await loadCandidates(fakeDb(calls), asOf);
+    const domestic = calls.find((call) => call.statement.includes("country='USA'"))!;
+    expect(domestic.params).toEqual([asOf, ["ABC", "AI", "LEG", "DISC"]]);
   });
   it("fails closed on an ambiguous LSE pound quote and on a listing not yet synced", async () => {
     const rows = await loadCandidates(fakeDb([]), asOf);
@@ -78,12 +86,12 @@ describe("stored market candidate read model", () => {
     for (const date of [asOf, "2025-01-02"]) {
       const calls: Call[] = [];
       await loadCandidates(fakeDb(calls), date);
-      expect(calls).toHaveLength(8);
+      expect(calls).toHaveLength(9);
       for (const call of calls) expect(call.params[0]).toBe(date);
       const revenue = calls.find((call) => call.statement.includes("concept=ANY($2)"))!;
       expect(revenue.params).toEqual([date, [...REVENUE_CONCEPTS]]);
       expect(calls.filter((call) => call.statement.includes("concept=ANY($2)"))).toHaveLength(1);
-      expect(calls.filter((call) => call !== revenue).every((call) => call.params.length === 1)).toBe(true);
+      expect(calls.filter((call) => call !== revenue && !call.statement.includes("country='USA'")).every((call) => call.params.length === 1)).toBe(true);
     }
   });
 });

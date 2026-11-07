@@ -116,7 +116,7 @@ E10. Decide the AI role (owner)
 
 E11. Scoring sign-off (owner)
 - Depends on: E8.
-- Do: review three open choices: European macro uses a STOXX 600 ETF price trend (no ECB series collected); US rotation averages US names only; the traded-value floor counts primary-venue volume for European names. Thresholds in `docs/eodhd-universe.md` are provisional.
+- Do: review four open choices: a US candidate without a stored SEC form type counts as domestic when its EODHD symbols row is Common Stock with country USA (provisional since 2026-11-07, see `docs/eodhd-universe.md`); European macro uses a STOXX 600 ETF price trend (no ECB series collected); US rotation averages US names only; the traded-value floor counts primary-venue volume for European names. Thresholds in `docs/eodhd-universe.md` are provisional.
 - DoD: each choice is accepted or a change task is created. Accepted choices are noted in `docs/data.md`.
 
 E12. Cleanup
