@@ -4,7 +4,12 @@
 
 Baseline (read-only query on 2026-11-07): 511 instruments scored for 2026-11-06, up from 77. States: Criteria broken 289, Ignore 133, Watch 60, Wait 25, Insufficient/invalid data 2, Setup met 2. How it got there: `SCORE_EXTENDED=on` (owner-private, only with `EODHD_PRIVATE_USE=on`, #336) lets reconcile and daily score the `extended` list; judge, extract, sitemap and public pages are unchanged (D36 gate kept). The 330 new members were backdated from 2026-11-07 to 2026-11-06 once, through a reviewed Job, so they sit on the latest scan date; this is a deliberate baseline step and not how promotion works. Infra #73 sets the env and purges the web cache after daily; #74 sets the catalyst env. Fixes on the way: reconcile out of memory (#337, SEC companyfacts no longer cached in memory), catalyst covers the scored universe (#338), owner ticker listing for names without an `instrument_ids` row (#339), `EXSA.XETRA` backfilled for the European benchmark.
 
-Not yet checked by a person: the 8-name spot check of owner ticker pages against the database, and the BUY/ADD list for the 511. Check them first next session (`/en/scanner`, `/en/owner/data`, `/en/owner/data/ticker?ticker=...`).
+Operator spot check: 8 names (US and European) match the database for price, currency, revenue and EPS. Setup met is CRON and REGN (both US); judge ADD is still only those two. Dashboard and scanner show 511 (43 visible before). Check by eye next session (`/en/scanner`, `/en/owner/data`, `/en/owner/data/ticker?ticker=...`).
+
+Open after the baseline (from the operator report):
+- Many extended rule inputs read no data because their facts were first seen 2026-11-07 (point in time); expected to clear on the 2026-11-09 scan. Recheck then.
+- 367 names show a wrong sector; 21 of 25 LSE names have stale revenue; the European catalyst run has not run yet.
+- The dashboard HTML is 20 MB with 511 names; page it or trim it before it hurts load time or memory.
 
 DoD status:
 - E1 done (secret exists, paid monthly plan, 100,000 calls a day). E2 done (#303). E3 done (68,986 symbols on 16 exchanges; MI missing at the vendor).
