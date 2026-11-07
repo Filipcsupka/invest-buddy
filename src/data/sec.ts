@@ -89,7 +89,13 @@ export function revenueFromCompanyFacts(data: CompanyFacts, asOf: string): Reven
 }
 const cache = new Map<string, { day: string; value: unknown }>();
 let previousRequest = 0;
-async function secJson<T>(url: string): Promise<T> {
+/** Test hook: number of cached SEC bodies. */
+export const secCacheSize = () => cache.size;
+/**
+ * `keep` caches the parsed body for the day. Only the shared ticker index is kept: a companyfacts body is several MB and is
+ * read once per symbol, so keeping them grew reconcile's heap with every universe name until it ran out of memory (2026-11-07, 511 names).
+ */
+async function secJson<T>(url: string, keep = false): Promise<T> {
   const day = new Date().toISOString().slice(0,10);
   const saved = cache.get(url);
   if (saved?.day === day) return saved.value as T;
@@ -100,11 +106,11 @@ async function secJson<T>(url: string): Promise<T> {
   const response = await fetch(url, { headers: { "user-agent": userAgent, accept: "application/json" }, signal: AbortSignal.timeout(10000) });
   if (!response.ok) throw new Error(`SEC HTTP ${response.status}`);
   const value = await response.json() as T;
-  cache.set(url, { day, value });
+  if (keep) cache.set(url, { day, value });
   return value;
 }
 export async function secRevenue(symbol: string, asOf: string): Promise<RevenueResult | null> {
-  const tickers = await secJson<Record<string, { ticker: string; cik_str: number }>>("https://www.sec.gov/files/company_tickers.json");
+  const tickers = await secJson<Record<string, { ticker: string; cik_str: number }>>("https://www.sec.gov/files/company_tickers.json", true);
   const company = Object.values(tickers).find((entry) => entry.ticker.toUpperCase() === symbol.toUpperCase());
   if (!company) return null;
   const cik = String(company.cik_str).padStart(10,"0");
