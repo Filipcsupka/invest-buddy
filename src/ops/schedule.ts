@@ -59,6 +59,7 @@ export const EXPECTED_JOBS: ExpectedJob[] = [
   { cronJob: "eodhd-index-components", schedule: "15 1 * * 0", enabled: false, runJob: "eodhd-index-components", graceMinutes: 20 },
   { cronJob: "eodhd-market-cap", schedule: "40 1 * * 0", enabled: false, runJob: "eodhd-market-cap", graceMinutes: 40 },
   { cronJob: "eodhd-screener", schedule: "0 6 * * 2-6", enabled: false, runJob: "eodhd-screener", graceMinutes: 20 },
+  { cronJob: "eodhd-universe-seed", schedule: "0 2 * * 0", enabled: false, runJob: "eodhd-universe-seed", graceMinutes: 180 },
   { cronJob: "watchdog-noon", schedule: "0 12 * * *", enabled: false, runJob: null, graceMinutes: 15, note: "the watchdog does not watch itself; PL28 adds a dead-man check" },
 ];
 

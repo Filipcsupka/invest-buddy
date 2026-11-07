@@ -19,6 +19,7 @@
     "daily": "tsx src/jobs/daily.ts",
     "prices": "tsx src/jobs/prices.ts",
     "prices:eodhd": "tsx src/jobs/eodhd-prices.ts",
+    "universe:seed-eodhd": "tsx src/jobs/eodhd-universe-seed.ts",
     "markets:bars": "tsx src/jobs/eodhd-market-bars.ts",
     "etf:detail": "tsx src/jobs/eodhd-etf.ts",
     "markets:components": "tsx src/jobs/eodhd-index-components.ts",

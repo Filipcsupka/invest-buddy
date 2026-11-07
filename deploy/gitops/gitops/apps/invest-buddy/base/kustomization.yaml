@@ -11,6 +11,7 @@ resources:
   - extract-judge-cronjobs.yaml
   - review-calendar-cronjob.yaml
   - macro-cronjob.yaml
+  - eodhd-universe-seed-cronjob.yaml
   - earnings-calendar-cronjob.yaml
   - macro-calendar-cronjob.yaml
   - pool-bars-cronjob.yaml

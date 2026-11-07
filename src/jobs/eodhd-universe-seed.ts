@@ -1,0 +1,166 @@
+import pg from "pg";
+import type { BulkLastDayBar, EodBar, Fundamentals, Split } from "../data-providers/eodhd/client";
+import { EodhdClient, EodhdHttpError } from "../data-providers/eodhd/client";
+import { parseEodhdFundamentals } from "../data-providers/eodhd/fundamentals";
+import { insertFundamentals, type FundamentalRow } from "../collectors/sources/companyfacts";
+import { PostgresPriceRepository } from "../db/prices";
+import { eodhdClassification } from "../universe/sector";
+import { isCommonStock } from "../universe/select";
+import { normalizeCurrency, UNIVERSE_CURRENCIES, UNIVERSE_EXCHANGES } from "../universe/market";
+import { barsFromHistory, splitActions } from "./eodhd-prices";
+import { storeClassification } from "./eodhd-fundamentals";
+import { runLoggedJob } from "./job-log";
+
+export interface SeedListing { vendorSymbol: string; code: string; exchange: string; name: string; currency: string; type: string }
+export interface RankedSeed extends SeedListing { tradedValue: number }
+export interface SeedClient {
+  eodBulkLastDay(exchange: string, options: { filter: "extended" }): Promise<BulkLastDayBar[]>;
+  eod(symbol: string, options: { period: "d"; order: "a" }): Promise<EodBar[]>;
+  splits(symbol: string): Promise<Split[]>;
+  fundamentals(symbol: string): Promise<Fundamentals>;
+  getCallCosts(): Record<string, number>;
+}
+export interface SeedStore {
+  readySymbols(): Promise<Set<string>>;
+  save(listing: SeedListing, bars: ReturnType<typeof barsFromHistory>, facts: FundamentalRow[], payload: Fundamentals, today: string): Promise<void>;
+}
+export interface SeedOptions { topPerExchange: number; maxCalls: number; minPrice: number; dryRun?: boolean; today?: string }
+
+/** GBX is pence, so the local floor is expressed in pounds for LSE pence lines. */
+export function rankSeedCandidates(listings: SeedListing[], bulk: BulkLastDayBar[], limit: number, minPrice: number): RankedSeed[] {
+  const byCode = new Map(bulk.map((row) => [row.code, row]));
+  return listings.flatMap((listing) => {
+    if (!isCommonStock({ ticker: listing.vendorSymbol, vendorSymbol: listing.vendorSymbol, exchange: listing.exchange,
+      name: listing.name, securityType: listing.type })) return [];
+    const row = byCode.get(listing.code);
+    const currency = normalizeCurrency(listing.currency);
+    if (!currency || !row || typeof row.close !== "number" || !Number.isFinite(row.close) ||
+      typeof row.volume !== "number" || !Number.isFinite(row.volume) || row.volume <= 0 ||
+      row.close < minPrice * (currency === "GBX" ? 100 : 1)) return [];
+    return [{ ...listing, tradedValue: row.close * row.volume }];
+  }).sort((a, b) => b.tradedValue - a.tradedValue || a.vendorSymbol.localeCompare(b.vendorSymbol)).slice(0, limit);
+}
+
+const total = (costs: Record<string, number>) => Object.values(costs).reduce((sum, cost) => sum + cost, 0);
+const fatal = (error: unknown) => error instanceof EodhdHttpError && [401, 402, 403].includes(error.status);
+
+/** Bulk prices shortlist each exchange; only its top unused names get history and fundamentals. */
+export async function runUniverseSeed(client: SeedClient, store: SeedStore, listings: SeedListing[], options: SeedOptions) {
+  const ready = await store.readySymbols();
+  const eligible = listings.filter((row) => {
+    const currency = normalizeCurrency(row.currency);
+    return row.exchange !== "US" && currency !== null && UNIVERSE_CURRENCIES.some((known) => known === currency)
+      && !(row.exchange === "LSE" && currency === "GBP")
+      && isCommonStock({ ticker: row.vendorSymbol, vendorSymbol: row.vendorSymbol, exchange: row.exchange,
+        name: row.name, securityType: row.type });
+  });
+  const groups = [...new Set(eligible.map((row) => row.exchange))];
+  let reserved = total(client.getCallCosts()), ranked = 0, saved = 0, failures = 0, skippedReady = 0;
+  let stoppedReason: string | null = null;
+  const canCall = (cost: number) => Math.max(reserved, total(client.getCallCosts())) + cost <= options.maxCalls;
+  const used = (cost: number) => { reserved = Math.max(reserved + cost, total(client.getCallCosts())); };
+  for (const exchange of groups) {
+    const pending = eligible.filter((row) => row.exchange === exchange && !ready.has(row.vendorSymbol));
+    skippedReady += eligible.filter((row) => row.exchange === exchange).length - pending.length;
+    if (!pending.length) continue;
+    if (!canCall(100)) { stoppedReason = "call_budget"; break; }
+    let bulk: BulkLastDayBar[];
+    try { bulk = await client.eodBulkLastDay(exchange, { filter: "extended" }); }
+    catch (error) {
+      used(100); failures++;
+      if (fatal(error)) { stoppedReason = `vendor_http_${(error as EodhdHttpError).status}`; break; }
+      continue;
+    }
+    used(100);
+    if (!Array.isArray(bulk) || !bulk.length) { failures++; continue; }
+    const choices = rankSeedCandidates(pending, bulk, options.topPerExchange, options.minPrice);
+    ranked += choices.length;
+    for (const listing of choices) {
+      if (options.dryRun) continue;
+      if (!canCall(12)) { stoppedReason = "call_budget"; break; }
+      try {
+        const history = await client.eod(listing.vendorSymbol, { period: "d", order: "a" });
+        used(1);
+        const splits = await client.splits(listing.vendorSymbol);
+        used(1);
+        const payload = await client.fundamentals(listing.vendorSymbol);
+        used(10);
+        const actions = splitActions(listing.vendorSymbol, splits as Split[]);
+        const bars = barsFromHistory(history as EodBar[], actions);
+        const facts = parseEodhdFundamentals(payload, listing.vendorSymbol, options.today ?? new Date().toISOString().slice(0, 10)).rows;
+        if (!facts.length) { failures++; continue; }
+        await store.save(listing, bars, facts, payload, options.today ?? new Date().toISOString().slice(0, 10));
+        saved++;
+        ready.add(listing.vendorSymbol);
+      } catch (error) {
+        reserved = Math.max(reserved, total(client.getCallCosts()));
+        failures++;
+        process.stderr.write(`${JSON.stringify({ event: "eodhd_universe_seed_symbol_failed", symbol: listing.vendorSymbol,
+          reason: error instanceof EodhdHttpError ? `HTTP ${error.status}` : error instanceof Error ? error.name : "error" })}\n`);
+        if (fatal(error)) { stoppedReason = `vendor_http_${(error as EodhdHttpError).status}`; break; }
+      }
+    }
+    if (stoppedReason) break;
+  }
+  return { exchanges: groups.length, ranked, saved, skippedReady, failures, estimatedCalls: Math.max(reserved, total(client.getCallCosts())), stoppedReason,
+    dryRun: Boolean(options.dryRun) };
+}
+
+export class PgSeedStore implements SeedStore {
+  constructor(private readonly db: pg.Pool) {}
+  async readySymbols() {
+    const rows = await this.db.query<{ vendor_symbol: string }>("SELECT vendor_symbol FROM eodhd_universe_seed WHERE seeded_at > now() - interval '30 days'");
+    return new Set(rows.rows.map((row) => row.vendor_symbol));
+  }
+  async save(listing: SeedListing, bars: ReturnType<typeof barsFromHistory>, facts: FundamentalRow[], payload: Fundamentals, today: string) {
+    await this.db.query(`INSERT INTO instruments (ticker,name,sector,tier,source) VALUES ($1,$2,'Unclassified',NULL,'discovery')
+      ON CONFLICT (ticker) DO NOTHING`, [listing.vendorSymbol, listing.name]);
+    const prices = new PostgresPriceRepository(this.db);
+    await prices.upsertBars(listing.vendorSymbol, bars, { sourceId: "eodhd", vendorSymbol: listing.vendorSymbol, currency: normalizeCurrency(listing.currency) });
+    await insertFundamentals(this.db, facts, "eodhd");
+    await storeClassification(this.db, listing.vendorSymbol, eodhdClassification(payload.General), today);
+    await this.db.query(`INSERT INTO eodhd_universe_seed (vendor_symbol,last_bar_date,bar_count,fact_count)
+      VALUES ($1,$2,$3,$4) ON CONFLICT (vendor_symbol) DO UPDATE SET seeded_at=now(),last_bar_date=EXCLUDED.last_bar_date,
+        bar_count=EXCLUDED.bar_count,fact_count=EXCLUDED.fact_count`, [listing.vendorSymbol, bars.at(-1)!.date, bars.length, facts.length]);
+  }
+}
+
+export function parseSeedArgs(args: string[]) {
+  const out: SeedOptions & { exchanges?: string[] } = { topPerExchange: 75, maxCalls: 19_000, minPrice: 5, dryRun: false };
+  for (let i = 0; i < args.length; i++) {
+    const flag = args[i];
+    if (flag === "--dry-run") out.dryRun = true;
+    else if (flag === "--top-per-exchange" || flag === "--max-calls" || flag === "--min-price") {
+      const value = Number(args[++i]);
+      if (!Number.isFinite(value) || value <= 0 || (flag !== "--min-price" && !Number.isInteger(value))) throw new Error(`Invalid ${flag}`);
+      if (flag === "--top-per-exchange") out.topPerExchange = value;
+      if (flag === "--max-calls") out.maxCalls = value;
+      if (flag === "--min-price") out.minPrice = value;
+    } else if (flag === "--exchanges") {
+      out.exchanges = args[++i]?.split(",").map((x) => x.trim().toUpperCase());
+      if (!out.exchanges?.length || out.exchanges.some((x) => x === "US" || !UNIVERSE_EXCHANGES.some((known) => known === x))) throw new Error("Invalid --exchanges");
+    } else throw new Error(`Unknown seed option ${flag}`);
+  }
+  if (out.topPerExchange > 500 || out.maxCalls > 20_000) throw new Error("Seed limits exceed the per-run bounds");
+  return out;
+}
+
+async function main() {
+  if (!process.env.DATABASE_URL || !process.env.EODHD_API_KEY) throw new Error("DATABASE_URL and EODHD_API_KEY are required");
+  const options = parseSeedArgs(process.argv.slice(2));
+  const exchanges = options.exchanges ?? UNIVERSE_EXCHANGES.filter((row) => row !== "US");
+  const db = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+  try {
+    const result = await db.query<{ vendor_symbol: string; code: string; exchange: string; name: string; currency: string; type: string }>(
+      `SELECT vendor_symbol,code,exchange,name,currency,type FROM symbols WHERE NOT delisted AND exchange=ANY($1::text[])
+       AND currency IS NOT NULL AND type IS NOT NULL ORDER BY exchange,vendor_symbol`, [exchanges]);
+    const listings = result.rows.map((row) => ({ vendorSymbol: row.vendor_symbol, code: row.code, exchange: row.exchange,
+      name: row.name, currency: row.currency, type: row.type }));
+    const counts = await runUniverseSeed(new EodhdClient({ maxRetries: 0 }), new PgSeedStore(db), listings, options);
+    if (counts.stoppedReason?.startsWith("vendor_http_")) process.exitCode = 1;
+    return counts;
+  } finally { await db.end(); }
+}
+
+if (/(?:^|[/\\])eodhd-universe-seed\.(?:ts|js)$/.test(process.argv[1] ?? ""))
+  void runLoggedJob("eodhd-universe-seed", main, process.argv.includes("--dry-run") ? { store: null } : {});
