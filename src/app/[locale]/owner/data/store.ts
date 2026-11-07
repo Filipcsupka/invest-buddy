@@ -52,6 +52,8 @@ export async function ownerTickerData(db: Db, ticker: string) {
     rows(db, `SELECT i.ticker,i.name,i.sector,s.vendor_symbol,s.exchange,s.currency,s.country,s.sector AS vendor_sector,s.industry,s.sector_observed_on::text,s.last_seen::text,s.delisted FROM instruments i LEFT JOIN instrument_ids ids ON ids.ticker=i.ticker AND ids.valid_to IS NULL LEFT JOIN LATERAL (
       SELECT s.* FROM symbols s WHERE s.vendor_symbol=ids.vendor_symbols->>'eodhd'
         OR (s.code=split_part(i.ticker,'.',1) AND (upper(s.exchange)=upper(ids.exchange) OR (upper(ids.exchange) IN ('NASDAQ','NYSE') AND s.exchange='US')))
+        -- Names added by selection or seeding have no instrument_ids row; their key is the vendor symbol (SAP.XETRA) or a bare US code.
+        OR (ids.ticker IS NULL AND s.vendor_symbol = CASE WHEN position('.' IN i.ticker) > 0 THEN i.ticker ELSE i.ticker || '.US' END)
       ORDER BY COALESCE(s.vendor_symbol=ids.vendor_symbols->>'eodhd',false) DESC,s.delisted,s.last_seen DESC LIMIT 1
     ) s ON true WHERE i.ticker=$1 LIMIT 1`, [ticker]),
     rows(db, `SELECT bar_date::text,open::text,high::text,low::text,close::text,volume::text,currency,vendor_symbol,source_id,fetched_at::text FROM daily_bars WHERE ticker=$1 AND source_id='eodhd' ORDER BY bar_date DESC LIMIT 20`, [ticker]),

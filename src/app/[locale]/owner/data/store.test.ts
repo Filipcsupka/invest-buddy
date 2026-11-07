@@ -25,3 +25,11 @@ it("matches a Nasdaq instrument to its US symbol without case sensitivity", asyn
   const identity = sql.find((query) => query.includes("FROM instruments i")) ?? "";
   expect(identity).toContain("upper(ids.exchange) IN ('NASDAQ','NYSE')");
 });
+
+it("finds the listing of a name without an instrument_ids row by its vendor key", async () => {
+  const sql: string[] = [];
+  const db = { query: async (text: string) => { sql.push(text); return { rows: [] }; } } as unknown as Pick<pg.Pool, "query">;
+  await ownerTickerData(db, "AUTO.LSE");
+  const identity = sql.find((query) => query.includes("FROM instruments i")) ?? "";
+  expect(identity).toContain("ids.ticker IS NULL AND s.vendor_symbol = CASE WHEN position('.' IN i.ticker) > 0 THEN i.ticker ELSE i.ticker || '.US' END");
+});
