@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { BulkLastDayBar, Fundamentals } from "../data-providers/eodhd/client";
-import { rankSeedCandidates, runUniverseSeed, type SeedListing } from "./eodhd-universe-seed";
+import { parseSeedArgs, rankSeedCandidates, runUniverseSeed, seedTicker, type SeedListing } from "./eodhd-universe-seed";
 
 const real = (name: string) => JSON.parse(readFileSync(join(process.cwd(), "src/data-providers/eodhd/fixtures/real", name), "utf8"));
 const lse = (real("lse-symbols.json").response as { Code: string; Name: string; Currency: string; Type: string }[])
@@ -61,5 +61,24 @@ describe("EU universe seeding", () => {
     };
     expect((await runUniverseSeed(client, store, lse.slice(0, 1), { topPerExchange: 1, maxCalls: 100, minPrice: 5 })).saved).toBe(0);
     expect((await runUniverseSeed(client, store, lse.slice(0, 1), { topPerExchange: 1, maxCalls: 200, minPrice: 5, dryRun: true })).saved).toBe(0);
+  });
+  it("seeds US names only when asked, under their bare code", async () => {
+    expect(parseSeedArgs([]).exchanges).toBeUndefined();
+    expect(parseSeedArgs(["--exchanges", "US", "--top-per-exchange", "400"])).toMatchObject({ exchanges: ["US"], topPerExchange: 400 });
+    expect(() => parseSeedArgs(["--exchanges", "XX"])).toThrow();
+    const us: SeedListing = { vendorSymbol: "NEWCO.US", code: "NEWCO", exchange: "US", name: "NewCo Inc", currency: "USD", type: "Common Stock" };
+    expect(seedTicker(us)).toBe("NEWCO");
+    expect(seedTicker(lse[0])).toBe(lse[0].vendorSymbol);
+    const saved: string[] = [];
+    const store = { readySymbols: async () => new Set<string>(), save: async (listing: SeedListing, _bars: unknown[], facts: { ticker: string }[]) => { saved.push(`${seedTicker(listing)}:${facts[0].ticker}`); } };
+    const client = {
+      eodBulkLastDay: async () => [{ ...eod("lse-hsba-eod.json", "NEWCO"), close: 20, volume: 1_000_000 }],
+      eod: async () => real("lse-hsba-eod.json").response,
+      splits: async () => [], fundamentals: async () => real("hsba-full.json").response as Fundamentals,
+      getCallCosts: () => ({ "eod-bulk-last-day": 100, eod: 1, splits: 1, fundamentals: 10 }),
+    };
+    const result = await runUniverseSeed(client, store, [us], { topPerExchange: 5, maxCalls: 300, minPrice: 5, today: "2026-11-07" });
+    expect(result.saved).toBe(1);
+    expect(saved).toEqual(["NEWCO:NEWCO"]);
   });
 });
