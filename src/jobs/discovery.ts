@@ -619,8 +619,8 @@ async function main() {
     const stored = async (table: "daily_bars" | "discovery_price_bars", symbol: string): Promise<OHLCV[]> => {
       const column = table === "daily_bars" ? "ticker" : "symbol";
       const result = await pool.query<{ date: string; open: string; high: string; low: string; close: string; volume: string }>(
-        `SELECT bar_date::text AS date,open,high,low,close,volume FROM ${table} WHERE ${column}=$1 AND bar_date <= $2::date ORDER BY bar_date`, [symbol, date]);
-      return result.rows.map((row) => ({ date: row.date, open: Number(row.open), high: Number(row.high), low: Number(row.low), close: Number(row.close), volume: Number(row.volume) }));
+        `SELECT bar_date::text AS date,open,high,low,close,volume FROM ${table} WHERE ${column}=$1 AND bar_date <= $2::date ORDER BY bar_date DESC LIMIT 520`, [symbol, date]);
+      return result.rows.reverse().map((row) => ({ date: row.date, open: Number(row.open), high: Number(row.high), low: Number(row.low), close: Number(row.close), volume: Number(row.volume) }));
     };
     const cache = new Map<string, Promise<OHLCV[]>>();
     const fetchBars = async (symbol: string): Promise<OHLCV[]> => {
