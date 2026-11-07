@@ -99,6 +99,19 @@ describe("EODHD catalyst job", () => {
     expect(result).toMatchObject({ failures: 1, failedSymbols: "GHOST" });
   });
 
+  it("reads the extended list only under SCORE_EXTENDED in private mode", async () => {
+    const seen: string[] = [];
+    const db = { query: async (sql: string) => { seen.push(sql); return { rows: [] }; } } as unknown as pg.Pool;
+    await loadCatalystSubjects(db, "2026-10-21");
+    expect(seen[0]).toContain("NOT IN ('benchmark', 'extended')");
+    vi.stubEnv("SCORE_EXTENDED", "on");
+    vi.stubEnv("EODHD_PRIVATE_USE", "on");
+    try {
+      await loadCatalystSubjects(db, "2026-10-21");
+      expect(seen[1]).not.toContain("'extended'");
+    } finally { vi.unstubAllEnvs(); }
+  });
+
   it("does not match a ticker by code alone on a non-US exchange", async () => {
     const db = { query: async (sql: string) => {
       if (sql.includes("FROM universe_membership")) return { rows: [{ ticker: "AI", name: "C3.ai", sector: "x", tier: 1 }] };

@@ -25,12 +25,12 @@ export interface CatalystClient { news(options: { symbol: string; from: string; 
 export interface CatalystOptions { dryRun?: boolean; now?: Date; only?: string[]; maxNewsSymbols?: number; subjects?: CatalystSubject[]; calendarRows?: CalendarObservation[]; fixtureDir?: string }
 
 /**
- * Only scored non-US home listings enter this collector; their latest score controls news spend.
+ * Only scored non-US home listings enter this collector (with SCORE_EXTENDED, the extended list too); their latest score controls news spend.
  * The vendor symbol comes from the explicit EODHD mapping or the home-listing resolver the price job uses (US names resolve to .US and stay out).
  * A ticker the resolver cannot place is returned in `unresolved`, never guessed from its code.
  */
 export async function loadCatalystSubjects(db: pg.Pool, asOf: string, only?: string[]): Promise<{ subjects: CatalystSubject[]; unresolved: string[] }> {
-  const universe = (await loadUniverse(db, asOf)).map((row) => row.symbol).filter((ticker) => !only || only.includes(ticker));
+  const universe = (await loadUniverse(db, asOf, { scoring: true })).map((row) => row.symbol).filter((ticker) => !only || only.includes(ticker));
   if (!universe.length) return { subjects: [], unresolved: [] };
   const { symbols, unmapped } = await loadEodhdPriceSymbols(db, universe);
   const scores = await db.query<{ ticker: string; total: number | null }>(`SELECT DISTINCT ON (ticker) ticker, total FROM score_results
