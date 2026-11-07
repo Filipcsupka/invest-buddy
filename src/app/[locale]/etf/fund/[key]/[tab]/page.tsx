@@ -16,10 +16,14 @@ import { resolveLocale } from "../../../../locale";
 export const dynamic = "force-dynamic";
 type Props = { params: Promise<{ locale: string; key: string; tab: string }> };
 const validKey = (key: string) => /^[A-Za-z0-9:._-]{1,80}$/.test(key);
+const decodedKey = (key: string) => {
+  try { return decodeURIComponent(key); } catch { return ""; }
+};
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const locale = await resolveLocale(params);
-  const { key, tab } = await params;
+  const { key: rawKey, tab } = await params;
+  const key = decodedKey(rawKey);
   const m = getEtfDetailMessages(locale);
   const path = `/etf/fund/${encodeURIComponent(key)}/${encodeURIComponent(tab)}`;
   return { ...pageMetadata(locale, path, isEtfTab(tab) ? m[tab] : m.vendorData, m.vendorLede), robots: { index: false, follow: false } };
@@ -29,7 +33,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 async function EtfFundTabPage({ params }: Props) {
   await assertViewable("eodhd");
   const locale = await resolveLocale(params);
-  const { key, tab } = await params;
+  const { key: rawKey, tab } = await params;
+  const key = decodedKey(rawKey);
   if (!validKey(key) || !isEtfTab(tab)) notFound();
   const result = await etfCatalogDetail(key.toUpperCase());
   if (!result) notFound();

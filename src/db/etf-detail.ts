@@ -16,6 +16,10 @@ const num = (value: unknown): number | null => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 };
+const nonzeroReturn = (value: unknown): number | null => {
+  const parsed = num(value);
+  return parsed === 0 ? null : parsed;
+};
 const text = (value: unknown): string | null => typeof value === "string" && value.trim() ? value.trim() : null;
 const isoDate = (value: unknown): string | null => {
   const raw = text(value);
@@ -96,8 +100,8 @@ export function parseEtfData(response: unknown): ParsedEtfData | null {
     // IWDA.AS reported Max_Annual_Mgmt_Charge=0 and Ongoing_Charge=0.1974; a zero ongoing charge is treated as missing.
     ongoingChargePct: ongoing !== null && ongoing > 0 && ongoing <= 10 ? ongoing : null,
     netExpenseRatioPct: expenseRatioPct(etf.NetExpenseRatio),
-    retYtdPct: num(performance.Returns_YTD), ret1yPct: num(performance.Returns_1Y), ret3yPct: num(performance.Returns_3Y),
-    ret5yPct: num(performance.Returns_5Y), ret10yPct: num(performance.Returns_10Y),
+    retYtdPct: num(performance.Returns_YTD), ret1yPct: num(performance.Returns_1Y), ret3yPct: nonzeroReturn(performance.Returns_3Y),
+    ret5yPct: nonzeroReturn(performance.Returns_5Y), ret10yPct: nonzeroReturn(performance.Returns_10Y),
     vol1yPct: num(performance["1y_Volatility"]), vol3yPct: num(performance["3y_Volatility"]), sharpe3y: num(performance["3y_SharpRatio"]),
     holdingsCount: count !== null && Number.isInteger(count) && count >= 0 ? count : null, holdingsListed: listed, holdings: rows,
     exposure: [
@@ -244,7 +248,7 @@ export interface EtfDividendRow { exDate: string; amount: number | null; currenc
 export interface EtfBar { date: string; open: number; high: number; low: number; close: number; volume: number }
 export interface EtfDetailView { stats: EtfStats | null; vendorSymbol: string | null; currency: string | null; holdings: EtfHoldingRow[]; exposure: Record<ExposureKind, { label: string; weightPct: number }[]>; dividends: EtfDividendRow[]; bars: EtfBar[] }
 
-const n = (value: unknown): number | null => value === null || value === undefined ? null : Number(value);
+const n = (value: unknown): number | null => value === null || value === undefined || value === "" ? null : Number(value);
 const day = (value: unknown): string | null => value == null ? null : value instanceof Date ? value.toISOString().slice(0, 10) : String(value).slice(0, 10);
 type StatsRow = Record<string, unknown>;
 export function mapStats(row: StatsRow): EtfStats {
@@ -253,7 +257,7 @@ export function mapStats(row: StatsRow): EtfStats {
     tradingCurrency: (row.trading_currency as string | null) ?? null, totalAssets: n(row.total_assets), totalAssetsCurrency: (row.total_assets_currency as string | null) ?? null,
     yieldPct: n(row.yield_pct), dividendFrequency: (row.dividend_frequency as string | null) ?? null, inceptionDate: day(row.inception_date),
     ongoingChargePct: n(row.ongoing_charge_pct), netExpenseRatioPct: n(row.net_expense_ratio_pct),
-    retYtdPct: n(row.ret_ytd_pct), ret1yPct: n(row.ret_1y_pct), ret3yPct: n(row.ret_3y_pct), ret5yPct: n(row.ret_5y_pct), ret10yPct: n(row.ret_10y_pct),
+    retYtdPct: n(row.ret_ytd_pct), ret1yPct: n(row.ret_1y_pct), ret3yPct: nonzeroReturn(row.ret_3y_pct), ret5yPct: nonzeroReturn(row.ret_5y_pct), ret10yPct: nonzeroReturn(row.ret_10y_pct),
     vol1yPct: n(row.vol_1y_pct), vol3yPct: n(row.vol_3y_pct), sharpe3y: n(row.sharpe_3y), holdingsCount: n(row.holdings_count), holdingsListed: n(row.holdings_listed),
     fetchedAt: row.fetched_at instanceof Date ? row.fetched_at.toISOString() : String(row.fetched_at ?? ""),
   };

@@ -12,4 +12,11 @@ describe("diffStates", () => {
     ], "2026-10-16");
     expect(out).toEqual([{ ticker: "AAA", from: "wait", to: "watch", asOf: "2026-10-16" }]);
   });
+  it("emits one change when a ticker has duplicate snapshots for a day", () => {
+    expect(diffStates([
+      row("AMD", "2026-10-15", "Wait"),
+      row("AMD", "2026-10-16", "Watch"),
+      row("AMD", "2026-10-16", "Watch"),
+    ], "2026-10-16")).toEqual([{ ticker: "AMD", from: "wait", to: "watch", asOf: "2026-10-16" }]);
+  });
 });

@@ -27,22 +27,22 @@ export default async function OwnerDataPage({ params, searchParams }: Props) {
   const etfPage = Number((await searchParams)?.etfPage ?? 1);
   const data = await ownerDataOverview(db, etfPage);
   const section = (id: string, title: string, rows: Record<string, unknown>[], columns: { key: string; label: string }[]) =>
-    <section className={s.section} aria-labelledby={id} key={id}><h2 id={id}>{title}</h2><DataTable rows={rows} columns={columns} empty={m.empty} /></section>;
+    <section className={s.section} aria-labelledby={id} key={id}><h2 id={id}>{title}</h2><DataTable rows={rows} columns={columns} empty={m.empty} locale={locale} /></section>;
   return <article className="frame page" data-owner-data="">
     <div className={s.stack}>
       <header className={s.head}><h1 className="title">{m.title}</h1><p>{m.lede}</p></header>
       <section className={s.section} aria-labelledby="ticker"><h2 id="ticker">{m.tickerTitle}</h2><p>{m.tickerHint}</p>
         <form className={s.form} action={`/${locale}/owner/data/ticker`} method="get"><label>{m.tickerLabel}<input name="ticker" maxLength={20} autoCapitalize="characters" required /></label><button className="button" type="submit">{m.open}</button></form>
       </section>
-      {section("source-freshness", m.source, data.sources, [{ key: "family", label: m.source }, { key: "records", label: m.records }, { key: "latest", label: m.latest }])}
+      {section("source-freshness", m.source, data.sources.map((row) => ({ ...row, family: m.families[String(row.family) as keyof typeof m.families] ?? row.family })), [{ key: "family", label: m.source }, { key: "records", label: m.records }, { key: "latest", label: m.latest }])}
       {section("usage", m.usage, data.usage, [{ key: "day", label: m.day }, { key: "job", label: m.job }, { key: "requests", label: m.requests }, { key: "credits", label: m.credits }])}
       {section("call-log", m.callLog, data.callLog, [{ key: "run_date", label: m.day }, { key: "job", label: m.job }, { key: "calls", label: m.calls }, { key: "source_id", label: m.source }])}
-      {section("symbols", m.exchanges, data.exchanges, [{ key: "exchange", label: m.exchanges }, { key: "active", label: m.active }, { key: "symbols", label: m.total }, { key: "last_seen", label: m.latest }])}
-      {section("universe", m.universe, data.universe, [{ key: "exchange", label: m.exchanges }, { key: "list", label: m.list }, { key: "tickers", label: m.tickers }, { key: "symbols", label: m.tickerLabel }, { key: "latest_change", label: m.latest }])}
-      {section("etf", m.etfs, data.etfs, [{ key: "listing_key", label: m.tickerLabel }, { key: "name", label: "ETF" }, { key: "exchange", label: m.exchanges }, { key: "ter_pct", label: m.ter }, { key: "aum_usd_m", label: m.aum }, { key: "holdings_count", label: m.holdings }, { key: "region", label: m.region }, { key: "enrichment_status", label: m.status }, { key: "enriched_at", label: m.enriched }, { key: "enrichment_source", label: m.source }])}
+      {section("symbols", m.exchanges, data.exchanges, [{ key: "exchange", label: m.exchange }, { key: "active", label: m.active }, { key: "symbols", label: m.total }, { key: "last_seen", label: m.latest }])}
+      {section("universe", m.universe, data.universe, [{ key: "exchange", label: m.exchange }, { key: "list", label: m.list }, { key: "tickers", label: m.tickers }, { key: "symbols", label: m.tickerLabel }, { key: "latest_change", label: m.latest }])}
+      {section("etf", m.etfs, data.etfs, [{ key: "listing_key", label: m.tickerLabel }, { key: "name", label: "ETF" }, { key: "exchange", label: m.exchange }, { key: "ter_pct", label: m.ter }, { key: "aum_usd_m", label: m.aum }, { key: "holdings_count", label: m.holdings }, { key: "region", label: m.region }, { key: "enrichment_status", label: m.status }, { key: "enriched_at", label: m.enriched }, { key: "enrichment_source", label: m.source }])}
       {data.etfPages > 1 && <nav className={s.actions} aria-label={m.etfs}>{data.etfPage > 1 && <Link href={`/${locale}/owner/data?etfPage=${data.etfPage - 1}#etf`}>{locale === "sk" ? "Predchádzajúca" : "Previous"}</Link>}<span>{data.etfPage} / {data.etfPages}</span>{data.etfPage < data.etfPages && <Link href={`/${locale}/owner/data?etfPage=${data.etfPage + 1}#etf`}>{locale === "sk" ? "Ďalšia" : "Next"}</Link>}</nav>}
       {section("macro", m.macro, data.macro, [{ key: "series_id", label: m.source }, { key: "obs_date", label: m.latest }, { key: "value", label: m.records }, { key: "source_id", label: m.source }, { key: "observed_at", label: m.enriched }])}
-      {section("assets", m.assets, data.assets, [{ key: "vendor_symbol", label: m.tickerLabel }, { key: "asset_class", label: m.assetClass }, { key: "name", label: m.assets }, { key: "exchange", label: m.exchanges }, { key: "currency", label: m.currency }, { key: "bar_date", label: m.latest }, { key: "close", label: m.close }, { key: "source_id", label: m.source }])}
+      {section("assets", m.assets, data.assets, [{ key: "vendor_symbol", label: m.tickerLabel }, { key: "asset_class", label: m.assetClass }, { key: "name", label: m.assets }, { key: "exchange", label: m.exchange }, { key: "currency", label: m.currency }, { key: "bar_date", label: m.latest }, { key: "close", label: m.close }, { key: "source_id", label: m.source }])}
       {section("jobs", m.jobs, data.jobs, [{ key: "job", label: m.job }, { key: "status", label: m.status }, { key: "started_at", label: m.started }, { key: "ended_at", label: m.ended }, { key: "counts", label: m.details }])}
       <p><Link href={`/${locale}/owner/horizons`}>{locale === "sk" ? "Horizontové profily" : "Horizon profiles"}</Link></p>
     </div>
