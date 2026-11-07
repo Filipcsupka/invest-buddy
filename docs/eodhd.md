@@ -145,3 +145,7 @@ npm run fundamentals:eodhd -- --dry-run --fixture-dir src/data-providers/eodhd/f
 ```
 
 With a configured database and key, `--dry-run` fetches and parses due symbols without storing rows. The job itself does not install a CronJob; that belongs in the infrastructure repository. The SEC `companyfacts`/filing-watch revenue and shares paths and Alpha Vantage `EARNINGS`/`EARNINGS_CALENDAR` paths become redundant for covered symbols once EODHD is verified. They remain in place as fallbacks and for comparison.
+
+## Judge gates with stored facts
+
+With `EODHD_PRIVATE_USE=on` the judge reads stored EODHD facts, which are current as of the run, so `--gate-from-db` takes the newest pending gate instead of the oldest. When that gate is consumed, older pending gates get `judged_at` and `judge_superseded_by` (migration 132) and no model call. Their rows stay. Without private use the judge still waits for extraction and takes gates oldest first.

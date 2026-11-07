@@ -24,8 +24,9 @@ export async function GET(request: Request) {
   try {
     type GateRow = { gate_date: string; symbols: string[]; reasons: Record<string, string[]>; accessions: Record<string, string[]>; extracted_at: Date | null; judged_at: Date | null; revision: number };
     const columns = "gate_date::text,symbols,reasons,accessions,extracted_at,judged_at,revision";
+    // Stored facts are current as of today, so the judge takes the newest pending gate; consuming it supersedes the older ones (POST).
     const pending = url.searchParams.has("date") ? null : await pool.query<GateRow>(
-      `SELECT ${columns} FROM scheduled_gates WHERE gate_date <= $1::date AND ${stage === "extract" ? "extracted_at IS NULL" : judgeFromStoredFacts ? "judged_at IS NULL" : "judged_at IS NULL AND extracted_at IS NOT NULL"} ORDER BY gate_date LIMIT 1`, [date]);
+      `SELECT ${columns} FROM scheduled_gates WHERE gate_date <= $1::date AND ${stage === "extract" ? "extracted_at IS NULL" : judgeFromStoredFacts ? "judged_at IS NULL" : "judged_at IS NULL AND extracted_at IS NOT NULL"} ORDER BY gate_date${judgeFromStoredFacts ? " DESC" : ""} LIMIT 1`, [date]);
     const result = pending?.rows.length ? pending : await pool.query<GateRow>(
       `SELECT ${columns} FROM scheduled_gates WHERE gate_date=$1::date`, [date]);
     if (!result.rows.length) return Response.json({ error: `No detect gate for ${date}` }, { status: 404 });
@@ -51,6 +52,8 @@ export async function POST(request: Request) {
     const column = body.stage === "extract" ? "extracted_at" : "judged_at";
     const result = await pool.query(`UPDATE scheduled_gates SET ${column}=COALESCE(${column},now()) WHERE gate_date=$1::date AND revision=$2${body.stage === "judge" && !judgeFromStoredFacts ? " AND extracted_at IS NOT NULL" : ""} RETURNING gate_date`, [body.date, body.revision]);
     if (!result.rowCount) return Response.json({ error: "Gate unavailable" }, { status: 409 });
+    // Older pending gates are closed without a model call. The row stays; judge_superseded_by records the gate that replaced it.
+    if (judgeFromStoredFacts) await pool.query("UPDATE scheduled_gates SET judged_at=now(),judge_superseded_by=$1::date WHERE gate_date<$1::date AND judged_at IS NULL", [body.date]);
     return Response.json({ recorded: true });
   } finally { await pool.end(); }
 }
