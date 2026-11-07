@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Judge step (phase C). Fixed rules in code (src/engine/signals.ts, served by the web's judge-input route) decide the action,
 // the size tier and the three setup ratings from data alone. The owner's portfolio baseline is optional: it only fills the private
-// EUR band, and the model never sees it. This script sends only the symbols whose decision changed to ONE `claude -p`
+// EUR band, and the model never sees it. This script sends each batch of changed symbols to one `claude -p`
 // call on the subscription CLI login (no API key). The model writes the wording and may only downgrade a buy to WATCH or flag
 // a conflict, each with an evidence url from the input. The script validates the JSON against scanner/schema/judge-output.schema.json,
 // rejects figures that are not in the input, merges the fixed decision with the wording and posts it to /api/ingest/ideas.
@@ -25,8 +25,7 @@ import { reserveBudget, finishBudget } from "./ai-budget.mjs";
 import { checkMonthlyBudget, expectedTokens } from "./monthly-budget.mjs";
 import { readGate, consumeGate as consumeGateRaw, gateTradingDay } from "./gate-db.mjs";
 
-const dayBefore = (now) => new Date(now.getTime() - 86400000).toISOString().slice(0, 10);
-/** Date of the gate this run consumed, so the entry point can go on to the next pending gate. */
+/** Date of the gate this run advanced, so the entry point can fetch the next page. */
 let consumedGateDate = null;
 const consumeGate = async (...args) => { await consumeGateRaw(...args); consumedGateDate = args[3]; };
 import { attachClaudeUsage, attachCliUsage, cutoffError, cutoffLine, CUTOFF_EXIT_CODE } from "./anthropic-cutoff.mjs";
@@ -372,18 +371,24 @@ async function main() {
   log(`judge ${runId} asOf=${asOf} model=${o.model} mode=${o.agentMode ? `agent(max ${o.maxTurns} turns)` : "single call, no tools"} maxSymbols=${o.maxSymbols} dryRun=${o.dryRun} force=${o.force} offline=${Boolean(o.inputFile)}`);
   if (!gate && !o.force) { log("--gate-from-db or --symbols-file is required; use --force for a manual scheduled review"); process.exit(2); }
   if (gate && !Array.isArray(gate.symbols)) { log("symbols file must contain a symbols array"); process.exit(2); }
-  if (gate && !gate.symbols.length) { log("nothing changed; 0 model calls"); if (o.gateFromDb && !o.dryRun && !gate.consumed) await consumeGate(o.baseUrl, token, "judge", gate.asOf, gate.revision); return; }
+  if (gate && !gate.symbols.length) { log("nothing changed; 0 model calls"); if (o.gateFromDb && !o.dryRun && !gate.consumed) await consumeGate(o.baseUrl, token, "judge", gate.asOf, gate.revision, []); return; }
   if (!token && !offline) token = getToken();
   if (!token && !offline) { log("no INGEST_TOKEN; aborting"); process.exit(2); }
   const record = Boolean(token) && !o.dryRun;
   if (!offline && process.env.EODHD_PRIVATE_USE !== "on") throw new Error("judge requires EODHD_PRIVATE_USE=on in an owner-private environment");
 
-  const input = await loadInput(o, token, asOf, gate);
+  const page = gate ? { ...gate, symbols: gate.symbols.slice(0, o.maxSymbols) } : null;
+  const input = await loadInput(o, token, asOf, page);
   if (!input.portfolio) log("no portfolio baseline: signals come from data alone; owner EUR bands stay 0");
-  const gatedSignals = (input.signals ?? []).filter((s) => !gate || gate.symbols.includes(s.symbol));
+  const gatedSignals = (input.signals ?? []).filter((s) => !page || page.symbols.includes(s.symbol));
+  if (o.gateFromDb && gatedSignals.length !== page.symbols.length) {
+    log(`gate remains pending: judge input omitted ${page.symbols.filter((symbol) => !gatedSignals.some((s) => s.symbol === symbol)).join(", ")}`);
+    process.exitCode = 1;
+    return;
+  }
   const news = o.force ? gatedSignals : changedSignals(gatedSignals, input.previousIdeas);
   log(`signals ${input.signals?.length ?? 0} (rules ${input.ruleConfigVersion}), changed ${news.length}${news.length ? `: ${news.map((s) => `${s.symbol} ${s.action} ${s.sizeTier}`).join(", ")}` : ""}`);
-  if (!news.length) { log("no signal changed since the last stored idea; no model call"); if (o.gateFromDb && !o.dryRun) await consumeGate(o.baseUrl, token, "judge", gate.asOf, gate.revision); return; }
+  if (!news.length) { log("no signal changed since the last stored idea; no model call"); if (o.gateFromDb && !o.dryRun) await consumeGate(o.baseUrl, token, "judge", gate.asOf, gate.revision, page.symbols); return; }
   const prompt = readFileSync(join(here, "prompts", "judge.md"), "utf8");
   const hash = judgeHash({ input, prompt, model: o.model, agent: o.agent, agentMode: o.agentMode });
   log(`judge input hash ${hash}; gate accessions ${JSON.stringify(gate?.accessions ?? {})}`);
@@ -475,14 +480,11 @@ async function main() {
   try {
     const res = await postRun(o, token, { run: { ...runBase, status: "ok", ideaCount: result.ideas.length, output: rawOutput }, ideas: result.ideas });
     log(`POST ok: ${JSON.stringify(res)}; ${totals}`);
-    if (o.gateFromDb && !skipped.size) await consumeGate(o.baseUrl, token, "judge", gate.asOf, gate.revision);
-    // A gate keeps its market date on retry, so a symbol that keeps failing would hold every later day behind it. One retry is enough:
-    // a gate older than today that is still partial is closed, and the skipped symbols stay in this log.
-    if (o.gateFromDb && skipped.size && gate.asOf < dayBefore(new Date())) { await consumeGate(o.baseUrl, token, "judge", gate.asOf, gate.revision); log(`gate ${gate.asOf} closed after a retry; not judged: ${[...skipped.keys()].join(", ")}`); }
-    else if (o.gateFromDb && skipped.size) { log("gate remains pending after partial judgement; the next run retries it once"); process.exitCode = 1; }
+    if (o.gateFromDb) await consumeGate(o.baseUrl, token, "judge", gate.asOf, gate.revision, page.symbols.filter((symbol) => !skipped.has(symbol)));
+    if (o.gateFromDb && skipped.size) { log("gate remains pending after partial judgement; the next run retries it once"); process.exitCode = 1; }
   } catch (e) { log(`POST failed: ${e.message}; ${totals}`); process.exit(3); }
 }
-/** With --gate-from-db one run clears every pending gate up to today, oldest first, so one stuck day cannot leave the judge a day behind for good. */
+/** With --gate-from-db one run advances pending gates in pages, oldest first, until the queue or budget stops it. */
 export async function runPendingGates(run = main, argv = process.argv.slice(2), peek = null) {
   const drain = argv.includes("--gate-from-db") && !argv.includes("--as-of") && !argv.includes("--dry-run");
   const next = peek ?? (async () => readGate(parseArgs(argv).baseUrl, getToken(), "judge"));
@@ -492,8 +494,8 @@ export async function runPendingGates(run = main, argv = process.argv.slice(2), 
     if (!drain || process.exitCode || !consumedGateDate) return;
     // Only another gate that is still open is worth a run; a 404 or a consumed gate means the queue is empty.
     const open = await next().catch(() => null);
-    if (!open || open.consumed || open.asOf === consumedGateDate) return;
+    if (!open || open.consumed || (open.asOf === consumedGateDate && open.symbols.length === 0)) return;
   }
 }
-const MAX_GATES_PER_RUN = 5;
+const MAX_GATES_PER_RUN = 40;
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) runPendingGates().catch((e) => { console.error(`fatal: ${e.stack || e.message}`); process.exit(1); });
