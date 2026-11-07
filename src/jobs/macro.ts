@@ -190,7 +190,7 @@ async function main() {
   if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required");
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
   try {
-    const result = await runMacro(pool, asOf, { fetch: !noFetch, tickers: (await loadUniverse(pool)).map((item) => item.symbol) });
+    const result = await runMacro(pool, asOf, { fetch: !noFetch, tickers: (await loadUniverse(pool, undefined, { scoring: true })).map((item) => item.symbol) });
     const show = (name: string, item: MacroResult) => `${name}=${item.value === null ? "unknown" : item.value}`;
     process.stdout.write(`Macro ${asOf}: ${show("dataTailwind", result.dataTailwind)} ${show("sectorRotationIntoGrowth", result.sectorRotationIntoGrowth)}, ${result.rows} consensus rows\n${result.dataTailwind.reason}\n${result.sectorRotationIntoGrowth.reason}\n`);
     for (const [region, item] of Object.entries(result.regions)) process.stdout.write(`${region}: ${show("dataTailwind", item.dataTailwind)} ${show("sectorRotationIntoGrowth", item.sectorRotationIntoGrowth)}\n${item.dataTailwind.reason}\n${item.sectorRotationIntoGrowth.reason}\n`);

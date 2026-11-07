@@ -67,7 +67,7 @@ async function Dashboard({ params }: LocaleParams) {
       searchLabel: m.scanner.searchLabel, searchPlaceholder: m.scanner.searchPlaceholder,
       filterLabel: m.scanner.filterLabel, allStates: m.scanner.allStates, clear: m.scanner.clear,
       empty: m.scanner.empty, showing: m.scanner.showing, sortBy: m.table.sortBy,
-      disclaimer: m.common.disclaimer, extension: m.common.extension, noScore: m.common.noScore, noRejection: m.table.noRejection,
+      disclaimer: m.common.disclaimer, extension: m.common.extension, extended: m.common.extended, noScore: m.common.noScore, noRejection: m.table.noRejection,
       held: m.portfolio.held, heldNoSignal: m.portfolio.heldNoSignal,
       rulesMet: m.scanner.rulesMet, rulesMetOf: m.scanner.rulesMetOf, hint: sc.kpiHint, rank: { short: sc.rankShort, long: sc.rank },
       columns: { ticker: m.table.ticker, sector: m.table.sector, score: m.table.score, rules: m.table.rules, state: m.status.columns.status, data: m.status.columns.data, criteria: m.table.criteria,

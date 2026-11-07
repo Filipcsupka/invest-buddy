@@ -29,7 +29,9 @@ export async function ownerDataOverview(db: Db, etfPage = 1) {
       UNION ALL SELECT run_date AS day,job,NULL::int AS requests,calls::numeric AS credits FROM eodhd_call_log WHERE source_id='eodhd' AND run_date >= current_date-6
     ) usage_rows GROUP BY day,job ORDER BY day DESC,job LIMIT 60`),
     rows(db, `SELECT exchange,count(*)::int AS symbols,count(*) FILTER (WHERE NOT delisted)::int AS active,max(last_seen)::text AS last_seen FROM symbols GROUP BY exchange ORDER BY exchange`),
-    rows(db, `SELECT exchange,list,count(*)::int AS tickers,string_agg(ticker,', ' ORDER BY ticker) AS symbols,max(valid_from)::text AS latest_change FROM universe_membership WHERE valid_to IS NULL GROUP BY exchange,list ORDER BY exchange,list`),
+    rows(db, `SELECT m.exchange,m.list,count(*)::int AS tickers,count(s.ticker)::int AS scored,max(s.as_of)::text AS scored_on,string_agg(m.ticker,', ' ORDER BY m.ticker) AS symbols,max(m.valid_from)::text AS latest_change
+      FROM universe_membership m LEFT JOIN score_results s ON s.ticker=m.ticker AND s.as_of=(SELECT max(as_of) FROM score_results)
+      WHERE m.valid_to IS NULL GROUP BY m.exchange,m.list ORDER BY m.exchange,m.list`),
     rows(db, `SELECT listing_key,name,exchange,region,ter_pct::text,aum_usd_m::text,holdings_count,enrichment_status,enriched_at::text,enrichment_source FROM etf_catalog WHERE enrichment_source='eodhd' ORDER BY enriched_at DESC NULLS LAST,listing_key LIMIT 100 OFFSET $1`, [(page - 1) * 100]),
     rows(db, `SELECT count(*)::int AS count FROM etf_catalog WHERE enrichment_source='eodhd'`),
     rows(db, `SELECT DISTINCT ON (series_id) series_id,obs_date::text,value::text,source_id,observed_at::text FROM macro_observations WHERE source_id IN ('eodhd','ecb') ORDER BY series_id,obs_date DESC,observed_at DESC LIMIT 50`),

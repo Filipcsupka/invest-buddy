@@ -90,3 +90,47 @@ describe("reconcile seeds the universe from stored EODHD facts (PGlite)", () => 
     expect(await consensus(ctx.pool)).toEqual([]);
   });
 });
+
+describe("SCORE_EXTENDED scores the collect-only list in private mode only (PGlite)", () => {
+  let ctx: Awaited<ReturnType<typeof migratedPool>>;
+  const bars = (pool: pg.Pool) => pool.query(`INSERT INTO daily_bars (ticker,bar_date,open,high,low,close,volume)
+      SELECT 'AAPL',d::date,100+n*0.1,101+n*0.1,99+n*0.1,100.5+n*0.1,1000000 FROM generate_series('2024-09-02'::date,$1::date,'1 day') WITH ORDINALITY AS g(d,n)
+      WHERE extract(isodow FROM d) < 6`, [AS_OF]);
+  beforeEach(async () => {
+    vi.stubEnv("CARRY_FORWARD", "off");
+    vi.stubEnv("EODHD_PRIVATE_USE", "on");
+    ctx = await migratedPool();
+    await seedEodhdOnly(ctx.pool);
+    await ctx.pool.query("UPDATE universe_membership SET list='extended' WHERE ticker='AAPL' AND valid_to IS NULL");
+    await bars(ctx.pool);
+  });
+  afterEach(async () => { vi.unstubAllEnvs(); await ctx.db.close(); });
+
+  it("switch off: an extended name gets no rule rows and no score", async () => {
+    expect(await runReconcile(ctx.pool, AS_OF, offVerifier, revenueLookup(ctx.pool))).toBe(0);
+    expect(await new DatabaseUniverseProvider(ctx.pool, AS_OF, false).instruments()).toEqual([]);
+  });
+
+  it("switch on without private use: still nothing", async () => {
+    vi.stubEnv("SCORE_EXTENDED", "on");
+    vi.stubEnv("EODHD_PRIVATE_USE", "off");
+    expect(await runReconcile(ctx.pool, AS_OF, offVerifier, revenueLookup(ctx.pool))).toBe(0);
+    expect(await new DatabaseUniverseProvider(ctx.pool, AS_OF, false).instruments()).toEqual([]);
+  });
+
+  it("switch on: the extended name is reconciled and scored, but its alert stays out of the digest", async () => {
+    vi.stubEnv("SCORE_EXTENDED", "on");
+    expect(await runReconcile(ctx.pool, AS_OF, offVerifier, revenueLookup(ctx.pool))).toBeGreaterThan(0);
+    const provider = new DatabaseUniverseProvider(ctx.pool, AS_OF, false);
+    expect((await provider.instruments()).map((item) => item.ticker)).toEqual(["AAPL"]);
+    const repo = new PostgresScoreRepository(ctx.pool);
+    const saved = await runDaily(provider, repo, AS_OF, "scan");
+    expect(saved.instrumentCount).toBe(1);
+    expect((await ctx.pool.query("SELECT 1 FROM score_results WHERE ticker='AAPL' AND as_of=$1", [AS_OF])).rows).toHaveLength(1);
+    // A state change on a later day writes an alert row; the digest must not read it while the name is collect-only.
+    await ctx.pool.query("INSERT INTO alerts (ticker,as_of,previous_state,current_state,previous_score,current_score,active) SELECT ticker,as_of,'Watch (12-17)',state,12,total,true FROM score_results WHERE ticker='AAPL' AND as_of=$1", [AS_OF]);
+    expect(await repo.alerts(AS_OF)).toEqual([]);
+    await ctx.pool.query("UPDATE universe_membership SET list='core' WHERE ticker='AAPL' AND valid_to IS NULL");
+    expect((await repo.alerts(AS_OF)).map((alert) => alert.ticker)).toEqual(["AAPL"]);
+  });
+});
