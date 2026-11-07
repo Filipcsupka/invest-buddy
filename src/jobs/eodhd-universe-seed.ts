@@ -12,6 +12,8 @@ import { storeClassification } from "./eodhd-fundamentals";
 import { runLoggedJob } from "./job-log";
 
 export interface SeedListing { vendorSymbol: string; code: string; exchange: string; name: string; currency: string; type: string }
+/** Instrument key: US names keep the bare code like every existing US instrument; other listings use the vendor symbol. */
+export const seedTicker = (listing: Pick<SeedListing, "vendorSymbol" | "code" | "exchange">) => (listing.exchange === "US" ? listing.code : listing.vendorSymbol);
 export interface RankedSeed extends SeedListing { tradedValue: number }
 export interface SeedClient {
   eodBulkLastDay(exchange: string, options: { filter: "extended" }): Promise<BulkLastDayBar[]>;
@@ -49,7 +51,7 @@ export async function runUniverseSeed(client: SeedClient, store: SeedStore, list
   const ready = await store.readySymbols();
   const eligible = listings.filter((row) => {
     const currency = normalizeCurrency(row.currency);
-    return row.exchange !== "US" && currency !== null && UNIVERSE_CURRENCIES.some((known) => known === currency)
+    return currency !== null && UNIVERSE_CURRENCIES.some((known) => known === currency)
       && !(row.exchange === "LSE" && currency === "GBP")
       && isCommonStock({ ticker: row.vendorSymbol, vendorSymbol: row.vendorSymbol, exchange: row.exchange,
         name: row.name, securityType: row.type });
@@ -87,7 +89,7 @@ export async function runUniverseSeed(client: SeedClient, store: SeedStore, list
         used(10);
         const actions = splitActions(listing.vendorSymbol, splits as Split[]);
         const bars = barsFromHistory(history as EodBar[], actions);
-        const facts = parseEodhdFundamentals(payload, listing.vendorSymbol, options.today ?? new Date().toISOString().slice(0, 10)).rows;
+        const facts = parseEodhdFundamentals(payload, seedTicker(listing), options.today ?? new Date().toISOString().slice(0, 10)).rows;
         if (!facts.length) { failures++; continue; }
         await store.save(listing, bars, facts, payload, options.today ?? new Date().toISOString().slice(0, 10));
         saved++;
@@ -113,10 +115,11 @@ export class PgSeedStore implements SeedStore {
     return new Set(rows.rows.map((row) => row.vendor_symbol));
   }
   async save(listing: SeedListing, bars: ReturnType<typeof barsFromHistory>, facts: FundamentalRow[], payload: Fundamentals, today: string) {
+    const ticker = seedTicker(listing);
     await this.db.query(`INSERT INTO instruments (ticker,name,sector,tier,source) VALUES ($1,$2,'Unclassified',NULL,'discovery')
-      ON CONFLICT (ticker) DO NOTHING`, [listing.vendorSymbol, listing.name]);
+      ON CONFLICT (ticker) DO NOTHING`, [ticker, listing.name]);
     const prices = new PostgresPriceRepository(this.db);
-    await prices.upsertBars(listing.vendorSymbol, bars, { sourceId: "eodhd", vendorSymbol: listing.vendorSymbol, currency: normalizeCurrency(listing.currency) });
+    await prices.upsertBars(ticker, bars, { sourceId: "eodhd", vendorSymbol: listing.vendorSymbol, currency: normalizeCurrency(listing.currency) });
     await insertFundamentals(this.db, facts, "eodhd");
     await storeClassification(this.db, listing.vendorSymbol, eodhdClassification(payload.General), today);
     await this.db.query(`INSERT INTO eodhd_universe_seed (vendor_symbol,last_bar_date,bar_count,fact_count)
@@ -138,7 +141,7 @@ export function parseSeedArgs(args: string[]) {
       if (flag === "--min-price") out.minPrice = value;
     } else if (flag === "--exchanges") {
       out.exchanges = args[++i]?.split(",").map((x) => x.trim().toUpperCase());
-      if (!out.exchanges?.length || out.exchanges.some((x) => x === "US" || !UNIVERSE_EXCHANGES.some((known) => known === x))) throw new Error("Invalid --exchanges");
+      if (!out.exchanges?.length || out.exchanges.some((x) => !UNIVERSE_EXCHANGES.some((known) => known === x))) throw new Error("Invalid --exchanges");
     } else throw new Error(`Unknown seed option ${flag}`);
   }
   if (out.topPerExchange > 500 || out.maxCalls > 20_000) throw new Error("Seed limits exceed the per-run bounds");
@@ -148,12 +151,15 @@ export function parseSeedArgs(args: string[]) {
 async function main() {
   if (!process.env.DATABASE_URL || !process.env.EODHD_API_KEY) throw new Error("DATABASE_URL and EODHD_API_KEY are required");
   const options = parseSeedArgs(process.argv.slice(2));
+  // US runs only when named: US listings must be USA-domiciled and not already an instrument (members keep their own collectors).
   const exchanges = options.exchanges ?? UNIVERSE_EXCHANGES.filter((row) => row !== "US");
   const db = new pg.Pool({ connectionString: process.env.DATABASE_URL });
   try {
     const result = await db.query<{ vendor_symbol: string; code: string; exchange: string; name: string; currency: string; type: string }>(
       `SELECT vendor_symbol,code,exchange,name,currency,type FROM symbols WHERE NOT delisted AND exchange=ANY($1::text[])
-       AND currency IS NOT NULL AND type IS NOT NULL ORDER BY exchange,vendor_symbol`, [exchanges]);
+       AND currency IS NOT NULL AND type IS NOT NULL
+       AND (exchange<>'US' OR (country='USA' AND NOT EXISTS (SELECT 1 FROM instruments i WHERE i.ticker=symbols.code)))
+       ORDER BY exchange,vendor_symbol`, [exchanges]);
     const listings = result.rows.map((row) => ({ vendorSymbol: row.vendor_symbol, code: row.code, exchange: row.exchange,
       name: row.name, currency: row.currency, type: row.type }));
     const counts = await runUniverseSeed(new EodhdClient({ maxRetries: 0 }), new PgSeedStore(db), listings, options);
