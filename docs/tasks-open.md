@@ -1,5 +1,26 @@
 # Open tasks
 
+## Handoff 2026-11-09
+
+Main is at e22ff56. Merged today: #343 to #349 (DB pool and caches, sector fallback and audit, dashboard payload trim, k6 scenarios, parallel company reads, owner sign-in session, customer account schema). Unpushed local branches: `auth-core` (customer accounts with Better Auth), `welcome-ui` (Welcome, sign-in, Plus pricing), `data-rev` (half-year revenue scoring), `auth-spike` (ADR only). Whether any of today's merges are deployed, and whether migrations 133 and 134 ran, was not checked.
+
+Decisions: Plus 9.90 EUR per month (yearly 99 EUR proposed), free sign-up open, 14-day no-card trial behind `TRIAL`, email and password plus Google with recovery codes and no email provider at launch, Better Auth 1.7.18 pinned.
+
+Blocker for customer-visible scores: no display licence for EODHD, Twelve Data or Alpha Vantage (TASK-064). Plus shows as "opens soon" until it is settled.
+
+Tasks T0 to T8 with definition of done, open owner decisions and the planning reports are in the vault: `~/Documents/ops-brain/projects/investing-platform/next-session-2026-11-09.md` and `plans-2026-11-09/`.
+
+Short list:
+- T0 check the live image and migration state (read-only).
+- T1 land auth-core after fixing the three high review findings.
+- T2 land welcome-ui after auth-core, then wire the nav and fix LCP.
+- T3 decide the rules version for data-rev, then merge.
+- T4 Google OAuth client, sealed secrets, flags `AUTH`, `TRIAL`.
+- T5 cache headers and soft purge, infra replicas and memory, k6 baseline on a dedicated node.
+- T6 sector audit run, 2026-11-09 point-in-time recheck, European catalyst dry-run, fix real names in `src/data/fixtures.ts`.
+- T7 free-to-paid funnel wiring.
+- T8 remove merged worktrees and old branches.
+
 ## Baseline 2026-11-07 evening and DoD status
 
 Baseline (read-only query on 2026-11-07): 511 instruments scored for 2026-11-06, up from 77. States: Criteria broken 289, Ignore 133, Watch 60, Wait 25, Insufficient/invalid data 2, Setup met 2. How it got there: `SCORE_EXTENDED=on` (owner-private, only with `EODHD_PRIVATE_USE=on`, #336) lets reconcile and daily score the `extended` list; judge, extract, sitemap and public pages are unchanged (D36 gate kept). The 330 new members were backdated from 2026-11-07 to 2026-11-06 once, through a reviewed Job, so they sit on the latest scan date; this is a deliberate baseline step and not how promotion works. Infra #73 sets the env and purges the web cache after daily; #74 sets the catalyst env. Fixes on the way: reconcile out of memory (#337, SEC companyfacts no longer cached in memory), catalyst covers the scored universe (#338), owner ticker listing for names without an `instrument_ids` row (#339), `EXSA.XETRA` backfilled for the European benchmark.
