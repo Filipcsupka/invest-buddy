@@ -3,13 +3,14 @@ import { fundamentalsHistory, type FundamentalsHistoryRow } from "../db/history"
 import type { ShareCount } from "../engine/flags";
 import { INTEREST_EXPENSE_CONCEPTS } from "./fundamentals-concepts";
 import { eodhdPrivateUse } from "./eodhd-private-use";
+import { CACHE_TAGS, webCached } from "./web-cache";
 
 /** Reported share counts from stored facts. EODHD is used in private mode, with SEC as the fallback. */
-export async function storedShareCounts(ticker: string): Promise<ShareCount[]> {
+async function storedShareCountsUncached(ticker: string, privateUse: boolean): Promise<ShareCount[]> {
   const db = getPool();
   if (!db) return [];
   try {
-    if (eodhdPrivateUse()) {
+    if (privateUse) {
       const vendor = await db.query<{ periodEnd: string; value: string | number }>(`SELECT period_end::text AS "periodEnd", value FROM fundamentals_pit
         WHERE ticker=$1 AND concept='EntityCommonStockSharesOutstanding' AND source_id='eodhd'
           AND filed <= CURRENT_DATE AND first_seen_at::date <= CURRENT_DATE
@@ -22,6 +23,8 @@ export async function storedShareCounts(ticker: string): Promise<ShareCount[]> {
     return [];
   }
 }
+const cachedStoredShareCounts = webCached(storedShareCountsUncached, "stored-share-counts", [CACHE_TAGS.scores], { bypass: () => !getPool() });
+export const storedShareCounts = (ticker: string) => cachedStoredShareCounts(ticker.toUpperCase(), eodhdPrivateUse());
 
 export interface InterestFacts { operatingIncome: number | null; interestExpense: number | null }
 
@@ -57,7 +60,7 @@ export function pickInterestFacts(operatingIncomeRows: readonly FundamentalsHist
 }
 
 /** Stored annual operating income and interest expense. Nulls without a database or on any read error: the flag then shows no data. */
-export async function storedInterestFacts(ticker: string): Promise<InterestFacts> {
+async function storedInterestFactsUncached(ticker: string): Promise<InterestFacts> {
   const db = getPool();
   if (!db) return { operatingIncome: null, interestExpense: null };
   try {
@@ -70,9 +73,11 @@ export async function storedInterestFacts(ticker: string): Promise<InterestFacts
     return { operatingIncome: null, interestExpense: null };
   }
 }
+const cachedStoredInterestFacts = webCached(storedInterestFactsUncached, "stored-interest-facts", [CACHE_TAGS.scores], { bypass: () => !getPool() });
+export const storedInterestFacts = (ticker: string) => cachedStoredInterestFacts(ticker.toUpperCase());
 
 /** Latest reported share count per ticker in one query (scanner floor). Missing tickers are absent; empty without a database or on any read error. */
-export async function latestShareCounts(tickers: readonly string[]): Promise<Record<string, number>> {
+async function latestShareCountsUncached(tickers: string[], privateUse: boolean): Promise<Record<string, number>> {
   const db = getPool();
   if (!db || !tickers.length) return {};
   try {
@@ -81,9 +86,13 @@ export async function latestShareCounts(tickers: readonly string[]): Promise<Rec
        WHERE f.ticker = ANY($1) AND f.concept = 'EntityCommonStockSharesOutstanding'
          AND (EXISTS (SELECT 1 FROM data_sources s WHERE s.id = f.source_id AND s.display_allowed)
               OR ($2::boolean AND f.source_id = 'eodhd'))
-       ORDER BY f.ticker, f.period_end DESC, f.filed DESC, f.id DESC`, [[...tickers], eodhdPrivateUse()]);
+       ORDER BY f.ticker, f.period_end DESC, f.filed DESC, f.id DESC`, [tickers, privateUse]);
     return Object.fromEntries(result.rows.map((row) => [row.ticker, Number(row.value)] as const).filter(([, value]) => Number.isFinite(value)));
   } catch {
     return {};
   }
 }
+const cachedLatestShareCounts = webCached(latestShareCountsUncached, "latest-share-counts", [CACHE_TAGS.scores], { bypass: () => !getPool() });
+export const latestShareCounts = (tickers: readonly string[]) => tickers.length
+  ? cachedLatestShareCounts([...new Set(tickers.map((ticker) => ticker.toUpperCase()))].sort(), eodhdPrivateUse())
+  : Promise.resolve({} as Record<string, number>);

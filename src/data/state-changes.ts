@@ -3,6 +3,7 @@ import type { AlertState } from "@/engine";
 import { stateKey, type StateKey } from "@/i18n/score-text";
 import { getPool } from "../db/pool";
 import { extendedOn, pageScoreRow, scoreExtended } from "../db/universe";
+import { CACHE_TAGS, webCached } from "./web-cache";
 
 export interface StateChangeRow { ticker: string; from: StateKey; to: StateKey; asOf: string }
 
@@ -36,4 +37,4 @@ async function latestStateChangesUncached(): Promise<StateChangeRow[]> {
     return diffStates(result.rows, newest);
   } catch { return []; }
 }
-export const latestStateChanges = cache(latestStateChangesUncached);
+export const latestStateChanges = cache(webCached(latestStateChangesUncached, "latest-state-changes", [CACHE_TAGS.scores], { bypass: () => !getPool() }));

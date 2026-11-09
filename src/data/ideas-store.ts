@@ -24,18 +24,22 @@ async function latestIdeasUncached(limit = 50): Promise<IdeasData> {
 export const latestIdeas = cache(webCached(latestIdeasUncached, "latest-ideas", [CACHE_TAGS.ideas], { bypass: () => !process.env.DATABASE_URL || !getPool() }));
 
 /** Latest idea for one ticker when it is worth a card on the company page (not HOLD). A read failure hides the card instead of breaking the page. */
-export async function companyIdea(symbol: string): Promise<{ idea: StoredIdea; sample: boolean } | null> {
+async function companyIdeaUncached(symbol: string): Promise<{ idea: StoredIdea; sample: boolean } | null> {
   try {
     const data = await latestIdeas(200);
     const idea = data.rows.find((row) => row.symbol === symbol.toUpperCase());
     return idea && showsOnCompanyPage(idea) ? { idea, sample: data.sample } : null;
   } catch { return null; }
 }
+const cachedCompanyIdea = webCached(companyIdeaUncached, "company-idea", [CACHE_TAGS.ideas], { bypass: () => !getPool() });
+export const companyIdea = (symbol: string) => cachedCompanyIdea(symbol.toUpperCase());
 
 /** Review dates for the company page stamp. Hidden (null) on fixture data, without a database, or on a read failure. */
-export async function companyReview(symbol: string): Promise<{ lastReviewed: string; nextDue: string } | null> {
+async function companyReviewUncached(symbol: string): Promise<{ lastReviewed: string; nextDue: string } | null> {
   if (process.env.DATA_MODE === "fixture" || !process.env.DATABASE_URL) return null;
   const db = getPool(); if (!db) return null;
   try { return await symbolReviewDates(db, symbol.toUpperCase()); }
   catch { return null; }
 }
+const cachedCompanyReview = webCached(companyReviewUncached, "company-review", [CACHE_TAGS.ideas], { bypass: () => !getPool() });
+export const companyReview = (symbol: string) => cachedCompanyReview(symbol.toUpperCase());
