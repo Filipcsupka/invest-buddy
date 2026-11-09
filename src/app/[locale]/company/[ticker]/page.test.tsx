@@ -109,6 +109,28 @@ describe("company page", () => {
     expect(renderToStaticMarkup(await Company(props(row.instrument.ticker, "en")))).toContain("Not enough history yet");
   });
 
+  it("starts independent company reads while viewer-limited history is pending", async () => {
+    const [row] = await scoredUniverse();
+    universe.mockResolvedValue([row.instrument]);
+    scores.mockResolvedValue({ rows: [row], sample: false, lastUpdated: row.result.asOf, stale: false });
+    let release!: () => void;
+    const pending = new Promise<void>((resolve) => { release = resolve; });
+    idea.mockImplementation(() => pending.then(() => null));
+    review.mockImplementation(() => pending.then(() => null));
+    shares.mockImplementation(() => pending.then(() => []));
+    history.mockImplementation(() => pending.then(() => []));
+
+    const rendering = Company(props(row.instrument.ticker));
+    await vi.waitFor(() => {
+      expect(idea).toHaveBeenCalledOnce();
+      expect(review).toHaveBeenCalledOnce();
+      expect(shares).toHaveBeenCalledOnce();
+      expect(history).toHaveBeenCalledWith(row.instrument.ticker, null);
+    });
+    release();
+    expect(renderToStaticMarkup(await rendering)).toContain(row.instrument.ticker);
+  });
+
   it("shows the flags block apart from the score, and the ADR line under the score widget, in both languages", async () => {
     const [row] = await scoredUniverse();
     universe.mockResolvedValue([row.instrument]);

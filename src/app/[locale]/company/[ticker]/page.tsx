@@ -75,10 +75,12 @@ async function Company({ params }: Params) {
   const { locale, instrument, result, data } = await load(params);
   const m = getMessages(locale);
   const adviceOutput = flags().ADVICE_OUTPUT;
-  const portfolio = await latestPortfolio();
-  const held = portfolio?.weights.some((position) => position.weightPercent > 0 && position.symbol.toUpperCase() === instrument.ticker) ?? false;
-  const freshness = await datasetFreshness(instrument.ticker);
-  if (!result) return <div className="frame page company is-empty"><header className="company-head co-hero"><div className="company-id"><h1 className="title"><span className="title-ticker">{instrument.ticker}</span>{instrument.name !== instrument.ticker && <span className="title-name">{instrument.name}</span>}</h1><p className="company-meta"><span className="company-sector">{sectorLabel(locale, instrument.sector)}</span>{held && <span className="tag">{m.portfolio.heldNoSignal}</span>}</p></div></header><DataStatus locale={locale} lastUpdated={data.lastUpdated} stale={data.stale} detail={freshness ? { datasets: freshness, coverage: null } : null} /></div>;
+  const common = Promise.all([latestPortfolio(), datasetFreshness(instrument.ticker)]);
+  if (!result) {
+    const [portfolio, freshness] = await common;
+    const held = portfolio?.weights.some((position) => position.weightPercent > 0 && position.symbol.toUpperCase() === instrument.ticker) ?? false;
+    return <div className="frame page company is-empty"><header className="company-head co-hero"><div className="company-id"><h1 className="title"><span className="title-ticker">{instrument.ticker}</span>{instrument.name !== instrument.ticker && <span className="title-name">{instrument.name}</span>}</h1><p className="company-meta"><span className="company-sector">{sectorLabel(locale, instrument.sector)}</span>{held && <span className="tag">{m.portfolio.heldNoSignal}</span>}</p></div></header><DataStatus locale={locale} lastUpdated={data.lastUpdated} stale={data.stale} detail={freshness ? { datasets: freshness, coverage: null } : null} /></div>;
+  }
   const state = stateKey(result.state);
   const scored = state !== "insufficient";
   const hits = new Map(result.ruleHits.map((hit) => [hit.id, hit]));
@@ -114,19 +116,23 @@ async function Company({ params }: Params) {
   const coverage = displayScore(state, result.ruleHits);
   const unknownIds = new Set<string>(view.coverage.unknownRules);
   const sources = scored ? sourceSummary(locale, result) : null;
-  const ideaRow = await companyIdea(instrument.ticker);
-  const review = await companyReview(instrument.ticker);
-  const viewer = await getViewer();
-  const history = await companyScoreHistory(instrument.ticker, limitFor(viewer, "scoreHistoryDays"));
-  // Flags read stored facts only and never feed the score. Short interest is not collected yet, so it shows no data.
-  const interest = await storedInterestFacts(instrument.ticker);
-  const flagResults = companyFlags({ bars: result.inputs.bars, shares: await storedShareCounts(instrument.ticker), operatingIncome: interest.operatingIncome, interestExpense: interest.interestExpense, shortInterestPercent: null });
-  const horizons = await publicHorizons();
   const today = new Date().toISOString().slice(0, 10);
-  const [macroSchedule, earningsDate] = await Promise.all([storedMacroEvents(today), publicEarningsDate(instrument.ticker, today)]);
-  // Owner-only EODHD market cap; null for every public request.
-  const marketCap = await ownerMarketCap(instrument.ticker);
-  const instruments = await instrumentUniverse();
+  const [[portfolio, freshness], ideaRow, review, { viewer, history }, interest, shares, horizons, macroSchedule, earningsDate, marketCap, instruments] = await Promise.all([
+    common,
+    companyIdea(instrument.ticker),
+    companyReview(instrument.ticker),
+    getViewer().then(async (viewer) => ({ viewer, history: await companyScoreHistory(instrument.ticker, limitFor(viewer, "scoreHistoryDays")) })),
+    storedInterestFacts(instrument.ticker),
+    storedShareCounts(instrument.ticker),
+    publicHorizons(),
+    storedMacroEvents(today),
+    publicEarningsDate(instrument.ticker, today),
+    ownerMarketCap(instrument.ticker),
+    instrumentUniverse(),
+  ]);
+  const held = portfolio?.weights.some((position) => position.weightPercent > 0 && position.symbol.toUpperCase() === instrument.ticker) ?? false;
+  // Flags read stored facts only and never feed the score. Short interest is not collected yet, so it shows no data.
+  const flagResults = companyFlags({ bars: result.inputs.bars, shares, operatingIncome: interest.operatingIncome, interestExpense: interest.interestExpense, shortInterestPercent: null });
   const index = instruments.findIndex((item) => item.ticker === instrument.ticker);
   const prev = instruments[(index - 1 + instruments.length) % instruments.length];
   const next = instruments[(index + 1) % instruments.length];
