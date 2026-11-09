@@ -5,6 +5,7 @@ import { spawnSync } from "node:child_process";
 import { parseEodhdCalendar, parseEodhdFundamentals } from "../data-providers/eodhd/fundamentals";
 import type { EarningsCalendar, Fundamentals } from "../data-providers/eodhd/client";
 import pg from "pg";
+import { revenueFromCompanyFacts } from "../data/sec";
 import { dueForRefresh, loadSubjects, parseArgs, runEodhdFundamentals, storeClassification } from "./eodhd-fundamentals";
 
 const fixture = (name: string) => JSON.parse(readFileSync(join(process.cwd(), "src/data-providers/eodhd/fixtures/offline", name), "utf8"));
@@ -59,12 +60,46 @@ describe("EODHD fundamentals parsing", () => {
       Object.fromEntries(halves.map((end, i) => [end, { date: end, filing_date: filed[i], currency_symbol: "GBP", totalRevenue: 100 + i }])) } } };
     const parsed = parseEodhdFundamentals(payload, "ZZH.LSE", "2026-10-01").rows.filter((row) => row.concept === "Revenues");
     expect(parsed.map((row) => [row.periodStart, row.periodEnd])).toEqual([
-      ["2024-03-31", "2024-06-30"], ["2024-07-01", "2024-12-31"], ["2025-01-01", "2025-06-30"], ["2025-07-01", "2025-12-31"],
+      ["2024-01-01", "2024-06-30"], ["2024-07-01", "2024-12-31"], ["2025-01-01", "2025-06-30"], ["2025-07-01", "2025-12-31"],
     ]);
     const gapped = ["2025-03-31", "2025-06-30", "2025-12-31", "2026-03-31"];
     const quarterly: Fundamentals = { General: { CurrencyCode: "USD" }, Financials: { Income_Statement: { quarterly:
       Object.fromEntries(gapped.map((end) => [end, { date: end, filing_date: "2026-05-01", currency_symbol: "USD", totalRevenue: 100 }])) } } };
     expect(parseEodhdFundamentals(quarterly, "GAP", "2026-10-01").rows.find((row) => row.periodEnd === "2025-12-31")?.periodStart).toBe("2025-10-01");
+  });
+  it("LSE fixture inventory: ULVR has half-year values but no currency or enough report dates; SHEL has quarters", () => {
+    const ulvr = parseEodhdFundamentals(real("half-year-ulvr.json"), "ULVR.LSE", "2026-11-06");
+    expect(ulvr.rows.filter((row) => row.concept === "Revenues")).toHaveLength(0);
+    const shel = parseEodhdFundamentals(real("half-year-shel.json"), "SHEL.LSE", "2026-11-06");
+    expect(shel.rows.filter((row) => row.concept === "Revenues").every((row) =>
+      (Date.parse(row.periodEnd) - Date.parse(row.periodStart!)) / 86_400_000 <= 105)).toBe(true);
+  });
+  it("replays captured ULVR half-year values with synthetic currency and filing dates", () => {
+    const captured = real("half-year-ulvr.json");
+    const income = (captured.Financials as { Income_Statement: { quarterly: Record<string, Record<string, unknown>> } }).Income_Statement.quarterly;
+    const syntheticFiled: Record<string, string> = {
+      "2024-06-30": "2024-07-31", "2024-12-31": "2025-03-13", "2025-06-30": "2025-07-31", "2025-12-31": "2026-01-31",
+    };
+    // The captured revenue values and periods are real; EUR currency and these availability dates are test-only inputs.
+    const syntheticHalfYearFixture: Fundamentals = { Financials: { Income_Statement: { quarterly:
+      Object.fromEntries(Object.entries(syntheticFiled).map(([end, filed]) => [end,
+        { ...income[end], currency_symbol: "EUR", filing_date: filed }])) } } };
+    const parse = (asOf: string) => parseEodhdFundamentals(syntheticHalfYearFixture, "ULVR.LSE", asOf).rows
+      .filter((row) => row.concept === "Revenues").map((row) => ({ start: row.periodStart!, end: row.periodEnd, filed: row.filed,
+        val: row.value, accn: row.accession, fy: row.fy!, fp: row.fp!, form: row.form }));
+    const score = (facts: ReturnType<typeof parse>, asOf: string) => revenueFromCompanyFacts({ facts: { "us-gaap":
+      { Revenues: { units: { USD: facts } } } } }, asOf);
+    const facts = parse("2026-02-01");
+    expect(facts).toHaveLength(4);
+    expect(facts.every((fact) => (Date.parse(fact.end) - Date.parse(fact.start)) / 86_400_000 >= 170)).toBe(true);
+    expect(score(facts.filter((fact) => (Date.parse(fact.end) - Date.parse(fact.start)) / 86_400_000 <= 105), "2026-02-01")).toBeNull();
+    const after = score(facts, "2026-02-01");
+    expect(after).toMatchObject({ period: "half ended 2025-12-31", revenueAccelerating: true, revenueDeclining: true });
+    expect(after?.currentGrowth).toBeCloseTo(-15.676);
+    expect(after?.priorGrowth).toBeCloseTo(-18.032);
+    // Improving growth still earns no acceleration points when revenue is declining.
+    expect(Number(after?.revenueAccelerating && !after.revenueDeclining) * 4).toBe(0);
+    expect(score(parse("2026-01-30"), "2026-01-30")).toBeNull();
   });
   it("parses a bulk calendar and filters the requested window", () => {
     expect(parseEodhdCalendar(calendar, "2025-10-01", "2025-10-31")).toMatchObject([{ vendorSymbol: "AAPL.US", reportDate: "2025-10-15", fiscalDateEnding: "2025-09-30", estimate: 2.34 }]);

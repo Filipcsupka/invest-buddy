@@ -22,7 +22,9 @@ export interface RefreshState { attemptedAt: string; latestReportDate: string | 
 export interface FundamentalsClient { fundamentals(symbol: string, filter?: string): Promise<Fundamentals>; earningsCalendar(options: { from: string; to: string }): Promise<EarningsCalendar>; getCallCosts(): Record<string, number> }
 export interface RunOptions { dryRun?: boolean; maxSymbols?: number; filter?: string; only?: string[]; subjects?: Subject[]; now?: Date }
 
-/** Match reports within three days, retry a missed expected report after 14 days, and refresh every 100 days without a calendar match. */
+/** Match reports within three days, retry a missed expected report after 14 days, and refresh every 100 days without a calendar match.
+ * The 100-day collection interval also covers half-year reporters whose scoring freshness is 200 days.
+ */
 export function dueForRefresh(expected: string | null, state: RefreshState | undefined, today: string): boolean {
   if (!state) return true;
   if (state.attemptedAt.slice(0, 10) <= shift(today, -100)) return true;
