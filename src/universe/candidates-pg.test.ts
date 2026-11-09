@@ -99,17 +99,19 @@ describe("market candidate read model (Postgres)", () => {
   }));
 });
 
-describe("EODHD sector for European candidates (Postgres)", () => {
-  it.skipIf(!process.env.TEST_DATABASE_URL)("fills an Unclassified European sector from the stored industry known by asOf, never a US one", () => inRollback(async (db) => {
+describe("EODHD sector for US and European candidates (Postgres)", () => {
+  it.skipIf(!process.env.TEST_DATABASE_URL)("fills Unclassified sectors from the stored industry known by asOf and preserves classified sectors", () => inRollback(async (db) => {
     await db.query(`INSERT INTO instruments (ticker,name,sector,tier,source) VALUES
       ('ZZS.XETRA','ZZ Chips AG','Unclassified',NULL,'discovery'),('ZZL.XETRA','ZZ Late AG','Unclassified',NULL,'discovery'),
-      ('ZZK.XETRA','ZZ Kept AG','Biotech',NULL,'discovery'),('ZZU','ZZ US Chips','Unclassified',NULL,'discovery')`);
+      ('ZZK.XETRA','ZZ Kept AG','Biotech',NULL,'discovery'),('ZZU','ZZ US Chips','Unclassified',NULL,'discovery'),
+      ('ZZK','ZZ Kept US Corp','Biotech',NULL,'discovery')`);
     await db.query(`INSERT INTO symbols (vendor_symbol,code,exchange,name,currency,type,first_seen,last_seen,sector,industry,sector_observed_on) VALUES
       ('ZZS.XETRA','ZZS','XETRA','ZZ Chips AG','EUR','Common Stock','2026-01-01','2026-10-21','Technology','Semiconductors','2026-10-01'),
       ('ZZL.XETRA','ZZL','XETRA','ZZ Late AG','EUR','Common Stock','2026-01-01','2026-10-21','Technology','Semiconductors','2026-10-25'),
       ('ZZK.XETRA','ZZK','XETRA','ZZ Kept AG','EUR','Common Stock','2026-01-01','2026-10-21','Technology','Semiconductors','2026-10-01'),
-      ('ZZU.US','ZZU','US','ZZ US Chips','USD','Common Stock','2026-01-01','2026-10-21','Technology','Semiconductors','2026-10-01')`);
+      ('ZZU.US','ZZU','US','ZZ US Chips','USD','Common Stock','2026-01-01','2026-10-21','Technology','Semiconductors','2026-10-01'),
+      ('ZZK.US','ZZK','US','ZZ Kept US Corp','USD','Common Stock','2026-01-01','2026-10-21','Technology','Semiconductors','2026-10-01')`);
     const sectors = Object.fromEntries((await loadCandidates(db, asOf)).filter((c) => c.ticker.startsWith("ZZ")).map((c) => [c.ticker, c.sector]));
-    expect(sectors).toMatchObject({ "ZZS.XETRA": "AI & semiconductors", "ZZL.XETRA": "Unclassified", "ZZK.XETRA": "Biotech", ZZU: "Unclassified" });
+    expect(sectors).toMatchObject({ "ZZS.XETRA": "AI & semiconductors", "ZZL.XETRA": "Unclassified", "ZZK.XETRA": "Biotech", ZZU: "AI & semiconductors", ZZK: "Biotech" });
   }));
 });
