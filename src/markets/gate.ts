@@ -4,11 +4,11 @@ import { flags } from "@/config/flags";
 import { ownerAuthorized } from "@/app/[locale]/owner/auth";
 
 /** The same owner password used by /owner/research. A feature flag never authenticates a visitor. */
-export function marketsViewable(authorization: string | null, env: Record<string, string | undefined> = process.env): boolean {
-  return flags(env).MARKETS_VIEWS && ownerAuthorized(authorization, env.OWNER_RESEARCH_PASSWORD);
+export function marketsViewable(requestHeaders: Headers | { get(name: string): string | null } | string | null, env: Record<string, string | undefined> = process.env): boolean {
+  return flags(env).MARKETS_VIEWS && ownerAuthorized(requestHeaders, env.OWNER_RESEARCH_PASSWORD, env);
 }
 
 export async function assertViewable(source = "eodhd"): Promise<void> {
   // Source is accepted for collector-specific page loaders; every market view stays owner-only until display rights are cleared.
-  if (source.length === 0 || !marketsViewable((await headers()).get("authorization"))) notFound();
+  if (source.length === 0 || !marketsViewable(await headers())) notFound();
 }

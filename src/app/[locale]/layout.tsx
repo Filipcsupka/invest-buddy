@@ -57,7 +57,7 @@ export default async function LocaleLayout({ children, params }: { children: Rea
           {m.common.skipToContent}
         </a>
         <div className="app-shell">
-          <Nav locale={locale} marketsViewable={flags().MARKETS_VIEWS && marketsViewable((await headers()).get("authorization"))} />
+          <Nav locale={locale} marketsViewable={flags().MARKETS_VIEWS && marketsViewable(await headers())} />
           <div className="app-body">
             {/* Tier logic is a later work package; until it decides a mode, the banner stays hidden for everyone. */}
             <TierBanner mode="hidden" title={kit.banner.admin} note={kit.banner.adminNote} badgeLabel={kit.tier.paid} />

@@ -17,7 +17,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return { ...pageMetadata(locale, "/owner/horizons", "Horizon labels", "Private horizon profile facts."), robots: { index: false, follow: false } };
 }
 export default async function OwnerHorizonsPage({ params }: Props) {
-  if (!flags().OWNER_VIEW || !ownerAuthorized((await headers()).get("authorization"), process.env.OWNER_RESEARCH_PASSWORD)) notFound();
+  if (!flags().OWNER_VIEW || !ownerAuthorized(await headers(), process.env.OWNER_RESEARCH_PASSWORD)) notFound();
   const { locale } = await params;
   if (locale !== "en" && locale !== "sk") notFound();
   const db = getPool();

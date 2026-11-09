@@ -33,7 +33,7 @@ async function Home({ params, searchParams }: HomeProps) {
   const m = getMessages(locale);
   const k = getKitMessages(locale);
   // The landing remains public, but a private scoring run must not put vendor-derived figures in it.
-  const privateVisitor = process.env.EODHD_PRIVATE_USE === "on" && !ownerAuthorized((await headers()).get("authorization"), process.env.OWNER_RESEARCH_PASSWORD);
+  const privateVisitor = process.env.EODHD_PRIVATE_USE === "on" && !ownerAuthorized(await headers(), process.env.OWNER_RESEARCH_PASSWORD);
   const [data, moved] = privateVisitor ? [{ rows: [], sample: false, lastUpdated: null, stale: false }, []] : await Promise.all([latestScores(), latestStateChanges()]);
   const rows = data.rows;
   const ranked = [...rows].sort((a, b) => Number(b.result.state === "Setup met (>=18)") - Number(a.result.state === "Setup met (>=18)") || b.result.total - a.result.total || a.instrument.ticker.localeCompare(b.instrument.ticker));
