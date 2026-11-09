@@ -5,7 +5,6 @@ Measures time to first byte (TTFB) for the public pages. Script: `scripts/perf-p
 ## Method
 
 ```sh
-node scripts/perf-probe.mjs --base https://invest.filipcsupka.online --runs 10 --out perf.json
 node scripts/perf-probe.mjs --base http://localhost:3000 --runs 10   # local build: npm run build && npm start
 ```
 
@@ -15,6 +14,36 @@ node scripts/perf-probe.mjs --base http://localhost:3000 --runs 10   # local bui
 - The first request per URL is reported as `cold`; p50/p95 cover the remaining (warm) runs, so use 2 or more runs. Runs of 1 give an empty warm set.
 - Requests run one after another, so this measures latency, not load.
 - Results depend on the caller's network. To split network from app time, run it once from inside the cluster (needs cluster write approval for a one-off Job; not done).
+- The probe and k6 refuse `invest.filipcsupka.online` unless `ALLOW_PROD=1` is set. Do not use the override for load tests.
+
+## k6 load test
+
+Run this on a dedicated test node against a separate web instance backed by a copy of the database. Keep the test hostname and database separate from production. Set `DATA_MODE=fixture` for a local smoke test. Set `RATE_LIMIT=off` on the test web instance, or set `RATE_LIMIT_PAGES_PER_MIN` and `RATE_LIMIT_API_PER_MIN` high enough that the test measures page capacity rather than one k6 node's shared IP. Keep the limiter enabled for a separate rate-limit test. The k6 thresholds require zero 429s.
+
+The default `perf/k6/tickers.txt` contains the 35 fixture symbols. For a copied database, export one published ticker per line to a file on the load node and pass its path as `TICKERS`. The file should match the target's universe; unknown tickers produce 404s. `OWNER_AUTH` may hold an `Authorization` header value such as `Basic ...` when the test target requires owner access. `REVALIDATE_TOKEN` must be the test instance's `INGEST_TOKEN`; the load profile sends one `POST /api/revalidate` for the `scores` tag at minute 17, while 100 extra VUs briefly increase traffic. The smoke profile does not purge.
+
+```sh
+# Local smoke: start the app separately with DATA_MODE=fixture, then run k6.
+DATA_MODE=fixture RATE_LIMIT=off npm run dev
+k6 inspect -e BASE_URL=http://localhost:3000 -e PROFILE=smoke perf/k6/load.js
+BASE_URL=http://localhost:3000 PROFILE=smoke HEALTH_EXPECTED_STATUS=503 k6 run --summary-export /tmp/invest-k6-smoke.json perf/k6/load.js
+
+# Dedicated load node: use only a test origin and its test token.
+export BASE_URL=https://test.example.internal
+export TICKERS=/path/to/test-tickers.txt
+export REVALIDATE_TOKEN=...  # test instance token
+export PROFILE=load
+k6 inspect --include-system-env-vars perf/k6/load.js
+k6 run --summary-export /tmp/invest-k6-load.json perf/k6/load.js
+```
+
+The smoke profile ramps from 1 to 5 VUs in one minute and assigns each VU a journey, covering all six journey types. It checks status, 429s, and response size. `/api/health` returns 503 in fixture mode without a database, so set `HEALTH_EXPECTED_STATUS=503` only for that local smoke; this exempts the built-in HTTP failure threshold while still checking every route's expected status. The load profile requires health 200 and ramps 0 to 50 to 200 to 500 VUs over 15 minutes, holds 500 for 10 minutes, then ramps down over two minutes. Load journey selection is 40% home/dashboard/company browsing, 25% scanner filters, 15% company/methodology/track record, 10% heatmap/ETF, 5% health, and 5% static assets. Each step has 1 to 5 seconds of think time. Scanner requests vary state, sector, F/T/M, sort, and `page=1..3`. The current scanner ignores `page` because it does not paginate yet.
+
+The script sends `Accept-Encoding: gzip` and checks every response for the expected status and size. The default decoded HTML limit is 25 million characters (`MAX_HTML_CHARS`); dashboard responses also have a 1 MiB compressed limit (`MAX_DASHBOARD_GZIP_BYTES`) when the server supplies both `Content-Encoding: gzip` and `Content-Length`. The revalidation response has a 64 KiB limit. The summary reports decoded body characters and any declared gzip length. If the server uses chunked transfer, use a network capture or proxy metrics to measure compressed dashboard bytes. Both profiles require no 429s or oversized responses. The load profile also requires HTTP failure rate below 0.5%, dashboard p95 below 1.5 s, company p95 below 800 ms, scanner p95 below 1.2 s, and health p99 below 500 ms.
+
+During the run, record web pod RSS and restarts (`kubectl top pod` and `kubectl get pod`), Postgres CPU (`kubectl top pod`), and Postgres connection activity (`pg_stat_activity`). Capture event-loop lag and pool wait p95 from the test instance's instrumentation if available; these metrics are not exposed by the app today. Compare the minute before and after revalidation for 5xx, latency, readiness changes, and memory growth. Record the test image, database size, node resources, rate-limit setting, ticker count, and summary JSON with the result.
+
+Local fixture smoke on 2026-11-09 used the standalone build, 1 to 5 VUs, and `RATE_LIMIT=off`. It made 65 requests; all 130 checks passed, with overall request p95 of 1.17 s and no 429s or oversized responses. Four health requests returned the expected 503 because the fixture app had no database. k6 counted those four in its built-in HTTP failure metric (4/65), while the explicit status checks passed. This smoke is a route check, not a capacity baseline.
 
 ## Baselines
 

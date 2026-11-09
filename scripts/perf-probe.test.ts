@@ -1,5 +1,18 @@
 import { describe, expect, it, vi } from "vitest";
-import { percentile, summarize, urlList } from "./perf-probe.mjs";
+import { percentile, probe, summarize, urlList } from "./perf-probe.mjs";
+
+describe("target guard", () => {
+  it("rejects production", async () => {
+    vi.stubEnv("ALLOW_PROD", "0");
+    await expect(probe("https://invest.filipcsupka.online", 1)).rejects.toThrow("Refusing production");
+    await expect(probe("https://INVEST.FILIPCSUPKA.ONLINE.:443", 1)).rejects.toThrow("Refusing production");
+    vi.unstubAllEnvs();
+  });
+  it("rejects targets that can hide another destination", async () => {
+    await expect(probe("http://localhost:3000@invest.filipcsupka.online", 1)).rejects.toThrow();
+    await expect(probe("http://localhost:3000/redirect", 1)).rejects.toThrow();
+  });
+});
 
 describe("percentile", () => {
   it("uses nearest rank on unsorted input", () => {

@@ -7,6 +7,19 @@ import { fileURLToPath } from "node:url";
 
 export const PATHS = ["", "/dashboard", "/company/NVDA", "/company/AMD", "/track-record", "/methodology"];
 export const LOCALES = ["en", "sk"];
+export const PRODUCTION_HOST = "invest.filipcsupka.online";
+
+export function assertSafeBase(base, allowProd = process.env.ALLOW_PROD === "1") {
+  const url = new URL(base);
+  if (!/^https?:$/.test(url.protocol) || url.username || url.password || (url.pathname !== "/" && url.pathname !== "") || url.search || url.hash) {
+    throw new Error("Base must be an HTTP origin without credentials, path, query or fragment");
+  }
+  const host = url.hostname.replace(/\.$/, "").toLowerCase();
+  if ((host === PRODUCTION_HOST || host.endsWith(`.${PRODUCTION_HOST}`)) && !allowProd) {
+    throw new Error(`Refusing production host ${PRODUCTION_HOST}; set ALLOW_PROD=1 to override`);
+  }
+  return url.origin;
+}
 
 export function urlList(base) {
   const root = base.replace(/\/+$/, "");
@@ -51,6 +64,8 @@ async function sample(url) {
 }
 
 export async function probe(base, runs) {
+  base = assertSafeBase(base);
+  if (!Number.isInteger(runs) || runs < 1) throw new Error("Runs must be a positive integer");
   const results = {};
   for (const url of urlList(base)) {
     const samples = [];
@@ -67,7 +82,7 @@ function arg(name, fallback) {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const base = arg("--base", "http://localhost:3000");
+  const base = arg("--base", process.env.BASE_URL || "http://localhost:3000");
   const runs = Number(arg("--runs", "10"));
   const out = arg("--out", "");
   const report = { base, runs, at: new Date().toISOString(), results: await probe(base, runs) };
