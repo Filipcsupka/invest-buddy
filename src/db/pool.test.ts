@@ -28,15 +28,16 @@ vi.mock("pg", () => {
 
 let handler: (sql: string) => { rows: unknown[] };
 
-import { closePool, getPool } from "./pool";
+import { closePool, getPool, poolMax } from "./pool";
 
 beforeEach(() => {
   requestMemo.clear(); pools.length = 0; sqlSeen.length = 0;
   process.env.DATABASE_URL = "postgres://test";
+  delete process.env.DB_POOL_MAX;
   delete process.env.DATA_MODE;
   handler = () => ({ rows: [] });
 });
-afterEach(async () => { await closePool(); delete process.env.DATABASE_URL; process.removeAllListeners("SIGTERM"); vi.restoreAllMocks(); });
+afterEach(async () => { await closePool(); delete process.env.DATABASE_URL; delete process.env.DB_POOL_MAX; process.removeAllListeners("SIGTERM"); vi.restoreAllMocks(); });
 
 describe("shared pool", () => {
   it("returns null without DATABASE_URL and builds one bounded pool otherwise", () => {
@@ -46,8 +47,15 @@ describe("shared pool", () => {
     const a = getPool();
     expect(getPool()).toBe(a);
     expect(pools).toHaveLength(1);
-    expect(pools[0].options).toMatchObject({ connectionString: "postgres://test", max: 5, connectionTimeoutMillis: 3000 });
+    expect(pools[0].options).toMatchObject({ connectionString: "postgres://test", max: 12, connectionTimeoutMillis: 1500 });
     expect(pools[0].options.idleTimeoutMillis).toBeGreaterThan(0);
+  });
+
+  it("accepts a bounded integer max and falls back for invalid values", async () => {
+    expect([undefined, "", "0", "-1", "1.5", "33", "999999999999999999", "abc"].map((value) => poolMax(value))).toEqual(Array(8).fill(12));
+    expect(poolMax("1")).toBe(1);
+    process.env.DB_POOL_MAX = "24";
+    expect(getPool()?.options.max).toBe(24);
   });
 
   it("closePool ends the pool once and a later getPool builds a fresh one", async () => {
