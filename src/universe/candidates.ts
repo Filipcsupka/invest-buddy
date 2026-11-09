@@ -2,7 +2,7 @@ import type pg from "pg";
 import { REVENUE_CONCEPTS } from "../collectors/sources/frames";
 import { barMetrics, revenueGrowth, type Candidate, type RevenuePeriod } from "./select";
 import { fxConversion, normalizeCurrency, suffixExchange, type FxObservation } from "./market";
-import { sectorFromEodhd, UNCLASSIFIED } from "./sector";
+import { sectorForCandidate } from "./sector";
 
 type Q = Pick<pg.Pool, "query">;
 type NameRow = {
@@ -184,8 +184,8 @@ export async function loadCandidates(db: Q, asOf: string, secCik: Map<string, nu
     const conversion = quote.currency ? fxConversion(quote.currency, rates, asOf) : { usdPerUnit: null, reason: "fx_unavailable" as const };
     const count = sharesBySource.get(`${n.ticker}:eodhd`) ?? (l.exchange === "US" ? sharesBySource.get(`${n.ticker}:sec`) ?? sharesBySource.get(`${usCode}:sec`) : undefined);
     const listingIssue = l.issue ?? quote.issue;
-    // European listings have no SIC code; an Unclassified one takes its sector from the stored EODHD industry. US names are unchanged.
-    const sector = !l.us && n.sector === UNCLASSIFIED ? sectorFromEodhd(n.industry) : n.sector;
+    // Only a missing stored classification takes the EODHD industry, for either US or European listings.
+    const sector = sectorForCandidate(n.sector, n.industry);
     return { ticker: n.ticker, name: n.name, sector, cik: cikMap.get(n.ticker) ?? secCik.get(n.ticker) ?? secCik.get(usCode) ?? null,
       exchange: l.exchange, currency: quote.currency, vendorSymbol: n.vendor_symbol, securityType: n.type, isin: n.isin ?? null, usdPerUnit: conversion.usdPerUnit,
       marketCapUsd: metrics.lastClose !== null && conversion.usdPerUnit !== null && count ? metrics.lastClose * count * conversion.usdPerUnit : null,

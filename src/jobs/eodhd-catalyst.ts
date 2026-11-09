@@ -24,6 +24,18 @@ export interface CalendarObservation extends EstimateObservation { ticker: strin
 export interface CatalystClient { news(options: { symbol: string; from: string; to: string; limit: number }): Promise<NewsItem[]>; getCallCosts(): Record<string, number> }
 export interface CatalystOptions { dryRun?: boolean; now?: Date; only?: string[]; maxNewsSymbols?: number; subjects?: CatalystSubject[]; calendarRows?: CalendarObservation[]; fixtureDir?: string }
 
+/** Mutually exclusive score buckets make an empty paid shortlist visible in job logs. */
+export function catalystScoreDistribution(subjects: CatalystSubject[]) {
+  const counts = { missing: 0, below15: 0, from15To19: 0, atLeast20: 0 };
+  for (const row of subjects) {
+    if (row.score === null || !Number.isFinite(row.score)) counts.missing++;
+    else if (row.score < NEWS_SCORE_MIN) counts.below15++;
+    else if (row.score < 20) counts.from15To19++;
+    else counts.atLeast20++;
+  }
+  return counts;
+}
+
 /**
  * Only scored non-US home listings enter this collector (with SCORE_EXTENDED, the extended list too); their latest score controls news spend.
  * The vendor symbol comes from the explicit EODHD mapping or the home-listing resolver the price job uses (US names resolve to .US and stay out).
@@ -72,8 +84,11 @@ export async function runEodhdCatalyst(db: pg.Pool | null, api: CatalystClient, 
   const byTicker = new Map<string, CalendarObservation[]>();
   for (const row of calendar) byTicker.set(row.ticker, [...(byTicker.get(row.ticker) ?? []), row]);
   const max = options.maxNewsSymbols ?? MAX_NEWS_SYMBOLS;
-  const shortlisted = subjects.filter((row) => row.score !== null && row.score >= NEWS_SCORE_MIN)
+  const shortlisted = subjects.filter((row) => row.score !== null && Number.isFinite(row.score) && row.score >= NEWS_SCORE_MIN)
     .sort((a, b) => b.score! - a.score! || a.ticker.localeCompare(b.ticker)).slice(0, max);
+  const scoreDistribution = catalystScoreDistribution(subjects);
+  process.stderr.write(`${JSON.stringify({ event: "eodhd_catalyst_scope", subjects: subjects.length, shortlisted: shortlisted.length,
+    newsSymbols: shortlisted.length, scoreDistribution, maxNewsSymbols: max, minNewsScore: NEWS_SCORE_MIN })}\n`);
   const repo = db && !options.dryRun ? new PostgresCollectorRepository(db) : null;
   const newsByTicker = new Map<string, EodhdNewsEvidence[]>();
   let requests = 0, articles = 0, documents = 0, facts = 0;
@@ -127,9 +142,14 @@ export async function runEodhdCatalyst(db: pg.Pool | null, api: CatalystClient, 
     if (repo) await repo.upsertFact({ symbol: row.ticker, key: CATALYST_EODHD_FACT_NAME, asOf: today, value: fact,
       documentIds: fact.documentIds, sourceId: SOURCE, expiresAt: shift(today, fact.kind === "earnings_revision" ? 15 : 8) });
   }
-  return { subjects: subjects.length, shortlisted: shortlisted.length, newsRequests: requests, newsArticles: articles,
+  const result = { subjects: subjects.length, shortlisted: shortlisted.length, newsSymbols: shortlisted.length,
+    scoreMissing: scoreDistribution.missing, scoreBelow15: scoreDistribution.below15,
+    scoreFrom15To19: scoreDistribution.from15To19, scoreAtLeast20: scoreDistribution.atLeast20,
+    newsRequests: requests, newsArticles: articles,
     documents, facts, failures: failed.length, failedSymbols: failed.join(","), stoppedEarly,
     baseCalls: api.getCallCosts().news ?? 0 };
+  process.stderr.write(`${JSON.stringify({ event: "eodhd_catalyst_result", ...result })}\n`);
+  return result;
 }
 
 export function parseArgs(args: string[]): CatalystOptions {

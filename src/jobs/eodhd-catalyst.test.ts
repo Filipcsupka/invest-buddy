@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type pg from "pg";
 import type { NewsItem } from "../data-providers/eodhd/client";
-import { loadCatalystCalendar, loadCatalystSubjects, parseArgs, runEodhdCatalyst, type CatalystSubject } from "./eodhd-catalyst";
+import { catalystScoreDistribution, loadCatalystCalendar, loadCatalystSubjects, parseArgs, runEodhdCatalyst, type CatalystSubject } from "./eodhd-catalyst";
 import { loadCatalyst } from "../data/catalyst";
 
 const now = new Date("2026-10-21T12:00:00Z");
@@ -16,6 +16,21 @@ const news: NewsItem[] = [
 ];
 
 describe("EODHD catalyst job", () => {
+  it("logs an empty shortlist and zero events as a successful scoped run", async () => {
+    const output = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    try {
+      const api = { news: vi.fn().mockResolvedValue([]), getCallCosts: () => ({}) };
+      const result = await runEodhdCatalyst(null, api, { dryRun: true, now, subjects: [rows[2], { ticker: "NONE", vendorSymbol: "NONE.AS", score: null }], calendarRows: [] });
+      expect(result).toMatchObject({ subjects: 2, shortlisted: 0, newsSymbols: 0, newsRequests: 0, facts: 0, failures: 0,
+        scoreMissing: 1, scoreBelow15: 1, scoreFrom15To19: 0, scoreAtLeast20: 0 });
+      expect(api.news).not.toHaveBeenCalled();
+      const events = output.mock.calls.map((call) => JSON.parse(String(call[0])));
+      expect(events).toMatchObject([{ event: "eodhd_catalyst_scope", subjects: 2, newsSymbols: 0 },
+        { event: "eodhd_catalyst_result", facts: 0, failures: 0 }]);
+    } finally { output.mockRestore(); }
+    expect(catalystScoreDistribution([{ ticker: "A", vendorSymbol: "A.AS", score: 20 }])).toMatchObject({ atLeast20: 1 });
+  });
+
   it("requests one symbol at a time and keeps low-score names off the paid endpoint", async () => {
     const api = { news: vi.fn().mockResolvedValue(news), getCallCosts: () => ({ news: 10 }) };
     const result = await runEodhdCatalyst(null, api, { dryRun: true, now, subjects: rows, calendarRows: [] });

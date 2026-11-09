@@ -35,6 +35,11 @@ export function sectorFromEodhd(industry: string | null | undefined): string {
   return industry ? EODHD_INDUSTRY_SECTOR.get(industry.trim().toLowerCase()) ?? UNCLASSIFIED : UNCLASSIFIED;
 }
 
+/** A known stored sector wins; EODHD industry only fills a missing classification. */
+export function sectorForCandidate(stored: string, industry: string | null | undefined): string {
+  return stored === UNCLASSIFIED ? sectorFromEodhd(industry) : stored;
+}
+
 /** Trimmed General.Sector and General.Industry from an EODHD fundamentals payload; blank or non-string values are null. */
 export function eodhdClassification(general: { Sector?: unknown; Industry?: unknown } | undefined): { sector: string | null; industry: string | null } {
   const text = (value: unknown) => typeof value === "string" && value.trim() ? value.trim().slice(0, 200) : null;
