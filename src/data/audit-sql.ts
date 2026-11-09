@@ -8,6 +8,7 @@ export const AUDIT_BAR_LIMIT = 320;
  */
 export function trimmedAudit(column = "s.audit", keep = AUDIT_BAR_LIMIT): string {
   const limit = Math.max(0, Math.trunc(keep));
+  if (limit === 0) return `jsonb_set(${column},'{inputs,bars}','[]'::jsonb,false)`;
   const kept = limit > 0
     ? `COALESCE((SELECT jsonb_agg(e.b ORDER BY e.o) FROM jsonb_array_elements(t.bars) WITH ORDINALITY e(b,o) WHERE e.o > t.n - ${limit}),'[]'::jsonb)`
     : `'[]'::jsonb`;

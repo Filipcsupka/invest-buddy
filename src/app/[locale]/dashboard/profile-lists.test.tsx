@@ -3,17 +3,15 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { scoredUniverse } from "@/data/scored";
 import { StateFilterProvider, type StateFilter } from "@/components/state-filter";
 import { toRow } from "@/components/view-model";
-import type { StoreRow } from "@/data/store";
 import { ProfileLists } from "./profile-lists";
 
 async function fixture() {
-  const rows = (await scoredUniverse()) as unknown as StoreRow[];
-  const screen = rows.map((row) => toRow("en", row));
+  const screen = (await scoredUniverse()).map((row) => toRow("en", row));
   const first = screen[0];
   const other = screen.find((row) => row.state !== first.state);
   if (!other) throw new Error("fixture needs two different statuses");
   const horizons = Object.fromEntries([first, other].map((row) => [row.ticker, { ticker: row.ticker, profile: "event_driven" as const, values: {} }]));
-  const html = (initial: StateFilter) => renderToStaticMarkup(<StateFilterProvider initial={initial}><ProfileLists locale="en" rows={rows} horizons={horizons} /></StateFilterProvider>);
+  const html = (initial: StateFilter) => renderToStaticMarkup(<StateFilterProvider initial={initial}><ProfileLists locale="en" rows={screen} horizons={horizons} /></StateFilterProvider>);
   return { first, other, html };
 }
 

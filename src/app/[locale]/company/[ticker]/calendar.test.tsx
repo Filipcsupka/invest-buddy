@@ -5,7 +5,7 @@ const universe = vi.fn();
 const scores = vi.fn();
 vi.mock("next/headers", () => ({ headers: async () => ({ get: () => null }) }));
 vi.mock("@/data/flag-facts", () => ({ storedShareCounts: async () => [], storedInterestFacts: async () => ({ operatingIncome: null, interestExpense: null }) }));
-vi.mock("@/data/store", () => ({ instrumentUniverse: () => universe(), latestScores: () => scores(), latestPortfolio: async () => null }));
+vi.mock("@/data/store", () => ({ instrumentUniverse: () => universe(), instrumentForTicker: async (ticker: string) => (await universe()).find((item: { ticker: string }) => item.ticker === ticker.toUpperCase()) ?? null, scoreForTicker: async (ticker: string) => { const data = await scores(); return { ...data, rows: data.rows.find((item: { instrument: { ticker: string } }) => item.instrument.ticker === ticker) ?? null }; }, latestPortfolio: async () => null }));
 vi.mock("@/data/score-history", () => ({ companyScoreHistory: async () => [] }));
 vi.mock("@/data/ideas-store", () => ({ companyIdea: async () => null, companyReview: async () => null }));
 // One fake pool for every web read: the earnings calendar answers, every other table is empty.

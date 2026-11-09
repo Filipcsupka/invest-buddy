@@ -8,7 +8,7 @@ const scores = vi.fn();
 const portfolio = vi.fn();
 const universe = vi.fn();
 const idea = vi.fn();
-vi.mock("@/data/store", () => ({ latestScores: () => scores(), latestPortfolio: () => portfolio(), instrumentUniverse: () => universe() }));
+vi.mock("@/data/store", () => ({ latestScores: () => scores(), latestScoreSummaries: () => scores(), scoreForTicker: async (ticker: string) => { const data = await scores(); return { ...data, rows: data.rows.find((item: { instrument: { ticker: string } }) => item.instrument.ticker === ticker) ?? null }; }, latestPortfolio: () => portfolio(), instrumentUniverse: () => universe(), instrumentForTicker: async (ticker: string) => (await universe()).find((item: { ticker: string }) => item.ticker === ticker.toUpperCase()) ?? null }));
 vi.mock("@/data/ideas-store", () => ({ companyIdea: () => idea(), companyReview: async () => null, ideasEnabled: () => true }));
 
 import Home from "./[locale]/page";

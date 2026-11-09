@@ -101,7 +101,7 @@ describe("one request", () => {
     const row = rows.find((r) => r.instrument.ticker === instruments[0].ticker)!;
     handler = (sql) => {
       if (sql.includes("FROM universe_membership m")) return { rows: [row.instrument] };
-      if (sql.includes("DISTINCT ON (s.ticker)")) return { rows: [{ ...row.instrument, audit: row.result, as_of: row.result.asOf }] };
+      if (sql.includes("FROM score_results s") && sql.includes("s.ticker=$1")) return { rows: [{ ...row.instrument, audit: row.result, as_of: row.result.asOf }] };
       return { rows: [] };
     };
     const Company = (await import("../app/[locale]/company/[ticker]/page")).default;
@@ -111,8 +111,8 @@ describe("one request", () => {
     const html = renderToStaticMarkup(await Company(props));
     expect(html).toContain(row.instrument.ticker);
     expect(pools).toHaveLength(1);
-    expect(sqlSeen.filter((sql) => sql.includes("DISTINCT ON (s.ticker)"))).toHaveLength(1);
-    expect(sqlSeen.filter((sql) => sql.includes("FROM universe_membership m"))).toHaveLength(1);
+    expect(sqlSeen.filter((sql) => sql.includes("FROM score_results s") && sql.includes("s.ticker=$1"))).toHaveLength(1);
+    expect(sqlSeen.filter((sql) => sql.includes("FROM universe_membership m"))).toHaveLength(2);
     expect(pools[0].end).not.toHaveBeenCalled();
   });
 });

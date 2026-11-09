@@ -2,6 +2,7 @@ import { cache } from "react";
 import { getPool } from "@/db/pool";
 import type { StoredHorizonProfile } from "@/db/horizon-labels";
 import type { HorizonResult } from "@/engine/horizon";
+import { CACHE_TAGS, webCached } from "./web-cache";
 
 export type PublicHorizon = {
   ticker: string;
@@ -10,7 +11,7 @@ export type PublicHorizon = {
 };
 
 /** Public pages use the last computed observation, never an owner override. */
-export const publicHorizons = cache(async (): Promise<Record<string, PublicHorizon>> => {
+async function publicHorizonsUncached(): Promise<Record<string, PublicHorizon>> {
   if (process.env.DATA_MODE === "fixture") return {};
   const db = getPool();
   if (!db) return {};
@@ -22,4 +23,6 @@ export const publicHorizons = cache(async (): Promise<Record<string, PublicHoriz
   return Object.fromEntries(rows.filter((row) => row.observed_profile).map((row) => [row.ticker, {
     ticker: row.ticker, profile: row.observed_profile!, values: row.input_values ?? {},
   }]));
-});
+}
+
+export const publicHorizons = cache(webCached(publicHorizonsUncached, "public-horizons", [CACHE_TAGS.scores], { bypass: () => !getPool() }));

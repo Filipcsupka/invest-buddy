@@ -12,6 +12,8 @@ import { samplePortfolio } from "../portfolio/fixture";
 import { PostgresPortfolioRepository } from "../db/portfolio";
 import { PostgresNavHistoryRepository } from "../db/portfolio-history";
 import { buildIndexedSeries, type IndexedSeries } from "../portfolio/history";
+import { score } from "../engine";
+import { fixtureProvider } from "./fixtures";
 
 export interface StoreRow { instrument: Instrument; result: ScoreResult }
 export interface StoreData<T> { rows: T; sample: boolean; lastUpdated: string | null; stale: boolean }
@@ -38,6 +40,51 @@ async function latestScoresUncached(): Promise<StoreData<StoreRow[]>> {
   const rows = result.rows.map((row) => ({ instrument: { ticker: row.ticker, name: row.name, sector: row.sector, tier: row.tier, source: row.source, list: row.list }, result: row.audit }));
   const lastUpdated = result.rows.map((row) => row.as_of).sort().at(-1) ?? null;
   return { rows, sample: false, lastUpdated, stale: stale(lastUpdated) };
+}
+/** Score rows for listing pages. Keep rules and evidence, but never load price bars for every name. */
+async function latestScoreSummariesUncached(): Promise<StoreData<StoreRow[]>> {
+  if (fixtureMode()) {
+    const rows = (await fixtureUniverse()).map(({ instrument, result }) => ({ instrument, result: { ...result, inputs: { ...result.inputs, bars: [] } } }));
+    return { rows, sample: true, lastUpdated: rows[0]?.result.asOf ?? null, stale: false };
+  }
+  const db = pool(); if (!db) return { rows: [], sample: false, lastUpdated: null, stale: false };
+  const result = await db.query<{ ticker: string; name: string; sector: string; tier: 1 | 2 | 3 | null; source: Instrument["source"]; list: string; audit: ScoreResult; as_of: string }>(`SELECT l.ticker,l.name,l.sector,l.tier,l.source,l.list,${trimmedAudit("r.audit", 0)} AS audit,l.as_of::text FROM (SELECT DISTINCT ON (s.ticker) s.ticker,i.name,i.sector,m.tier,i.source,m.list,s.as_of FROM score_results s
+    JOIN instruments i ON i.ticker=s.ticker JOIN universe_membership m ON m.ticker=i.ticker
+    WHERE ${pageScoreRow()} AND ${scoringMember()} AND m.valid_from <= CURRENT_DATE
+      AND s.as_of >= m.valid_from
+      AND (m.valid_to IS NULL OR m.valid_to > CURRENT_DATE) ORDER BY s.ticker,s.as_of DESC) l
+    JOIN score_results r ON r.ticker=l.ticker AND r.as_of=l.as_of ORDER BY l.ticker`);
+  const rows = result.rows.map((row) => ({ instrument: { ticker: row.ticker, name: row.name, sector: row.sector, tier: row.tier, source: row.source, list: row.list }, result: row.audit }));
+  const lastUpdated = result.rows.map((row) => row.as_of).sort().at(-1) ?? null;
+  return { rows, sample: false, lastUpdated, stale: stale(lastUpdated) };
+}
+/** Current, viewable membership for one ticker. Safe to reuse across public requests. */
+async function instrumentForTickerUncached(ticker: string): Promise<Instrument | null> {
+  const symbol = ticker.toUpperCase();
+  if (fixtureMode()) return fixtureInstruments.find((item) => item.ticker === symbol) ?? null;
+  const db = pool(); if (!db) return null;
+  const result = await db.query<Instrument>(`SELECT i.ticker,i.name,i.sector,m.tier,i.source,m.list FROM universe_membership m
+    JOIN instruments i ON i.ticker=m.ticker WHERE i.ticker=$1 AND ${scoringMember()} AND m.valid_from <= CURRENT_DATE
+    AND (m.valid_to IS NULL OR m.valid_to > CURRENT_DATE) LIMIT 1`, [symbol]);
+  return result.rows[0] ?? null;
+}
+/** One full audit, with chart bars, for the selected company only. */
+async function scoreForTickerUncached(ticker: string): Promise<StoreData<StoreRow | null>> {
+  const symbol = ticker.toUpperCase();
+  if (fixtureMode()) {
+    const instrument = fixtureInstruments.find((item) => item.ticker === symbol);
+    const row = instrument ? { instrument, result: score({ ticker: symbol, bars: await fixtureProvider.bars(symbol), fundamentals: await fixtureProvider.fundamentals(symbol), macro: await fixtureProvider.macro(symbol) }) } : null;
+    return { rows: row, sample: true, lastUpdated: row?.result.asOf ?? null, stale: false };
+  }
+  const db = pool(); if (!db) return { rows: null, sample: false, lastUpdated: null, stale: false };
+  const result = await db.query<{ ticker: string; name: string; sector: string; tier: 1 | 2 | 3 | null; source: Instrument["source"]; list: string; audit: ScoreResult; as_of: string }>(`SELECT s.ticker,i.name,i.sector,m.tier,i.source,m.list,${trimmedAudit("s.audit")} AS audit,s.as_of::text FROM score_results s
+    JOIN instruments i ON i.ticker=s.ticker JOIN universe_membership m ON m.ticker=i.ticker
+    WHERE s.ticker=$1 AND ${pageScoreRow()} AND ${scoringMember()} AND m.valid_from <= CURRENT_DATE
+      AND s.as_of >= m.valid_from AND (m.valid_to IS NULL OR m.valid_to > CURRENT_DATE)
+    ORDER BY s.as_of DESC LIMIT 1`, [symbol]);
+  const row = result.rows[0];
+  const lastUpdated = row?.as_of ?? null;
+  return { rows: row ? { instrument: { ticker: row.ticker, name: row.name, sector: row.sector, tier: row.tier, source: row.source, list: row.list }, result: row.audit } : null, sample: false, lastUpdated, stale: stale(lastUpdated) };
 }
 /** Ticker universe: fixture instruments in fixture mode, otherwise current membership. */
 async function instrumentUniverseUncached(): Promise<Instrument[]> {
@@ -82,5 +129,8 @@ export async function alertHistory() {
 
 /** Per-request memo (React cache): generateMetadata and the page share one query. */
 export const latestScores = cache(webCached(latestScoresUncached, "latest-scores", [CACHE_TAGS.scores], { bypass: noPool }));
+export const latestScoreSummaries = cache(webCached(latestScoreSummariesUncached, "latest-score-summaries", [CACHE_TAGS.scores], { bypass: noPool }));
+export const instrumentForTicker = cache(webCached(instrumentForTickerUncached, "instrument-for-ticker", [CACHE_TAGS.scores], { bypass: noPool }));
+export const scoreForTicker = cache(webCached(scoreForTickerUncached, "score-for-ticker", [CACHE_TAGS.scores], { bypass: noPool }));
 export const instrumentUniverse = cache(webCached(instrumentUniverseUncached, "instrument-universe", [CACHE_TAGS.scores], { bypass: noPool }));
 export const latestPortfolio = cache(webCached(latestPortfolioUncached, "latest-portfolio", [CACHE_TAGS.portfolio], { bypass: noPool }));
