@@ -1,8 +1,22 @@
 /** One mail. `headers` carries List-Unsubscribe when a mail is a list mail. */
 export interface MailMessage { to: string; subject: string; text: string; html?: string; headers?: Record<string, string> }
 
-/** Adapter every mail kind goes through. The delivery provider is an owner decision (W12); until then only the two implementations below exist. */
+/** Adapter every mail kind goes through. */
 export interface Mailer { send(message: MailMessage): Promise<void> }
+
+export class ResendMailer implements Mailer {
+  constructor(private readonly apiKey: string, private readonly from: string) {}
+  async send(message: MailMessage): Promise<void> {
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${this.apiKey}`, "Content-Type": "application/json" },
+      // List-Unsubscribe travels only when the caller set it, which only list mail does.
+      body: JSON.stringify({ from: this.from, to: [message.to], subject: message.subject, text: message.text, html: message.html, ...(message.headers ? { headers: message.headers } : {}) }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!response.ok) throw new Error(`Resend delivery failed (${response.status})`);
+  }
+}
 
 /** Prints the message to stdout. For local work only: the output holds the recipient and any links in the body. */
 export class ConsoleMailer implements Mailer {
@@ -24,7 +38,7 @@ export class MemoryMailer implements Mailer {
 
 /**
  * `MAIL_PROVIDER` unset gives the console mailer outside production. In production the console mailer needs `MAIL_PROVIDER=console` set on purpose,
- * because it writes recipients and links to the log. Any other value is refused until a provider is chosen and built (W12).
+ * because it writes recipients and links to the log.
  */
 export function mailerFromEnv(env: Record<string, string | undefined> = process.env): Mailer {
   const explicit = env.MAIL_PROVIDER?.trim();
@@ -32,6 +46,10 @@ export function mailerFromEnv(env: Record<string, string | undefined> = process.
   if (provider === "console") {
     if (env.NODE_ENV === "production" && !explicit) throw new Error("MAIL_PROVIDER must be set in production; set MAIL_PROVIDER=console to use the console mailer on purpose");
     return new ConsoleMailer();
+  }
+  if (provider === "resend") {
+    if (!env.RESEND_API_KEY || !env.MAIL_FROM) throw new Error("RESEND_API_KEY and MAIL_FROM are required for Resend");
+    return new ResendMailer(env.RESEND_API_KEY, env.MAIL_FROM);
   }
   throw new Error(`MAIL_PROVIDER ${provider} is not supported yet`);
 }

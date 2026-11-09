@@ -26,6 +26,8 @@ const en = {
     watchlist: "A longer watchlist.",
     "alerts-daily": "Daily alerts when a ticker changes state, for more tickers.",
     "csv-export": "Download of the table as a CSV file.",
+    "insiders-filters": "Filters for insider events by role, transaction type and size.",
+    "company-sec-history": "SEC filing history beyond the free window.",
   } as Partial<Record<TierId, string>>,
   limit: {
     "insiders-history": "The free tier shows events from the last {days}. Older events are in the paid tier.",
@@ -33,6 +35,7 @@ const en = {
     "saved-screens": "The free tier keeps {n} saved screens.",
     watchlist: "The free tier keeps {n} tickers on a watchlist.",
     "alerts-daily": "The free tier allows alerts for {n} tickers.",
+    "company-sec-history": "The free tier shows SEC filings from the last {n} years. Older filings are in the paid tier.",
   } as Partial<Record<TierId, string>>,
 };
 
@@ -57,6 +60,8 @@ const sk: TierMessages = {
     watchlist: "Dlhší zoznam sledovaných titulov.",
     "alerts-daily": "Denné upozornenia na zmenu stavu titulu pre viac titulov.",
     "csv-export": "Stiahnutie tabuľky ako súboru CSV.",
+    "insiders-filters": "Filtre udalostí insiderov podľa funkcie, typu transakcie a veľkosti.",
+    "company-sec-history": "História podaní SEC mimo bezplatného okna.",
   },
   limit: {
     "insiders-history": "Bezplatná úroveň ukazuje udalosti za posledných {days}. Staršie sú v platenej úrovni.",
@@ -64,6 +69,7 @@ const sk: TierMessages = {
     "saved-screens": "Počet uložených filtrov v bezplatnej úrovni: {n}.",
     watchlist: "Počet sledovaných titulov v bezplatnej úrovni: {n}.",
     "alerts-daily": "Počet titulov s upozornením v bezplatnej úrovni: {n}.",
+    "company-sec-history": "Počet rokov podaní SEC v bezplatnej úrovni: {n}. Staršie podania sú v platenej úrovni.",
   },
 };
 

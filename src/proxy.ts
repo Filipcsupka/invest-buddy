@@ -14,6 +14,7 @@ import { ownerSessionFromCookieHeader, verifyOwnerSession } from "@/security/own
 import { marketsViewable } from "@/markets/gate";
 import { isEtfDataPath } from "@/components/etf/tabs";
 import { PRIVATE_DATA_SECTIONS } from "@/app/private-data-routes";
+import { hasCustomerCookie } from "@/auth/cookie";
 
 const marketSections = new Set(["indices", "forex", "crypto", "economy", "congress", "news", "screener"]);
 const privateDataSections = new Set<string>(PRIVATE_DATA_SECTIONS);
@@ -34,10 +35,13 @@ async function handle(request: NextRequest) {
   const session = ownerSessionFromCookieHeader(request.headers.get("cookie"));
   const cookieOwner = verifyOwnerSession(session, password);
   const owner = basicOwner || cookieOwner;
+  // A customer cookie never grants anything here; it only marks the response as per-user so shared caches skip it.
+  const customerCookie = hasCustomerCookie(request.headers.get("cookie"));
   if (request.nextUrl.pathname.startsWith("/api/")) {
     const response = (rateLimit(request) as NextResponse | undefined) ?? NextResponse.next();
-    if (owner) {
+    if (owner || customerCookie || request.nextUrl.pathname.startsWith("/api/auth/")) {
       response.headers.set("Cache-Control", "private, no-store");
+      response.headers.set("Vary", "Cookie");
       response.headers.set("X-Robots-Tag", "noindex");
     }
     return response;
@@ -56,7 +60,7 @@ async function handle(request: NextRequest) {
   // Never trust a client-sent preview header. Only an admin request with ?view=free gets one; resolveViewer ignores it for others.
   incoming.delete(PREVIEW_HEADER);
   const previewParam = request.nextUrl.searchParams.get("view");
-  if (previewParam === "free" && resolveViewer(flags(), "free").preview) incoming.set(PREVIEW_HEADER, "free");
+  if (previewParam === "free" && resolveViewer(flags(), "free", owner).preview) incoming.set(PREVIEW_HEADER, "free");
   const [, locale, section, ticker] = request.nextUrl.pathname.split("/");
   const featureFlags = flags();
   const privateDataRoute = privateDataSections.has(section);
@@ -89,8 +93,11 @@ async function handle(request: NextRequest) {
     || (section === "company" && (!ticker || !(await instrumentForTicker(ticker))));
   if (!unavailable) {
     const response = NextResponse.next({ request: { headers: incoming } });
-    if (owner || section === "owner" || section === "owner-sign-in" || market || (process.env.EODHD_PRIVATE_USE === "on" && privateDataRoute)) response.headers.set("Cache-Control", "private, no-store");
-    if (owner || section === "owner" || section === "owner-sign-in" || market || (process.env.EODHD_PRIVATE_USE === "on" && privateDataRoute)) response.headers.set("X-Robots-Tag", "noindex");
+    if (owner || customerCookie || section === "account" || section === "owner" || section === "owner-sign-in" || market || (process.env.EODHD_PRIVATE_USE === "on" && privateDataRoute)) {
+      response.headers.set("Cache-Control", "private, no-store");
+      response.headers.set("Vary", "Cookie");
+    }
+    if (owner || section === "account" || section === "owner" || section === "owner-sign-in" || market || (process.env.EODHD_PRIVATE_USE === "on" && privateDataRoute)) response.headers.set("X-Robots-Tag", "noindex");
     if (request.nextUrl.searchParams.has("view")) response.headers.set("X-Robots-Tag", "noindex");
     response.headers.set("x-request-id", requestId);
     response.headers.set("server-timing", `rid;desc="${requestId}"`);

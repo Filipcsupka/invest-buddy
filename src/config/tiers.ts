@@ -4,10 +4,10 @@ import { PAYWALL_SEGMENTS, type PaywallSegmentId } from "@/paywall/segments";
  * Free, paid and admin tiers in one place (design: docs/tier-map.md). Pure data.
  * Pages, the pricing table and later the alert job read tiers and limits from here only.
  */
-export type LimitKey = "scoreHistoryDays" | "scannerRows" | "savedScreens" | "alerts" | "watchlistTickers" | "insiderDays" | "trackRecordHistoryDays";
+export type LimitKey = "scoreHistoryDays" | "scannerRows" | "savedScreens" | "alerts" | "watchlistTickers" | "insiderDays" | "secHistoryYears" | "trackRecordHistoryDays";
 
 /** Ids that are not page markers yet. They move into the registry (src/paywall/segments.ts) when a page marks them. */
-export const FEATURES = ["discovery-list", "saved-screens", "watchlist", "alerts-weekly", "alerts-daily", "csv-export"] as const;
+export const FEATURES = ["discovery-list", "saved-screens", "watchlist", "alerts-weekly", "alerts-daily", "csv-export", "insiders-filters", "company-sec-history"] as const;
 export type FeatureId = (typeof FEATURES)[number];
 export type TierId = PaywallSegmentId | FeatureId;
 
@@ -47,6 +47,8 @@ export const FEATURE_TIERS: Record<FeatureId, TierEntry> = {
   "alerts-weekly": free,
   "alerts-daily": limit("alerts"),
   "csv-export": lock,
+  "insiders-filters": lock,
+  "company-sec-history": limit("secHistoryYears"),
 };
 
 export function tierEntry(id: TierId): TierEntry {
@@ -61,6 +63,6 @@ export function tierEntry(id: TierId): TierEntry {
  * `paid` is also what admin gets; the paid caps only stop abuse.
  */
 export const TIER_LIMITS: { free: Record<LimitKey, number | null>; paid: Record<LimitKey, number | null> } = {
-  free: { scoreHistoryDays: 90, scannerRows: null, savedScreens: 1, alerts: 3, watchlistTickers: 10, insiderDays: 180, trackRecordHistoryDays: null },
-  paid: { scoreHistoryDays: null, scannerRows: null, savedScreens: 20, alerts: 50, watchlistTickers: 200, insiderDays: null, trackRecordHistoryDays: null },
+  free: { scoreHistoryDays: 90, scannerRows: null, savedScreens: 1, alerts: 3, watchlistTickers: 10, insiderDays: 180, secHistoryYears: 2, trackRecordHistoryDays: null },
+  paid: { scoreHistoryDays: null, scannerRows: null, savedScreens: 20, alerts: 50, watchlistTickers: 200, insiderDays: null, secHistoryYears: null, trackRecordHistoryDays: null },
 };

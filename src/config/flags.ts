@@ -5,7 +5,7 @@ import { z } from "zod";
 // so tests and runtime changes to process.env are honoured.
 const onOff = z.enum(["on", "off"]);
 
-export type FlagName = "PAYWALL" | "AUTH" | "BILLING" | "WAITLIST" | "ADVICE_OUTPUT" | "IDEAS_PAGE" | "INSIDERS_PAGE" | "OWNER_VIEW" | "DESIGN_VIEW" | "PUBLIC_EARNINGS_DATES" | "MARKETS_VIEWS";
+export type FlagName = "PAYWALL" | "AUTH" | "BILLING" | "TRIAL" | "MAGIC_LINK" | "EMAIL_VERIFY" | "WAITLIST" | "ADVICE_OUTPUT" | "IDEAS_PAGE" | "INSIDERS_PAGE" | "OWNER_VIEW" | "DESIGN_VIEW" | "PUBLIC_EARNINGS_DATES" | "MARKETS_VIEWS";
 export type Flags = Record<FlagName, boolean>;
 
 function parse(raw: string | undefined, fallback: boolean): boolean {
@@ -16,10 +16,13 @@ function parse(raw: string | undefined, fallback: boolean): boolean {
 export function flags(env: Record<string, string | undefined> = process.env): Flags {
   const fixture = env.DATA_MODE === "fixture";
   return {
-    // Enforce tiers for non-admin viewers (src/config/tiers.ts). It no longer hides /scanner. While AUTH is off every viewer is admin.
+    // Enforce tiers for non-owner viewers (src/config/tiers.ts).
     PAYWALL: parse(env.PAYWALL, false),
     AUTH: parse(env.AUTH, false),
     BILLING: parse(env.BILLING, false),
+    TRIAL: parse(env.TRIAL, false),
+    MAGIC_LINK: parse(env.MAGIC_LINK, false),
+    EMAIL_VERIFY: parse(env.EMAIL_VERIFY, false),
     WAITLIST: parse(env.WAITLIST, false),
     // Public action, size and plan wording stays hidden until legal review.
     ADVICE_OUTPUT: parse(env.ADVICE_OUTPUT, false),

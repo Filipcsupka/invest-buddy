@@ -28,6 +28,8 @@ const expected: Record<string, string> = {
   "alerts-weekly": "free",
   "alerts-daily": "limit:alerts",
   "csv-export": "lock",
+  "insiders-filters": "lock",
+  "company-sec-history": "limit:secHistoryYears",
 };
 
 const describe = (id: string) => {
@@ -60,6 +62,6 @@ it("names a TIER_LIMITS key for every limit entry, in both columns", () => {
 });
 
 it("holds the proposed free defaults", () => {
-  const free: Record<LimitKey, number | null> = { scoreHistoryDays: 90, scannerRows: null, savedScreens: 1, alerts: 3, watchlistTickers: 10, insiderDays: 180, trackRecordHistoryDays: null };
+  const free: Record<LimitKey, number | null> = { scoreHistoryDays: 90, scannerRows: null, savedScreens: 1, alerts: 3, watchlistTickers: 10, insiderDays: 180, secHistoryYears: 2, trackRecordHistoryDays: null };
   expect(TIER_LIMITS.free).toEqual(free);
 });
