@@ -18,7 +18,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return { ...pageMetadata(locale, "/owner/data", ownerDataMessages(locale).title, ownerDataMessages(locale).lede), robots: { index: false, follow: false } };
 }
 export default async function OwnerDataPage({ params, searchParams }: Props) {
-  if (!ownerAuthorized((await headers()).get("authorization"), process.env.OWNER_RESEARCH_PASSWORD)) notFound();
+  if (!ownerAuthorized(await headers(), process.env.OWNER_RESEARCH_PASSWORD)) notFound();
   const { locale } = await params;
   if (locale !== "en" && locale !== "sk") notFound();
   const db = getPool();

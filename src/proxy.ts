@@ -10,6 +10,7 @@ import { writeHttpLog } from "@/app/api/ingest/request-log";
 import { resolveRequestId } from "@/app/request-id";
 import { statusPage } from "@/app/status-page";
 import { ownerAuthorized } from "@/app/[locale]/owner/auth";
+import { ownerSessionFromCookieHeader, verifyOwnerSession } from "@/security/owner-session";
 import { marketsViewable } from "@/markets/gate";
 import { isEtfDataPath } from "@/components/etf/tabs";
 import { PRIVATE_DATA_SECTIONS } from "@/app/private-data-routes";
@@ -27,12 +28,29 @@ export async function proxy(request: NextRequest) {
 }
 
 async function handle(request: NextRequest) {
-  if (request.nextUrl.pathname.startsWith("/api/")) return (rateLimit(request) as NextResponse | undefined) ?? NextResponse.next();
+  const password = process.env.OWNER_RESEARCH_PASSWORD;
+  const basic = request.headers.get("authorization");
+  const basicOwner = basic?.startsWith("Basic ") ? ownerAuthorized(basic, password) : false;
+  const session = ownerSessionFromCookieHeader(request.headers.get("cookie"));
+  const cookieOwner = verifyOwnerSession(session, password);
+  const owner = basicOwner || cookieOwner;
+  if (request.nextUrl.pathname.startsWith("/api/")) {
+    const response = (rateLimit(request) as NextResponse | undefined) ?? NextResponse.next();
+    if (owner) {
+      response.headers.set("Cache-Control", "private, no-store");
+      response.headers.set("X-Robots-Tag", "noindex");
+    }
+    return response;
+  }
   const start = performance.now();
   const requestId = resolveRequestId(request.headers);
   const retryAfter = rateLimitRetryAfter(request);
   if (retryAfter !== undefined) return statusPage("rateLimited", 429, request.nextUrl.pathname.split("/")[1] === "sk" ? "sk" : "en", requestId, retryAfter);
   const incoming = new Headers(request.headers);
+  // Forward only credentials verified here. A client-supplied OwnerSession header is never trusted.
+  incoming.delete("authorization");
+  if (basicOwner) incoming.set("authorization", basic!);
+  else if (cookieOwner && session) incoming.set("authorization", `OwnerSession ${session}`);
   incoming.set("x-request-id", requestId);
   incoming.set("x-request-start-ms", String(Date.now()));
   // Never trust a client-sent preview header. Only an admin request with ?view=free gets one; resolveViewer ignores it for others.
@@ -43,16 +61,22 @@ async function handle(request: NextRequest) {
   const featureFlags = flags();
   const privateDataRoute = privateDataSections.has(section);
   if (process.env.EODHD_PRIVATE_USE === "on" && privateDataRoute &&
-    !ownerAuthorized(request.headers.get("authorization"), process.env.OWNER_RESEARCH_PASSWORD)) return ownerChallenge();
+    !owner) return ownerChallenge();
   // Owner-only EODHD ETF tabs under /etf/fund/{key}/{tab} share the market gate.
   const market = marketSections.has(section) || isEtfDataPath(request.nextUrl.pathname);
   if (market && featureFlags.MARKETS_VIEWS &&
-    !marketsViewable(request.headers.get("authorization"))) {
+    !marketsViewable(incoming)) {
     return ownerChallenge();
   }
   if (section === "owner" && featureFlags.OWNER_VIEW &&
-    !ownerAuthorized(request.headers.get("authorization"), process.env.OWNER_RESEARCH_PASSWORD)) {
-    return new NextResponse("Authentication required", { status: 401, headers: { "WWW-Authenticate": 'Basic realm="Owner"', "Cache-Control": "no-store" } });
+    !owner) {
+    if (request.headers.get("accept")?.includes("text/html")) {
+      return new NextResponse(null, { status: 303, headers: {
+        Location: `/${locale}/owner-sign-in`,
+        "Cache-Control": "private, no-store", "X-Robots-Tag": "noindex",
+      } });
+    }
+    return ownerChallenge();
   }
   // Legal and owner gates come first and never read the viewer: admin does not bypass them. PAYWALL no longer hides /scanner.
   const unavailable = (section === "sizing" && !featureFlags.ADVICE_OUTPUT)
@@ -65,8 +89,8 @@ async function handle(request: NextRequest) {
     || (section === "company" && (!ticker || !(await instrumentForTicker(ticker))));
   if (!unavailable) {
     const response = NextResponse.next({ request: { headers: incoming } });
-    if (section === "owner" || market || (process.env.EODHD_PRIVATE_USE === "on" && privateDataRoute)) response.headers.set("Cache-Control", "private, no-store");
-    if (market || (process.env.EODHD_PRIVATE_USE === "on" && privateDataRoute)) response.headers.set("X-Robots-Tag", "noindex");
+    if (owner || section === "owner" || section === "owner-sign-in" || market || (process.env.EODHD_PRIVATE_USE === "on" && privateDataRoute)) response.headers.set("Cache-Control", "private, no-store");
+    if (owner || section === "owner" || section === "owner-sign-in" || market || (process.env.EODHD_PRIVATE_USE === "on" && privateDataRoute)) response.headers.set("X-Robots-Tag", "noindex");
     if (request.nextUrl.searchParams.has("view")) response.headers.set("X-Robots-Tag", "noindex");
     response.headers.set("x-request-id", requestId);
     response.headers.set("server-timing", `rid;desc="${requestId}"`);

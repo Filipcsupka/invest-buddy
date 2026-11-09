@@ -18,7 +18,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return { ...pageMetadata(locale, "/owner/data/ticker", ownerDataMessages(locale).tickerTitle, ownerDataMessages(locale).lede), robots: { index: false, follow: false } };
 }
 export default async function OwnerTickerPage({ params, searchParams }: Props) {
-  if (!ownerAuthorized((await headers()).get("authorization"), process.env.OWNER_RESEARCH_PASSWORD)) notFound();
+  if (!ownerAuthorized(await headers(), process.env.OWNER_RESEARCH_PASSWORD)) notFound();
   const { locale } = await params;
   if (locale !== "en" && locale !== "sk") notFound();
   const ticker = (await searchParams).ticker?.trim().toUpperCase();
