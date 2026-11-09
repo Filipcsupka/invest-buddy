@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ownerAuthorized, ownerPasswordMatches } from "@/app/[locale]/owner/auth";
 import { marketsViewable } from "@/markets/gate";
-import { issueOwnerSession, OWNER_SESSION_COOKIE, verifyOwnerSession } from "./owner-session";
+import { issueOwnerSession, OWNER_SESSION_COOKIE, OWNER_SESSION_SECONDS, verifyOwnerSession } from "./owner-session";
 
 const password = "owner-test-password";
 const env = { OWNER_SESSION_SECRET: "a-secret-with-at-least-thirty-two-bytes", OWNER_RESEARCH_PASSWORD: password, MARKETS_VIEWS: "on" };
@@ -43,4 +43,18 @@ describe("owner session", () => {
     expect(ownerAuthorized(`Basic ${Buffer.from("other:owner-test-password").toString("base64")}`, password, {})).toBe(false);
     expect(ownerPasswordMatches("wrong", password)).toBe(false);
   });
+});
+
+it("allows at most 60 seconds of issued-at skew without extending expiry", () => {
+  const good = token();
+  expect(verifyOwnerSession(good, password, env, now - 60_000)).toBe(true);
+  expect(verifyOwnerSession(good, password, env, now - 60_001)).toBe(false);
+  const expires = now + OWNER_SESSION_SECONDS * 1000;
+  expect(verifyOwnerSession(good, password, env, expires - 1)).toBe(true);
+  expect(verifyOwnerSession(good, password, env, expires)).toBe(false);
+  expect(verifyOwnerSession(good, password, env, expires + 1)).toBe(false);
+});
+
+it("revokes existing sessions when the signing secret rotates", () => {
+  expect(verifyOwnerSession(token(), password, { ...env, OWNER_SESSION_SECRET: "another-secret-with-at-least-thirty-two-bytes" }, now)).toBe(false);
 });

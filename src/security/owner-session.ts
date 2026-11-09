@@ -28,7 +28,7 @@ export function verifyOwnerSession(token: string | null, password: string | unde
   if (!match) return false;
   const issued = Number(match[2]);
   const expires = Number(match[3]);
-  if (!Number.isSafeInteger(issued) || !Number.isSafeInteger(expires) || issued > now || expires <= now || expires - issued !== OWNER_SESSION_SECONDS * 1000) return false;
+  if (!Number.isSafeInteger(issued) || !Number.isSafeInteger(expires) || issued > now + 60_000 || expires <= now || expires - issued !== OWNER_SESSION_SECONDS * 1000) return false;
   const key = signingKey(password, env);
   if (!key) return false;
   const supplied = Buffer.from(match[4], "base64url");

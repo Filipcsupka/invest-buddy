@@ -70,6 +70,12 @@ async function handle(request: NextRequest) {
   }
   if (section === "owner" && featureFlags.OWNER_VIEW &&
     !owner) {
+    if (request.headers.get("accept")?.includes("text/html")) {
+      return new NextResponse(null, { status: 303, headers: {
+        Location: `/${locale}/owner-sign-in`,
+        "Cache-Control": "private, no-store", "X-Robots-Tag": "noindex",
+      } });
+    }
     return ownerChallenge();
   }
   // Legal and owner gates come first and never read the viewer: admin does not bypass them. PAYWALL no longer hides /scanner.
