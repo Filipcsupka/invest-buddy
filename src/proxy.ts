@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { instrumentUniverse } from "@/data/store";
+import { instrumentForTicker } from "@/data/store";
 import { ideasEnabled } from "@/data/ideas-store";
 import { ownerViewEnabled } from "@/data/owner-allocation";
 import { designViewEnabled, flags } from "@/config/flags";
@@ -62,7 +62,7 @@ async function handle(request: NextRequest) {
     || (section === "owner-allocation" && !ownerViewEnabled())
     || (section === "owner" && !featureFlags.OWNER_VIEW)
     || (market && !featureFlags.MARKETS_VIEWS)
-    || (section === "company" && (!ticker || !(await instrumentUniverse()).some((item) => item.ticker === ticker.toUpperCase())));
+    || (section === "company" && (!ticker || !(await instrumentForTicker(ticker))));
   if (!unavailable) {
     const response = NextResponse.next({ request: { headers: incoming } });
     if (section === "owner" || market || (process.env.EODHD_PRIVATE_USE === "on" && privateDataRoute)) response.headers.set("Cache-Control", "private, no-store");

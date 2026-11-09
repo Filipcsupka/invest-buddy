@@ -27,7 +27,7 @@ import { statusView } from "@/engine/status";
 import { SourceList, SourceNotes } from "@/components/source-list";
 import { inputSources, ruleSourceNotes, ruleSources, sourceSummary } from "@/components/view-model";
 import { companyIdea, companyReview } from "@/data/ideas-store";
-import { instrumentUniverse, latestPortfolio, latestScores } from "@/data/store";
+import { instrumentForTicker, instrumentUniverse, latestPortfolio, scoreForTicker } from "@/data/store";
 import { DataStatus, DataStatusBlock } from "@/components/data-status";
 import { datasetFreshness } from "@/data/data-freshness-store";
 import { coverageOf } from "@/data/data-freshness";
@@ -57,13 +57,11 @@ export const dynamicParams = true;
 async function load(params: Params["params"]) {
   const { locale, ticker } = await params;
   if (!isLocale(locale)) notFound();
-  const instruments = await instrumentUniverse();
-  const instrument = instruments.find((item) => item.ticker === ticker.toUpperCase());
+  const instrument = await instrumentForTicker(ticker);
   if (!instrument) notFound();
   await requireCompanyDataAccess(instrument.ticker);
-  const data = await latestScores();
-  const row = data.rows.find((item) => item.instrument.ticker === instrument.ticker);
-  return { locale: locale as Locale, instrument, instruments, result: row?.result ?? null, data };
+  const data = await scoreForTicker(instrument.ticker);
+  return { locale: locale as Locale, instrument, result: data.rows?.result ?? null, data };
 }
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
@@ -74,7 +72,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 }
 
 async function Company({ params }: Params) {
-  const { locale, instrument, instruments, result, data } = await load(params);
+  const { locale, instrument, result, data } = await load(params);
   const m = getMessages(locale);
   const adviceOutput = flags().ADVICE_OUTPUT;
   const portfolio = await latestPortfolio();
@@ -128,6 +126,7 @@ async function Company({ params }: Params) {
   const [macroSchedule, earningsDate] = await Promise.all([storedMacroEvents(today), publicEarningsDate(instrument.ticker, today)]);
   // Owner-only EODHD market cap; null for every public request.
   const marketCap = await ownerMarketCap(instrument.ticker);
+  const instruments = await instrumentUniverse();
   const index = instruments.findIndex((item) => item.ticker === instrument.ticker);
   const prev = instruments[(index - 1 + instruments.length) % instruments.length];
   const next = instruments[(index + 1) % instruments.length];

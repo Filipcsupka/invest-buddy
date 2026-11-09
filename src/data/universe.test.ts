@@ -4,7 +4,7 @@ const query = vi.fn();
 const end = vi.fn(async () => undefined);
 vi.mock("pg", () => ({ default: { Pool: vi.fn(() => ({ query, end, on: vi.fn() })) } }));
 
-import { instrumentUniverse, latestPortfolio, latestScores } from "./store";
+import { instrumentForTicker, instrumentUniverse, latestPortfolio, latestScoreSummaries, latestScores, scoreForTicker } from "./store";
 import { closePool } from "../db/pool";
 import { instruments as fixtures } from "./fixtures";
 
@@ -51,4 +51,30 @@ describe("instrumentUniverse", () => {
     process.env.DATA_MODE = "db"; delete process.env.DATABASE_URL;
     expect(await instrumentUniverse()).toEqual([]);
   });
+});
+
+it("loads bar-free score summaries for listings and one full chart for a company", async () => {
+  process.env.DATA_MODE = "fixture";
+  const summaries = await latestScoreSummaries();
+  expect(summaries.rows).toHaveLength(fixtures.length);
+  expect(summaries.rows.every((row) => row.result.inputs.bars.length === 0)).toBe(true);
+  expect(await instrumentForTicker(fixtures[0].ticker)).toEqual(fixtures[0]);
+  const company = await scoreForTicker(fixtures[0].ticker);
+  expect(company.rows?.result.inputs.bars).toHaveLength(220);
+  expect(company.rows?.result.inputs.bars).toEqual((await latestScores()).rows[0].result.inputs.bars);
+  expect(company.rows?.result.total).toBe(summaries.rows[0].result.total);
+  expect(query).not.toHaveBeenCalled();
+});
+
+it("uses parameterized one-ticker reads and drops bars in the summary SQL", async () => {
+  process.env.DATA_MODE = "db"; process.env.DATABASE_URL = "postgresql://x";
+  query.mockResolvedValue({ rows: [] });
+  expect(await instrumentForTicker("nvda")).toBeNull();
+  expect(query.mock.calls[0][1]).toEqual(["NVDA"]);
+  expect(query.mock.calls[0][0]).toContain("i.ticker=$1");
+  await scoreForTicker("nvda");
+  expect(query.mock.calls[1][1]).toEqual(["NVDA"]);
+  expect(query.mock.calls[1][0]).toContain("ORDER BY s.as_of DESC LIMIT 1");
+  await latestScoreSummaries();
+  expect(query.mock.calls[2][0]).toContain("'{inputs,bars}','[]'::jsonb");
 });

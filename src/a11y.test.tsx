@@ -8,7 +8,7 @@ const portfolio = vi.fn();
 const history = vi.fn();
 const insiders = vi.fn();
 vi.mock("next/navigation", () => ({ usePathname: () => "/en/dashboard" }));
-vi.mock("@/data/store", () => ({ instrumentUniverse: () => universe(), latestScores: () => scores(), latestPortfolio: () => portfolio(), scoreHistory: () => [], stale: () => false }));
+vi.mock("@/data/store", () => ({ instrumentUniverse: () => universe(), instrumentForTicker: async (ticker: string) => (await universe()).find((item: { ticker: string }) => item.ticker === ticker.toUpperCase()) ?? null, latestScores: () => scores(), latestScoreSummaries: () => scores(), scoreForTicker: async (ticker: string) => { const data = await scores(); return { ...data, rows: data.rows.find((item: { instrument: { ticker: string } }) => item.instrument.ticker === ticker) ?? null }; }, latestPortfolio: () => portfolio(), scoreHistory: () => [], stale: () => false }));
 vi.mock("@/data/score-history", () => ({ companyScoreHistory: () => history() }));
 vi.mock("@/data/ideas-store", () => ({ companyIdea: async () => null, companyReview: async () => null, ideasEnabled: () => false }));
 vi.mock("@/db/track-record", () => ({ recordHistory: async () => ({ snapshotCount: 1, firstDate: "2026-01-02", lastDate: "2026-01-02", buySignalCount: 1, worst: [{ id: 1, ticker: "NVDA", asOf: "2026-01-02", window: 1, stock: -0.1, excess: -0.15 }], hit20: { hits: 1, n: 1, rate: 1 }, signals: [{ id: 1, ticker: "NVDA", asOf: "2026-01-02", tier: "SETUP", state: "Setup met (>=18)", score: 20, windows: { 1: { date: "2026-01-05", stock: 0.1, spy: 0.05, excess: 0.05 }, 5: null, 20: null, 60: null } }] }) }));

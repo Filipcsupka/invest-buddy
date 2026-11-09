@@ -2,7 +2,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
 const universe = vi.fn();
-vi.mock("@/data/store", () => ({ instrumentUniverse: () => universe() }));
+vi.mock("@/data/store", () => ({ instrumentForTicker: async (ticker: string) => (await universe()).find((item: { ticker: string }) => item.ticker === ticker.toUpperCase()) ?? null }));
 import { proxy } from "./proxy";
 
 const original = { mode: process.env.DATA_MODE, ideas: process.env.IDEAS_PAGE, owner: process.env.OWNER_VIEW, password: process.env.OWNER_RESEARCH_PASSWORD, paywall: process.env.PAYWALL, auth: process.env.AUTH, advice: process.env.ADVICE_OUTPUT, markets: process.env.MARKETS_VIEWS, privateUse: process.env.EODHD_PRIVATE_USE };

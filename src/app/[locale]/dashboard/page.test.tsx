@@ -1,10 +1,12 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { scoredUniverse } from "@/data/scored";
+import { gzipSync } from "node:zlib";
+import { toRow } from "@/components/view-model";
 
 const scores = vi.fn();
 const portfolio = vi.fn();
-vi.mock("@/data/store", () => ({ latestScores: () => scores(), latestPortfolio: () => portfolio() }));
+vi.mock("@/data/store", () => ({ latestScoreSummaries: () => scores(), latestPortfolio: () => portfolio() }));
 import Dashboard, * as page from "./page";
 
 const props = (locale = "sk") => ({ params: Promise.resolve({ locale }) });
@@ -48,4 +50,29 @@ describe("merged stock screen", () => {
     portfolio.mockResolvedValue(null);
     expect(renderToStaticMarkup(await Dashboard(props()))).not.toContain("V portfóliu");
   });
+
+  it("renders a 511-name dashboard below one megabyte gzip without price bars in client rows", async () => {
+    const fixture = await scoredUniverse();
+    const fullRows = Array.from({ length: 511 }, (_, index) => {
+      const original = fixture[index % fixture.length];
+      const ticker = `T${index.toString().padStart(3, "0")}`;
+      return { instrument: { ...original.instrument, ticker, name: `Company ${index}` }, result: { ...original.result, ticker } };
+    });
+    const rows = fullRows.map(({ instrument, result }) => ({ instrument, result: { ...result, inputs: { ...result.inputs, bars: [] } } }));
+    const screenRows = rows.map((row) => toRow("en", row));
+    const oldClientProps = JSON.stringify({ profileRows: fullRows, scannerRows: screenRows });
+    const before = gzipSync(oldClientProps).length;
+    const clientProps = JSON.stringify({ profileRows: screenRows, scannerRows: screenRows });
+    const after = gzipSync(clientProps).length;
+    expect(clientProps).not.toContain('"bars"');
+    expect(after).toBeLessThan(before);
+    scores.mockResolvedValue({ rows, sample: true, lastUpdated: rows[0].result.asOf, stale: false });
+    portfolio.mockResolvedValue(null);
+    const html = renderToStaticMarkup(await Dashboard(props("en")));
+    if (process.env.PERF_MEASURE === "1") console.info(JSON.stringify({ names: 511, beforeClientPropsBytes: Buffer.byteLength(oldClientProps), beforeClientPropsGzip: before, afterClientPropsBytes: Buffer.byteLength(clientProps), afterClientPropsGzip: after, htmlBytes: Buffer.byteLength(html), htmlGzip: gzipSync(html).length }));
+    expect(html).toContain("511");
+    expect([...html.matchAll(/<tr data-state=/g)].length).toBeLessThanOrEqual(200);
+    expect(clientProps).toContain("T510");
+    expect(gzipSync(html).length).toBeLessThan(1_000_000);
+  }, 30_000);
 });

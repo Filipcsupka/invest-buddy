@@ -7,7 +7,7 @@ import { getHeatmapMessages } from "@/i18n/heatmap-messages";
 import { getScreenMessages } from "@/i18n/screen-messages";
 import { ScannerTable } from "@/components/scanner-table";
 import { byScore, toRow } from "@/components/view-model";
-import { latestPortfolio, latestScores } from "@/data/store";
+import { latestPortfolio, latestScoreSummaries } from "@/data/store";
 import { publicHorizons } from "@/data/public-horizons";
 import { ProfileLists } from "./profile-lists";
 import { StateFilterProvider } from "@/components/state-filter";
@@ -38,7 +38,7 @@ export async function generateMetadata({ params }: LocaleParams): Promise<Metada
 async function Dashboard({ params }: LocaleParams) {
   const locale = await resolveLocale(params);
   const m = getMessages(locale);
-  const [data, portfolio, moved, horizons, macroSchedule] = await Promise.all([latestScores(), latestPortfolio(), latestStateChanges(), publicHorizons(), storedMacroEvents(new Date().toISOString().slice(0, 10))]);
+  const [data, portfolio, moved, horizons, macroSchedule] = await Promise.all([latestScoreSummaries(), latestPortfolio(), latestStateChanges(), publicHorizons(), storedMacroEvents(new Date().toISOString().slice(0, 10))]);
   const k = getKitMessages(locale);
   const changes: StateChange[] = moved.map(({ ticker, from, to }) => {
     const [fromLabel, toLabel] = [m.status.labels[from], m.status.labels[to]];
@@ -77,7 +77,7 @@ async function Dashboard({ params }: LocaleParams) {
       board: { summaryLabel: m.dashboard.summaryLabel, lowerTitle: m.dashboard.lowerTitle, lowerBody: m.dashboard.lowerBody,
         showLower: m.dashboard.showLower, empty: m.dashboard.empty, stateNotes: m.dashboard.stateNotes },
     }} />
-    <ProfileLists locale={locale} rows={data.rows} horizons={horizons} />
+    <ProfileLists locale={locale} rows={rows} horizons={horizons} />
     </StateFilterProvider>
   </div>;
 }

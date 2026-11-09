@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 const universe = vi.fn();
 const scores = vi.fn();
-vi.mock("@/data/store", () => ({ instrumentUniverse: () => universe(), latestScores: () => scores() }));
+vi.mock("@/data/store", () => ({ instrumentForTicker: async (ticker: string) => (await universe()).find((item: { ticker: string }) => item.ticker === ticker.toUpperCase()) ?? null, scoreForTicker: async (ticker: string) => { const data = await scores(); return { ...data, rows: data.rows.find((item: { instrument: { ticker: string } }) => item.instrument.ticker === ticker) ?? null }; } }));
 
 import CompanyLayout from "./layout";
 

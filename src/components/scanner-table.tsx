@@ -43,12 +43,15 @@ type Text = {
 
 const ruleTotal = ruleGroups.reduce((sum, group) => sum + group.rules.length, 0);
 const numeric: SortKey[] = ["total", "fundamentals", "technical", "macro"];
+export const SCANNER_PAGE_SIZE = 50;
+export const scannerPage = <T,>(rows: T[], pages: number): T[] => rows.slice(0, SCANNER_PAGE_SIZE * Math.max(1, Math.trunc(pages)));
 
 export function ScannerTable({ locale, rows, text, heldTickers = [], aside, profiles = {} }: { locale: string; rows: ScreenRow[]; text: Text; heldTickers?: string[]; aside?: ReactNode; profiles?: Record<string, string> }) {
   const held = new Set(heldTickers);
   const [query, setQuery] = useState("");
   const { state, setState } = useStateFilter();
   const [sort, setSort] = useState<{ key: SortKey; dir: "ascending" | "descending" }>({ key: "total", dir: "descending" });
+  const [limits, setLimits] = useState<Record<string, number>>({});
   const [narrow, setNarrow] = useState(false);
   useEffect(() => {
     const media = window.matchMedia("(max-width: 900px)");
@@ -107,8 +110,10 @@ export function ScannerTable({ locale, rows, text, heldTickers = [], aside, prof
   const groupRows = (group: (typeof groups)[number]) => visible.filter((row) => group === "lower" ? !["setup", "watch", "broken"].includes(row.state) : row.state === group);
   const clearAll = () => { setQuery(""); setState("all"); };
   const table = (list: ScreenRow[], group: string) => {
+    const shown = scannerPage(list, Math.ceil((limits[group] ?? SCANNER_PAGE_SIZE) / SCANNER_PAGE_SIZE));
     const label = text.board ? (group === "lower" ? text.board.lowerTitle : text.states[group as StateKey]) : text.showing.replace("{shown}", String(list.length)).replace("{total}", String(rows.length));
     return (
+    <>
     <DataTable key={group} label={label} density="compact" bounded={group === "lower"} stickyFirst describedBy={disclaimerId} className={group === "broken" ? `${styles.grid} ${styles.gridReason}` : styles.grid}>
       <colgroup><col className={styles.cCompany} /><col className={styles.cSector} /><col className={styles.cScore} /><col className={styles.cRules} /><col className={styles.cState} />{group === "broken" ? <col /> : null}</colgroup>
       <caption className="visually-hidden">{label}</caption>
@@ -120,7 +125,7 @@ export function ScannerTable({ locale, rows, text, heldTickers = [], aside, prof
         {header("state", text.columns.state)}
         {group === "broken" && <th scope="col" className="col-reason">{text.columns.criteria}</th>}
       </tr></thead>
-      <tbody>{list.map((row, index) => {
+      <tbody>{shown.map((row, index) => {
         const chipState = kitState(row.state, Boolean(row.pullbackLabel));
         const met = row.matched?.length ?? null;
         return (
@@ -153,6 +158,10 @@ export function ScannerTable({ locale, rows, text, heldTickers = [], aside, prof
         );
       })}</tbody>
     </DataTable>
+    {shown.length < list.length ? <button type="button" className="button secondary" onClick={() => setLimits((current) => ({ ...current, [group]: (current[group] ?? SCANNER_PAGE_SIZE) + SCANNER_PAGE_SIZE }))}>
+      {locale === "sk" ? "Zobraziť viac" : "Show more"} ({list.length - shown.length})
+    </button> : null}
+    </>
     );
   };
 

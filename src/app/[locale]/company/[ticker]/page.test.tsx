@@ -12,7 +12,7 @@ vi.mock("next/headers", () => ({ headers: async () => ({ get: () => viewHeader()
 const shares = vi.fn(async () => [] as { periodEnd: string; value: number }[]);
 vi.mock("@/data/flag-facts", () => ({ storedShareCounts: () => shares(), storedInterestFacts: async () => ({ operatingIncome: null, interestExpense: null }) }));
 const originalAdvice = process.env.ADVICE_OUTPUT;
-vi.mock("@/data/store", () => ({ instrumentUniverse: () => universe(), latestScores: () => scores(), latestPortfolio: () => portfolio() }));
+vi.mock("@/data/store", () => ({ instrumentUniverse: () => universe(), instrumentForTicker: async (ticker: string) => (await universe()).find((item: { ticker: string }) => item.ticker === ticker.toUpperCase()) ?? null, scoreForTicker: async (ticker: string) => { const data = await scores(); return { ...data, rows: data.rows.find((item: { instrument: { ticker: string } }) => item.instrument.ticker === ticker) ?? null }; }, latestPortfolio: () => portfolio() }));
 vi.mock("@/data/score-history", () => ({ companyScoreHistory: (...args: unknown[]) => history(...args) }));
 vi.mock("@/data/ideas-store", () => ({ companyIdea: () => idea(), companyReview: () => review() }));
 
