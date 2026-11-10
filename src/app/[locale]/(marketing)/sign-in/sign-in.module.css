@@ -18,6 +18,3 @@
 .single { grid-template-columns: minmax(0, 32rem); justify-content: center; }
 
 /* Quiet way in for the site owner, below the customer form. */
-.owner { margin: var(--s5) 0 0; font-size: var(--t-sm); }
-.owner a { color: var(--ink-3); text-decoration: underline; text-underline-offset: 0.2em; }
-.owner a:hover { color: var(--ink); }

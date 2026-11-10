@@ -1,6 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { customerCookieName } from "@/auth/cookie";
-import { issueOwnerSession, OWNER_SESSION_COOKIE } from "@/security/owner-session";
 
 const state = vi.hoisted(() => ({ plan: { plan: "free", endsAt: null } as { plan: "free" | "plus" | "trial"; endsAt: Date | null }, deleted: false, fail: false }));
 vi.mock("@/db/pool", () => ({ getPool: () => ({ query: async () => ({ rows: state.deleted ? [] : [{ id: "7" }] }) }) }));
@@ -8,7 +7,7 @@ vi.mock("@/entitlements/plan", () => ({ customerPlan: async () => { if (state.fa
 import { meFromHeaders, ME_HEADERS } from "./me";
 import { GET } from "./route";
 
-const keys = ["AUTH", "MARKETS_VIEWS", "OWNER_RESEARCH_PASSWORD", "OWNER_SESSION_SECRET"] as const;
+const keys = ["AUTH", "MARKETS_VIEWS", "OWNER_USER_IDS"] as const;
 const saved = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
 afterEach(() => {
   for (const key of keys) if (saved[key] === undefined) delete process.env[key]; else process.env[key] = saved[key];
@@ -36,16 +35,21 @@ it("clears a sign-in hint left behind by an ended session", async () => {
   expect(response.headers.get("set-cookie")).toBe("ib_signed_in=; Path=/; Max-Age=0; SameSite=Lax");
 });
 
-it("recognises the owner by session cookie or Basic, with Markets only when the flag is on", async () => {
-  process.env.OWNER_RESEARCH_PASSWORD = "owner-pass";
-  process.env.OWNER_SESSION_SECRET = "a-secret-with-at-least-thirty-two-bytes";
-  const cookie = new Headers({ cookie: `${OWNER_SESSION_COOKIE}=${issueOwnerSession("owner-pass")}` });
-  expect(await meFromHeaders(cookie)).toEqual({ kind: "owner", markets: false });
+it("recognises the owner by user id in OWNER_USER_IDS, with Markets only when the flag is on", async () => {
+  process.env.AUTH = "on";
+  process.env.OWNER_USER_IDS = "7";
+  const headers = new Headers({ cookie: customerCookie });
+  expect(await meFromHeaders(headers, reader("owner@example.com"))).toEqual({ kind: "owner", markets: false });
   process.env.MARKETS_VIEWS = "on";
-  expect(await meFromHeaders(cookie)).toEqual({ kind: "owner", markets: true });
-  const basic = new Headers({ authorization: `Basic ${Buffer.from("owner:owner-pass").toString("base64")}` });
-  expect((await meFromHeaders(basic)).kind).toBe("owner");
-  expect((await meFromHeaders(new Headers({ authorization: `Basic ${Buffer.from("owner:wrong").toString("base64")}` }))).kind).toBe("anon");
+  expect(await meFromHeaders(headers, reader("owner@example.com"))).toEqual({ kind: "owner", markets: true });
+});
+
+it("treats the same email under a different user id as a customer, not the owner", async () => {
+  process.env.AUTH = "on";
+  process.env.OWNER_USER_IDS = "3";
+  const headers = new Headers({ cookie: customerCookie });
+  expect(await meFromHeaders(headers, reader("owner@example.com"), NOW)).toEqual({ kind: "customer", email: "owner@example.com", plan: "free", markets: false });
+  expect((await meFromHeaders(new Headers({ authorization: `Basic ${Buffer.from("owner:x").toString("base64")}` }))).kind).toBe("anon");
 });
 
 it("reports a customer's email and plan only with AUTH on", async () => {

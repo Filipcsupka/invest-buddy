@@ -1,6 +1,20 @@
 # Customer accounts
 
-Customer auth uses Better Auth 1.7.18 (exact pin) with Postgres sessions, mounted at `/api/auth/[...all]`. Owner Basic auth and the owner session stay separate. A customer session never makes a viewer the owner and never opens owner or private vendor routes.
+Customer auth uses Better Auth 1.7.18 (exact pin) with Postgres sessions, mounted at `/api/auth/[...all]`.
+
+## Owner
+
+There is no separate owner login. The owner creates a normal account at `/sign-in` with email and password, signs in the same way and signs out with the normal Sign out button. A session is the owner when its user id is in `OWNER_USER_IDS`, a comma separated list of user ids. An email address never makes anyone owner.
+
+The owner gets the admin tier, every sidebar item unlocked and the Owner badge, whatever the tier and the `PAYWALL` and `TRIAL` flags say. Owner-only routes (`/owner/*`, the market views and the EODHD data routes) open for the owner session only. An anonymous browser is sent to `/sign-in?next=`, a signed-in account that is not the owner gets a 404 page, and non-browser clients get a plain 401 with no Basic challenge. The old owner password, Basic auth, owner cookie and owner sign-in page are gone; the app ignores any leftover owner password or session secret variables. The `ib_signed_in` hint cookie is never trusted for any of this.
+
+Why ids and not emails: password accounts have no email verification at launch, so anyone could register the owner's address first. That account gets a different id and is a normal customer. Tests cover this case.
+
+Finding the id: sign up with the owner address, then read the id with a read-only query, `SELECT id FROM users WHERE email = '<owner address>';`, and put it in `OWNER_USER_IDS` in the deployment secret store. Register the owner account before anyone else can use that address, and check that the row you read is the one you created. The ids are never hardcoded in the repository. The owner check needs `AUTH=on`; with `AUTH` off nobody is owner and the owner pages answer 401 or 404.
+
+Google sign-in is not offered in the UI. The Better Auth Google provider code stays dormant and starts only if `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are set, which production does not need.
+
+Probes, cron jobs and health checks use `/api/health`, which is public. Nothing in the repository or the deploy manifests depends on owner Basic auth.
 
 ## Flags
 
@@ -15,24 +29,25 @@ All default to off.
 | `MAGIC_LINK` | Email sign-in links. Needs working mail and `EMAIL_VERIFY=on`; auth refuses to start with `MAGIC_LINK` on and `EMAIL_VERIFY` off. |
 | `EMAIL_VERIFY` | Password accounts must confirm their email before they can sign in or get a trial. Needs working mail. |
 
-With `AUTH` off, a visitor without owner credentials is no longer treated as admin. Owner Basic auth and the owner session still give the admin view.
+With `AUTH` off, every visitor is anonymous, the owner included, because the owner is a signed-in account. Production needs `AUTH=on` for the owner to sign in.
 
 ## Environment
 
 Required when `AUTH=on`:
 
 - `DATABASE_URL`
-- `AUTH_SECRET`: at least 32 random characters. Keep it separate from `OWNER_SESSION_SECRET` and `WAITLIST_TOKEN_SECRET`. Recovery codes that were never shown are encrypted with it, so changing it makes them unreadable; users can still generate a new set.
+- `AUTH_SECRET`: at least 32 random characters. Keep it separate from `WAITLIST_TOKEN_SECRET`. Recovery codes that were never shown are encrypted with it, so changing it makes them unreadable; users can still generate a new set.
 - `AUTH_URL` or `SITE_URL`: the public origin, `https://invest.filipcsupka.online`. Only this origin may POST to auth routes.
+- `OWNER_USER_IDS`: comma separated user ids of the owner accounts. Without it nobody is owner.
 
 Optional:
 
-- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`: turn on Google sign-in.
+- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`: only for the dormant Google provider; not needed.
 - `MAIL_PROVIDER`: `resend` or `console`. Unset means console outside production; production refuses an unset value.
 - `RESEND_API_KEY`, `MAIL_FROM`: required for `MAIL_PROVIDER=resend`, for example `MAIL_FROM="InvestBuddy <hello@invest.filipcsupka.online>"`.
 - `RATE_LIMIT_TRUSTED_HOPS`: proxies in front of the app that append to `X-Forwarded-For`. Default 1 (Traefik only). Set it per environment: if a CDN is added in front of Traefik, use 2, or every visitor shares the CDN's bucket. The client IP is the entry this many places from the end; entries further left and `X-Real-IP` are ignored because the client can set them. A request with fewer entries than hops counts against one shared `unknown` bucket.
 - `RATE_LIMIT_SECRET`: key for hashing emails and IPs in rate-limit rows. Defaults to `AUTH_SECRET`.
-- `VENDOR_DISPLAY_LICENSE`: set `on` only after a vendor display licence exists. Until then, and while `EODHD_PRIVATE_USE=on`, `canUseVendorData` is false for everyone except the owner.
+- `VENDOR_DISPLAY_LICENSE`: set `on` only after a vendor display licence exists. Until then, and while `EODHD_PRIVATE_USE=on`, `canUseVendorData` is false for everyone except the owner session.
 
 Never commit any of these values.
 
@@ -85,7 +100,7 @@ All POSTs go to the same origin and send an `Origin` header. Better Auth routes 
 | Magic link (flag) | `POST /api/auth/sign-in/magic-link` | JSON `{ "email": "name@example.com" }` |
 | Session | `GET /api/auth/get-session` | none |
 | Sign out (JSON) | `POST /api/auth/sign-out` | JSON `{}` |
-| Sign out (form) | `POST /api/auth/account/sign-out` | form `locale`; redirects to `/{locale}` |
+| Sign out (form) | `POST /api/auth/account/sign-out` | form `locale`; runs Better Auth sign-out and redirects to `/{locale}`; the sidebar footer button uses it for the owner and customers |
 | Recovery reset | `POST /api/auth/recovery/reset` | JSON `{ "email": "...", "code": "XXXX-...", "newPassword": "..." }` |
 | First recovery codes | `POST /api/auth/recovery/codes` | JSON `{}` returns `{ "codes": [...] }` once for the signed-in user; later calls get 409 `RECOVERY_CODES_ALREADY_SHOWN` |
 | Regenerate codes | `POST /api/auth/recovery/regenerate` | JSON `{ "currentPassword": "..." }` returns `{ "codes": [...] }`; the account page form gets an HTML page |
@@ -99,7 +114,7 @@ With `EMAIL_VERIFY` off, sign-up with an email that already exists returns Bette
 
 ## Recovery codes
 
-Each password sign-up gets ten single-use codes of 128 bits. Google and magic-link sign-ups get none, since they have no password to reset. They are stored as HMAC digests. The first set is also stored encrypted until the user reveals it once on the account page. Regeneration needs the current password and replaces the whole set. The account page warns when fewer than three remain.
+Each password sign-up gets ten single-use codes of 128 bits. Magic-link sign-ups get none, since they have no password to reset. They are stored as HMAC digests. The first set is also stored encrypted until the user reveals it once on the account page. Regeneration needs the current password and replaces the whole set. The account page warns when fewer than three remain.
 
 A reset only replaces an existing password; it never creates one. After a successful reset the account address gets a "password was reset" mail. If sending fails, the reset still stands and the failure is logged without the address.
 
@@ -108,23 +123,22 @@ Pre-registration takeover: someone can sign up with a password at another person
 ## Owner steps before turning on AUTH
 
 1. Review migrations 133, 134, 135 and 136. Before 133, check for emails that differ only by case: `SELECT lower(email), count(*) FROM users GROUP BY 1 HAVING count(*) > 1;` must return no rows. The web init container runs `npm run migrate` on every new web pod, so merging and deploying this change applies 135 and 136. Approve that before the deploy.
-2. In Google Cloud Console, create an OAuth client of type Web application. Authorized JavaScript origin: `https://invest.filipcsupka.online`. Authorized redirect URI: `https://invest.filipcsupka.online/api/auth/callback/google`.
-3. Put `AUTH_SECRET` (for example `openssl rand -base64 48`), `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in the deployment secret store. Set `AUTH_URL=https://invest.filipcsupka.online`.
-4. Leave `MAGIC_LINK` and `EMAIL_VERIFY` off until mail works, and turn `MAGIC_LINK` on only together with `EMAIL_VERIFY`. For Resend, verify the sending domain in Resend first, then set `MAIL_PROVIDER=resend`, `RESEND_API_KEY` and `MAIL_FROM`.
-5. Decide on `TRIAL`. Keep `BILLING` off.
-6. In a non-production environment, test password sign-up, Google sign-in, sign-out, recovery-code reveal and reset, export and delete. Check that owner Basic auth and the owner session still open owner routes and a customer cookie does not.
-7. Set `AUTH=on` in production.
+2. Put `AUTH_SECRET` (for example `openssl rand -base64 48`) and `OWNER_USER_IDS` (after the owner account exists) in the deployment secret store. Set `AUTH_URL=https://invest.filipcsupka.online`.
+3. Leave `MAGIC_LINK` and `EMAIL_VERIFY` off until mail works, and turn `MAGIC_LINK` on only together with `EMAIL_VERIFY`. For Resend, verify the sending domain in Resend first, then set `MAIL_PROVIDER=resend`, `RESEND_API_KEY` and `MAIL_FROM`.
+4. Decide on `TRIAL`. Keep `BILLING` off.
+5. In a non-production environment, test password sign-up, sign-in, sign-out, recovery-code reveal and reset, export and delete. Check that the owner account (id in `OWNER_USER_IDS`) opens owner routes, sees the whole sidebar unlocked and can sign out, and that a second account with the same email does not.
+6. Set `AUTH=on` in production.
 
 ## Manual operations
 
-Both scripts are dry runs unless `--apply` is given. They need `DATABASE_URL` and `OWNER_RESEARCH_PASSWORD` in the environment and print a user id, never the email or password.
+Both scripts are dry runs unless `--apply` is given. They need `DATABASE_URL` in the environment and print a user id, never the email or password.
 
 - `npx tsx scripts/grant-entitlement.ts --email name@example.com --tier plus --days 30` grants Plus for 30 days. Without `--days` the grant has no end. `--tier free` removes a manual grant. It refuses to change a Stripe-managed entitlement.
 - `CUSTOMER_NEW_PASSWORD=... npx tsx scripts/reset-customer-password.ts --email name@example.com` sets a new password and revokes that user's sessions.
 
 ## Caching
 
-Public pages without a customer or owner cookie stay cacheable. A response to a request carrying a customer or owner cookie, every `/api/auth/*` response and every `/{locale}/account` page gets `Cache-Control: private, no-store` and `Vary: Cookie`. The viewer is memoised per request with React `cache` and is never put in Next's shared data cache.
+Public pages without a customer cookie stay cacheable. A response to a request carrying a customer cookie, every `/api/auth/*` response and every `/{locale}/account` page gets `Cache-Control: private, no-store` and `Vary: Cookie`. The viewer is memoised per request with React `cache` and is never put in Next's shared data cache.
 
 ## Known limits
 
@@ -140,4 +154,4 @@ Open items from the 2026-11-10 security review that this change does not fix:
 - `auth_rate_limits` rows are never purged (item 16).
 - Email case folding uses JavaScript `toLowerCase`, which can differ from Postgres `lower()` for some Unicode (item 17). Trial and limit keys use NFKC.
 - scrypt uses Better Auth defaults and the password denylist is small, with no breach check (item 18).
-- The 60 s cookie cache (item 12), the `OWNER_RESEARCH_PASSWORD` presence check in the scripts (item 11), and the nits 19 to 22 are unchanged.
+- The 60 s cookie cache (item 12), the nits 19 to 22 are unchanged.

@@ -85,13 +85,13 @@ const en = {
       { q: "Where does the data come from?", a: "Filings come from SEC EDGAR and macro series from US government sources. Live market data appears only where its licence allows display. Until then, scores shown here are sample data." },
       { q: "Why sample data?", a: "The licence for showing live prices and scores to the public is not settled yet. The sample uses invented companies so no figure can be mistaken for a rating of a real one." },
       { q: "What does the free account include?", a: "The method, the sample views, saved preferences and every live view as it clears the licence. The status, score and rules stay free in every plan." },
-      { q: "What happens to my data?", a: "We store your email address, a hash of your password or your Google sign-in, and your preferences. No tracking cookies, no data sales. Product news by email is a separate opt-in." },
+      { q: "What happens to my data?", a: "We store your email address, a hash of your password, and your preferences. No tracking cookies, no data sales. Product news by email is a separate opt-in." },
       { q: "Can I delete my account?", a: "Yes. Deleting the account removes your profile and preferences. The privacy page lists what must be kept by law and for how long." },
     ],
   },
   close: {
     title: "Create your free account",
-    body: "One screen for sign-up and sign-in. Continue with Google, or use an email address and a password.",
+    body: "One screen for sign-up and sign-in. Use an email address and a password.",
   },
   sticky: "Create free account",
 };
@@ -178,13 +178,13 @@ const sk: WelcomeMessages = {
       { q: "Odkiaľ sú údaje?", a: "Hlásenia pochádzajú zo SEC EDGAR a makro rady z verejných zdrojov vlády USA. Živé trhové údaje sa zobrazia len tam, kde to licencia dovolí. Dovtedy sú skóre na tejto stránke ukážkové." },
       { q: "Prečo ukážkové údaje?", a: "Licencia na verejné zobrazenie živých cien a skóre ešte nie je vyriešená. Ukážka používa vymyslené spoločnosti, aby sa žiadne číslo nedalo zameniť s hodnotením skutočnej firmy." },
       { q: "Čo obsahuje bezplatný účet?", a: "Metodiku, ukážkové prehľady, uložené nastavenia a každý živý prehľad, keď ho licencia povolí. Stav, skóre a pravidlá ostávajú zadarmo v každom pláne." },
-      { q: "Čo sa stane s mojimi údajmi?", a: "Ukladáme e-mailovú adresu, odtlačok (hash) hesla alebo prihlásenie cez Google a vaše nastavenia. Žiadne sledovacie cookies a vaše údaje nepredávame. Novinky e-mailom sú samostatný súhlas." },
+      { q: "Čo sa stane s mojimi údajmi?", a: "Ukladáme e-mailovú adresu, odtlačok (hash) hesla a vaše nastavenia. Žiadne sledovacie cookies a vaše údaje nepredávame. Novinky e-mailom sú samostatný súhlas." },
       { q: "Môžem si účet zrušiť?", a: "Áno. Zrušením účtu sa vymaže profil aj nastavenia. Stránka o ochrane súkromia uvádza, čo musíme podľa zákona ponechať a ako dlho." },
     ],
   },
   close: {
     title: "Vytvorte si bezplatný účet",
-    body: "Jedna obrazovka na registráciu aj prihlásenie. Pokračujte cez Google alebo použite e-mail a heslo.",
+    body: "Jedna obrazovka na registráciu aj prihlásenie. Použite e-mail a heslo.",
   },
   sticky: "Vytvoriť bezplatný účet",
 };

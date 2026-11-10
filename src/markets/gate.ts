@@ -1,14 +1,13 @@
-import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { flags } from "@/config/flags";
-import { ownerAuthorized } from "@/app/[locale]/owner/auth";
+import { getViewer, isOwner, type Viewer } from "@/viewer/get-viewer";
 
-/** The same owner password used by /owner/research. A feature flag never authenticates a visitor. */
-export function marketsViewable(requestHeaders: Headers | { get(name: string): string | null } | string | null, env: Record<string, string | undefined> = process.env): boolean {
-  return flags(env).MARKETS_VIEWS && ownerAuthorized(requestHeaders, env.OWNER_RESEARCH_PASSWORD, env);
+/** Market views are owner-only (session user id in OWNER_USER_IDS). A feature flag never authenticates a visitor. */
+export function marketsViewable(viewer: Pick<Viewer, "owner">, env: Record<string, string | undefined> = process.env): boolean {
+  return flags(env).MARKETS_VIEWS && isOwner(viewer);
 }
 
 export async function assertViewable(source = "eodhd"): Promise<void> {
   // Source is accepted for collector-specific page loaders; every market view stays owner-only until display rights are cleared.
-  if (source.length === 0 || !marketsViewable(await headers())) notFound();
+  if (source.length === 0 || !marketsViewable(await getViewer())) notFound();
 }

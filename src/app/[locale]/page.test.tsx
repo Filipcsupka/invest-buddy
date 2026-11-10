@@ -74,9 +74,9 @@ describe.each(["en", "sk"])("Welcome (%s)", (locale) => {
     for (const svg of html.match(/<svg[^>]*>/g) ?? []) expect(svg).toMatch(/aria-hidden="true"|role="img"/);
   });
 
-  it("offers sign-up with Google or email and a new password, ready for password managers", async () => {
+  it("offers sign-up with email and a new password, and no Google button, ready for password managers", async () => {
     const html = await render(locale);
-    expect(html).toContain(locale === "en" ? "Continue with Google" : "Pokračovať cez Google");
+    expect(html).not.toMatch(/Google/);
     expect(html).toContain('name="email"');
     expect(html).toContain('type="password"');
     expect(html).toContain('autoComplete="new-password"');

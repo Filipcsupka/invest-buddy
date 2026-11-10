@@ -13,9 +13,9 @@ const render = (props: Partial<Parameters<typeof AuthForm>[0]> = {}) => renderTo
 const codes = Array.from({ length: 10 }, (_, i) => `K${i}M4X7P2QZ`);
 
 describe("AuthForm", () => {
-  it("opens on sign-up: Google first, then email and a new password with the length rule, no magic link", () => {
+  it("opens on sign-up: email and a new password with the length rule, no magic link", () => {
     const html = render();
-    expect(html.indexOf("Continue with Google")).toBeLessThan(html.indexOf('name="email"'));
+    expect(html).not.toContain("Google");
     expect(html).toMatch(/aria-pressed="true"[^>]*>Create account</);
     expect(html).toContain('autoComplete="new-password"');
     expect(html).toContain('autoComplete="email"');
@@ -43,7 +43,7 @@ describe("AuthForm", () => {
     expect(render({ mode: "sign-up", magicLink: true })).not.toContain("Email me a sign-in link instead");
   });
 
-  it.each([["expired", "That link has expired"], ["denied", "Google sign-in was cancelled"], ["rate-limited", "Too many attempts"], ["error", "Something went wrong"]] as const)("shows the %s state from a failed redirect", (error, title) => {
+  it.each([["expired", "That link has expired"], ["denied", "Sign-in was cancelled"], ["rate-limited", "Too many attempts"], ["error", "Something went wrong"]] as const)("shows the %s state from a failed redirect", (error, title) => {
     expect(render({ error })).toContain(title);
   });
 
@@ -105,9 +105,26 @@ describe("sign-in and reset pages", () => {
     expect(await page({ next: "https://evil.example" })).not.toContain("evil.example");
   });
 
+  it("shows only the opens-soon notice, with no Google button or form, while AUTH is off", async () => {
+    const off = process.env.AUTH;
+    delete process.env.AUTH;
+    try {
+      const html = await page({ mode: "sign-in" });
+      expect(html).toContain("Sign-in opens soon");
+      expect(html).not.toContain("<form");
+      expect(html).not.toContain("Google");
+      expect(html).not.toMatch(/owner.?sign/i);
+    } finally {
+      if (off === undefined) delete process.env.AUTH; else process.env.AUTH = off;
+    }
+  });
+
   it("opens the sign-in mode from the query and shows callback errors, in Slovak too", async () => {
-    expect(await page({ mode: "sign-in" })).toContain('autoComplete="current-password"');
-    expect(await page({ error: "access_denied" }, "sk")).toContain("Prihlásenie cez Google bolo zrušené");
+    process.env.AUTH = "on";
+    try {
+      expect(await page({ mode: "sign-in" })).toContain('autoComplete="current-password"');
+      expect(await page({ error: "access_denied" }, "sk")).toContain("Prihlásenie bolo zrušené");
+    } finally { delete process.env.AUTH; }
   });
 
   it("renders the reset page as a static shell", async () => {

@@ -8,7 +8,7 @@ async function main() {
   const email = value("--email");
   const tier = value("--tier");
   const daysRaw = value("--days");
-  if (!process.env.OWNER_RESEARCH_PASSWORD || !email || (tier !== "free" && tier !== "plus") || (daysRaw && (!/^\d+$/.test(daysRaw) || Number(daysRaw) < 1))) throw new Error("Owner password env, --email and --tier free|plus are required");
+  if (!email || (tier !== "free" && tier !== "plus") || (daysRaw && (!/^\d+$/.test(daysRaw) || Number(daysRaw) < 1))) throw new Error("--email and --tier free|plus are required");
   const db = getPool();
   if (!db) throw new Error("DATABASE_URL is required");
   const user = await findUserByEmail(db, email);

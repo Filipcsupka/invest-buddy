@@ -1,4 +1,4 @@
-import { headers } from "next/headers";
+import { getViewer } from "@/viewer/get-viewer";
 import type { Locale } from "@/i18n";
 import { SectionHead } from "@/components/kit";
 import { Chart } from "@/components/chart";
@@ -7,12 +7,12 @@ import { marketCapSeries, type MarketCapPoint } from "@/db/market-cap";
 import { getMarketsMessages } from "@/i18n/markets-messages";
 
 /**
- * The stored weekly market cap for the owner (MARKETS_VIEWS on and the owner password), or null for everyone else.
+ * The stored weekly market cap for the owner (MARKETS_VIEWS on and an owner session), or null for everyone else.
  * Without a request context it also returns null, so owner data never renders by accident.
  */
 export async function ownerMarketCap(ticker: string): Promise<MarketCapPoint[] | null> {
   let viewable = false;
-  try { viewable = marketsViewable((await headers()).get("authorization")); } catch { /* No request context. */ }
+  try { viewable = marketsViewable(await getViewer()); } catch { /* No request context. */ }
   return viewable ? marketCapSeries(ticker) : null;
 }
 

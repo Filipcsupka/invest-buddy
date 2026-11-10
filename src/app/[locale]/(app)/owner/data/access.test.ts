@@ -2,8 +2,11 @@ import { afterEach, expect, it, vi } from "vitest";
 const pool = vi.fn();
 const auth = vi.fn();
 vi.mock("@/db/pool", () => ({ getPool: () => pool() }));
-vi.mock("next/headers", () => ({ headers: async () => ({ get: () => "Basic test" }) }));
-vi.mock("@/app/[locale]/owner/auth", () => ({ ownerAuthorized: () => auth() }));
+vi.mock("next/headers", () => ({ headers: async () => new Headers() }));
+vi.mock("@/viewer/get-viewer", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@/viewer/get-viewer")>();
+  return { ...real, getViewer: async () => real.resolveViewer(undefined, null, Boolean(auth())) };
+});
 import { requireCompanyDataAccess, requireEtfDataAccess } from "./access";
 const originalMode = process.env.EODHD_PRIVATE_USE;
 afterEach(() => { pool.mockReset(); auth.mockReset(); process.env.EODHD_PRIVATE_USE = originalMode; });

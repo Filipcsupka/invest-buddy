@@ -1,10 +1,13 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const events = vi.fn();
-// Admin is the owner only (Basic auth or owner session); AUTH off no longer makes every visitor admin.
+// Admin is the owner only (a session user id in OWNER_USER_IDS); AUTH off no longer makes every visitor admin.
 const owner = vi.hoisted(() => ({ on: false }));
-vi.mock("next/headers", () => ({ headers: async () => new Headers(owner.on ? { authorization: `Basic ${Buffer.from("owner:page-test-owner-password").toString("base64")}` } : {}) }));
-process.env.OWNER_RESEARCH_PASSWORD = "page-test-owner-password";
+vi.mock("next/headers", () => ({ headers: async () => new Headers() }));
+vi.mock("@/viewer/get-viewer", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@/viewer/get-viewer")>();
+  return { ...real, getViewer: async () => real.resolveViewer(undefined, null, owner.on) };
+});
 vi.mock("@/db/insiders", () => ({ insiderEvents: () => events() }));
 import Insiders from "./page";
 

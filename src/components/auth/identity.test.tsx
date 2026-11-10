@@ -27,14 +27,13 @@ it.each([["en", "Not signed in", "Sign in", "Create free account"], ["sk", "Nepr
   expect(html).toContain(`href="/${locale}/sign-in?next=%2Fen%2Fdashboard&amp;mode=sign-in"`);
   expect(text(html)).toContain(signIn);
   expect(text(html)).toContain(create);
-  expect(html).not.toContain("owner-sign-in");
+  expect(html).not.toMatch(/owner.?sign/i);
 });
 
-it("shows only a quiet owner sign-in link when AUTH is off", () => {
+it("shows no sign-in controls and no owner link when AUTH is off", () => {
   ready({ kind: "anon", markets: false });
   const html = renderToStaticMarkup(<IdentityPanel locale="en" auth={false} />);
-  expect(html).toContain('href="/en/owner-sign-in"');
-  expect(text(html)).toContain("Owner sign-in");
+  expect(html).not.toMatch(/owner.?sign/i);
   expect(html).not.toContain("/en/sign-in?");
   expect(renderToStaticMarkup(<IdentityChip locale="en" auth={false} />)).not.toContain("<a");
 });
@@ -44,7 +43,7 @@ it.each([["en", "Owner", "Signed in as owner", "Sign out"], ["sk", "Vlastník", 
   const html = renderToStaticMarkup(<IdentityPanel locale={locale} auth />);
   expect(text(html)).toContain(badge);
   expect(text(html)).toContain(stateText);
-  expect(html).toMatch(/<form[^>]*action="\/api\/owner\/logout" method="post"><input type="hidden" name="locale" value="(en|sk)"\/><button type="submit"[^>]*>/);
+  expect(html).toMatch(/<form[^>]*action="\/api\/auth\/account\/sign-out" method="post"><input type="hidden" name="locale" value="(en|sk)"\/><button type="submit"[^>]*>/);
   expect(text(html)).toContain(signOut);
   expect(html).not.toContain("/sign-in?");
   expect(text(renderToStaticMarkup(<IdentityChip locale={locale} auth />))).toContain(badge);
@@ -139,7 +138,9 @@ it("unlocks the whole app sidebar for an owner and shows the footer controls", (
     for (const route of ["dashboard", "scanner", "heatmap", "track-record", "insiders", "portfolio", "etf", "indices", "forex", "crypto", "economy", "congress", "news", "screener"]) {
       expect(html, route).toContain(`href="/en/${route}"`);
     }
-    expect(html).toContain('action="/api/owner/logout"');
+    expect(html).toContain('action="/api/auth/account/sign-out"');
+    expect(html).not.toContain("api/owner");
+    expect(html.match(/account\/sign-out/g)).toHaveLength(1);
     expect(html).toContain("Owner");
     expect(html).not.toContain("Owner sign-in");
     expect(html).not.toContain('data-locked=""');

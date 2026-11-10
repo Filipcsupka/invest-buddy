@@ -12,7 +12,7 @@ vi.mock("@/db/pool", () => ({ getPool: () => ({ query }) }));
 vi.mock("next/headers", () => ({ headers: async () => new Headers() }));
 
 import { viewerFromHeaders } from "./get-viewer";
-import { canUseVendorData } from "./viewer";
+import { canUseVendorData, isOwner } from "./viewer";
 
 const env = { ...process.env };
 const day = 86_400_000;
@@ -26,7 +26,8 @@ beforeEach(() => {
   state.entitlements = {};
   process.env.AUTH = "on";
   process.env.PAYWALL = "on";
-  process.env.OWNER_RESEARCH_PASSWORD = "owner-password-for-tests";
+  delete process.env.OWNER_USER_IDS;
+  delete process.env.OWNER_EMAILS;
 });
 afterEach(() => { process.env = { ...env }; query.mockClear(); });
 
@@ -63,11 +64,58 @@ it("ignores a cached session for a deleted user", async () => {
   expect(await viewerFromHeaders(new Headers(customerCookie), session("7"))).toEqual({ tier: "free", preview: false });
 });
 
-it("keeps owner Basic auth admin and ignores the customer session for it", async () => {
-  const basic = `Basic ${Buffer.from("owner:owner-password-for-tests").toString("base64")}`;
-  const reader = vi.fn(session("7"));
-  expect(await viewerFromHeaders(new Headers({ authorization: basic, ...customerCookie }), reader)).toEqual({ tier: "admin", preview: false, owner: true, userId: null });
+const sessionOf = (id: string) => async () => ({ user: { id } });
+
+it("makes a session whose user id is in OWNER_USER_IDS the owner, with an admin tier", async () => {
+  process.env.OWNER_USER_IDS = " 3 , 7";
+  const viewer = await viewerFromHeaders(new Headers(customerCookie), sessionOf("7"));
+  expect(viewer).toEqual({ tier: "admin", preview: false, owner: true, userId: "7" });
+  expect(isOwner(viewer)).toBe(true);
+  expect(canUseVendorData(viewer, { EODHD_PRIVATE_USE: "on" })).toBe(true);
+});
+
+it("keeps ?view=free for the owner only", async () => {
+  process.env.OWNER_USER_IDS = "7";
+  const owner = await viewerFromHeaders(new Headers({ ...customerCookie, "x-tier-preview": "free" }), sessionOf("7"));
+  expect(owner).toMatchObject({ tier: "free", preview: true, owner: true });
+});
+
+it("another account with the owner's email but a different id is NOT the owner", async () => {
+  process.env.OWNER_USER_IDS = "3";
+  process.env.OWNER_EMAILS = "owner@example.com";
+  const impostor = async () => ({ user: { id: "7", email: "owner@example.com", emailVerified: true } });
+  const viewer = await viewerFromHeaders(new Headers(customerCookie), impostor);
+  expect(isOwner(viewer)).toBe(false);
+  expect(viewer.tier).not.toBe("admin");
+  expect(canUseVendorData(viewer, { EODHD_PRIVATE_USE: "on" })).toBe(false);
+});
+
+it("with OWNER_USER_IDS unset nobody is the owner", async () => {
+  delete process.env.OWNER_USER_IDS;
+  expect(isOwner(await viewerFromHeaders(new Headers(customerCookie), sessionOf("7")))).toBe(false);
+});
+
+it("never trusts the sign-in hint cookie, a Basic header or an owner header", async () => {
+  process.env.OWNER_USER_IDS = "7";
+  const basic = `Basic ${Buffer.from("owner:anything").toString("base64")}`;
+  const reader = vi.fn(noSession);
+  const viewer = await viewerFromHeaders(new Headers({ cookie: "ib_signed_in=1", authorization: basic }), reader);
+  expect(isOwner(viewer)).toBe(false);
   expect(reader).not.toHaveBeenCalled();
+});
+
+it("a deleted owner row is not the owner", async () => {
+  process.env.OWNER_USER_IDS = "7";
+  state.users = {};
+  expect(isOwner(await viewerFromHeaders(new Headers(customerCookie), sessionOf("7")))).toBe(false);
+});
+
+it("owner access works with AUTH on whatever PAYWALL says, and not with AUTH off", async () => {
+  process.env.OWNER_USER_IDS = "7";
+  process.env.PAYWALL = "off";
+  expect(isOwner(await viewerFromHeaders(new Headers(customerCookie), sessionOf("7")))).toBe(true);
+  process.env.AUTH = "off";
+  expect(isOwner(await viewerFromHeaders(new Headers(customerCookie), sessionOf("7")))).toBe(false);
 });
 
 it("does not make anonymous visitors admin while AUTH is off", async () => {

@@ -7,7 +7,6 @@ const en = {
   anon: "Not signed in",
   signIn: "Sign in",
   create: "Create free account",
-  ownerSignIn: "Owner sign-in",
   owner: "Owner",
   ownerState: "Signed in as owner",
   signedIn: "Signed in",
@@ -48,7 +47,6 @@ const en = {
       screener: "Browse the market screener.",
     },
   },
-  ownerLink: "Owner sign in",
 };
 
 export type IdentityMessages = typeof en;
@@ -59,7 +57,6 @@ const sk: IdentityMessages = {
   anon: "Neprihlásený",
   signIn: "Prihlásiť sa",
   create: "Vytvoriť účet zdarma",
-  ownerSignIn: "Prihlásenie vlastníka",
   owner: "Vlastník",
   ownerState: "Prihlásený ako vlastník",
   signedIn: "Prihlásený",
@@ -100,7 +97,6 @@ const sk: IdentityMessages = {
       screener: "Prezerajte trhový skener.",
     },
   },
-  ownerLink: "Prihlásenie vlastníka",
 };
 
 export function getIdentityMessages(locale: Locale): IdentityMessages {

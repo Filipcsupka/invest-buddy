@@ -7,7 +7,7 @@ async function main() {
   const index = args.indexOf("--email");
   const email = index < 0 ? undefined : args[index + 1];
   const password = process.env.CUSTOMER_NEW_PASSWORD;
-  if (!process.env.OWNER_RESEARCH_PASSWORD || !email || !validPassword(password)) throw new Error("Owner password env, --email and a strong CUSTOMER_NEW_PASSWORD are required");
+  if (!email || !validPassword(password)) throw new Error("--email and a strong CUSTOMER_NEW_PASSWORD are required");
   const db = getPool();
   if (!db) throw new Error("DATABASE_URL is required");
   const user = await findUserByEmail(db, email);

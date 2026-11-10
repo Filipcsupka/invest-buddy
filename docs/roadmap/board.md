@@ -117,7 +117,7 @@ Detail: `lane-engine.md` (EN48) and `lane-positions.md` (PM2, PM4).
 - RS7: supply `invest-buddy-codex-token` and verify the research job in the cluster. The real CLI JSON run reported no rate limit or cost field; Codex API auth stays disabled because `RESEARCH_MONTHLY_USD` cannot cap unmetered spend.
 
 - `TELEGRAM_CARD_MODE=owner` for the private channel (action word and EUR band).
-- A private research page password (`OWNER_RESEARCH_PASSWORD`) alongside `OWNER_VIEW=on`; the page challenges the owner before showing facts.
+- A private research page password (`OWNER_RESEARCH_PASSWORD`) alongside `OWNER_VIEW=on`; the page challenges the owner before showing facts (superseded 2026-11-10: owner access is now an OWNER_USER_IDS session).
 - Weekly summary CronJob: un-suspend after the format is approved.
 - Research runner: Claude first, OpenAI token later through a sealed secret; Anthropic terms for unattended runs on a subscription token to be decided before any schedule.
 - GDELT daily collect (infra CronJob suspended).

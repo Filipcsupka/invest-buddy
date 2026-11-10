@@ -1,11 +1,10 @@
 import type { Metadata } from "next";
-import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { flags } from "@/config/flags";
 import { getPool } from "@/db/pool";
 import { latestHorizonLabels } from "@/db/horizon-labels";
 import { pageMetadata } from "@/i18n/metadata";
-import { ownerAuthorized } from "@/app/[locale]/owner/auth";
+import { getViewer, isOwner } from "@/viewer/get-viewer";
 import Link from "next/link";
 import { formatNumber } from "@/i18n";
 
@@ -17,7 +16,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return { ...pageMetadata(locale, "/owner/horizons", "Horizon labels", "Private horizon profile facts."), robots: { index: false, follow: false } };
 }
 export default async function OwnerHorizonsPage({ params }: Props) {
-  if (!flags().OWNER_VIEW || !ownerAuthorized(await headers(), process.env.OWNER_RESEARCH_PASSWORD)) notFound();
+  if (!flags().OWNER_VIEW || !isOwner(await getViewer())) notFound();
   const { locale } = await params;
   if (locale !== "en" && locale !== "sk") notFound();
   const db = getPool();
