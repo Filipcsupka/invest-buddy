@@ -27,7 +27,7 @@ afterEach(() => {
   }
 });
 
-it.each(["en", "sk"])("shows owner data and Markets in %s after cookie sign-in while public stays empty", async (locale) => {
+it.each(["en", "sk"])("keeps the static Welcome page data-free and shows Markets in %s only after cookie sign-in", async (locale) => {
   process.env.EODHD_PRIVATE_USE = "on";
   process.env.MARKETS_VIEWS = "on";
   process.env.OWNER_RESEARCH_PASSWORD = "test-password";
@@ -43,8 +43,10 @@ it.each(["en", "sk"])("shows owner data and Markets in %s after cookie sign-in w
   expect(publicNav).not.toContain(`/${locale}/indices`);
 
   state.cookie = `${OWNER_SESSION_COOKIE}=${issueOwnerSession("test-password")}`;
+  // The Welcome page is the same static HTML for everyone: it never reads scores, even for a signed-in owner.
   const ownerHtml = renderToStaticMarkup(await Home(props));
-  expect(ownerHtml).toContain(row.instrument.ticker);
+  expect(ownerHtml).not.toContain(row.instrument.ticker);
+  expect(state.scores).not.toHaveBeenCalled();
   const ownerNav = renderToStaticMarkup(<Nav locale={locale as "en" | "sk"} marketsViewable={marketsViewable(new Headers({ cookie: state.cookie }))} />);
   expect(ownerNav).toContain(`/${locale}/indices`);
 });
