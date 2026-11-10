@@ -8,27 +8,30 @@ type Groups = ReturnType<typeof getWelcomeStoryMessages>["areas"]["previewGroups
 
 /**
  * The signed-in left panel as a customer sees it after sign-up: every area with its status chip. Chips follow src/config/tiers.ts and
- * the area status on this page: Free account, Plus, Opens soon. The page area beside it is drawn sample art, blurred, with no figures
+ * the area status on this page: Free account, Plus, Opens soon for unbuilt tools. The page area beside it is drawn sample art, blurred, with no figures
  * in it; nothing real is hidden behind the blur (funnel-design s3: blur only static sample art).
  */
-const PANEL: { group: keyof Groups; items: { key: keyof Items; chip: Chip }[] }[] = [
-  {
-    group: "stocks",
-    items: [
-      { key: "dashboard", chip: "free" },
-      { key: "scanner", chip: "free" },
-      { key: "heatmap", chip: "free" },
-      { key: "company", chip: "free" },
-      { key: "history", chip: "plus" },
-      { key: "insiders", chip: "soon" },
-      { key: "record", chip: "soon" },
-      { key: "method", chip: "open" },
-    ],
-  },
-  { group: "etfs", items: [{ key: "etfResearch", chip: "soon" }, { key: "etfRecord", chip: "soon" }] },
-  { group: "markets", items: [{ key: "indices", chip: "soon" }, { key: "economy", chip: "soon" }, { key: "news", chip: "soon" }] },
-  { group: "you", items: [{ key: "watchlist", chip: "free" }, { key: "alerts", chip: "free" }, { key: "export", chip: "plus" }] },
-];
+function panel(): { group: keyof Groups; items: { key: keyof Items; chip: Chip }[] }[] {
+  const vendorChip: Chip = process.env.EODHD_PRIVATE_USE === "on" ? "plus" : "free";
+  return [
+    {
+      group: "stocks",
+      items: [
+        { key: "dashboard", chip: vendorChip },
+        { key: "scanner", chip: vendorChip },
+        { key: "heatmap", chip: vendorChip },
+        { key: "company", chip: vendorChip },
+        { key: "history", chip: "plus" },
+        { key: "insiders", chip: vendorChip },
+        { key: "record", chip: vendorChip },
+        { key: "method", chip: "open" },
+      ],
+    },
+    { group: "etfs", items: [{ key: "etfResearch", chip: vendorChip }, { key: "etfRecord", chip: vendorChip }] },
+    { group: "markets", items: [{ key: "indices", chip: "plus" }, { key: "economy", chip: "plus" }, { key: "news", chip: "plus" }] },
+    { group: "you", items: [{ key: "watchlist", chip: "soon" }, { key: "alerts", chip: "soon" }, { key: "export", chip: "soon" }] },
+  ];
+}
 
 /** The brand tile, drawn small for the mock panel (same shapes as the shell's BrandMark). */
 const Mark = () => (
@@ -47,7 +50,7 @@ export function AppPreview({ locale }: { locale: Locale }) {
       <div className={s.window}>
         <div className={s.panel}>
           <p><Mark />InvestBuddy</p>
-          {PANEL.map((group) => [
+          {panel().map((group) => [
             <p key={`${group.group}-label`}>{t.previewGroups[group.group]}</p>,
             <ul key={group.group}>
               {group.items.map((item, i) => (
