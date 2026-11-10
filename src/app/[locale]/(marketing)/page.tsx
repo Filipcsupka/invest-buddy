@@ -1,11 +1,8 @@
 import type { Metadata } from "next";
 import { preload } from "react-dom";
-import { StateBoard } from "@/components/landing/sections";
-import { StickyCta } from "@/components/welcome/sticky-cta";
-import { AreaGrid, CloseBlock, Faq, RuleBand, ScoreStory, Tiers, Trust, WelcomeHero } from "@/components/welcome/sections";
-import { WelcomeMotion } from "@/components/welcome/welcome-motion";
+import { WelcomeHero } from "@/components/welcome/sections";
+import { Story } from "@/components/welcome/story";
 import styles from "@/components/welcome/welcome.module.css";
-import { flags } from "@/config/flags";
 import { pageMetadata } from "@/i18n/metadata";
 import { getWelcomeMessages } from "@/i18n/welcome-messages";
 import { resolveLocale, type LocaleParams } from "@/app/[locale]/locale";
@@ -25,23 +22,12 @@ export async function generateMetadata({ params }: LocaleParams): Promise<Metada
 
 export default async function Welcome({ params }: LocaleParams) {
   const locale = await resolveLocale(params);
-  const f = flags();
-  const t = getWelcomeMessages(locale);
   // The hero is set in Manrope and Inter; fetching both early keeps the swap from moving the board on slow phones.
   for (const font of ["manrope-latin-wght-normal", "inter-latin-wght-normal"]) preload(`/fonts/${font}.woff2`, { as: "font", type: "font/woff2", crossOrigin: "anonymous" });
   return (
     <div className={styles.page} data-welcome="">
       <WelcomeHero locale={locale} />
-      <RuleBand locale={locale} />
-      <ScoreStory locale={locale} />
-      <AreaGrid locale={locale} />
-      <StateBoard locale={locale} counts={null} adviceOutput={f.ADVICE_OUTPUT} />
-      <Tiers locale={locale} pricingOpen={f.WAITLIST} />
-      <Trust locale={locale} />
-      <Faq locale={locale} />
-      <CloseBlock locale={locale} />
-      <StickyCta locale={locale} label={t.sticky} />
-      <WelcomeMotion />
+      <Story locale={locale} />
     </div>
   );
 }

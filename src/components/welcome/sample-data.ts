@@ -63,3 +63,23 @@ export function specimenRow(): SampleRow {
   const rows = sampleRows();
   return rows.find((row) => row.company.ticker === SPECIMEN_TICKER) ?? rows[0]!;
 }
+
+const histories = new Map<string, (number | null)[]>();
+
+/**
+ * Display score of one sample company over its last `sessions` trading days, from the same engine run on the generated bars cut at each
+ * day. The fundamentals and macro inputs of the sample are fixed, so only the technical rules move. SAMPLE data, like the rest.
+ */
+export function sampleHistory(row: SampleRow, sessions = 20): (number | null)[] {
+  const key = `${row.company.ticker}:${sessions}`;
+  const hit = histories.get(key);
+  if (hit) return hit;
+  const bars = fixtureBars(row.company.seed);
+  const out = Array.from({ length: sessions }, (_, i) => {
+    const cut = bars.slice(0, bars.length - (sessions - 1 - i));
+    const result = score({ ticker: row.company.ticker, bars: cut, fundamentals: fixtureFundamentals(row.company.seed), macro: fixtureMacro(row.company.seed) });
+    return displayScore(stateKey(result.state), result.ruleHits).percent;
+  });
+  histories.set(key, out);
+  return out;
+}
