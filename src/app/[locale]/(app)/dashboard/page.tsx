@@ -6,6 +6,7 @@ import { IconBandWatch } from "@/components/icons";
 import { getHeatmapMessages } from "@/i18n/heatmap-messages";
 import { getScreenMessages } from "@/i18n/screen-messages";
 import { ScannerTable } from "@/components/scanner-table";
+import { ScoreStrip } from "@/components/score-strip";
 import { byScore, toRow } from "@/components/view-model";
 import { latestPortfolio, latestScoreSummaries } from "@/data/store";
 import { publicHorizons } from "@/data/public-horizons";
@@ -60,6 +61,7 @@ async function Dashboard({ params }: LocaleParams) {
         <div className={styles.ghosts} aria-hidden="true">{[0, 1, 2].map((i) => <span key={i} className={styles.ghost}><b /><i /><i /></span>)}</div>
       </section>}
     </div>
+    <ScoreStrip locale={locale} rows={rows} />
     <HeadDisclosure text={m.common.operatorDisclosure} />
     <StateFilterProvider>
     <ScannerTable locale={locale} rows={rows} profiles={Object.fromEntries(Object.entries(horizons).map(([ticker, h]) => [ticker, h.profile]))} aside={<MacroEvents locale={locale} schedule={macroSchedule} />} heldTickers={portfolio?.weights.filter((p) => p.weightPercent > 0).map((p) => p.symbol.toUpperCase()) ?? []} text={{

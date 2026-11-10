@@ -2,26 +2,46 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { SideIcon } from "./nav-icons";
+import { LockGlyph, SideIcon } from "./nav-icons";
 import { sideStorageKey as sideKey } from "./pre-paint";
 import { useIdentity } from "./auth/identity-store";
 import styles from "./nav-links.module.css";
 
-export type NavItem = { href: string; text: string; icon?: string; locked?: boolean; tier?: "free" | "plus" };
-export type LockLabels = { free: string; plus: string; locked: string };
+export type NavItem = { href: string; text: string; icon?: string; locked?: boolean; tier?: "open" | "free" | "plus" };
+export type LockLabels = { open: string; free: string; plus: string; locked: string; owner: string };
+/** `everyone`: all viewers. `owner`: rendered only for a confirmed owner session, so shared HTML never holds these entries. */
+export type Audience = "everyone" | "owner";
+
+/** Tier chip: a lock glyph plus the tier name for an item the viewer's tier cannot open, the plain tier name otherwise. */
+function Chip({ tier, label, locked }: { tier: string; label: string; locked?: boolean }) {
+  return (
+    <span className={styles.chip} data-tier={tier} aria-hidden="true">
+      {locked && <LockGlyph />}
+      <span className={styles.chipText}>{label}</span>
+    </span>
+  );
+}
 
 /**
- * A confirmed owner sees direct links. A confirmed customer sees tier labels and Plus locks. Until /api/me answers, locked items
- * have a neutral appearance and link to the preview, so the shared HTML never prefetches owner-only pages.
+ * One sidebar group. A confirmed owner sees direct links. A confirmed customer sees tier chips and, for items their tier cannot open,
+ * a lock chip and a blurred label that leads to the preview. Until /api/me answers, locked items have a neutral appearance and link to
+ * the preview, so the shared HTML never prefetches owner-only pages. A group with `audience="owner"` renders nothing until the owner is
+ * confirmed: customers and visitors never receive those entries.
  */
-export function NavLinks({ locale, label, items, sectionLabel, lock }: { locale: string; label: string; sectionLabel?: string; items: NavItem[]; lock?: LockLabels }) {
+export function NavLinks({ locale, label, items, sectionLabel, lock, audience = "everyone" }: { locale: string; label: string; sectionLabel?: string; items: NavItem[]; lock?: LockLabels; audience?: Audience }) {
   const pathname = usePathname();
   const identity = useIdentity();
   const owner = identity.status === "ready" && identity.me.kind === "owner";
   const customer = identity.status === "ready" && identity.me.kind === "customer";
+  if (audience === "owner" && !owner) return null;
   return (
-    <nav aria-label={label} className="nav-links" style={sectionLabel ? { flex: "none" } : undefined}>
-      {sectionLabel && <span className="nav-text" style={{ color: "var(--navy-ink-2)", fontSize: "0.75rem", fontWeight: 700, padding: "0.75rem 0.75rem 0.25rem" }}>{sectionLabel}</span>}
+    <nav aria-label={label} className="nav-links" data-audience={audience}>
+      {sectionLabel && (
+        <span className="nav-group nav-text">
+          {sectionLabel}
+          {audience === "owner" && lock && <span className={styles.groupTag}>{lock.owner}</span>}
+        </span>
+      )}
       {items.map((item) => {
         if (item.locked && !owner && lock) {
           const page = item.href.slice(1);
@@ -30,20 +50,41 @@ export function NavLinks({ locale, label, items, sectionLabel, lock }: { locale:
             <Link key={item.href} href={`/${locale}/plus-preview?page=${encodeURIComponent(page)}`} prefetch={false} className={showLock ? styles.locked : undefined} aria-label={showLock ? `${item.text}, ${lock.locked}` : item.text} title={showLock ? `${item.text}: ${lock.locked}` : item.text} data-locked={showLock ? "" : undefined}>
               <SideIcon name={item.icon ?? item.href.slice(1)} />
               <span className={`nav-text${showLock ? ` ${styles.blur}` : ""}`} aria-hidden={showLock ? "true" : undefined}>{item.text}</span>
-              {showLock && <span className={styles.chip} aria-hidden="true"><span>🔒</span>{lock.plus}</span>}
+              {showLock && <Chip tier="plus" label={lock.plus} locked />}
             </Link>
           );
         }
         const href = `/${locale}${item.href}`;
         const current = pathname === href || (pathname.startsWith(`${href}/`) && !(item.href === "/etf" && pathname.startsWith(`${href}/track-record`))) || (item.href === "/dashboard" && pathname.startsWith(`/${locale}/company/`));
+        const tier = item.tier ?? "free";
         return (
           <Link key={item.href} href={href} aria-current={current ? "page" : undefined} title={item.text}>
             <SideIcon name={item.icon ?? item.href.slice(1)} />
             <span className="nav-text">{item.text}</span>
-            {customer && item.tier && lock && <span className={styles.chip} aria-hidden="true">{item.tier === "free" ? lock.free : lock.plus}</span>}
+            {customer && lock && audience === "everyone" && <Chip tier={tier} label={lock[tier]} />}
           </Link>
         );
       })}
+    </nav>
+  );
+}
+
+/**
+ * A quiet group of areas that have no licensed data yet. Plain text, not links: there is no page a customer could open, nothing is
+ * blurred or locked, and the owner (who has the real links) does not see it.
+ */
+export function NavLater({ label, items }: { label: string; items: { icon: string; text: string }[] }) {
+  const identity = useIdentity();
+  if (identity.status === "ready" && identity.me.kind === "owner") return null;
+  return (
+    <nav aria-label={label} className="nav-links nav-later">
+      <span className="nav-group nav-text">{label}</span>
+      {items.map((item) => (
+        <span key={item.text} className="nav-later-item">
+          <SideIcon name={item.icon} />
+          <span className="nav-text">{item.text}</span>
+        </span>
+      ))}
     </nav>
   );
 }

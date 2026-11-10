@@ -142,6 +142,9 @@ const en = {
     methodology: "Methodology",
     ideas: "Ideas",
     sizing: "Sizing guide",
+    learn: "Method and plans",
+    comingLater: "Coming later",
+    ownerOnly: "Owner only",
   },
   theme: {
     toDark: "Switch to dark theme",
@@ -963,6 +966,9 @@ const sk: Messages = {
     methodology: "Metodika",
     ideas: "Nápady",
     sizing: "Veľkosť pozície",
+    learn: "Metodika a plány",
+    comingLater: "Neskôr",
+    ownerOnly: "Len vlastník",
   },
   theme: {
     toDark: "Prepnúť na tmavý motív",

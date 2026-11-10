@@ -1,5 +1,6 @@
 import type { Locale } from "@/i18n";
 import { getWelcomeStoryMessages } from "@/i18n/welcome-messages-story";
+import { SideIcon } from "@/components/nav-icons";
 import { ChipTag, type Chip } from "./chip";
 import s from "./story.module.css";
 
@@ -7,29 +8,27 @@ type Items = ReturnType<typeof getWelcomeStoryMessages>["areas"]["previewItems"]
 type Groups = ReturnType<typeof getWelcomeStoryMessages>["areas"]["previewGroups"];
 
 /**
- * The signed-in left panel as a customer sees it after sign-up: every area with its status chip. Chips follow src/config/tiers.ts and
- * the area status on this page: Free account, Plus, Opens soon for unbuilt tools. The page area beside it is drawn sample art, blurred, with no figures
- * in it; nothing real is hidden behind the blur (funnel-design s3: blur only static sample art).
+ * The signed-in left panel as a customer sees it after sign-up. It lists the same entries and groups as the real app sidebar
+ * (src/components/nav.tsx) and nothing else: no ETF, Markets, watchlist, alerts or export entry, because the real panel has none for
+ * customers. Chips follow src/config/tiers.ts and the licence gate: Free account, Plus (locked while the private data gate is on), Open.
+ * The page area beside it is drawn sample art, blurred, with no figures in it; nothing real is hidden behind the blur.
  */
-function panel(): { group: keyof Groups; items: { key: keyof Items; chip: Chip }[] }[] {
+function panel(): { group: keyof Groups; items: { key: keyof Items; icon: string; chip?: Chip }[] }[] {
   const vendorChip: Chip = process.env.EODHD_PRIVATE_USE === "on" ? "plus" : "free";
   return [
     {
       group: "stocks",
       items: [
-        { key: "dashboard", chip: vendorChip },
-        { key: "scanner", chip: vendorChip },
-        { key: "heatmap", chip: vendorChip },
-        { key: "company", chip: vendorChip },
-        { key: "history", chip: "plus" },
-        { key: "insiders", chip: vendorChip },
-        { key: "record", chip: vendorChip },
-        { key: "method", chip: "open" },
+        { key: "dashboard", icon: "dashboard", chip: vendorChip },
+        { key: "scanner", icon: "scanner", chip: vendorChip },
+        { key: "heatmap", icon: "heatmap", chip: vendorChip },
+        { key: "record", icon: "track", chip: vendorChip },
+        { key: "insiders", icon: "insiders", chip: vendorChip },
+        { key: "portfolio", icon: "portfolio", chip: vendorChip },
       ],
     },
-    { group: "etfs", items: [{ key: "etfResearch", chip: vendorChip }, { key: "etfRecord", chip: vendorChip }] },
-    { group: "markets", items: [{ key: "indices", chip: "plus" }, { key: "economy", chip: "plus" }, { key: "news", chip: "plus" }] },
-    { group: "you", items: [{ key: "watchlist", chip: "soon" }, { key: "alerts", chip: "soon" }, { key: "export", chip: "soon" }] },
+    { group: "learn", items: [{ key: "method", icon: "methodology", chip: "open" }, { key: "pricing", icon: "pricing", chip: "open" }] },
+    { group: "later", items: [{ key: "economy", icon: "economy" }, { key: "etfResearch", icon: "scanner" }] },
   ];
 }
 
@@ -54,9 +53,10 @@ export function AppPreview({ locale }: { locale: Locale }) {
             <p key={`${group.group}-label`}>{t.previewGroups[group.group]}</p>,
             <ul key={group.group}>
               {group.items.map((item, i) => (
-                <li key={item.key} data-current={group.group === "stocks" && i === 0 ? "" : undefined}>
+                <li key={item.key} data-current={group.group === "stocks" && i === 0 ? "" : undefined} data-later={group.group === "later" ? "" : undefined}>
+                  <SideIcon name={item.icon} />
                   {t.previewItems[item.key]}
-                  <ChipTag chip={item.chip} label={t.chips[item.chip]} />
+                  {item.chip ? <ChipTag chip={item.chip} label={t.chips[item.chip]} /> : null}
                 </li>
               ))}
             </ul>,

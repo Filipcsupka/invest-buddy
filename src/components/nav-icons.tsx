@@ -73,3 +73,13 @@ export function SideIcon({ name }: { name: string }) {
     </svg>
   );
 }
+
+/** Small padlock for tier chips. 12px, same stroke as the icon set. */
+export function LockGlyph() {
+  return (
+    <svg className="lock-glyph" width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+      <rect x="4" y="9" width="12" height="8" rx="2" />
+      <path d="M7 9V6.5a3 3 0 0 1 6 0V9" />
+    </svg>
+  );
+}

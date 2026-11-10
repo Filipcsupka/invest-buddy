@@ -23,26 +23,25 @@ it.each(["en", "sk"] as const)("links the scanner and keeps the heat map link (%
   expect(html).not.toContain("data jobs and judge");
   expect(html).toContain(`href="/${locale}/scanner"`);
   expect(html).toContain(`href="/${locale}/heatmap"`);
-  expect(html).toContain(`href="/${locale}/etf"`);
-  expect(html).toContain(`href="/${locale}/etf/track-record"`);
+  expect(html).toContain(`href="/${locale}/portfolio"`);
+  expect(html).toContain(`href="/${locale}/pricing"`);
   expect(html).toContain(locale === "en" ? "Stocks" : "Akcie");
 });
 
-it("lists Markets as a neutral preview until identity resolves", () => {
-  const saved = process.env.MARKETS_VIEWS;
-  process.env.MARKETS_VIEWS = "on";
+it("renders no Markets or ETF entry in shared HTML, whatever the flags say", () => {
+  const saved = { markets: process.env.MARKETS_VIEWS, use: process.env.EODHD_PRIVATE_USE };
   try {
-    const html = renderToStaticMarkup(<Nav locale="en" />);
-    for (const route of ["indices", "forex", "crypto", "economy", "congress", "news", "screener"]) {
-      expect(html).not.toContain(`href="/en/${route}"`);
-      expect(html).toContain(`href="/en/plus-preview?page=${route}"`);
+    for (const markets of ["on", "off"]) for (const use of ["on", "off"]) {
+      Object.assign(process.env, { MARKETS_VIEWS: markets, EODHD_PRIVATE_USE: use });
+      const html = renderToStaticMarkup(<Nav locale="en" />);
+      for (const route of ["indices", "forex", "crypto", "economy", "congress", "news", "screener", "etf", "etf/track-record"]) {
+        expect(html, `${route} ${markets} ${use}`).not.toContain(`/en/${route}"`);
+        expect(html, `${route} ${markets} ${use}`).not.toContain(`page=${encodeURIComponent(route)}`);
+      }
+      expect(html).not.toContain("ETF track record");
     }
-    const owner = renderToStaticMarkup(<Nav locale="en" marketsViewable />);
-    for (const route of ["indices", "forex", "crypto", "economy", "congress", "news", "screener"]) expect(owner).toContain(`href="/en/${route}"`);
-    process.env.MARKETS_VIEWS = "off";
-    expect(renderToStaticMarkup(<Nav locale="en" />)).not.toContain("page=indices");
   } finally {
-    if (saved === undefined) delete process.env.MARKETS_VIEWS; else process.env.MARKETS_VIEWS = saved;
+    for (const [key, value] of [["MARKETS_VIEWS", saved.markets], ["EODHD_PRIVATE_USE", saved.use]] as const) if (value === undefined) delete process.env[key]; else process.env[key] = value;
   }
 });
 
@@ -55,7 +54,7 @@ it.each(["en", "sk"] as const)("server-renders no per-user state in the %s shell
     expect(html).toContain(locale === "en" ? "Checking sign-in" : "Overujeme prihlásenie");
     expect(html).not.toMatch(/Signed in as owner|Prihlásený ako vlastník|account\/sign-out|@/);
     // Vendor pages lead to the preview in shared HTML, without flashing a blur before identity resolves.
-    for (const route of ["dashboard", "scanner", "track-record", "insiders", "portfolio", "etf"]) expect(html).not.toContain(`href="/${locale}/${route}"`);
+    for (const route of ["dashboard", "scanner", "track-record", "insiders", "portfolio"]) expect(html).not.toContain(`href="/${locale}/${route}"`);
     expect(html).not.toContain('data-locked=""');
     expect(html).not.toContain("Soon");
     expect(html).toContain(`href="/${locale}/methodology"`);
