@@ -3,17 +3,24 @@ import { NextRequest } from "next/server";
 import { issueOwnerSession, OWNER_SESSION_COOKIE } from "@/security/owner-session";
 import { customerCookieName } from "@/auth/cookie";
 
+// A cookie counts only when Better Auth resolves it to a session and the user row exists. The fakes decide by the cookie value.
+const auth = vi.hoisted(() => ({ getSession: vi.fn(async ({ headers }: { headers: Headers }) => (headers.get("cookie")?.includes("=valid") ? { user: { id: 7, email: "ana@example.com" } } : null)) }));
+vi.mock("@/auth/server", () => ({ customerAuth: () => ({ api: { getSession: auth.getSession } }) }));
+vi.mock("@/db/pool", () => ({ getPool: () => ({ query: async () => ({ rows: [{ id: "7" }] }) }) }));
+vi.mock("@/entitlements/plan", () => ({ customerPlan: async () => ({ plan: "free", endsAt: null }) }));
 vi.mock("@/data/store", () => ({ instrumentForTicker: async (ticker: string) => (ticker.toUpperCase() === "NVDA" ? { ticker: "NVDA" } : null) }));
 import { proxy } from "./proxy";
 
-const keys = ["EODHD_PRIVATE_USE", "OWNER_RESEARCH_PASSWORD", "OWNER_SESSION_SECRET", "MARKETS_VIEWS", "OWNER_VIEW"] as const;
+const keys = ["AUTH", "EODHD_PRIVATE_USE", "OWNER_RESEARCH_PASSWORD", "OWNER_SESSION_SECRET", "MARKETS_VIEWS", "OWNER_VIEW"] as const;
 const saved = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
 afterEach(() => {
+  auth.getSession.mockClear();
   for (const key of keys) if (saved[key] === undefined) delete process.env[key]; else process.env[key] = saved[key];
 });
 
 const PASSWORD = "private-test-password";
 function setup() {
+  process.env.AUTH = "on";
   process.env.EODHD_PRIVATE_USE = "on";
   process.env.MARKETS_VIEWS = "on";
   process.env.OWNER_VIEW = "on";
@@ -70,9 +77,11 @@ it("keeps the Basic challenge for non-browser clients", async () => {
   expect((await proxy(request("/en/dashboard"))).headers.get("www-authenticate")).toContain("Basic");
 });
 
-it("sends a signed-in customer to the opens-soon page, not to sign-in", async () => {
+const session = customerCookieName("session", true);
+
+it("sends a customer with a verified session to the opens-soon page, not to sign-in", async () => {
   setup();
-  const cookie = `${customerCookieName("session", true)}=token`;
+  const cookie = `${session}=valid`;
   const response = await proxy(request("/en/indices", { ...document, cookie }));
   expect(response.status).toBe(307);
   expect(where(response)).toBe("/en/opens-soon?page=indices");
@@ -80,6 +89,38 @@ it("sends a signed-in customer to the opens-soon page, not to sign-in", async ()
   const prefetched = await proxy(request("/en/dashboard", { ...prefetch, cookie }));
   expect(prefetched.status).toBe(401);
   expect(prefetched.headers.get("www-authenticate")).toBeNull();
+});
+
+it.each([
+  ["a forged session cookie", `${session}=forged.value`],
+  ["an expired session cookie", `${session}=expired`],
+  ["the sign-in hint alone", "ib_signed_in=1"],
+  ["a forged cookie next to the hint", `${session}=forged; ib_signed_in=1`],
+])("treats %s as anonymous: a page load goes to sign-in with next", async (_name, cookie) => {
+  setup();
+  const response = await proxy(request("/en/indices?x=1", { ...document, cookie }));
+  expect(response.status).toBe(307);
+  expect(where(response)).toBe(`/en/sign-in?mode=sign-in&next=${encodeURIComponent("/en/indices?x=1")}`);
+  expect(response.headers.get("www-authenticate")).toBeNull();
+});
+
+it("does not even read a session for the hint alone, and reads one only to redirect a browser page load", async () => {
+  setup();
+  await proxy(request("/en/dashboard", { ...document, cookie: "ib_signed_in=1" }));
+  expect(auth.getSession).not.toHaveBeenCalled();
+  await proxy(request("/en/dashboard", { ...prefetch, cookie: `${session}=valid` }));
+  await proxy(request("/en/dashboard", { ...curl, cookie: `${session}=valid` }));
+  expect(auth.getSession).not.toHaveBeenCalled();
+});
+
+it("treats a customer cookie as anonymous when AUTH is off or the session check fails", async () => {
+  setup();
+  const cookie = `${session}=valid`;
+  process.env.AUTH = "off";
+  expect(where(await proxy(request("/en/dashboard", { ...document, cookie })))).toMatch(/^\/en\/sign-in\?/);
+  process.env.AUTH = "on";
+  auth.getSession.mockRejectedValueOnce(new Error("db down"));
+  expect(where(await proxy(request("/en/dashboard", { ...document, cookie })))).toMatch(/^\/en\/sign-in\?/);
 });
 
 it("lets the owner through with the session cookie or Basic, and sets the sign-in hint for the cookie", async () => {

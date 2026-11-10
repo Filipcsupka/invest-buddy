@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { getServerSnapshot, getSnapshot, ME_CACHE_KEY, parseMe, resetIdentityStore, subscribe } from "./identity-store";
+import { forgetIdentity, getServerSnapshot, getSnapshot, ME_CACHE_KEY, parseMe, resetIdentityStore, subscribe } from "./identity-store";
 
 function browser(cookie: string, stored: Record<string, string> = {}) {
   const storage = new Map(Object.entries(stored));
@@ -22,22 +22,49 @@ it("treats a visitor without the sign-in hint as anonymous and never calls /api/
   expect(fetchMock).not.toHaveBeenCalled();
 });
 
-it("shows the cached state at once, then refreshes it from /api/me without the HTTP cache", async () => {
-  const storage = browser("ib_signed_in=1", { [ME_CACHE_KEY]: JSON.stringify({ kind: "owner", markets: true }) });
-  fetchMock.mockResolvedValue(new Response(JSON.stringify({ kind: "customer", email: "a@b.cz", plan: "plus" }), { headers: { "content-type": "application/json" } }));
+it("shows only a skeleton until /api/me answers, even when an earlier account was stored in this tab", async () => {
+  const storage = browser("ib_signed_in=1", { [ME_CACHE_KEY]: JSON.stringify({ kind: "customer", email: "previous@example.com", plan: "plus" }) });
+  let answer: (response: Response) => void = () => {};
+  fetchMock.mockReturnValue(new Promise<Response>((resolve) => { answer = resolve; }));
   const listener = vi.fn();
   subscribe(listener);
-  expect(getSnapshot()).toEqual({ status: "ready", me: { kind: "owner", markets: true } });
-  await vi.waitFor(() => expect(listener).toHaveBeenCalled());
+  expect(getSnapshot()).toEqual({ status: "pending" });
+  expect(JSON.stringify(getSnapshot())).not.toContain("previous@example.com");
+  expect(storage.has(ME_CACHE_KEY)).toBe(false);
   expect(fetchMock).toHaveBeenCalledWith("/api/me", expect.objectContaining({ cache: "no-store", credentials: "same-origin" }));
+  answer(new Response(JSON.stringify({ kind: "customer", email: "a@b.cz", plan: "plus" }), { headers: { "content-type": "application/json" } }));
+  await vi.waitFor(() => expect(listener).toHaveBeenCalled());
   expect(getSnapshot()).toEqual({ status: "ready", me: { kind: "customer", email: "a@b.cz", plan: "plus", markets: false } });
-  expect(JSON.parse(storage.get(ME_CACHE_KEY)!)).toMatchObject({ kind: "customer" });
+  expect(storage.has(ME_CACHE_KEY)).toBe(false);
+  for (const [key] of storage) expect(storage.get(key)).not.toContain("a@b.cz");
 });
 
-it("drops the cached state when the hint is gone", () => {
+it("never writes the account to browser storage", async () => {
+  const storage = browser("ib_signed_in=1");
+  fetchMock.mockResolvedValue(new Response(JSON.stringify({ kind: "customer", email: "a@b.cz", plan: "free" }), { headers: { "content-type": "application/json" } }));
+  const listener = vi.fn();
+  subscribe(listener);
+  await vi.waitFor(() => expect(listener).toHaveBeenCalled());
+  expect(storage.size).toBe(0);
+});
+
+it("drops the answer and any stored copy when the hint is gone", () => {
   const storage = browser("", { [ME_CACHE_KEY]: JSON.stringify({ kind: "owner", markets: true }) });
   expect(getSnapshot()).toEqual({ status: "ready", me: { kind: "anon", markets: false } });
   expect(storage.has(ME_CACHE_KEY)).toBe(false);
+  expect(fetchMock).not.toHaveBeenCalled();
+});
+
+it("clears the stored copy and the shown account on sign-out, and resets to a skeleton when another tab changes the session", async () => {
+  const storage = browser("ib_signed_in=1");
+  fetchMock.mockResolvedValue(new Response(JSON.stringify({ kind: "customer", email: "a@b.cz", plan: "free" }), { headers: { "content-type": "application/json" } }));
+  const listener = vi.fn();
+  subscribe(listener);
+  await vi.waitFor(() => expect(getSnapshot().status).toBe("ready"));
+  storage.set(ME_CACHE_KEY, "legacy");
+  forgetIdentity();
+  expect(storage.has(ME_CACHE_KEY)).toBe(false);
+  expect(getSnapshot()).toEqual({ status: "pending" });
 });
 
 it("accepts only shapes the island can render", () => {

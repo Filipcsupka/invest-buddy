@@ -8,8 +8,9 @@ export type IdentityState = { status: "server" } | { status: "pending" } | { sta
 
 /**
  * Who is signed in, for the nav island. Browser only; the server snapshot is always `pending`, so no user data is ever rendered into
- * shared HTML. Without the `ib_signed_in` hint the visitor is anonymous and /api/me is not called. With it, the last answer from this tab
- * (sessionStorage) shows at once and /api/me refreshes it. All mounted islands share one request.
+ * shared HTML. Without the `ib_signed_in` hint the visitor is anonymous and /api/me is not called. With it, the island shows a
+ * non-identifying skeleton until /api/me answers; no email or plan is ever stored in the browser, so a reused tab cannot show the
+ * previous account. All mounted islands share one request.
  */
 export const ME_URL = "/api/me";
 export const ME_CACHE_KEY = "ib_me";
@@ -43,38 +44,24 @@ export function parseMe(raw: unknown): Me | null {
   return null;
 }
 
-function readCache(): Me | null {
+/** Older builds kept the last answer in sessionStorage. Remove it so a previous account's email can never be read back. */
+function clearLegacyCache(): void {
   try {
-    const raw = window.sessionStorage.getItem(ME_CACHE_KEY);
-    return raw ? parseMe(JSON.parse(raw)) : null;
+    window.sessionStorage.removeItem(ME_CACHE_KEY);
   } catch {
-    return null;
-  }
-}
-
-function writeCache(me: Me | null): void {
-  try {
-    if (!me || me.kind === "anon") window.sessionStorage.removeItem(ME_CACHE_KEY);
-    else window.sessionStorage.setItem(ME_CACHE_KEY, JSON.stringify(me));
-  } catch {
-    /* storage blocked: the next page load asks again */
+    /* storage blocked: nothing was stored */
   }
 }
 
 function initial(): IdentityState {
+  clearLegacyCache();
   hinted = hasSessionHint();
-  if (!hinted) {
-    writeCache(null);
-    return ANON_STATE;
-  }
-  const cached = readCache();
-  return cached ? { status: "ready", me: cached } : PENDING;
+  return hinted ? PENDING : ANON_STATE;
 }
 
 async function load(): Promise<void> {
   if (inflight) return;
   if (!hasSessionHint()) {
-    writeCache(null);
     emit(ANON_STATE);
     return;
   }
@@ -82,10 +69,8 @@ async function load(): Promise<void> {
   try {
     const response = await fetch(ME_URL, { credentials: "same-origin", cache: "no-store", headers: { accept: "application/json" } });
     const me = response.ok ? parseMe(await response.json().catch(() => null)) ?? ANON : null;
-    if (me) {
-      writeCache(me);
-      emit({ status: "ready", me });
-    } else if (state?.status !== "ready") emit(ANON_STATE);
+    if (me) emit({ status: "ready", me });
+    else if (state?.status !== "ready") emit(ANON_STATE);
   } catch {
     // Offline or blocked: keep the last known state, or show the anonymous controls rather than an endless skeleton.
     if (state?.status !== "ready") emit(ANON_STATE);
@@ -100,6 +85,8 @@ function onVisible(): void {
   const now = hasSessionHint();
   if (now === hinted) return;
   hinted = now;
+  // A different session may now be behind the cookie: drop the old answer until /api/me confirms the new one.
+  emit(now ? PENDING : ANON_STATE);
   void load();
 }
 
@@ -124,9 +111,10 @@ export function subscribe(listener: () => void): () => void {
   };
 }
 
-/** Called before a sign-out form posts, so the next page does not flash the old state. */
+/** Called before a sign-out form posts: drop the in-memory answer and any legacy stored one, so nothing of the old account is shown. */
 export function forgetIdentity(): void {
-  writeCache(null);
+  clearLegacyCache();
+  if (state?.status === "ready") emit(PENDING);
 }
 
 /** Test seam. */

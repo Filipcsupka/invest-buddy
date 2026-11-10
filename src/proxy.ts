@@ -35,16 +35,31 @@ const browserRequest = (h: Headers) => routerRequest(h) || documentRequest(h) ||
 const sameOrigin = (request: NextRequest, path: string) => new URL(path, request.nextUrl).toString();
 
 /**
+ * True only for a cookie that resolves to a live customer session (signature, expiry, user row). A forged or expired cookie, or the
+ * readable ib_signed_in hint alone, is anonymous. Runs only when a browser page load is being redirected, never on allowed requests;
+ * an unsigned cookie fails before any database read.
+ */
+async function verifiedCustomer(headers: Headers): Promise<boolean> {
+  if (!flags().AUTH || !hasCustomerCookie(headers.get("cookie"))) return false;
+  try {
+    const { viewerFromHeaders } = await import("@/viewer/get-viewer");
+    return Boolean((await viewerFromHeaders(headers)).userId);
+  } catch {
+    return false;
+  }
+}
+
+/**
  * The answer for a gated route the visitor may not open. Non-browser clients (curl, scripts) get the Basic challenge. A browser page load
  * goes to sign-in, or to the "opens soon" page for a signed-in customer. Prefetches and fetches get a plain 401 with no challenge header.
  * Locations are relative so the proxy host never leaks into them.
  */
-function denied(request: NextRequest, locale: string, section: string, signedIn: boolean): NextResponse {
+async function denied(request: NextRequest, locale: string, section: string): Promise<NextResponse> {
   const h = request.headers;
   if (!browserRequest(h)) return ownerChallenge();
   if (!documentRequest(h)) return new NextResponse(null, { status: 401, headers: privateHeaders });
   const next = `${request.nextUrl.pathname}${request.nextUrl.search}`;
-  const location = signedIn ? `/${locale}/opens-soon?page=${encodeURIComponent(section)}` : `/${locale}/sign-in?mode=sign-in&next=${encodeURIComponent(next)}`;
+  const location = (await verifiedCustomer(h)) ? `/${locale}/opens-soon?page=${encodeURIComponent(section)}` : `/${locale}/sign-in?mode=sign-in&next=${encodeURIComponent(next)}`;
   return new NextResponse(null, { status: 307, headers: { ...privateHeaders, Location: sameOrigin(request, location) } });
 }
 
@@ -93,12 +108,12 @@ async function handle(request: NextRequest) {
   const featureFlags = flags();
   const privateDataRoute = privateDataSections.has(section);
   if (process.env.EODHD_PRIVATE_USE === "on" && privateDataRoute &&
-    !owner) return denied(request, locale, section, customerCookie);
+    !owner) return denied(request, locale, section);
   // Owner-only EODHD ETF tabs under /etf/fund/{key}/{tab} share the market gate.
   const market = marketSections.has(section) || isEtfDataPath(request.nextUrl.pathname);
   if (market && featureFlags.MARKETS_VIEWS &&
     !marketsViewable(incoming)) {
-    return denied(request, locale, section, customerCookie);
+    return denied(request, locale, section);
   }
   if (section === "owner" && featureFlags.OWNER_VIEW &&
     !owner) {
