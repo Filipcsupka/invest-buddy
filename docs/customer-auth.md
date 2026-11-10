@@ -39,6 +39,7 @@ Never commit any of these values.
 ## Sessions and cookies
 
 - Sessions live 30 days in `auth_sessions`. The cookie is `__Host-ib_session`: HttpOnly, Secure, SameSite=Lax, Path=/, no Domain. Plain-HTTP localhost uses `ib_session` because browsers reject `__Host-` cookies without Secure.
+- `ib_signed_in=1` is a readable hint cookie set next to the session cookie and cleared with it, so static pages can show the account entry. It holds no token and the server never trusts it.
 - The cookie cache (`__Host-ib_session_data`) is on for 60 seconds. A revoked session or a changed plan can still be read from it for up to a minute on normal pages. Export, delete, recovery-code reveal and regeneration always read the database. A deleted user is treated as signed out at once because the viewer checks the `users` row.
 - Better Auth checks the `Origin` header and CSRF on every POST, including in tests. Our routes also require `Origin` to equal the site origin.
 - Google is linked to an existing account only when that account's email is verified locally (`accountLinking.requireLocalEmailVerified`, checked in the 1.7.18 source and covered by a test). While `EMAIL_VERIFY` is off no password account is verified, so a person who signed up with a password and later tries Google gets an error. This blocks someone from registering a password account with another person's address and taking over their Google sign-in.
@@ -78,7 +79,7 @@ All POSTs go to the same origin and send an `Origin` header. Better Auth routes 
 
 | Action | Endpoint | Body |
 | --- | --- | --- |
-| Password sign-up | `POST /api/auth/sign-up/email` | JSON `{ "name": "Name", "email": "name@example.com", "password": "10 to 128 chars" }` |
+| Password sign-up | `POST /api/auth/sign-up/email` | JSON `{ "name": "Name", "email": "name@example.com", "password": "10 to 128 chars", "callbackURL": "/en", "marketing": true }`; `callbackURL` and `marketing` are optional, and `marketing: true` records the marketing opt-in |
 | Password sign-in | `POST /api/auth/sign-in/email` | JSON `{ "email": "name@example.com", "password": "..." }` |
 | Google sign-in | `POST /api/auth/sign-in/social` | JSON `{ "provider": "google", "callbackURL": "/en/account" }` |
 | Magic link (flag) | `POST /api/auth/sign-in/magic-link` | JSON `{ "email": "name@example.com" }` |
@@ -86,6 +87,7 @@ All POSTs go to the same origin and send an `Origin` header. Better Auth routes 
 | Sign out (JSON) | `POST /api/auth/sign-out` | JSON `{}` |
 | Sign out (form) | `POST /api/auth/account/sign-out` | form `locale`; redirects to `/{locale}` |
 | Recovery reset | `POST /api/auth/recovery/reset` | JSON `{ "email": "...", "code": "XXXX-...", "newPassword": "..." }` |
+| First recovery codes | `POST /api/auth/recovery/codes` | JSON `{}` returns `{ "codes": [...] }` once for the signed-in user; later calls get 409 `RECOVERY_CODES_ALREADY_SHOWN` |
 | Regenerate codes | `POST /api/auth/recovery/regenerate` | JSON `{ "currentPassword": "..." }` returns `{ "codes": [...] }`; the account page form gets an HTML page |
 | Marketing consent | `POST /api/auth/account/consent` | form `marketing=on` or absent, `locale` |
 | Delete account | `POST /api/auth/account/delete` | form `confirm=DELETE`, `locale` |

@@ -37,11 +37,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ act
   const { body, form } = await readBody(request);
   const locale = body.locale === "sk" ? "sk" : "en";
 
-  if (action === "reveal" || action === "regenerate") {
+  if (action === "reveal" || action === "codes" || action === "regenerate") {
     const session = await customerAuth().api.getSession({ headers: request.headers, query: { disableCookieCache: true } });
     if (!session?.user?.id) return new Response("Sign in required", { status: 401, headers: privateHeaders });
     const userId = String(session.user.id);
     if (action === "reveal") return htmlResponse(recoveryCodesPage(await revealInitialRecoveryCodes(db, userId), locale));
+    // JSON form of reveal for the sign-up screen. It shows the first set once and never makes a new set without the password.
+    if (action === "codes") {
+      const codes = await revealInitialRecoveryCodes(db, userId);
+      return codes.length > 0
+        ? Response.json({ codes }, { headers: privateHeaders })
+        : Response.json({ code: "RECOVERY_CODES_ALREADY_SHOWN", error: "Recovery codes were already shown; generate a new set on the account page" }, { status: 409, headers: privateHeaders });
+    }
     if (!await takeAuthLimit(db, "user", `regenerate:${userId}`, 10, 3600)) return tooMany();
     const result = await db.query<{ password: string | null }>("SELECT password FROM auth_accounts WHERE user_id = $1 AND provider_id = 'credential' LIMIT 1", [userId]);
     const hash = result.rows[0]?.password;

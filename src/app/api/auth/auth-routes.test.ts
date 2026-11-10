@@ -12,6 +12,7 @@ import { POST as recoveryPost } from "./recovery/[action]/route";
 import { POST as accountPost } from "./account/[action]/route";
 import { createInitialRecoveryCodes, revealInitialRecoveryCodes } from "@/auth/recovery";
 import { CUSTOMER_SESSION_COOKIE } from "@/auth/cookie";
+import { createRecoveryCodes, resetWithRecoveryCode, signInWithGoogle, signInWithPassword, signUpWithPassword } from "@/auth/client-api";
 
 const SITE = "https://invest.example.test";
 let db: PGlite;
@@ -217,4 +218,53 @@ it("never creates a password through recovery for an account without one", async
   const response = await recoveryPost(post("/api/auth/recovery/reset", { email: "nopass@example.test", code, newPassword: "Another Strong 99" }), action("reset"));
   expect(response.status).toBe(200);
   expect((await db.query("SELECT 1 FROM auth_accounts WHERE user_id = $1", [userId])).rows).toHaveLength(0);
+}, 60_000);
+
+it("serves the request shapes src/auth/client-api.ts sends", async () => {
+  // A browser-like fetch: same origin, cookies kept, routed to the handlers under test.
+  let jar = new Map<string, string>();
+  const ip = freshIp();
+  const fetcher = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const headers = new Headers(init?.headers);
+    headers.set("Origin", SITE);
+    headers.set("x-forwarded-for", ip);
+    if (jar.size) headers.set("cookie", [...jar].map(([name, value]) => `${name}=${value}`).join("; "));
+    const request = new Request(`${SITE}${String(input)}`, { ...init, headers });
+    const path = new URL(request.url).pathname;
+    const response = path.startsWith("/api/auth/recovery/") ? await recoveryPost(request, action(path.split("/").pop()!)) : await authPost(request);
+    for (const value of response.headers.getSetCookie()) {
+      const [pair] = value.split(";");
+      const [name, ...rest] = pair.split("=");
+      if (/Max-Age=0/i.test(value)) jar.delete(name); else jar.set(name, rest.join("="));
+    }
+    return response;
+  }) as typeof fetch;
+
+  const signedUp = await signUpWithPassword({ email: "Client@Example.test", password: "Correct Horse 42", callbackURL: "/en/welcome", marketing: true }, fetcher);
+  expect(signedUp.kind).toBe("signed-up");
+  expect(jar.get("ib_signed_in")).toBe("1");
+  const userId = await userIdOf("client@example.test");
+  expect((await db.query<{ granted: boolean }>("SELECT granted FROM user_consents WHERE user_id = $1 AND kind = 'marketing'", [userId])).rows).toEqual([{ granted: true }]);
+  const session = jar;
+  jar = new Map();
+  expect((await signUpWithPassword({ email: "client@example.test", password: "Correct Horse 42", callbackURL: "/en" }, fetcher)).kind).toBe("exists");
+  jar = session;
+
+  const codes = await createRecoveryCodes(fetcher);
+  expect(codes.kind).toBe("codes");
+  const list = codes.kind === "codes" ? codes.codes : [];
+  expect(list).toHaveLength(10);
+  // Shown once; a new set needs the password on the account page.
+  expect((await createRecoveryCodes(fetcher)).kind).toBe("error");
+
+  jar = new Map();
+  expect((await signInWithPassword({ email: "client@example.test", password: "wrong password 1", callbackURL: "/en" }, fetcher)).kind).toBe("wrong-credentials");
+  expect((await resetWithRecoveryCode({ email: "client@example.test", code: list[0].toLowerCase(), newPassword: "Another Strong 99" }, fetcher)).kind).toBe("reset");
+  expect((await signInWithPassword({ email: "client@example.test", password: "Another Strong 99", callbackURL: "/en" }, fetcher)).kind).toBe("signed-in");
+  expect(jar.get("ib_signed_in")).toBe("1");
+  // No Google client configured in this test: the social route answers but has no provider.
+  expect((await signInWithGoogle({ callbackURL: "/en" }, fetcher)).kind).not.toBe("redirect");
+
+  const signOut = await accountPost(new Request(`${SITE}/api/auth/account/sign-out`, { method: "POST", headers: { Origin: SITE }, body: new URLSearchParams({ locale: "en" }) }), action("sign-out"));
+  expect(signOut.headers.getSetCookie()).toContain("ib_signed_in=; Path=/; Max-Age=0; SameSite=Lax");
 }, 60_000);
