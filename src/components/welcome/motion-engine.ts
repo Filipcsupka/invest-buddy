@@ -169,7 +169,8 @@ export function startWelcomeMotion(root: HTMLElement): () => void {
     const story = root.querySelector<HTMLElement>('[data-w="story"]');
     const storyList = story?.querySelector<HTMLElement>('[data-w="rules"]');
     if (story && storyList && below(storyList)) {
-      const steps = JSON.parse(story.dataset.steps ?? "[]") as Step[];
+      // data-steps: "earned,percent,band" per rule, space separated.
+      const steps: Step[] = (story.dataset.steps ?? "").split(" ").filter(Boolean).map((step) => { const [e, p, b] = step.split(",").map(Number); return { e: e!, p: p!, b: b! }; });
       const rules = Array.from(story.querySelectorAll<HTMLElement>('[data-w="rule"]'));
       const fill = story.querySelector<HTMLElement>('[data-w="fill"]');
       const percent = story.querySelector<HTMLElement>('[data-w="percent"]');

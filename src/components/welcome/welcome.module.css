@@ -18,7 +18,6 @@
   letter-spacing: -0.03em;
   text-wrap: balance;
 }
-.h3 { margin: 0 0 var(--s3); font-family: var(--display); font-size: var(--t-h3); font-weight: 800; letter-spacing: -0.015em; }
 .lede { margin: 0; color: var(--ink-2); font-size: var(--t-lede); line-height: 1.55; text-wrap: pretty; max-inline-size: 62ch; }
 /* Words are wrapped by the motion layer only; the server sends plain heading text. */
 .h2 :global(.w), .closeTitle :global(.w) { display: inline-block; overflow: clip; padding-block-end: 0.12em; margin-block-end: -0.12em; vertical-align: top; }
@@ -107,9 +106,9 @@
 .ghostLink:hover { text-decoration-color: var(--accent); }
 .ghostLink:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: var(--radius-sm); }
 .heroNotes { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--s2) var(--s5); color: var(--navy-ink-2); font-size: var(--t-sm); }
-.heroNotes li, .tierList li[data-tick] { display: inline-flex; align-items: center; gap: var(--s2); }
+.heroNotes li { display: inline-flex; align-items: center; gap: var(--s2); }
 /* A drawn tick in CSS: same look as the kit pass mark, without an inline SVG per item. */
-.heroNotes li::before, .tierList li[data-tick]::before {
+.heroNotes li::before {
   content: "";
   flex: none;
   inline-size: 1.25rem;
@@ -117,7 +116,6 @@
   border-radius: 50%;
   background: var(--gain) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='m4 8.5 2.75 2.75L12 5.5' fill='none' stroke='white' stroke-width='1.9' stroke-linecap='square'/%3E%3C/svg%3E") center / 0.875rem no-repeat;
 }
-.tierList li[data-tick] { align-items: start; }
 
 .boardWrap { min-inline-size: 0; transform-style: preserve-3d; }
 .board {
@@ -135,7 +133,7 @@
   margin: 0;
   padding: var(--s2) var(--s3);
   display: grid;
-  grid-template-columns: 1.5rem minmax(0, 1fr) minmax(5.5rem, 8.5rem);
+  grid-template-columns: 1.5rem minmax(6.5rem, 1fr) minmax(5rem, 8.5rem);
   column-gap: var(--s3);
 }
 .boardRow {
@@ -148,8 +146,9 @@
 }
 .boardRow:last-child { border-block-end: 0; }
 .rank { color: var(--ink-3); font-weight: 700; font-size: var(--t-sm); }
-.boardName { display: grid; gap: 0.1rem; min-inline-size: 0; }
-.boardTicker { display: flex; align-items: center; gap: var(--s2); font-family: var(--display); font-weight: 800; letter-spacing: -0.01em; }
+/* The name cell never spills into the score column: the SAMPLE mark wraps under the ticker when the column is narrow. */
+.boardName { display: grid; gap: 0.1rem; min-inline-size: 0; overflow: hidden; }
+.boardTicker { display: flex; flex-wrap: wrap; align-items: center; gap: 0.125rem var(--s2); min-inline-size: 0; font-family: var(--display); font-weight: 800; letter-spacing: -0.01em; }
 .rowSample {
   padding: 0 0.4rem;
   border: 1px solid var(--rule-strong);
@@ -161,13 +160,16 @@
   line-height: 1.5;
 }
 .boardCompany { color: var(--ink-3); font-size: var(--t-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.boardBar { min-inline-size: 0; }
+.boardBar { min-inline-size: 0; overflow: hidden; }
 .boardChip { grid-column: 2 / -1; justify-self: start; margin-block-start: var(--s2); }
 .boardFoot { display: grid; gap: var(--s2); padding: var(--s3) var(--s5) var(--s4); border-block-start: 1px solid var(--rule); background: var(--sheet-hover); }
 .boardNote { margin: 0; color: var(--ink-2); font-size: var(--t-sm); }
 
-@media (min-width: 560px) {
-  .boardList { grid-template-columns: 1.5rem minmax(0, 1fr) minmax(6rem, 9rem) max-content; }
+/* Columns follow the board's own width, not the viewport: beside the hero copy the board can be narrow on a wide screen. Below 34rem
+   the state chip moves to a second line so the name column keeps room for the ticker and its SAMPLE mark. */
+.board { container-type: inline-size; }
+@container (min-width: 34rem) {
+  .boardList { grid-template-columns: 1.5rem minmax(7rem, 1fr) minmax(6rem, 9rem) max-content; }
   .boardChip { grid-column: auto; justify-self: end; margin: 0; }
 }
 @media (min-width: 1024px) {
@@ -250,7 +252,7 @@
 .ruleGroup { display: grid; gap: var(--s2); }
 .ruleGroupName { margin: 0; font-family: var(--display); font-size: var(--t-sm); font-weight: 800; color: var(--ink-3); }
 .ruleList { display: grid; gap: var(--s2); margin: 0; padding: 0; list-style: none; }
-.rule {
+.ruleList > li {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
@@ -261,16 +263,14 @@
   background: var(--sheet);
   box-shadow: var(--shadow-1);
 }
-.rule :global(.kit-mark) { margin: 0; }
-.rule[data-result="fail"] { background: var(--sheet-hover); }
-.ruleText { display: grid; gap: 0.15rem; min-inline-size: 0; }
-.ruleName { font-weight: 650; }
-.ruleBonus { color: var(--ink-3); font-size: var(--t-xs); font-style: italic; }
-.ruleOutcome { display: grid; justify-items: end; gap: 0.1rem; text-align: end; }
-.ruleWord { font-size: var(--t-xs); font-weight: 700; }
-.rule[data-result="pass"] .ruleWord { color: var(--gain); }
-.rule[data-result="fail"] .ruleWord { color: var(--ink-3); }
-.rulePts { color: var(--ink-2); font-size: var(--t-sm); }
+.ruleList > li > :global(.kit-mark) { margin: 0; }
+.ruleList > li[data-result="fail"] { background: var(--sheet-hover); }
+.ruleList > li > span:nth-child(2) { display: grid; gap: 0.15rem; min-inline-size: 0; font-weight: 650; }
+.ruleList small { color: var(--ink-3); font-size: var(--t-xs); font-style: italic; font-weight: 400; }
+.ruleList > li > span:last-child { display: grid; justify-items: end; gap: 0.1rem; text-align: end; color: var(--ink-2); font-size: var(--t-sm); font-variant-numeric: tabular-nums; }
+.ruleList b { font-size: var(--t-xs); font-weight: 700; }
+.ruleList > li[data-result="pass"] b { color: var(--gain); }
+.ruleList > li[data-result="fail"] b { color: var(--ink-3); }
 
 @media (max-width: 899px) {
   /* Phone: the meter shrinks to a slim sticky strip so the rules stay readable under it. */
@@ -282,88 +282,12 @@
   .story { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: var(--s7); }
   .stage { inset-block-start: var(--s6); }
   .ruleList { gap: var(--s3); }
-  .rule { padding: var(--s5); min-block-size: 5.5rem; }
+  .ruleList > li { padding: var(--s5); min-block-size: 5.5rem; }
   .rules { gap: var(--s7); }
 }
 @media (max-width: 899px) {
   .result { display: none; }
 }
-
-/* ---------- 4. areas ---------- */
-.areas { display: grid; gap: var(--s4); margin: 0; padding: 0; list-style: none; }
-.area { display: grid; padding: 0; overflow: clip; transform-style: preserve-3d; }
-.area:not(:has(> a)) { padding: var(--s5); gap: var(--s3); align-content: start; }
-.areaLink { display: grid; gap: var(--s3); align-content: start; padding: var(--s5); color: inherit; text-decoration: none; }
-.areaLink:hover .areaTitle { color: var(--signal); }
-.areaLink:focus-visible { outline: 2px solid var(--signal); outline-offset: -2px; border-radius: var(--radius-lg); }
-.areaTop { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s2); }
-.areaTitle { margin: 0; font-family: var(--display); font-size: var(--t-h2); font-weight: 800; letter-spacing: -0.02em; }
-.areaBody { margin: 0; color: var(--ink-2); }
-.pill { padding: 0.15rem 0.6rem; border-radius: var(--radius-pill); font-size: var(--t-xs); font-weight: 700; border: 1px solid var(--rule-strong); color: var(--ink-2); }
-.pill[data-pill="open"] { background: var(--st-setup-wash); border-color: color-mix(in srgb, var(--st-setup) 40%, transparent); color: var(--st-setup); }
-.pill[data-pill="account"] { background: var(--signal-tint); border-color: color-mix(in srgb, var(--signal) 40%, transparent); color: var(--signal); }
-.pill[data-pill="plus"] { background: var(--tier-wash); border-color: var(--tier-line); color: var(--tier); }
-.areaPreview { display: grid; gap: var(--s2); margin: var(--s2) 0 0; padding: var(--s3); border: 1px dashed var(--rule-strong); border-radius: var(--radius); background: var(--ground); }
-.areaPreview figcaption { justify-self: start; }
-.miniTable { display: grid; gap: var(--s2); margin: 0; padding: 0; list-style: none; }
-.miniTable li { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); }
-.miniTicker { font-family: var(--display); font-weight: 800; font-size: var(--t-sm); }
-.miniState, .miniTimeline li { display: inline-flex; align-items: center; gap: var(--s1); font-size: var(--t-xs); font-weight: 700; color: var(--st-c, var(--ink-2)); }
-.miniState::before, .miniTimeline li::after { content: ""; inline-size: 0.5rem; block-size: 0.5rem; border-radius: 50%; background: currentColor; }
-.miniTimeline li::after { order: -1; }
-.areaPreview [data-state="setup"] { --st-c: var(--st-setup); }
-.areaPreview [data-state="watch"] { --st-c: var(--st-watch); }
-.areaPreview [data-state="wait"] { --st-c: var(--st-wait); }
-.areaPreview [data-state="broken"] { --st-c: var(--st-broken); }
-.miniRule { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: var(--s2); margin: 0; font-size: var(--t-sm); }
-.miniTimeline { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); margin: 0; padding: 0; list-style: none; }
-.miniTimeline li + li::before { content: ""; display: inline-block; inline-size: 0.75rem; block-size: 1px; margin-inline-end: var(--s2); vertical-align: middle; background: var(--rule-strong); }
-.miniChart { inline-size: 100%; block-size: 3rem; color: var(--ink-3); }
-
-@media (min-width: 700px) {
-  .areas { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .area[data-area="stocks"], .area[data-area="method"] { grid-column: span 2; }
-}
-@media (min-width: 1100px) {
-  .areas { grid-template-columns: repeat(6, minmax(0, 1fr)); }
-  .area { grid-column: span 2; }
-  .area[data-area="stocks"] { grid-column: span 4; }
-}
-
-/* ---------- 5. tiers ---------- */
-.tiers { display: grid; gap: var(--s4); align-items: stretch; }
-.tier { display: grid; gap: var(--s4); align-content: start; padding: var(--s6) var(--s5); transform-style: preserve-3d; }
-.tier :global(.button) { justify-self: start; margin-block-start: auto; }
-.tierPlus { border-color: var(--tier-line); }
-.tierHead { display: grid; gap: var(--s1); }
-.tierName { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); margin: 0; font-family: var(--display); font-size: var(--t-h2); font-weight: 800; }
-.plannedTag { padding: 0.1rem 0.55rem; border-radius: var(--radius-pill); background: var(--tier-wash); color: var(--tier); font-family: var(--sans); font-size: var(--t-xs); font-weight: 700; }
-.tierPrice { margin: var(--s2) 0 0; font-family: var(--display); font-size: var(--t-figure); font-weight: 800; letter-spacing: -0.03em; }
-.tierSub { margin: 0; color: var(--ink-2); font-size: var(--t-sm); }
-.tierList { display: grid; gap: var(--s2); margin: 0; padding: 0; list-style: none; }
-.tierList li { display: grid; grid-template-columns: auto 1fr; align-items: start; gap: var(--s1); }
-.lockDot { inline-size: 0.5rem; block-size: 0.5rem; margin: 0.45rem var(--s3) 0 0.35rem; border-radius: 50%; background: var(--tier); }
-.tierStatus { margin: 0; padding: var(--s3); border-radius: var(--radius); background: var(--tier-wash); color: var(--ink); font-size: var(--t-sm); }
-.tierVat { margin: 0; color: var(--ink-3); font-size: var(--t-xs); }
-.tierLock { display: grid; }
-.lockHead { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); margin: 0; }
-.lockTitle { font-family: var(--display); font-weight: 800; }
-.lockSpark { inline-size: 100%; block-size: 3rem; color: var(--signal); opacity: 0.7; }
-@media (min-width: 760px) { .tiers { grid-template-columns: repeat(2, minmax(0, 1fr)); } .tierLock { grid-column: 1 / -1; } }
-@media (min-width: 1100px) { .tiers { grid-template-columns: repeat(3, minmax(0, 1fr)); } .tierLock { grid-column: auto; } }
-
-/* ---------- 6. trust ---------- */
-.trust { display: grid; gap: var(--s6); padding: var(--s6) var(--s5); border: 1px solid var(--rule); border-radius: var(--radius-lg); background: var(--sheet); }
-.trustMain { display: grid; gap: var(--s3); align-content: start; }
-.trustLead { margin: 0; font-size: var(--t-lede); line-height: 1.5; text-wrap: pretty; }
-.trustSmall { margin: var(--s2) 0 0; color: var(--ink-3); font-size: var(--t-sm); }
-.sources, .legal { display: grid; gap: var(--s2); margin: 0; padding: 0; list-style: none; }
-.sources > div { display: grid; gap: var(--s1); padding-block: var(--s2); }
-.sources dd { margin: 0; }
-.sourceName { font-weight: 650; line-height: 1.5; }
-.sourceClass { color: var(--ink-3); font-size: var(--t-sm); }
-.legal :global(.arrow-link) { min-block-size: 2.75rem; }
-@media (min-width: 900px) { .trust { grid-template-columns: 4fr 3fr 2fr; padding: var(--s7) var(--s6); } }
 
 /* ---------- 7. faq ---------- */
 .faq { display: grid; border-block-start: 1px solid var(--rule); }
@@ -399,6 +323,7 @@
 .close { padding-block: clamp(3rem, 2rem + 4vw, 6rem) 0; }
 .closePanel {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--s6);
   align-items: center;
   padding: clamp(1.5rem, 1rem + 3vw, 4rem);

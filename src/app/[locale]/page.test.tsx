@@ -84,13 +84,14 @@ describe.each(["en", "sk"])("Welcome (%s)", (locale) => {
   });
 });
 
-it("links the plans only while the pricing page is open, and shows the planned Plus price", async () => {
+it("always links the plans, reads no build flag, and shows the planned Plus price", async () => {
   delete process.env.WAITLIST;
-  expect(await render("en")).not.toContain('href="/en/pricing"');
+  const off = await render("en");
+  expect(off).toContain('href="/en/pricing"');
   process.env.WAITLIST = "on";
-  const en = text(await render("en"));
+  expect(await render("en")).toBe(off);
+  const en = text(off);
   const sk = text(await render("sk"));
-  expect(await render("en")).toContain('href="/en/pricing"');
   expect(en).toContain("€9.90 per month");
   expect(en).toContain("€99 per year");
   expect(sk).toContain("9,90 € mesačne");
