@@ -64,18 +64,34 @@ it("shows a customer's email, plan with trial days, Account and Sign out", () =>
   }
 });
 
+it("puts the visitor buttons into the static top bar HTML, with no flag involved", () => {
+  state.current = { status: "server" };
+  const saved = process.env.AUTH;
+  for (const auth of ["on", "off"]) {
+    process.env.AUTH = auth;
+    const html = renderToStaticMarkup(<TopBarIdentity locale="en" />);
+    expect(html).toContain('href="/en/sign-in?next=%2Fen%2Fdashboard&amp;mode=sign-in"');
+    expect(text(html)).toContain("Create free account");
+    expect(html).not.toMatch(/Owner|Open app|@/);
+  }
+  if (saved === undefined) delete process.env.AUTH; else process.env.AUTH = saved;
+  // In the browser, a visitor with the sign-in hint and no cached answer sees a short skeleton instead.
+  state.current = { status: "pending" };
+  expect(renderToStaticMarkup(<TopBarIdentity locale="en" />)).not.toContain("sign-in?");
+});
+
 it("gives the marketing top bar sign-in buttons for visitors and Open app for anyone signed in", () => {
   ready({ kind: "anon", markets: false });
-  let html = renderToStaticMarkup(<TopBarIdentity locale="en" auth />);
+  let html = renderToStaticMarkup(<TopBarIdentity locale="en" />);
   expect(text(html)).toContain("Sign in");
   expect(text(html)).toContain("Create free account");
   expect(html).not.toContain("Open app");
   ready({ kind: "owner", markets: true });
-  html = renderToStaticMarkup(<TopBarIdentity locale="en" auth />);
+  html = renderToStaticMarkup(<TopBarIdentity locale="en" />);
   expect(text(html)).toContain("Owner");
   expect(html).toMatch(/href="\/en\/dashboard"[^>]*>Open app</);
   ready({ kind: "customer", email: "ana@example.com", plan: "plus", markets: false });
-  html = renderToStaticMarkup(<TopBarIdentity locale="sk" auth />);
+  html = renderToStaticMarkup(<TopBarIdentity locale="sk" />);
   expect(text(html)).toContain("Plus");
   expect(text(html)).toContain("Otvoriť aplikáciu");
 });
@@ -84,7 +100,7 @@ const items = [{ href: "/dashboard", text: "Stock screen", icon: "dashboard", lo
 const lock = { soon: "Soon", locked: "locked, opens soon" };
 
 it("blurs locked items for everyone but the owner and links them to the opens-soon page", () => {
-  for (const current of [{ status: "pending" }, { status: "ready", me: { kind: "anon", markets: false } }, { status: "ready", me: { kind: "customer", email: "a@b.cz", plan: "plus", markets: false } }] as IdentityState[]) {
+  for (const current of [{ status: "server" }, { status: "pending" }, { status: "ready", me: { kind: "anon", markets: false } }, { status: "ready", me: { kind: "customer", email: "a@b.cz", plan: "plus", markets: false } }] as IdentityState[]) {
     state.current = current;
     const html = renderToStaticMarkup(<NavLinks locale="en" label="Stocks" items={items} lock={lock} />);
     expect(html).toContain('href="/en/opens-soon?page=dashboard"');

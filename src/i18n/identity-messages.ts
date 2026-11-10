@@ -27,6 +27,7 @@ const en = {
     back: "Back to your account",
     methodology: "Read the methodology",
     signIn: "Sign in",
+    owner: "Site owner? Use the owner sign-in.",
   },
   ownerLink: "Owner sign in",
 };
@@ -59,6 +60,7 @@ const sk: IdentityMessages = {
     back: "Späť na účet",
     methodology: "Prečítať metodiku",
     signIn: "Prihlásiť sa",
+    owner: "Vlastník stránky? Použite prihlásenie vlastníka.",
   },
   ownerLink: "Prihlásenie vlastníka",
 };

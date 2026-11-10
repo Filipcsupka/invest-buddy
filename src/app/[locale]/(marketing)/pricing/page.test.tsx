@@ -17,9 +17,11 @@ afterEach(() => {
 const render = async (locale: string) => renderToStaticMarkup(await Pricing({ params: Promise.resolve({ locale }) }));
 const text = (html: string) => html.replace(/<[^>]+>/g, " ").replace(/\u00a0|&nbsp;/g, " ").replace(/\s+/g, " ");
 
-it("is unavailable while WAITLIST is off", async () => {
+it("renders the same static page whatever WAITLIST says", async () => {
   delete process.env.WAITLIST;
-  await expect(render("en")).rejects.toThrow("NEXT_NOT_FOUND");
+  const off = await render("en");
+  process.env.WAITLIST = "on";
+  expect(await render("en")).toBe(off);
 });
 
 it("formats the Plus prices per locale and keeps the yearly arithmetic true", () => {
@@ -41,18 +43,16 @@ it.each([["en", "€9.90", "€99", "Two months free, about €8.25 a month", "V
   expect(page).not.toMatch(/most popular|najobľúbenejš|checked|aria-pressed="true"/i);
 });
 
-it("waits for BILLING: waitlist state while off, a Choose Plus entry while on, never a card field", async () => {
-  process.env.WAITLIST = "on";
-  delete process.env.BILLING;
-  const off = await render("en");
-  expect(text(off)).toContain("Opens soon");
-  expect(text(off)).toContain("Notify me when Plus opens");
-  expect(off).toContain('id="join"');
-  expect(off).not.toContain("Choose Plus");
-  process.env.BILLING = "on";
-  const on = await render("en");
-  expect(text(on)).toContain("Choose Plus");
-  for (const html of [off, on]) expect(html).not.toMatch(/card number|cvc|checkout|stripe/i);
+it("shows Plus as opening soon without reading BILLING, and never a card field", async () => {
+  for (const value of [undefined, "on"]) {
+    if (value === undefined) delete process.env.BILLING; else process.env.BILLING = value;
+    const html = await render("en");
+    expect(text(html)).toContain("Opens soon");
+    expect(text(html)).toContain("Notify me when Plus opens");
+    expect(html).toContain('id="join"');
+    expect(html).not.toContain("Choose Plus");
+    expect(html).not.toMatch(/card number|cvc|checkout|stripe/i);
+  }
 });
 
 const paid = [...Object.entries(TIERS), ...Object.entries(FEATURE_TIERS)].filter(([, e]) => e.tier === "paid").map(([id]) => id);

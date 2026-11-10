@@ -3,7 +3,8 @@ import { hasSessionHint } from "@/auth/client-api";
 import type { Me } from "@/app/api/me/me";
 
 export type { Me };
-export type IdentityState = { status: "pending" } | { status: "ready"; me: Me };
+/** `server`: the shared HTML and the hydration pass, where nobody is known. `pending`: in the browser, waiting for /api/me. */
+export type IdentityState = { status: "server" } | { status: "pending" } | { status: "ready"; me: Me };
 
 /**
  * Who is signed in, for the nav island. Browser only; the server snapshot is always `pending`, so no user data is ever rendered into
@@ -14,6 +15,7 @@ export const ME_URL = "/api/me";
 export const ME_CACHE_KEY = "ib_me";
 
 const PENDING: IdentityState = { status: "pending" };
+const SERVER: IdentityState = { status: "server" };
 const ANON: Me = { kind: "anon", markets: false };
 const ANON_STATE: IdentityState = { status: "ready", me: ANON };
 
@@ -106,7 +108,7 @@ export function getSnapshot(): IdentityState {
 }
 
 export function getServerSnapshot(): IdentityState {
-  return PENDING;
+  return SERVER;
 }
 
 export function subscribe(listener: () => void): () => void {

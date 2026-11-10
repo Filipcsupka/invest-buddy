@@ -117,6 +117,12 @@ it("layout puts the skip link before either shell and both shells target the foc
   }
 });
 
+it("keeps the static shell free of build-time flags and data", () => {
+  expect(readFileSync("src/components/nav-top.tsx", "utf8")).not.toMatch(/flags\(|@\/data\//);
+  expect(readFileSync("src/app/[locale]/(marketing)/layout.tsx", "utf8")).toContain("<Footer locale={locale} data={false} />");
+  expect(readFileSync("src/app/[locale]/(marketing)/pricing/page.tsx", "utf8")).not.toMatch(/flags\(|notFound/);
+});
+
 it("keeps the root and marketing layouts free of request reads so their pages stay static", () => {
   for (const file of ["src/app/[locale]/layout.tsx", "src/app/[locale]/(marketing)/layout.tsx", "src/app/[locale]/(app)/layout.tsx", "src/components/nav.tsx", "src/components/nav-top.tsx"]) {
     expect(readFileSync(file, "utf8"), file).not.toMatch(/next\/headers|headers\(\)|cookies\(\)/);

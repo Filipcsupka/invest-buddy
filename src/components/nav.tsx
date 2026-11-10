@@ -79,7 +79,7 @@ export function Nav({ locale, marketsViewable = false }: { locale: Locale; marke
             { href: "/portfolio", text: m.nav.portfolio, icon: "portfolio" },
             { href: "/methodology", text: m.nav.methodology, icon: "methodology" },
             ...(flags().ADVICE_OUTPUT ? [{ href: "/sizing", text: m.nav.sizing, icon: "sizing" }] : []),
-            ...(flags().WAITLIST ? [{ href: "/pricing", text: getLaunchMessages(locale).pricing.title, icon: "pricing" }] : []),
+            { href: "/pricing", text: getLaunchMessages(locale).pricing.title, icon: "pricing" },
           ])}
         />
         <NavLinks locale={locale} label={m.nav.etfs} sectionLabel={m.nav.etfs} lock={lock} items={vendor([
@@ -106,16 +106,20 @@ export function Nav({ locale, marketsViewable = false }: { locale: Locale; marke
   );
 }
 
-export async function Footer({ locale }: { locale: Locale }) {
+/**
+ * Site footer. `data` reads the latest scores for the sample or live note; static marketing pages pass false, so their HTML never
+ * holds data read at build time.
+ */
+export async function Footer({ locale, data: withData = true }: { locale: Locale; data?: boolean }) {
   const m = getMessages(locale);
-  const data = await latestScores();
+  const data = withData ? await latestScores() : null;
   return (
     <footer className="site-footer">
       <div className="frame footer-inner">
         <p className="footer-note">
           <BrandMark />
-          <span>{data.sample ? m.footer.note : m.footer.liveNote}</span>
-          {data.sample && <span className="stamp">{m.common.sample}</span>}
+          {data ? <span>{data.sample ? m.footer.note : m.footer.liveNote}</span> : <span>InvestBuddy</span>}
+          {data?.sample && <span className="stamp">{m.common.sample}</span>}
         </p>
         <p className="footer-built">{getKitMessages(locale).shell.builtFor}</p>
         <nav aria-label={m.footer.legal} className="footer-links">

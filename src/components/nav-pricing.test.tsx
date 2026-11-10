@@ -7,9 +7,9 @@ import { Nav } from "./nav";
 const original = process.env.WAITLIST;
 afterEach(() => { if (original === undefined) delete process.env.WAITLIST; else process.env.WAITLIST = original; });
 
-it.each(["en", "sk"] as const)("shows the pricing link only while WAITLIST is on (%s)", (locale) => {
-  delete process.env.WAITLIST;
-  expect(renderToStaticMarkup(<Nav locale={locale} />)).not.toContain(`href="/${locale}/pricing"`);
-  process.env.WAITLIST = "on";
-  expect(renderToStaticMarkup(<Nav locale={locale} />)).toContain(`href="/${locale}/pricing"`);
+it.each(["en", "sk"] as const)("always lists pricing, whatever WAITLIST says (%s)", (locale) => {
+  for (const value of [undefined, "off", "on"]) {
+    if (value === undefined) delete process.env.WAITLIST; else process.env.WAITLIST = value;
+    expect(renderToStaticMarkup(<Nav locale={locale} />)).toContain(`href="/${locale}/pricing"`);
+  }
 });

@@ -73,3 +73,10 @@ it.each([["en", "Collapse sidebar"], ["sk", "Zbaliť bočný panel"]] as const)(
   expect(html).toMatch(new RegExp(`<button[^>]*class="side-toggle"[^>]*aria-controls="side-panel"[^>]*aria-label="${label}"`));
   expect(html).toContain(`title="${label}"`);
 });
+
+it.each(["en", "sk"] as const)("renders the static %s footer without reading scores", async (locale) => {
+  const html = renderToStaticMarkup(await Footer({ locale, data: false }));
+  expect(scores).not.toHaveBeenCalled();
+  expect(html).toContain(`href="/${locale}/legal/privacy"`);
+  expect(html).not.toMatch(/SAMPLE DATA|UKÁŽKOVÉ ÚDAJE/);
+});

@@ -88,19 +88,22 @@ export function IdentityChip({ locale, auth }: { locale: Locale; auth: boolean }
   return <div className={styles.chip} aria-live="polite">{body}</div>;
 }
 
-/** Marketing top bar: sign-in buttons for visitors, the signed-in state and "Open app" for everyone else. */
-export function TopBarIdentity({ locale, auth }: { locale: Locale; auth: boolean }) {
+/**
+ * Marketing top bar: Sign in and Create free account for visitors, the signed-in state and "Open app" for everyone else. The static
+ * HTML carries the visitor buttons and depends on no flag; with AUTH off the sign-in screen itself says sign-in opens soon.
+ */
+export function TopBarIdentity({ locale }: { locale: Locale }) {
   const state = useIdentity();
   const path = usePathname() ?? `/${locale}`;
   const t = getIdentityMessages(locale);
-  const me = state.status === "ready" ? state.me : null;
+  const me = state.status === "ready" ? state.me : state.status === "server" ? { kind: "anon" as const, markets: false as const } : null;
   const openApp = <Link className={`button cta ${styles.topAction}`} href={`/${locale}/dashboard`}>{t.openApp}</Link>;
   let body: React.ReactNode = <span className={styles.skeletonTop} aria-hidden="true" />;
   if (me?.kind === "owner") body = <><span className={styles.topState} title={t.ownerState}><span className={styles.badge}>{t.owner}</span><span className={styles.topText}>{t.signedIn}</span></span>{openApp}</>;
   else if (me?.kind === "customer") body = <><span className={styles.topState}><span className={styles.plan} data-plan={me.plan}>{planText(t, me, locale)}</span><span className={`${styles.topText} ${styles.topEmail}`} title={me.email}><span className="visually-hidden">{t.signedIn}: </span>{me.email}</span></span>{openApp}</>;
-  else if (me?.kind === "anon") body = auth ? <>
+  else if (me?.kind === "anon") body = <>
     <AuthDialogLink locale={locale} next={path} mode="sign-in" className={styles.topLink}>{t.signIn}</AuthDialogLink>
     <AuthDialogLink locale={locale} next={path} mode="sign-up" className={`button cta ${styles.topAction}`}>{t.create}</AuthDialogLink>
-  </> : <Link className={styles.topQuiet} href={`/${locale}/owner-sign-in`}>{t.ownerSignIn}</Link>;
+  </>;
   return <div className={styles.top} aria-live="polite">{body}</div>;
 }

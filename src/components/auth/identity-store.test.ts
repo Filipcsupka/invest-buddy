@@ -12,7 +12,7 @@ beforeEach(() => { resetIdentityStore(); vi.stubGlobal("fetch", fetchMock); });
 afterEach(() => { fetchMock.mockReset(); vi.unstubAllGlobals(); });
 
 it("keeps the server snapshot pending so no user state reaches shared HTML", () => {
-  expect(getServerSnapshot()).toEqual({ status: "pending" });
+  expect(getServerSnapshot()).toEqual({ status: "server" });
 });
 
 it("treats a visitor without the sign-in hint as anonymous and never calls /api/me", () => {

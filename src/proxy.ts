@@ -112,7 +112,6 @@ async function handle(request: NextRequest) {
   }
   // Legal and owner gates come first and never read the viewer: admin does not bypass them. PAYWALL no longer hides /scanner.
   const unavailable = (section === "sizing" && !featureFlags.ADVICE_OUTPUT)
-    || (section === "pricing" && !featureFlags.WAITLIST)
     || (section === "design" && !designViewEnabled())
     || (section === "ideas" && (!ideasEnabled() || !featureFlags.ADVICE_OUTPUT))
     || (section === "owner-allocation" && !ownerViewEnabled())

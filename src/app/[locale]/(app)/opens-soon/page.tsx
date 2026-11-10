@@ -42,6 +42,7 @@ export default async function OpensSoon({ params, searchParams }: Props) {
           <Link className="button secondary" href={`/${locale}/account`}>{t.back}</Link>
           <Link className="button secondary" href={`/${locale}/methodology`}>{t.methodology}</Link>
         </p>
+        <p className="muted" style={{ margin: 0, fontSize: "var(--t-sm)" }}><Link href={`/${locale}/owner-sign-in`}>{t.owner}</Link></p>
       </section>
     </article>
   );

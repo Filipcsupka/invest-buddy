@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
 import { AuthDialogLink } from "@/components/auth/auth-dialog";
 import { Disclaimer } from "@/components/disclaimer";
 import { DataTable, ResultMark, SectionHead } from "@/components/kit";
@@ -8,7 +7,6 @@ import { PlusLock } from "@/components/paywall/lock-card";
 import { TrackView } from "@/components/track-view";
 import { WaitlistForm } from "@/components/waitlist-form";
 import { historyDepth } from "@/components/welcome/sections";
-import { flags } from "@/config/flags";
 import { FEATURE_TIERS, TIERS, TIER_LIMITS, type LimitKey, type TierId } from "@/config/tiers";
 import { fill, getMessages, plural, type Locale } from "@/i18n";
 import { getLaunchMessages } from "@/i18n/launch-messages";
@@ -41,9 +39,9 @@ function cells(locale: Locale, id: TierId, pm: ReturnType<typeof getPricingMessa
 
 export default async function Pricing({ params }: LocaleParams) {
   const locale = await resolveLocale(params);
-  // The page exists only while the waitlist is open to the public. The proxy answers 404 first.
-  if (!flags().WAITLIST) notFound();
-  const billing = flags().BILLING;
+  // A static page must not depend on flags read at build time, so the page is always open and Plus shows "opens soon". Opening
+  // billing is a code change here (or a dynamic page), not a BILLING value baked into the HTML.
+  const billing = false;
   const m = getMessages(locale);
   const pm = getPricingMessages(locale);
   const p = pm.plans;

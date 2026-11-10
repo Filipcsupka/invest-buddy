@@ -13,7 +13,7 @@ export default async function MarketingLayout({ children, params }: { children: 
       <main id="main" tabIndex={-1}>
         {children}
       </main>
-      <Footer locale={locale} />
+      <Footer locale={locale} data={false} />
     </div>
   );
 }
