@@ -20,10 +20,10 @@ function PlanChip({ t, me, locale }: { t: IdentityMessages; me: Customer; locale
   return <span className={styles.plan} data-plan={me.plan}>{planText(t, me, locale)}</span>;
 }
 
-function SignOut({ locale, kind, label, className }: { locale: Locale; kind: "owner" | "customer"; label: string; className?: string }) {
-  const action = kind === "owner" ? "/api/owner/logout" : "/api/auth/account/sign-out";
+/** Better Auth sign-out through the account route, for the owner and customers alike; it returns to /{locale}. */
+function SignOut({ locale, label, className }: { locale: Locale; label: string; className?: string }) {
   return (
-    <form method="post" action={action} className={styles.signOutForm} onSubmit={forgetIdentity}>
+    <form method="post" action="/api/auth/account/sign-out" className={styles.signOutForm} onSubmit={forgetIdentity}>
       <input type="hidden" name="locale" value={locale} />
       <button type="submit" className={className ?? styles.signOut}>{label}</button>
     </form>
@@ -54,11 +54,10 @@ export function IdentityPanel({ locale, auth }: { locale: Locale; auth: boolean 
           <AuthDialogLink locale={locale} next={path} mode="sign-in" className={`button secondary ${styles.action}`}>{t.signIn}</AuthDialogLink>
           <AuthDialogLink locale={locale} next={path} mode="sign-up" className={`button ${styles.action}`}>{t.create}</AuthDialogLink>
         </>}
-        {quiet && <Link className={styles.quiet} href={`/${locale}/owner-sign-in`}>{t.ownerSignIn}</Link>}
-        {me?.kind === "owner" && <SignOut locale={locale} kind="owner" label={t.signOut} />}
+        {me?.kind === "owner" && <SignOut locale={locale} label={t.signOut} />}
         {me?.kind === "customer" && <>
           <Link className={styles.link} href={`/${locale}/account`}>{t.account}</Link>
-          <SignOut locale={locale} kind="customer" label={t.signOut} />
+          <SignOut locale={locale} label={t.signOut} />
         </>}
       </div>
       <Compact t={t} me={me} locale={locale} auth={auth} path={path} />

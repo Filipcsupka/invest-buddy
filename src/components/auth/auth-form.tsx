@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { passwordOk, sendMagicLink, signInWithGoogle, signInWithPassword, signUpWithPassword, validEmail, PASSWORD_MIN, type CallbackError, type Failure } from "@/auth/client-api";
+import { passwordOk, sendMagicLink, signInWithPassword, signUpWithPassword, validEmail, PASSWORD_MIN, type CallbackError, type Failure } from "@/auth/client-api";
 import { fill, type Locale } from "@/i18n";
 import { getAuthMessages } from "@/i18n/auth-messages";
 import { PasswordField } from "./password-field";
@@ -15,7 +15,6 @@ export type AuthMode = "sign-up" | "sign-in";
 export type AuthState =
   | { kind: "idle" }
   | { kind: "sending-password" }
-  | { kind: "sending-google" }
   | { kind: "sending-link" }
   | { kind: "recovery"; email: string; codes: string[] | null }
   | { kind: "sent"; email: string }
@@ -40,17 +39,6 @@ export function initialState(error: CallbackError | null): AuthState {
 
 const fromFailure = (failure: Failure): AuthState => (failure.kind === "error" ? { kind: "error" } : failure);
 
-function GoogleMark() {
-  return (
-    <svg className={styles.gMark} viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.4h6.5a5.6 5.6 0 0 1-2.4 3.6v3h3.9c2.2-2.1 3.5-5.1 3.5-8.7Z" />
-      <path fill="#34A853" d="M12 24c3.2 0 6-1.1 8-2.9l-3.9-3c-1.1.7-2.5 1.2-4.1 1.2-3.1 0-5.8-2.1-6.7-5H1.3v3.1A12 12 0 0 0 12 24Z" />
-      <path fill="#FBBC05" d="M5.3 14.3a7.2 7.2 0 0 1 0-4.6V6.6H1.3a12 12 0 0 0 0 10.8l4-3.1Z" />
-      <path fill="#EA4335" d="M12 4.8c1.8 0 3.3.6 4.6 1.8l3.4-3.4A12 12 0 0 0 1.3 6.6l4 3.1c.9-2.9 3.6-4.9 6.7-4.9Z" />
-    </svg>
-  );
-}
-
 interface Props {
   locale: Locale;
   /** Validated same-site path to land on after sign-in. */
@@ -62,14 +50,16 @@ interface Props {
   /** The heading level the surrounding page needs. The dialog and the page use 1 or 2; the Welcome close card hides it. */
   headingLevel?: 1 | 2;
   hideHeading?: boolean;
+  /** False while AUTH is off: show the "opens soon" notice only, with no form that could do nothing. */
+  available?: boolean;
   /** Email sign-in link as a secondary path. Off at launch: there is no email provider. */
   magicLink?: boolean;
   /** Test hook: replaces `fetch` and the navigation after a successful sign-in. */
   deps?: { fetcher?: typeof fetch; navigate?: (url: string) => void };
 }
 
-/** Google first, then email and password. One screen for sign-up and sign-in. Sign-up ends on the recovery codes screen. */
-export function AuthForm({ locale, next, error = null, mode: initialMode = "sign-up", headingLevel = 1, hideHeading = false, magicLink = false, deps }: Props) {
+/** Email and password. One screen for sign-up and sign-in. Sign-up ends on the recovery codes screen. */
+export function AuthForm({ locale, next, error = null, mode: initialMode = "sign-up", headingLevel = 1, hideHeading = false, available = true, magicLink = false, deps }: Props) {
   const t = getAuthMessages(locale);
   const id = useId();
   const [mode, setMode] = useState<AuthMode>(initialMode);
@@ -78,7 +68,7 @@ export function AuthForm({ locale, next, error = null, mode: initialMode = "sign
   const emailRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
   const statusRef = useRef<HTMLDivElement>(null);
-  const busy = state.kind === "sending-password" || state.kind === "sending-google" || state.kind === "sending-link";
+  const busy = state.kind === "sending-password" || state.kind === "sending-link";
   const fetcher = deps?.fetcher;
   const navigate = deps?.navigate ?? ((url: string) => window.location.assign(url));
   const errorCallbackURL = `/${locale}/sign-in?next=${encodeURIComponent(next)}`;
@@ -102,14 +92,6 @@ export function AuthForm({ locale, next, error = null, mode: initialMode = "sign
     setState(result);
   }
 
-  async function google() {
-    if (busy) return;
-    setState({ kind: "sending-google" });
-    const outcome = await signInWithGoogle({ callbackURL: next, errorCallbackURL }, fetcher);
-    if (outcome.kind === "redirect") return navigate(outcome.url);
-    settle(fromFailure(outcome));
-  }
-
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy) return;
@@ -119,14 +101,18 @@ export function AuthForm({ locale, next, error = null, mode: initialMode = "sign
     if (!validEmail(email)) return settle({ kind: "invalid-email" });
     if (mode === "sign-up" && !passwordOk(password)) return settle({ kind: "weak-password" });
     setState({ kind: "sending-password" });
-    if (mode === "sign-up") {
-      const outcome = await signUpWithPassword({ email, password, callbackURL: next, marketing: data.get("marketing") === "on" }, fetcher);
-      if (outcome.kind === "signed-up") return setState({ kind: "recovery", email, codes: outcome.recoveryCodes });
-      return settle(outcome.kind === "exists" ? outcome : fromFailure(outcome));
+    try {
+      if (mode === "sign-up") {
+        const outcome = await signUpWithPassword({ email, password, callbackURL: next, marketing: data.get("marketing") === "on" }, fetcher);
+        if (outcome.kind === "signed-up") return setState({ kind: "recovery", email, codes: outcome.recoveryCodes });
+        return settle(outcome.kind === "exists" ? outcome : fromFailure(outcome));
+      }
+      const outcome = await signInWithPassword({ email, password, callbackURL: next }, fetcher);
+      if (outcome.kind === "signed-in") return navigate(next);
+      settle(outcome.kind === "wrong-credentials" ? outcome : fromFailure(outcome));
+    } catch {
+      settle({ kind: "network" });
     }
-    const outcome = await signInWithPassword({ email, password, callbackURL: next }, fetcher);
-    if (outcome.kind === "signed-in") return navigate(next);
-    settle(outcome.kind === "wrong-credentials" ? outcome : fromFailure(outcome));
   }
 
   async function emailLink() {
@@ -171,6 +157,24 @@ export function AuthForm({ locale, next, error = null, mode: initialMode = "sign
     );
   }
 
+  if (!available) {
+    return (
+      <div className={styles.form} data-state="unavailable" data-mode={initialMode}>
+        {hideHeading ? null : (
+          <header className={styles.head}>
+            <H className={styles.title} id={titleId}>{t.title}</H>
+          </header>
+        )}
+        <div className={styles.status} role="status" aria-live="polite">
+          <div className={styles.notice} data-tone="info">
+            <p className={styles.noticeTitle}>{t.states.unavailableTitle}</p>
+            <p>{t.states.unavailableBody}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const notice = noticeFor(state, t, left);
   const signUp = mode === "sign-up";
   return (
@@ -195,11 +199,6 @@ export function AuthForm({ locale, next, error = null, mode: initialMode = "sign
           </div>
         ) : null}
       </div>
-      <button type="button" className={`button secondary ${styles.google}`} onClick={google} disabled={busy}>
-        {state.kind === "sending-google" ? <span className={styles.spinner} aria-hidden="true" /> : <GoogleMark />}
-        <span>{state.kind === "sending-google" ? t.googleBusy : t.google}</span>
-      </button>
-      <p className={styles.divider}><span>{t.or}</span></p>
       <form className={styles.emailForm} onSubmit={submit} noValidate aria-label={signUp ? t.modes.signUp : t.modes.signIn}>
         <div className={styles.field}>
           <label className={styles.label} htmlFor={`${id}-email`}>{t.emailLabel}</label>

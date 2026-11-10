@@ -1,11 +1,10 @@
 import type { Metadata } from "next";
-import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getPool } from "@/db/pool";
 import { pageMetadata } from "@/i18n/metadata";
 import { ownerDataMessages } from "@/i18n/owner-data-messages";
-import { ownerAuthorized } from "@/app/[locale]/owner/auth";
+import { getViewer, isOwner } from "@/viewer/get-viewer";
 import { ownerTickerData } from "../store";
 import { DataTable } from "../table";
 import s from "../data.module.css";
@@ -18,7 +17,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return { ...pageMetadata(locale, "/owner/data/ticker", ownerDataMessages(locale).tickerTitle, ownerDataMessages(locale).lede), robots: { index: false, follow: false } };
 }
 export default async function OwnerTickerPage({ params, searchParams }: Props) {
-  if (!ownerAuthorized(await headers(), process.env.OWNER_RESEARCH_PASSWORD)) notFound();
+  if (!isOwner(await getViewer())) notFound();
   const { locale } = await params;
   if (locale !== "en" && locale !== "sk") notFound();
   const ticker = (await searchParams).ticker?.trim().toUpperCase();

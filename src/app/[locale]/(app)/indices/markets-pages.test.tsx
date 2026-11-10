@@ -4,7 +4,11 @@ import type { AssetDetail, AssetSummary } from "@/db/markets";
 
 const auth = vi.hoisted(() => ({ header: null as string | null }));
 const data = vi.hoisted(() => ({ summaries: [] as unknown[], detail: null as unknown, components: { asOf: null as string | null, rows: [] as unknown[] }, runs: [] as unknown[], results: { asOf: null as string | null, rows: [] as unknown[] } }));
-vi.mock("next/headers", () => ({ headers: async () => ({ get: (name: string) => name === "authorization" ? auth.header : null }) }));
+vi.mock("next/headers", () => ({ headers: async () => new Headers() }));
+vi.mock("@/viewer/get-viewer", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@/viewer/get-viewer")>();
+  return { ...real, getViewer: async () => real.resolveViewer(undefined, null, auth.header !== null) };
+});
 vi.mock("@/db/markets", async (original) => ({
   ...(await original<typeof import("@/db/markets")>()),
   assetSummaries: async () => data.summaries, assetDetail: async () => data.detail, indexComponents: async () => data.components,
@@ -19,8 +23,7 @@ const Crypto = (await import("../crypto/page")).default;
 const Coin = (await import("../crypto/[symbol]/page")).default;
 const Screener = (await import("../screener/page")).default;
 
-const password = "owner-test-password";
-const owner = `Basic ${Buffer.from(`owner:${password}`).toString("base64")}`;
+const owner = "owner-session";
 const summary = (over: Partial<AssetSummary>): AssetSummary => ({ symbol: "GSPC.INDX", code: "GSPC", name: "S&P 500 Index", currency: "USD", assetClass: "index", lastDate: "2026-11-05",
   last: 7720.39, change1d: -0.003, change5d: 0.012, changeYtd: 0.15, spark: [7700, 7743.98, 7720.39], sparkFirst: "2026-11-03", ...over });
 const bars = Array.from({ length: 30 }, (_, i) => ({ date: `2026-10-${String(i + 1).padStart(2, "0")}`, open: 100 + i, high: 101 + i, low: 99 + i, close: 100 + i, volume: 0 }));
@@ -28,7 +31,7 @@ const detail = (over: Partial<AssetSummary>): AssetDetail => ({ summary: summary
 const params = <T extends Record<string, string>>(extra: T = {} as T) => ({ params: Promise.resolve({ locale: "en", ...extra }) });
 const html = async (node: Promise<unknown>) => renderToStaticMarkup((await node) as React.ReactElement);
 
-beforeEach(() => { vi.stubEnv("MARKETS_VIEWS", "on"); vi.stubEnv("OWNER_RESEARCH_PASSWORD", password); auth.header = owner; });
+beforeEach(() => { vi.stubEnv("MARKETS_VIEWS", "on"); auth.header = owner; });
 afterEach(() => { vi.unstubAllEnvs(); data.summaries = []; data.detail = null; data.components = { asOf: null, rows: [] }; data.runs = []; data.results = { asOf: null, rows: [] }; });
 
 describe("owner gate", () => {

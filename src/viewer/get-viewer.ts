@@ -1,25 +1,23 @@
 import { headers } from "next/headers";
 import { cache } from "react";
 import { flags } from "@/config/flags";
-import { ownerAuthorized } from "@/app/[locale]/owner/auth";
+import { isOwnerUser } from "@/auth/owner";
 import { hasCustomerCookie } from "@/auth/cookie";
 import { customerAuth } from "@/auth/server";
 import { getPool } from "@/db/pool";
 import { customerPlan } from "@/entitlements/plan";
 import { PREVIEW_HEADER, resolveViewer, type Viewer } from "./viewer";
 
-export { baseViewer, canSee, canUseVendorData, limitFor, requireFeature, resolveViewer, PREVIEW_HEADER, type Tier, type Viewer } from "./viewer";
+export { baseViewer, canSee, isOwner, canUseVendorData, limitFor, requireFeature, resolveViewer, PREVIEW_HEADER, type Tier, type Viewer } from "./viewer";
 
 type SessionReader = (requestHeaders: Headers) => Promise<{ user?: { id?: string | number } } | null>;
 const readCustomerSession: SessionReader = (requestHeaders) => customerAuth().api.getSession({ headers: requestHeaders });
 
 /**
- * Owner first (Basic or owner session), then a customer session, then the anonymous fallback.
- * A customer session never yields `owner` or the admin tier. Exported for tests; pages use getViewer.
+ * A customer session, then the anonymous fallback. The owner is the session user whose id is listed in OWNER_USER_IDS. Exported for tests; pages use getViewer.
  */
 export async function viewerFromHeaders(requestHeaders: Headers, readSession: SessionReader = readCustomerSession): Promise<Viewer> {
   const currentFlags = flags();
-  if (ownerAuthorized(requestHeaders, process.env.OWNER_RESEARCH_PASSWORD)) return resolveViewer(currentFlags, requestHeaders.get(PREVIEW_HEADER), true);
   if (!currentFlags.AUTH || !hasCustomerCookie(requestHeaders.get("cookie"))) return resolveViewer(currentFlags);
   const db = getPool();
   if (!db) return resolveViewer(currentFlags);
@@ -32,6 +30,7 @@ export async function viewerFromHeaders(requestHeaders: Headers, readSession: Se
     customerPlan(db, userId),
   ]);
   if (!user.rows[0]) return resolveViewer(currentFlags);
+  if (isOwnerUser(session.user)) return { ...resolveViewer(currentFlags, requestHeaders.get(PREVIEW_HEADER), true), userId };
   return {
     tier: !currentFlags.PAYWALL || state.plan !== "free" ? "paid" : "free",
     preview: false,

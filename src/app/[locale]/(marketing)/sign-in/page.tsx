@@ -7,8 +7,7 @@ import { getAuthMessages } from "@/i18n/auth-messages";
 import { pageMetadata } from "@/i18n/metadata";
 import { getWelcomeMessages } from "@/i18n/welcome-messages";
 import { resolveLocale, type LocaleParams } from "@/app/[locale]/locale";
-import Link from "next/link";
-import { getIdentityMessages } from "@/i18n/identity-messages";
+import { flags } from "@/config/flags";
 import styles from "./sign-in.module.css";
 
 type Props = LocaleParams & { searchParams?: Promise<Record<string, string | string[] | undefined>> };
@@ -32,8 +31,7 @@ async function SignIn({ params, searchParams }: Props) {
   return (
     <div className={`frame ${styles.page}`}>
       <section className={`kit-card ${styles.card}`} aria-label={getAuthMessages(locale).title}>
-        <AuthForm locale={locale} next={next} error={error} mode={mode} headingLevel={1} />
-        <p className={styles.owner}><Link href={`/${locale}/owner-sign-in`}>{getIdentityMessages(locale).ownerLink}</Link></p>
+        <AuthForm locale={locale} next={next} error={error} mode={mode} headingLevel={1} available={flags().AUTH} />
       </section>
       <aside className={styles.side} aria-labelledby="free-includes">
         <h2 id="free-includes" className={styles.sideTitle}>{w.freeTitle}</h2>

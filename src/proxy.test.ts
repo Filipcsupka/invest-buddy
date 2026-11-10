@@ -3,27 +3,38 @@ import { NextRequest } from "next/server";
 
 const universe = vi.fn();
 vi.mock("@/data/store", () => ({ instrumentForTicker: async (ticker: string) => (await universe()).find((item: { ticker: string }) => item.ticker === ticker.toUpperCase()) ?? null }));
+vi.mock("@/viewer/get-viewer", () => ({
+  viewerFromHeaders: async (headers: Headers) => {
+    const cookie = headers.get("cookie") ?? "";
+    if (cookie.includes("ib_session=owner")) return { tier: "admin", preview: false, owner: true, userId: "1" };
+    if (cookie.includes("ib_session=customer")) return { tier: "paid", preview: false, owner: false, userId: "2" };
+    return { tier: "free", preview: false };
+  },
+}));
 import { proxy } from "./proxy";
 
-const original = { mode: process.env.DATA_MODE, ideas: process.env.IDEAS_PAGE, owner: process.env.OWNER_VIEW, password: process.env.OWNER_RESEARCH_PASSWORD, paywall: process.env.PAYWALL, auth: process.env.AUTH, advice: process.env.ADVICE_OUTPUT, markets: process.env.MARKETS_VIEWS, privateUse: process.env.EODHD_PRIVATE_USE };
+const ownerCookie = { cookie: "__Host-ib_session=owner" };
+const customerCookie = { cookie: "__Host-ib_session=customer" };
+const browserDoc = { "sec-fetch-dest": "document", accept: "text/html" };
+
+const original = { mode: process.env.DATA_MODE, ideas: process.env.IDEAS_PAGE, owner: process.env.OWNER_VIEW, paywall: process.env.PAYWALL, auth: process.env.AUTH, advice: process.env.ADVICE_OUTPUT, markets: process.env.MARKETS_VIEWS, privateUse: process.env.EODHD_PRIVATE_USE };
 afterEach(() => {
   universe.mockReset();
-  for (const [key, value] of [["DATA_MODE", original.mode], ["IDEAS_PAGE", original.ideas], ["OWNER_VIEW", original.owner], ["OWNER_RESEARCH_PASSWORD", original.password], ["PAYWALL", original.paywall], ["AUTH", original.auth], ["ADVICE_OUTPUT", original.advice], ["MARKETS_VIEWS", original.markets], ["EODHD_PRIVATE_USE", original.privateUse]] as const) {
+  for (const [key, value] of [["DATA_MODE", original.mode], ["IDEAS_PAGE", original.ideas], ["OWNER_VIEW", original.owner], ["PAYWALL", original.paywall], ["AUTH", original.auth], ["ADVICE_OUTPUT", original.advice], ["MARKETS_VIEWS", original.markets], ["EODHD_PRIVATE_USE", original.privateUse]] as const) {
     if (value === undefined) delete process.env[key]; else process.env[key] = value;
   }
 });
 
 it("keeps vendor-backed pages private while allowing public content and health probes", async () => {
   process.env.EODHD_PRIVATE_USE = "on";
-  process.env.OWNER_RESEARCH_PASSWORD = "private-test-password";
+  process.env.AUTH = "on";
   universe.mockResolvedValue([{ ticker: "NVDA" }]);
-  const auth = `Basic ${Buffer.from("owner:private-test-password").toString("base64")}`;
   for (const path of ["dashboard", "scanner", "company/NVDA", "etf", "heatmap", "insiders", "portfolio", "track-record"]) {
     const url = `https://example.com/en/${path}`;
     const blocked = await proxy(new NextRequest(url));
     expect(blocked.status, path).toBe(401);
     expect(blocked.headers.get("cache-control"), path).toBe("private, no-store");
-    const owner = await proxy(new NextRequest(url, { headers: { authorization: auth } }));
+    const owner = await proxy(new NextRequest(url, { headers: ownerCookie }));
     expect(owner.status, path).toBe(200);
     expect(owner.headers.get("x-robots-tag"), path).toBe("noindex");
   }
@@ -44,9 +55,9 @@ it("keeps market routes private even when the flag is on", async () => {
   process.env.MARKETS_VIEWS = "off";
   expect((await proxy(new NextRequest(url))).status).toBe(404);
   process.env.MARKETS_VIEWS = "on";
-  process.env.OWNER_RESEARCH_PASSWORD = "private-test-password";
+  process.env.AUTH = "on";
   expect((await proxy(new NextRequest(url))).status).toBe(401);
-  const response = await proxy(new NextRequest(url, { headers: { authorization: `Basic ${Buffer.from("owner:private-test-password").toString("base64")}` } }));
+  const response = await proxy(new NextRequest(url, { headers: ownerCookie }));
   expect(response.status).toBe(200);
   expect(response.headers.get("x-robots-tag")).toBe("noindex");
   expect(response.headers.get("cache-control")).toBe("private, no-store");
@@ -58,25 +69,35 @@ it("gates the owner ETF data tabs like market routes and leaves the public fund 
   expect((await proxy(new NextRequest(tab))).status).toBe(404);
   expect((await proxy(new NextRequest("https://example.com/en/etf/fund/NYSEARCA%3ASPY"))).status).toBe(200);
   process.env.MARKETS_VIEWS = "on";
-  process.env.OWNER_RESEARCH_PASSWORD = "private-test-password";
+  process.env.AUTH = "on";
   expect((await proxy(new NextRequest(tab))).status).toBe(401);
-  const response = await proxy(new NextRequest(tab, { headers: { authorization: `Basic ${Buffer.from("owner:private-test-password").toString("base64")}` } }));
+  const response = await proxy(new NextRequest(tab, { headers: ownerCookie }));
   expect(response.status).toBe(200);
   expect(response.headers.get("x-robots-tag")).toBe("noindex");
   expect(response.headers.get("cache-control")).toBe("private, no-store");
 });
 
-it("challenges for private owner pages and accepts only the owner password", async () => {
+it("owner pages need an owner session: anonymous browsers go to sign-in, signed-in customers get 404, clients get a plain 401", async () => {
   process.env.OWNER_VIEW = "on";
-  process.env.OWNER_RESEARCH_PASSWORD = "private-test-password";
+  process.env.AUTH = "on";
   const url = "https://example.com/en/owner/horizons";
-  const missing = await proxy(new NextRequest(url));
-  expect(missing.status).toBe(401);
-  expect(missing.headers.get("www-authenticate")).toContain("Basic");
-  expect((await proxy(new NextRequest(url, { headers: { authorization: `Basic ${Buffer.from("owner:wrong").toString("base64")}` } }))).status).toBe(401);
-  expect((await proxy(new NextRequest(url, { headers: { authorization: `Basic ${Buffer.from("owner:private-test-password").toString("base64")}` } }))).status).toBe(200);
+  const client = await proxy(new NextRequest(url));
+  expect(client.status).toBe(401);
+  expect(client.headers.get("www-authenticate")).toBeNull();
+  expect((await proxy(new NextRequest(url, { headers: { authorization: `Basic ${Buffer.from("owner:anything").toString("base64")}` } }))).status).toBe(401);
+  const browser = await proxy(new NextRequest(url, { headers: browserDoc }));
+  expect(browser.status).toBe(303);
+  expect(browser.headers.get("location")).toBe("https://example.com/en/sign-in?mode=sign-in&next=%2Fen%2Fowner%2Fhorizons");
+  expect((await proxy(new NextRequest(url, { headers: { ...browserDoc, ...customerCookie } }))).status).toBe(404);
+  expect((await proxy(new NextRequest(url, { headers: ownerCookie }))).status).toBe(200);
   process.env.OWNER_VIEW = "off";
   expect((await proxy(new NextRequest(url))).status).toBe(404);
+});
+
+it("owner session never works while AUTH is off", async () => {
+  process.env.OWNER_VIEW = "on";
+  delete process.env.AUTH;
+  expect((await proxy(new NextRequest("https://example.com/en/owner/horizons", { headers: ownerCookie }))).status).toBe(401);
 });
 
 it.each(["en", "sk"])("returns a real 404 for unavailable %s routes", async (locale) => {
@@ -118,16 +139,14 @@ it.each(["en", "sk"])("opens the %s scanner whatever PAYWALL says", async (local
 });
 
 it("marks ?view= previews noindex and drops a client-sent preview header", async () => {
-  delete process.env.AUTH;
-  process.env.OWNER_RESEARCH_PASSWORD = "private-test-password";
-  const ownerAuth = `Basic ${Buffer.from("owner:private-test-password").toString("base64")}`;
+  process.env.AUTH = "on";
   const plain = await proxy(new NextRequest("https://example.com/en/scanner"));
   expect(plain.headers.get("x-robots-tag")).toBeNull();
   // AUTH off no longer makes every visitor admin: only the owner gets the free preview.
   const anonymous = await proxy(new NextRequest("https://example.com/en/scanner?view=free"));
   expect(anonymous.headers.get("x-robots-tag")).toBe("noindex");
   expect(anonymous.headers.get("x-middleware-request-x-tier-preview")).toBeNull();
-  const preview = await proxy(new NextRequest("https://example.com/en/scanner?view=free", { headers: { authorization: ownerAuth } }));
+  const preview = await proxy(new NextRequest("https://example.com/en/scanner?view=free", { headers: ownerCookie }));
   expect(preview.status).toBe(200);
   expect(preview.headers.get("x-robots-tag")).toBe("noindex");
   expect(preview.headers.get("x-middleware-request-x-tier-preview")).toBe("free");

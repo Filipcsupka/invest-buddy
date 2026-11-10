@@ -53,7 +53,7 @@ it.each(["en", "sk"] as const)("server-renders no per-user state in the %s shell
     const html = renderToStaticMarkup(<Nav locale={locale} />);
     // The islands render their pending skeleton on the server: no badge, email, plan, sign-out or owner link in shared HTML.
     expect(html).toContain(locale === "en" ? "Checking sign-in" : "Overujeme prihlásenie");
-    expect(html).not.toMatch(/Signed in as owner|Prihlásený ako vlastník|api\/owner\/logout|account\/sign-out|@/);
+    expect(html).not.toMatch(/Signed in as owner|Prihlásený ako vlastník|account\/sign-out|@/);
     // Vendor pages lead to the preview in shared HTML, without flashing a blur before identity resolves.
     for (const route of ["dashboard", "scanner", "track-record", "insiders", "portfolio", "etf"]) expect(html).not.toContain(`href="/${locale}/${route}"`);
     expect(html).not.toContain('data-locked=""');

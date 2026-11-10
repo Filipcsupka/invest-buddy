@@ -3,7 +3,7 @@ import { TIER_LIMITS, tierEntry, type LimitKey, type TierId } from "@/config/tie
 
 export type Tier = "free" | "paid" | "admin";
 /**
- * `owner` comes only from owner Basic auth or the owner session, never from a customer session.
+ * `owner` is true only for a session whose user id is listed in OWNER_USER_IDS (see `isOwnerUser`).
  * `userId`, `plan` and `planEndsAt` are set for a signed-in customer.
  */
 export type Viewer = { tier: Tier; preview: boolean; owner?: boolean; userId?: string | null; plan?: "free" | "plus" | "trial"; planEndsAt?: Date | null };
@@ -16,6 +16,11 @@ export const PREVIEW_HEADER = "x-tier-preview";
  */
 export function baseViewer(f: Pick<Flags, "AUTH" | "PAYWALL"> = flags()): Viewer {
   return { tier: f.PAYWALL ? "free" : "paid", preview: false };
+}
+
+/** The one owner check. Owner viewers come only from `viewerFromHeaders`, never from a cookie hint. */
+export function isOwner(viewer: Pick<Viewer, "owner">): boolean {
+  return viewer.owner === true;
 }
 
 /** `?view=free` turns an admin request into a free render. It is ignored for every other viewer. */
@@ -50,6 +55,6 @@ export function requireFeature(viewer: Viewer, id: TierId): Response | null {
  * and nobody else gets it until VENDOR_DISPLAY_LICENSE=on records a display licence.
  */
 export function canUseVendorData(viewer: Viewer, env: Record<string, string | undefined> = process.env): boolean {
-  if (viewer.owner) return true;
+  if (isOwner(viewer)) return true;
   return env.EODHD_PRIVATE_USE !== "on" && env.VENDOR_DISPLAY_LICENSE === "on";
 }

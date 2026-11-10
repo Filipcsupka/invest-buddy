@@ -4,8 +4,11 @@ import { afterEach, expect, it, vi } from "vitest";
 const auth = vi.fn();
 const pool = vi.fn();
 const overview = vi.fn();
-vi.mock("next/headers", () => ({ headers: async () => ({ get: () => "Basic private" }) }));
-vi.mock("@/app/[locale]/owner/auth", () => ({ ownerAuthorized: () => auth() }));
+vi.mock("next/headers", () => ({ headers: async () => new Headers() }));
+vi.mock("@/viewer/get-viewer", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@/viewer/get-viewer")>();
+  return { ...real, getViewer: async () => real.resolveViewer(undefined, null, Boolean(auth())) };
+});
 vi.mock("@/db/pool", () => ({ getPool: () => pool() }));
 vi.mock("./store", () => ({ ownerDataOverview: () => overview() }));
 import Page from "./page";
