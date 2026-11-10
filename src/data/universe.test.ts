@@ -7,6 +7,7 @@ vi.mock("pg", () => ({ default: { Pool: vi.fn(function () { return { query, end,
 import { instrumentForTicker, instrumentUniverse, latestPortfolio, latestScoreSummaries, latestScores, scoreForTicker } from "./store";
 import { closePool } from "../db/pool";
 import { instruments as fixtures } from "./fixtures";
+import { LISTING_BAR_LIMIT } from "./audit-sql";
 
 const env = { mode: process.env.DATA_MODE, url: process.env.DATABASE_URL };
 afterEach(() => {
@@ -53,7 +54,7 @@ describe("instrumentUniverse", () => {
   });
 });
 
-it("loads bar-free score summaries for listings and one full chart for a company", async () => {
+it("loads short-bar listings, bar-free summaries and one full chart for a company", async () => {
   process.env.DATA_MODE = "fixture";
   const summaries = await latestScoreSummaries();
   expect(summaries.rows).toHaveLength(fixtures.length);
@@ -61,12 +62,12 @@ it("loads bar-free score summaries for listings and one full chart for a company
   expect(await instrumentForTicker(fixtures[0].ticker)).toEqual(fixtures[0]);
   const company = await scoreForTicker(fixtures[0].ticker);
   expect(company.rows?.result.inputs.bars).toHaveLength(220);
-  expect(company.rows?.result.inputs.bars).toEqual((await latestScores()).rows[0].result.inputs.bars);
+  expect((await latestScores()).rows[0].result.inputs.bars).toEqual(company.rows?.result.inputs.bars.slice(-LISTING_BAR_LIMIT));
   expect(company.rows?.result.total).toBe(summaries.rows[0].result.total);
   expect(query).not.toHaveBeenCalled();
 });
 
-it("uses parameterized one-ticker reads and drops bars in the summary SQL", async () => {
+it("uses parameterized one-ticker reads and the listing copy of the audit for summaries", async () => {
   process.env.DATA_MODE = "db"; process.env.DATABASE_URL = "postgresql://x";
   query.mockResolvedValue({ rows: [] });
   expect(await instrumentForTicker("nvda")).toBeNull();
@@ -76,5 +77,6 @@ it("uses parameterized one-ticker reads and drops bars in the summary SQL", asyn
   expect(query.mock.calls[1][1]).toEqual(["NVDA"]);
   expect(query.mock.calls[1][0]).toContain("ORDER BY s.as_of DESC LIMIT 1");
   await latestScoreSummaries();
-  expect(query.mock.calls[2][0]).toContain("'{inputs,bars}','[]'::jsonb");
+  expect(query.mock.calls[2][0]).toContain("r.listing_audit AS audit");
+  expect(query.mock.calls[2][0]).not.toMatch(/\.audit\b/);
 });

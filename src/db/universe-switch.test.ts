@@ -21,7 +21,7 @@ describe("SCORE_EXTENDED switch", () => {
     expect(extendedOn("s.ticker", "s.as_of")).toContain("x.list='extended' AND x.valid_from <= s.as_of AND (x.valid_to IS NULL OR x.valid_to > s.as_of)");
   });
   it("pageScoreRow reads stored-fact rows only in private mode", () => {
-    expect(pageScoreRow("s", {})).toBe("s.audit ? 'scanRunId'");
-    expect(pageScoreRow("s", { EODHD_PRIVATE_USE: "on" })).toBe("(s.audit ? 'scanRunId' OR s.audit ? 'agreement')");
+    expect(pageScoreRow("s", {})).toBe("s.has_scan_run");
+    expect(pageScoreRow("s", { EODHD_PRIVATE_USE: "on" })).toBe("(s.has_scan_run OR s.has_agreement)");
   });
 });

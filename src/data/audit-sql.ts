@@ -16,3 +16,17 @@ export function trimmedAudit(column = "s.audit", keep = AUDIT_BAR_LIMIT): string
     FROM (SELECT b.audit,b.bars,CASE WHEN jsonb_typeof(b.bars)='array' THEN jsonb_array_length(b.bars) ELSE 0 END AS n
       FROM (SELECT ${column} AS audit,${column}->'inputs'->'bars' AS bars OFFSET 0) b OFFSET 0) t)`;
 }
+
+/**
+ * Sessions kept in `score_results.listing_audit` (migration 137): the heatmap 3m change needs 63 sessions plus a base,
+ * the scanner floor 20. Change it only together with a migration that regenerates the column.
+ */
+export const LISTING_BAR_LIMIT = 64;
+
+/**
+ * SQL for the listing copy of the audit (migration 137 generated column, bars already cut to LISTING_BAR_LIMIT).
+ * Listing reads use this so they never detoast the full audit. `keep: 0` drops the bars too.
+ */
+export function listingAudit(alias = "s", keep: 0 | typeof LISTING_BAR_LIMIT = LISTING_BAR_LIMIT): string {
+  return keep === 0 ? `jsonb_set(${alias}.listing_audit,'{inputs,bars}','[]'::jsonb,false)` : `${alias}.listing_audit`;
+}

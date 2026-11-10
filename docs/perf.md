@@ -97,13 +97,45 @@ Not collected here. It needs `kubectl logs` on the web pod, and this change did 
 
 ## W5 caching
 
-Pages stay server-rendered per request. The shared reads (`latestScores`, `instrumentUniverse`, `latestPortfolio`, `latestIdeas`) go through `webCached` in `src/data/web-cache.ts`: Next data cache, 300 s, tags `scores`, `ideas`, `portfolio`. A repeat hit does not query Postgres.
+Pages stay server-rendered per request. The shared reads (`latestScores`, `instrumentUniverse`, `latestPortfolio`, `latestIdeas`) go through `webCached` in `src/data/web-cache.ts`: 300 s, tags `scores`, `ideas`, `portfolio`. A repeat hit does not query Postgres. Since 2026-11-10 the cache in the Next server is in process memory (see Cold start below); unit tests and jobs still go through `unstable_cache`.
 
 - Purge: `POST /api/revalidate` with `Authorization: Bearer $INGEST_TOKEN`, optional body `{"tags":["scores"]}`. The scan and ideas ingest routes purge their tag after a successful write.
 - Only viewer-independent reads are wrapped. Anything that reads a session, cookie or header must not use `webCached`; a test checks the store files for `headers()` and `cookies()`.
 - `src/jobs/daily.ts` writes to Postgres directly, then calls `POST /api/revalidate` with `{"tags":["scores","portfolio"]}`. It is best effort: unset env logs one line and skips, a failed call logs and never fails the job. Without a purge, a new score date shows within 300 s.
   - Env the daily CronJob needs: `INGEST_TOKEN` (same secret the web pod uses) and `INGEST_BASE_URL` (`WEB_BASE_URL` is accepted too), for example `http://web.invest.svc.cluster.local:3000`. Not added to the manifests yet; that is an infra change.
-- The cache is per pod (Next data cache on the pod's disk/memory). A purge reaches only the pod that receives the request, so this is valid for 1 web replica. With more replicas, the other pods serve stale data for up to 300 s, and the purge needs a shared cache handler or a call per pod.
+- The cache is per pod (process memory). A purge reaches only the pod that receives the request, so this is valid for 1 web replica. With more replicas, the other pods serve stale data for up to 300 s, and the purge needs a shared cache handler or a call per pod.
 - When no database pool exists (`DATABASE_URL` unset), the loaders skip the cache so the empty result is not kept for 300 s.
 - Ingest routes that purge: scan (`scores`), ideas (`ideas`). `universe` and `judge-input` are GET-only reads, `research`, `extraction-runs`, `gate` and `ai-budget` write tables no cached loader reads, and `portfolio-baseline` writes `portfolio_baseline`, which `latestPortfolio` does not read (it reads `portfolio_snapshots`), so none purge.
 - `purgeWebCache` logs `cache_purge_failed` when `revalidateTag` throws; `/api/revalidate` reads at most 1 KB of body.
+
+## Cold start (2026-11-10)
+
+The owner saw about 9 s to open a page with a cold cache. Read-only `EXPLAIN (ANALYZE, BUFFERS)` on production, same day, private mode (`EODHD_PRIVATE_USE=on`, `SCORE_EXTENDED=on`), 2,230 score rows, 515 on the latest date:
+
+| Read | Time | Shared buffers |
+|---|---|---|
+| `latestScores` (320 bars per name) | 8.9 s | 27,449 |
+| `latestScoreSummaries` (no bars) | 2.9 s | 25,124 |
+| `scoreHistory` (track record, no bars) | 4.5 s | 24,960 |
+| page-row filter alone (`audit ? 'scanRunId' OR audit ? 'agreement'`) | 2.3 s | 15,084 |
+| same `DISTINCT ON` with no filter | 3 ms | 1,248 |
+
+The filter detoasted every stored audit (about 13 kB compressed each), and the listing reads then detoasted the full audit again for the payload.
+
+Changes:
+
+- Migration 137 adds generated columns to `score_results`: `has_scan_run`, `has_agreement` (the two key tests) and `listing_audit` (the audit with the last 64 bars). `pageScoreRow` uses the booleans, and partial indexes on `(ticker, as_of DESC)` match both modes. The listing reads use `listing_audit`; only `scoreForTicker` (one company) reads the full audit.
+- `latestScores` keeps 64 bars per name, enough for the heatmap 3m change and the scanner floor. `latestScoreSummaries` is the same cached read with the bars removed, so one query serves both. `scoreHistory` (track record) is now cached too.
+- In the Next server, `webCached` keeps entries in process memory (64 MB serialized budget, oldest dropped first). Concurrent misses share one loader call. An entry older than 300 s, or purged, is served once more while one background read replaces it. A failed background read keeps the old entry.
+- `purgeWebCache` marks entries stale instead of dropping them, so the post-daily purge does not send every visitor to Postgres at once.
+- `register()` in `src/instrumentation.ts` starts `warmWebCaches()` (scores, instrument universe, portfolio) in the background at server start. It is not awaited and logs `web_cache_warm` or `web_cache_warm_failed`. `WEB_CACHE_WARM=off` skips it. Per-ticker reads (company page, dataset freshness) fill on first visit.
+
+Same SQL on a local PGlite copy of the production rows (median of 3, PGlite is single-process WASM, so compare the ratio, not the absolute numbers):
+
+| Read | Before | After | Payload before / after |
+|---|---|---|---|
+| `latestScores` | 522 ms | 41 ms | 16.6 MB / 4.7 MB |
+| `scoreHistory` | 310 ms | 95 ms | 7.7 MB / 7.7 MB |
+| `scoreForTicker` | | 1 ms | one row |
+
+Migration 137 took about 1 s on that copy. It rewrites `score_results` once. After deploy, re-run the production `EXPLAIN` above against the new SQL to get the real numbers.
