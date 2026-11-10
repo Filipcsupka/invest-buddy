@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const query = vi.fn();
 const end = vi.fn(async () => undefined);
-vi.mock("pg", () => ({ default: { Pool: vi.fn(() => ({ query, end, on: vi.fn() })) } }));
+vi.mock("pg", () => ({ default: { Pool: vi.fn(function () { return { query, end, on: vi.fn() }; }) } }));
 
 import { instrumentForTicker, instrumentUniverse, latestPortfolio, latestScoreSummaries, latestScores, scoreForTicker } from "./store";
 import { closePool } from "../db/pool";
