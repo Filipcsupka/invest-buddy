@@ -24,9 +24,11 @@ export const extendedOn = (tickerSql: string, dateSql: string) => `EXISTS (SELEC
  * SQL condition for a stored score row the score pages read. Public mode keeps scan-backed rows only (`scanRunId`).
  * Private EODHD mode also reads rows scored from stored facts: they carry `agreement` from the database provider but no
  * extractor run, because extraction is off. Fixture runs carry neither.
+ * Reads the generated columns from migration 137 (`audit ? 'scanRunId'`, `audit ? 'agreement'`), so the filter never
+ * detoasts the audit. `score_results` only; the partial indexes of migration 137 match these exact predicates.
  */
 export const pageScoreRow = (alias = "s", env: Record<string, string | undefined> = process.env) =>
-  eodhdPrivateUse(env) ? `(${alias}.audit ? 'scanRunId' OR ${alias}.audit ? 'agreement')` : `${alias}.audit ? 'scanRunId'`;
+  eodhdPrivateUse(env) ? `(${alias}.has_scan_run OR ${alias}.has_agreement)` : `${alias}.has_scan_run`;
 
 export interface UniverseInstrument { symbol: string; name: string; sector: string; tier: number | null }
 
