@@ -12,8 +12,8 @@ All default to off.
 | `PAYWALL` | Enforces Free limits for Free customers and anonymous visitors. Off: every non-owner sees the paid view. |
 | `TRIAL` | A new account gets one 14-day Plus trial, no card. Works while `BILLING` is off. |
 | `BILLING` | Reserved for Stripe. Leave off. |
-| `MAGIC_LINK` | Email sign-in links. Needs working mail. |
-| `EMAIL_VERIFY` | Password accounts must confirm their email. Needs working mail. |
+| `MAGIC_LINK` | Email sign-in links. Needs working mail and `EMAIL_VERIFY=on`; auth refuses to start with `MAGIC_LINK` on and `EMAIL_VERIFY` off. |
+| `EMAIL_VERIFY` | Password accounts must confirm their email before they can sign in or get a trial. Needs working mail. |
 
 With `AUTH` off, a visitor without owner credentials is no longer treated as admin. Owner Basic auth and the owner session still give the admin view.
 
@@ -30,7 +30,7 @@ Optional:
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`: turn on Google sign-in.
 - `MAIL_PROVIDER`: `resend` or `console`. Unset means console outside production; production refuses an unset value.
 - `RESEND_API_KEY`, `MAIL_FROM`: required for `MAIL_PROVIDER=resend`, for example `MAIL_FROM="InvestBuddy <hello@invest.filipcsupka.online>"`.
-- `RATE_LIMIT_TRUSTED_HOPS`: proxies in front of the app that append to `X-Forwarded-For`. Default 1 (Traefik).
+- `RATE_LIMIT_TRUSTED_HOPS`: proxies in front of the app that append to `X-Forwarded-For`. Default 1 (Traefik only). Set it per environment: if a CDN is added in front of Traefik, use 2, or every visitor shares the CDN's bucket. The client IP is the entry this many places from the end; entries further left and `X-Real-IP` are ignored because the client can set them. A request with fewer entries than hops counts against one shared `unknown` bucket.
 - `RATE_LIMIT_SECRET`: key for hashing emails and IPs in rate-limit rows. Defaults to `AUTH_SECRET`.
 - `VENDOR_DISPLAY_LICENSE`: set `on` only after a vendor display licence exists. Until then, and while `EODHD_PRIVATE_USE=on`, `canUseVendorData` is false for everyone except the owner.
 
@@ -41,7 +41,7 @@ Never commit any of these values.
 - Sessions live 30 days in `auth_sessions`. The cookie is `__Host-ib_session`: HttpOnly, Secure, SameSite=Lax, Path=/, no Domain. Plain-HTTP localhost uses `ib_session` because browsers reject `__Host-` cookies without Secure.
 - The cookie cache (`__Host-ib_session_data`) is on for 60 seconds. A revoked session or a changed plan can still be read from it for up to a minute on normal pages. Export, delete, recovery-code reveal and regeneration always read the database. A deleted user is treated as signed out at once because the viewer checks the `users` row.
 - Better Auth checks the `Origin` header and CSRF on every POST, including in tests. Our routes also require `Origin` to equal the site origin.
-- Google is linked to an existing account only when that account's email is verified locally. While `EMAIL_VERIFY` is off no password account is verified, so a person who signed up with a password and later tries Google gets an error. This blocks someone from registering a password account with another person's address and taking over their Google sign-in.
+- Google is linked to an existing account only when that account's email is verified locally (`accountLinking.requireLocalEmailVerified`, checked in the 1.7.18 source and covered by a test). While `EMAIL_VERIFY` is off no password account is verified, so a person who signed up with a password and later tries Google gets an error. This blocks someone from registering a password account with another person's address and taking over their Google sign-in.
 
 ## Limits
 
@@ -51,18 +51,22 @@ Counters live in Postgres (`auth_rate_limits`) and apply across replicas. Keys h
 | --- | --- | --- |
 | `POST /api/auth/sign-up/email` | 5 per hour | 5 per hour |
 | `POST /api/auth/sign-in/email` | 20 per hour | 10 per hour |
-| `POST /api/auth/sign-in/magic-link` | 20 per hour | 5 per hour |
+| `POST /api/auth/sign-in/magic-link` | 5 per hour | 5 per hour |
 | `POST /api/auth/sign-in/social` | 20 per hour | n/a |
 | `POST /api/auth/recovery/reset` | 10 per hour | 5 per hour |
 | `POST /api/auth/recovery/regenerate` | 10 per hour per user | n/a |
 
-Better Auth adds its own per-IP limit of 100 requests a minute on other auth routes.
+Sign-up and magic link can create an account, so their per-email counters use the canonical mailbox: lowercase, NFKC, `+tag` removed, and for Gmail dots removed. Better Auth adds its own per-IP limit of 100 requests a minute on other auth routes.
+
+Only these Better Auth routes are reachable from outside: `POST` sign-up/email, sign-in/email, sign-in/social, sign-in/magic-link (with `MAGIC_LINK`), sign-out; `GET` get-session, callback/google, error, verify-email (with `EMAIL_VERIFY`). Everything else returns 404, including change-password, revoke-sessions, send-verification-email and `GET /magic-link/verify`. A magic link is spent only through the `POST /api/auth/magic-link/consume` step, so mail scanners that prefetch links cannot use it.
 
 ## Trial and plans
 
-With `TRIAL=on`, the first time a user row is created it gets a `manual` Plus entitlement that ends 14 days later. The grant is one row per user, so it never repeats, not even after it ends. An ended trial reads as Free. `src/entitlements/plan.ts` turns an entitlement into `free`, `trial` or `plus`; the viewer reads it once per request.
+With `TRIAL=on`, a new user gets a `manual` Plus entitlement that ends 14 days later. With `EMAIL_VERIFY` on, an unverified password account gets it only when it confirms the address (email link or magic link); magic-link sign-ups, and Google sign-ups whose Google email is verified, count as verified at creation. An ended trial reads as Free.
 
-A new email can get another trial. Watch sign-up counts once the trial is on.
+Each grant also writes a row to `trial_claims` (migration 136): an HMAC of the canonical mailbox, keyed from `AUTH_SECRET`, never the address. The row has no foreign key and stays after the account is deleted, so a `+tag`, a Gmail dot variant, or deleting and re-registering the same address gets no second trial. Rotating `AUTH_SECRET` makes old claims unmatchable. Apply migration 136 before turning `TRIAL` on. `src/entitlements/plan.ts` turns an entitlement into `free`, `trial` or `plus`; the viewer reads it once per request.
+
+A genuinely different address still gets a trial. Watch sign-up counts once the trial is on.
 
 ## Consent
 
@@ -89,18 +93,22 @@ All POSTs go to the same origin and send an `Origin` header. Better Auth routes 
 
 Error codes: 400 invalid input or weak password, 403 wrong origin, 404 flag off, 429 limit hit (with `Retry-After`). The reset endpoint returns the same 200 body whether or not the email or code matched. A successful reset revokes every session of that user.
 
-Sign-up with an email that already exists returns Better Auth's "user already exists" error, so sign-up does reveal whether an email has an account. The sign-up limits slow down probing.
+With `EMAIL_VERIFY` off, sign-up with an email that already exists returns Better Auth's "user already exists" error, so sign-up reveals whether an email has an account; the sign-up limits slow down probing. With `EMAIL_VERIFY` on, Better Auth returns the same response for a new and an existing email.
 
 ## Recovery codes
 
-Each new account gets ten single-use codes of 128 bits. They are stored as HMAC digests. The first set is also stored encrypted until the user reveals it once on the account page. Regeneration needs the current password and replaces the whole set. The account page warns when fewer than three remain.
+Each password sign-up gets ten single-use codes of 128 bits. Google and magic-link sign-ups get none, since they have no password to reset. They are stored as HMAC digests. The first set is also stored encrypted until the user reveals it once on the account page. Regeneration needs the current password and replaces the whole set. The account page warns when fewer than three remain.
+
+A reset only replaces an existing password; it never creates one. After a successful reset the account address gets a "password was reset" mail. If sending fails, the reset still stands and the failure is logged without the address.
+
+Pre-registration takeover: someone can sign up with a password at another person's address. When the real owner later signs in by magic link, Better Auth 1.7.18 deletes the account's password, OAuth links and sessions before marking the email verified (`revokeUnprovenAccountAccess`), and our hook deletes the recovery codes from that sign-up. Google sign-in does not link to such an unverified account at all.
 
 ## Owner steps before turning on AUTH
 
-1. Review migrations 133, 134 and 135. Before 133, check for emails that differ only by case: `SELECT lower(email), count(*) FROM users GROUP BY 1 HAVING count(*) > 1;` must return no rows. The web init container runs `npm run migrate` on every new web pod, so merging and deploying this change applies 135. Approve that before the deploy.
+1. Review migrations 133, 134, 135 and 136. Before 133, check for emails that differ only by case: `SELECT lower(email), count(*) FROM users GROUP BY 1 HAVING count(*) > 1;` must return no rows. The web init container runs `npm run migrate` on every new web pod, so merging and deploying this change applies 135 and 136. Approve that before the deploy.
 2. In Google Cloud Console, create an OAuth client of type Web application. Authorized JavaScript origin: `https://invest.filipcsupka.online`. Authorized redirect URI: `https://invest.filipcsupka.online/api/auth/callback/google`.
 3. Put `AUTH_SECRET` (for example `openssl rand -base64 48`), `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in the deployment secret store. Set `AUTH_URL=https://invest.filipcsupka.online`.
-4. Leave `MAGIC_LINK` and `EMAIL_VERIFY` off until mail works. For Resend, verify the sending domain in Resend first, then set `MAIL_PROVIDER=resend`, `RESEND_API_KEY` and `MAIL_FROM`.
+4. Leave `MAGIC_LINK` and `EMAIL_VERIFY` off until mail works, and turn `MAGIC_LINK` on only together with `EMAIL_VERIFY`. For Resend, verify the sending domain in Resend first, then set `MAIL_PROVIDER=resend`, `RESEND_API_KEY` and `MAIL_FROM`.
 5. Decide on `TRIAL`. Keep `BILLING` off.
 6. In a non-production environment, test password sign-up, Google sign-in, sign-out, recovery-code reveal and reset, export and delete. Check that owner Basic auth and the owner session still open owner routes and a customer cookie does not.
 7. Set `AUTH=on` in production.
@@ -115,3 +123,19 @@ Both scripts are dry runs unless `--apply` is given. They need `DATABASE_URL` an
 ## Caching
 
 Public pages without a customer or owner cookie stay cacheable. A response to a request carrying a customer or owner cookie, every `/api/auth/*` response and every `/{locale}/account` page gets `Cache-Control: private, no-store` and `Vary: Cookie`. The viewer is memoised per request with React `cache` and is never put in Next's shared data cache.
+
+## Known limits
+
+Open items from the 2026-11-10 security review that this change does not fix:
+
+- Sign-up enumeration while `EMAIL_VERIFY` is off (review item 5). Turning `EMAIL_VERIFY` on removes it; until then the sign-up limits slow probing.
+- Verification-link pre-hijack with `EMAIL_VERIFY` on. If someone signs up at another person's address and that person clicks the confirmation mail they did not ask for, the stranger's password becomes valid. The mail says to ignore it if you did not create an account. The magic-link path is covered.
+- A legitimate user who signed up with a password, never confirmed the address, and then signs in by magic link loses that password and its recovery codes. They keep magic-link and Google sign-in.
+- Targeted lockout (item 8). Per-email limits on sign-in (10 an hour) and reset (5 an hour) let anyone exhaust a victim's bucket. A per-(email, IP) key would weaken protection against distributed guessing, so this needs a decision, or a captcha.
+- `RATE_LIMIT_TRUSTED_HOPS` must match the proxy chain in each environment (item 7). The code no longer reads `X-Real-IP` and fails closed, but a wrong hop count still mis-buckets.
+- Account delete needs no re-authentication, and a non-JSON `magic-link:%` verification row aborts the delete (item 14).
+- The `user.create.after` hook is not one transaction, so a failure can leave a user with partial recovery codes or no trial (item 15).
+- `auth_rate_limits` rows are never purged (item 16).
+- Email case folding uses JavaScript `toLowerCase`, which can differ from Postgres `lower()` for some Unicode (item 17). Trial and limit keys use NFKC.
+- scrypt uses Better Auth defaults and the password denylist is small, with no breach check (item 18).
+- The 60 s cookie cache (item 12), the `OWNER_RESEARCH_PASSWORD` presence check in the scripts (item 11), and the nits 19 to 22 are unchanged.

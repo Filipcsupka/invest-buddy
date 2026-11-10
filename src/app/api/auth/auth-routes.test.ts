@@ -7,7 +7,7 @@ import { afterAll, beforeAll, beforeEach, expect, it, vi } from "vitest";
 const holder = vi.hoisted(() => ({ pool: undefined as unknown }));
 vi.mock("@/db/pool", () => ({ getPool: () => holder.pool }));
 
-import { POST as authPost } from "./[...all]/route";
+import { GET as authGet, POST as authPost } from "./[...all]/route";
 import { POST as recoveryPost } from "./recovery/[action]/route";
 import { POST as accountPost } from "./account/[action]/route";
 import { createInitialRecoveryCodes, revealInitialRecoveryCodes } from "@/auth/recovery";
@@ -18,7 +18,7 @@ let db: PGlite;
 
 beforeAll(async () => {
   db = new PGlite();
-  for (const name of ["001_initial.sql", "133_customer_auth.sql", "134_customer_entitlements.sql", "135_customer_recovery_codes.sql"]) {
+  for (const name of ["001_initial.sql", "133_customer_auth.sql", "134_customer_entitlements.sql", "135_customer_recovery_codes.sql", "136_trial_claims.sql"]) {
     await db.exec(readFileSync(join(process.cwd(), "migrations", name), "utf8"));
   }
   const query = async (sql: string, params?: unknown[]) => {
@@ -31,6 +31,7 @@ beforeAll(async () => {
   vi.stubEnv("AUTH_URL", SITE);
   vi.stubEnv("AUTH_SECRET", "a-test-secret-of-at-least-thirty-two-characters");
   vi.stubEnv("RATE_LIMIT_TRUSTED_HOPS", "1");
+  vi.stubEnv("MAIL_PROVIDER", "console");
 }, 60_000);
 afterAll(async () => { vi.unstubAllEnvs(); await db.close(); });
 beforeEach(async () => { await db.query("DELETE FROM auth_rate_limits"); });
@@ -140,4 +141,80 @@ it("deletes the account and clears every customer cookie", async () => {
   expect(response.headers.getSetCookie().some((value) => value.startsWith(`${CUSTOMER_SESSION_COOKIE}=;`))).toBe(true);
   expect((await db.query("SELECT 1 FROM users WHERE id = $1", [userId])).rows).toHaveLength(0);
   expect((await db.query("SELECT 1 FROM user_recovery_codes WHERE user_id = $1", [userId])).rows).toHaveLength(0);
+}, 60_000);
+
+const userIdOf = async (email: string) => (await db.query<{ id: string }>("SELECT id::text FROM users WHERE email = $1", [email])).rows[0].id;
+
+it("returns 404 for Better Auth routes outside the allowlist", async () => {
+  for (const path of ["/api/auth/change-password", "/api/auth/revoke-sessions", "/api/auth/send-verification-email", "/api/auth/update-user"]) {
+    expect((await authPost(post(path, { email: "x@example.test" }))).status).toBe(404);
+  }
+  expect((await authGet(new Request(`${SITE}/api/auth/magic-link/verify?token=abcdefghijklmnopqrstuvwxyz`))).status).toBe(404);
+  expect((await authGet(new Request(`${SITE}/api/auth/list-sessions`))).status).toBe(404);
+  expect((await authGet(new Request(`${SITE}/api/auth/get-session`))).status).toBe(200);
+});
+
+it("keys the sign-up IP limit on the proxy-appended address, not a spoofed X-Forwarded-For prefix", async () => {
+  for (let i = 0; i < 5; i++) expect((await signUp(`spoof${i}@example.test`, `198.51.100.${i}, 192.0.2.250`)).status).toBe(200);
+  expect((await signUp("spoof5@example.test", "198.51.100.99, 192.0.2.250")).status).toBe(429);
+}, 60_000);
+
+it("shares the per-email sign-up limit across +tags and Gmail dots", async () => {
+  const variants = ["bucket@gmail.com", "bucket+1@gmail.com", "b.ucket@gmail.com", "bucket+x@googlemail.com", "bu.cket+2@gmail.com"];
+  for (const email of variants) expect((await signUp(email)).status).toBe(200);
+  expect((await signUp("b.u.c.k.e.t+6@gmail.com")).status).toBe(429);
+}, 60_000);
+
+it("gives no second trial through an alias or after delete and re-register", async () => {
+  const first = await signUp("farm@gmail.com");
+  const cookie = first.headers.getSetCookie().map((value) => value.split(";")[0]).join("; ");
+  const hasTrial = async (email: string) => (await db.query("SELECT 1 FROM entitlements WHERE user_id = $1", [await userIdOf(email)])).rows.length === 1;
+  expect(await hasTrial("farm@gmail.com")).toBe(true);
+  expect((await signUp("f.arm+again@gmail.com")).status).toBe(200);
+  expect(await hasTrial("f.arm+again@gmail.com")).toBe(false);
+  const deleted = await accountPost(new Request(`${SITE}/api/auth/account/delete`, { method: "POST", headers: { Origin: SITE, cookie }, body: new URLSearchParams({ confirm: "DELETE" }) }), action("delete"));
+  expect(deleted.status).toBe(303);
+  expect((await signUp("farm@gmail.com")).status).toBe(200);
+  expect(await hasTrial("farm@gmail.com")).toBe(false);
+}, 60_000);
+
+it("lets only one of two parallel resets with the same recovery code succeed", async () => {
+  await signUp("race@example.test");
+  const userId = await userIdOf("race@example.test");
+  const [code] = await revealInitialRecoveryCodes(holder.pool as pg.Pool, userId);
+  // One connection per transaction, like a real pool: a second client waits until the first is released.
+  const shared = holder.pool as pg.Pool;
+  let tail = Promise.resolve();
+  holder.pool = {
+    query: shared.query.bind(shared),
+    connect: async () => {
+      let release!: () => void;
+      const previous = tail;
+      tail = new Promise<void>((resolve) => { release = resolve; });
+      await previous;
+      const client = await shared.connect();
+      return { query: client.query.bind(client), release() { release(); } };
+    },
+  } as unknown as pg.Pool;
+  const output: string[] = [];
+  const write = vi.spyOn(process.stdout, "write").mockImplementation((chunk) => { output.push(String(chunk)); return true; });
+  try {
+    const reset = (password: string) => recoveryPost(post("/api/auth/recovery/reset", { email: "race@example.test", code, newPassword: password }), action("reset"));
+    const responses = await Promise.all([reset("Parallel Pass One 1"), reset("Parallel Pass Two 2")]);
+    expect(responses.map((response) => response.status)).toEqual([200, 200]);
+  } finally { holder.pool = shared; write.mockRestore(); }
+  expect((await db.query("SELECT 1 FROM user_recovery_codes WHERE user_id = $1 AND used_at IS NOT NULL", [userId])).rows).toHaveLength(1);
+  // The owner is told once, at the account address.
+  expect(output.join("").match(/To: race@example\.test\nSubject: Your InvestBuddy password was reset/g)).toHaveLength(1);
+  const works = await Promise.all(["Parallel Pass One 1", "Parallel Pass Two 2"].map(async (password) => (await authPost(post("/api/auth/sign-in/email", { email: "race@example.test", password }))).status === 200));
+  expect(works.filter(Boolean)).toHaveLength(1);
+}, 60_000);
+
+it("never creates a password through recovery for an account without one", async () => {
+  const userId = (await db.query<{ id: string }>("INSERT INTO users (email, email_verified) VALUES ('nopass@example.test', true) RETURNING id::text")).rows[0].id;
+  await createInitialRecoveryCodes(holder.pool as pg.Pool, userId);
+  const [code] = await revealInitialRecoveryCodes(holder.pool as pg.Pool, userId);
+  const response = await recoveryPost(post("/api/auth/recovery/reset", { email: "nopass@example.test", code, newPassword: "Another Strong 99" }), action("reset"));
+  expect(response.status).toBe(200);
+  expect((await db.query("SELECT 1 FROM auth_accounts WHERE user_id = $1", [userId])).rows).toHaveLength(0);
 }, 60_000);

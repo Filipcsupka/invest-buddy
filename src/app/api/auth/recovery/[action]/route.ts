@@ -5,6 +5,8 @@ import { consumeRecoveryCode, regenerateRecoveryCodes, revealInitialRecoveryCode
 import { recoveryCodesPage } from "@/auth/recovery-page";
 import { getPool } from "@/db/pool";
 import { flags } from "@/config/flags";
+import { mailerFromEnv } from "@/mail/mailer";
+import { passwordResetNoticeMail } from "@/mail/templates/magic-link";
 
 export const runtime = "nodejs";
 
@@ -58,15 +60,23 @@ export async function POST(request: Request, { params }: { params: Promise<{ act
   if (!await takeAuthLimit(db, "email", `reset:${email}`, 5, 3600)) return tooMany();
   // Hash before the lookup so a known and an unknown email cost the same time.
   const hash = await hashPassword(body.newPassword);
+  let notify: string | null = null;
   const client = await db.connect();
   try {
     await client.query("BEGIN");
-    const user = await client.query<{ id: string }>("SELECT id::text FROM users WHERE lower(email) = $1 AND deleted_at IS NULL FOR UPDATE", [email]);
+    const user = await client.query<{ id: string; email: string }>("SELECT id::text, email FROM users WHERE lower(email) = $1 AND deleted_at IS NULL FOR UPDATE", [email]);
     const userId = user.rows[0]?.id;
+    // Only an existing password is replaced, never created: an account whose credential Better Auth removed on
+    // magic-link proof (pre-hijack cleanup) must not get one back from a code issued before that proof.
     if (userId && await consumeRecoveryCode(client, userId, body.code)) {
       const updated = await client.query("UPDATE auth_accounts SET password = $2, updated_at = now() WHERE user_id = $1 AND provider_id = 'credential'", [userId, hash]);
-      if (updated.rowCount !== 1) await client.query("INSERT INTO auth_accounts (user_id, account_id, provider_id, password) VALUES ($1, $1::text, 'credential', $2)", [userId, hash]);
-      await client.query("DELETE FROM auth_sessions WHERE user_id = $1", [userId]);
+      if (updated.rowCount === 1) {
+        await client.query("DELETE FROM auth_sessions WHERE user_id = $1", [userId]);
+        notify = user.rows[0].email;
+      } else {
+        await client.query("ROLLBACK");
+        return Response.json({ status: RESET_DONE }, { headers: privateHeaders });
+      }
     }
     await client.query("COMMIT");
   } catch (error) {
@@ -74,6 +84,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ act
     throw error;
   } finally {
     client.release();
+  }
+  if (notify) {
+    try { await mailerFromEnv().send(passwordResetNoticeMail({ to: notify, locale })); }
+    catch (error) { console.error(JSON.stringify({ event: "auth_reset_notice_failed", message: error instanceof Error ? error.message : "send failed" })); }
   }
   return Response.json({ status: RESET_DONE }, { headers: privateHeaders });
 }

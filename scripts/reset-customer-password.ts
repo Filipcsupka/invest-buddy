@@ -19,7 +19,7 @@ async function main() {
     await client.query("BEGIN");
     await client.query("SELECT id FROM users WHERE id = $1 FOR UPDATE", [user.id]);
     const result = await client.query("UPDATE auth_accounts SET password = $2, updated_at = now() WHERE user_id = $1 AND provider_id = 'credential'", [user.id, hash]);
-    if (result.rowCount !== 1) await client.query("INSERT INTO auth_accounts (user_id, account_id, provider_id, password) VALUES ($1, $1, 'credential', $2)", [user.id, hash]);
+    if (result.rowCount !== 1) await client.query("INSERT INTO auth_accounts (user_id, account_id, provider_id, password) VALUES ($1, $1::text, 'credential', $2)", [user.id, hash]);
     await client.query("DELETE FROM auth_sessions WHERE user_id = $1", [user.id]);
     await client.query("COMMIT");
   } catch (error) { await client.query("ROLLBACK"); throw error; }
