@@ -6,8 +6,8 @@
  *   POST /api/auth/sign-up/email      { name, email, password, callbackURL }       Better Auth core
  *   POST /api/auth/sign-in/email      { email, password, callbackURL }             Better Auth core
  *   POST /api/auth/sign-in/social     { provider: "google", callbackURL, ... }     Better Auth core
- *   POST /api/auth/recovery/codes     {}  -> { codes: string[] }                   ASSUMED shape, confirm against docs/auth.md
- *   POST /api/auth/recovery/reset     { email, code, newPassword } -> { remaining? } ASSUMED shape, confirm against docs/auth.md
+ *   POST /api/auth/recovery/codes     {}  -> { codes: string[] }; 409 once shown    first set only, see docs/customer-auth.md
+ *   POST /api/auth/recovery/reset     { email, code, newPassword } -> { status }   same 200 body whether or not it matched
  *   POST /api/auth/sign-in/magic-link { email, callbackURL }                       kept behind a prop, off by default
  *
  * When the handler is not deployed yet (404, 405, 501 or a non-JSON answer) the outcome is `unavailable`, so the UI can say "Sign-in
@@ -163,7 +163,7 @@ export async function signInWithPassword(input: { email: string; password: strin
   return errorOf(answer);
 }
 
-/** POST /api/auth/recovery/codes for the signed-in user. Replaces any earlier set. */
+/** POST /api/auth/recovery/codes for the signed-in user: the first set, shown once. A new set needs the password (account page). */
 export async function createRecoveryCodes(fetcher: Fetch = fetch): Promise<CodesOutcome> {
   const answer = await post("/recovery/codes", {}, fetcher);
   if ("kind" in answer) return answer;
@@ -172,7 +172,10 @@ export async function createRecoveryCodes(fetcher: Fetch = fetch): Promise<Codes
   return codes ? { kind: "codes", codes } : { kind: "unavailable" };
 }
 
-/** POST /api/auth/recovery/reset: one unused recovery code sets a new password. The code is spent either way the server decides. */
+/**
+ * POST /api/auth/recovery/reset: one unused recovery code sets a new password. The server answers the same 200 whether or not the email
+ * and code matched, so `reset` means "request accepted", not "password changed".
+ */
 export async function resetWithRecoveryCode(input: { email: string; code: string; newPassword: string }, fetcher: Fetch = fetch): Promise<ResetOutcome> {
   const email = input.email.trim();
   if (!validEmail(email)) return { kind: "invalid-email" };

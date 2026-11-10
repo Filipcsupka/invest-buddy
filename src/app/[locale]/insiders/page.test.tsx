@@ -1,6 +1,10 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const events = vi.fn();
+// Admin is the owner only (Basic auth or owner session); AUTH off no longer makes every visitor admin.
+const owner = vi.hoisted(() => ({ on: false }));
+vi.mock("next/headers", () => ({ headers: async () => new Headers(owner.on ? { authorization: `Basic ${Buffer.from("owner:page-test-owner-password").toString("base64")}` } : {}) }));
+process.env.OWNER_RESEARCH_PASSWORD = "page-test-owner-password";
 vi.mock("@/db/insiders", () => ({ insiderEvents: () => events() }));
 import Insiders from "./page";
 
@@ -12,10 +16,11 @@ const event = (date: string, ticker: string) => ({
 });
 const render = async () => renderToStaticMarkup(await Insiders({ params: Promise.resolve({ locale: "en" }) }));
 beforeEach(() => { events.mockResolvedValue([event(day(10), "NEWR"), event(day(400), "OLDR")]); });
-afterEach(() => { events.mockReset(); for (const [key, value] of Object.entries(saved)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } });
+afterEach(() => { owner.on = false; events.mockReset(); for (const [key, value] of Object.entries(saved)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } });
 
 it("shows an admin every event with a Paid badge", async () => {
   delete process.env.AUTH;
+  owner.on = true;
   const html = await render();
   expect(html).toContain("NEWR");
   expect(html).toContain("OLDR");

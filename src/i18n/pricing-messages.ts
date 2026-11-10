@@ -49,6 +49,8 @@ const en = {
     "alerts-daily": { label: "Daily alerts for your watchlist", detail: "A message when a ticker you follow changes state or gains or loses a rule.", free: "Up to {n} tickers", paid: "Up to {n} tickers" },
     "csv-export": { label: "CSV export", detail: "Download the scanner table as a file." },
     "discovery-list": { label: "Discovery list", detail: "New names found beyond the fixed screen." },
+    "insiders-filters": { label: "Insider event filters", detail: "Filter insider events by role, transaction type and size." },
+    "company-sec-history": { label: "SEC filing history", detail: "Older SEC filings on the company page.", free: "Last {n} years", paid: "Full history" },
   } as Partial<Record<TierId, Row>>,
   plans: {
     title: "Plans and prices",
@@ -134,6 +136,8 @@ const sk: PricingMessages = {
     "alerts-daily": { label: "Denné upozornenia pre váš zoznam", detail: "Správa, keď ticker, ktorý sledujete, zmení stav alebo získa či stratí pravidlo.", free: "Až {n} tickerov", paid: "Až {n} tickerov" },
     "csv-export": { label: "Export do CSV", detail: "Stiahnutie tabuľky skenera ako súboru." },
     "discovery-list": { label: "Zoznam nových titulov", detail: "Nové tituly nájdené mimo pevného výberu." },
+    "insiders-filters": { label: "Filtre udalostí insiderov", detail: "Filtrovanie udalostí insiderov podľa funkcie, typu transakcie a veľkosti." },
+    "company-sec-history": { label: "História podaní SEC", detail: "Staršie podania SEC na stránke spoločnosti.", free: "Počet rokov: {n}", paid: "Celá história" },
   },
   plans: {
     title: "Plány a ceny",

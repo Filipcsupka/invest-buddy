@@ -15,8 +15,8 @@ afterEach(() => {
 
 const matrix = [
   // AUTH, PAYWALL, tier
-  [false, false, "admin"],
-  [false, true, "admin"],
+  [false, false, "paid"],
+  [false, true, "free"],
   [true, false, "paid"],
   [true, true, "free"],
 ] as const;
@@ -26,8 +26,8 @@ it.each(matrix)("resolves AUTH %s PAYWALL %s to %s", (auth, paywall, tier) => {
 });
 
 it("honours ?view=free only for an admin", () => {
-  expect(resolveViewer({ AUTH: false, PAYWALL: false }, "free")).toEqual({ tier: "free", preview: true });
-  expect(resolveViewer({ AUTH: false, PAYWALL: false }, "other")).toEqual({ tier: "admin", preview: false });
+  expect(resolveViewer({ AUTH: false, PAYWALL: false }, "free", true)).toEqual({ tier: "free", preview: true, owner: true, userId: null });
+  expect(resolveViewer({ AUTH: false, PAYWALL: false }, "other", true)).toEqual({ tier: "admin", preview: false, owner: true, userId: null });
   expect(resolveViewer({ AUTH: true, PAYWALL: true }, "free")).toEqual({ tier: "free", preview: false });
   expect(resolveViewer({ AUTH: true, PAYWALL: false }, "free")).toEqual({ tier: "paid", preview: false });
 });
@@ -35,9 +35,9 @@ it("honours ?view=free only for an admin", () => {
 it("reads the request header, and falls back to the flags outside a request", async () => {
   delete process.env.AUTH;
   headerValue.mockReturnValue(null);
-  expect(await getViewer()).toEqual({ tier: "admin", preview: false });
+  expect(await getViewer()).toEqual({ tier: "paid", preview: false });
   headerValue.mockReturnValue("free");
-  expect(await getViewer()).toEqual({ tier: "free", preview: true });
+  expect(await getViewer()).toEqual({ tier: "paid", preview: false });
   process.env.AUTH = "on";
   expect(await getViewer()).toEqual({ tier: "paid", preview: false });
 });

@@ -2,6 +2,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, expect, it, vi } from "vitest";
 const enabled = vi.fn();
 const ideas = vi.fn();
+// Admin is the owner only (Basic auth or owner session); AUTH off no longer makes every visitor admin.
+const owner = vi.hoisted(() => ({ on: false }));
+vi.mock("next/headers", () => ({ headers: async () => new Headers(owner.on ? { authorization: `Basic ${Buffer.from("owner:page-test-owner-password").toString("base64")}` } : {}) }));
+process.env.OWNER_RESEARCH_PASSWORD = "page-test-owner-password";
 vi.mock("@/data/ideas-store", () => ({ ideasEnabled: () => enabled(), latestIdeas: () => ideas() }));
 import Ideas from "./page";
 import { sampleIdeas } from "@/ideas/fixtures";
@@ -38,11 +42,12 @@ it("gives a free viewer a lock card without the idea cards, and an admin the car
     const free = renderToStaticMarkup(await Ideas({ params: Promise.resolve({ locale: "en" }) }));
     expect(free).toContain('data-tier-lock="ideas-list"');
     expect(free).not.toContain("Add 1/3");
-    delete process.env.AUTH;
+    owner.on = true;
     const admin = renderToStaticMarkup(await Ideas({ params: Promise.resolve({ locale: "en" }) }));
     expect(admin).toContain('data-tier-badge="ideas-list"');
     expect(admin).toContain("Add 1/3");
   } finally {
+    owner.on = false;
     for (const [key, value] of Object.entries(saved)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
   }
 });

@@ -1,5 +1,9 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+// Admin is the owner only (Basic auth or owner session); AUTH off no longer makes every visitor admin.
+const owner = vi.hoisted(() => ({ on: false }));
+vi.mock("next/headers", () => ({ headers: async () => new Headers(owner.on ? { authorization: `Basic ${Buffer.from("owner:page-test-owner-password").toString("base64")}` } : {}) }));
+process.env.OWNER_RESEARCH_PASSWORD = "page-test-owner-password";
 import Scanner, { generateMetadata } from "./page";
 
 describe("scanner route", () => {
@@ -8,6 +12,7 @@ describe("scanner route", () => {
     process.env.PAYWALL = "off";
     delete process.env.AUTH;
     process.env.DATA_MODE = "fixture";
+    owner.on = true;
     try {
       for (const locale of ["en", "sk"]) {
         const markup = renderToStaticMarkup(await Scanner({ params: Promise.resolve({ locale }), searchParams: Promise.resolve({}) }));
@@ -18,6 +23,7 @@ describe("scanner route", () => {
         expect(markup).not.toContain("data-tier-lock");
       }
     } finally {
+      owner.on = false;
       for (const [key, value] of Object.entries(saved)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
     }
   });

@@ -2,25 +2,26 @@ import { flags, type Flags } from "@/config/flags";
 import { TIER_LIMITS, tierEntry, type LimitKey, type TierId } from "@/config/tiers";
 
 export type Tier = "free" | "paid" | "admin";
-export type Viewer = { tier: Tier; preview: boolean };
+/**
+ * `owner` comes only from owner Basic auth or the owner session, never from a customer session.
+ * `userId`, `plan` and `planEndsAt` are set for a signed-in customer.
+ */
+export type Viewer = { tier: Tier; preview: boolean; owner?: boolean; userId?: string | null; plan?: "free" | "plus" | "trial"; planEndsAt?: Date | null };
 
 /** Request header the proxy sets for `?view=free`. */
 export const PREVIEW_HEADER = "x-tier-preview";
 
 /**
- * The viewer before any preview. AUTH off: everyone is admin (today's open site).
- * AUTH on: no session or entitlement lookup exists yet (W29, W30), so others are `free` when PAYWALL enforces tiers
- * and `paid` when it does not (soft launch, nothing locked). The owner account becomes `admin` with W29.
+ * Non-owner fallback. PAYWALL off keeps the soft launch open without granting owner access.
  */
 export function baseViewer(f: Pick<Flags, "AUTH" | "PAYWALL"> = flags()): Viewer {
-  if (!f.AUTH) return { tier: "admin", preview: false };
   return { tier: f.PAYWALL ? "free" : "paid", preview: false };
 }
 
 /** `?view=free` turns an admin request into a free render. It is ignored for every other viewer. */
-export function resolveViewer(f: Pick<Flags, "AUTH" | "PAYWALL"> = flags(), view?: string | null): Viewer {
-  const base = baseViewer(f);
-  return base.tier === "admin" && view === "free" ? { tier: "free", preview: true } : base;
+export function resolveViewer(f: Pick<Flags, "AUTH" | "PAYWALL"> = flags(), view?: string | null, owner = false): Viewer {
+  if (owner) return view === "free" ? { tier: "free", preview: true, owner: true, userId: null } : { tier: "admin", preview: false, owner: true, userId: null };
+  return baseViewer(f);
 }
 
 /** False only for a free viewer on a paid lock segment. Depth-limited segments stay visible; use limitFor for the depth. */
@@ -33,4 +34,22 @@ export function canSee(viewer: Viewer, id: TierId): boolean {
 /** The depth limit for this viewer, or null for no limit. Admin and paid use the paid column. */
 export function limitFor(viewer: Viewer, key: LimitKey): number | null {
   return TIER_LIMITS[viewer.tier === "free" ? "free" : "paid"][key];
+}
+
+/** Null when the viewer may use the feature, otherwise a private 401 (signed out) or 403 (signed in, upgrade needed). */
+export function requireFeature(viewer: Viewer, id: TierId): Response | null {
+  if (canSee(viewer, id)) return null;
+  return Response.json({ error: viewer.userId ? "Upgrade required" : "Sign in required" }, {
+    status: viewer.userId ? 403 : 401,
+    headers: { "Cache-Control": "private, no-store", Vary: "Cookie" },
+  });
+}
+
+/**
+ * Licensed vendor data (EODHD) for this viewer. Only the owner gets it while EODHD_PRIVATE_USE=on,
+ * and nobody else gets it until VENDOR_DISPLAY_LICENSE=on records a display licence.
+ */
+export function canUseVendorData(viewer: Viewer, env: Record<string, string | undefined> = process.env): boolean {
+  if (viewer.owner) return true;
+  return env.EODHD_PRIVATE_USE !== "on" && env.VENDOR_DISPLAY_LICENSE === "on";
 }

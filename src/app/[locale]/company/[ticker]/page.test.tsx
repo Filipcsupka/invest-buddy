@@ -8,7 +8,10 @@ const review = vi.fn();
 const portfolio = vi.fn();
 const history = vi.fn();
 const viewHeader = vi.fn<() => string | null>(() => null);
-vi.mock("next/headers", () => ({ headers: async () => ({ get: () => viewHeader() }) }));
+// Admin is the owner only, so these tests render as the owner; viewHeader feeds the ?view=free preview header.
+process.env.OWNER_RESEARCH_PASSWORD = "page-test-owner-password";
+const ownerBasic = `Basic ${Buffer.from("owner:page-test-owner-password").toString("base64")}`;
+vi.mock("next/headers", () => ({ headers: async () => ({ get: (name: string) => name === "authorization" ? ownerBasic : name === "x-tier-preview" ? viewHeader() : null }) }));
 const shares = vi.fn(async () => [] as { periodEnd: string; value: number }[]);
 vi.mock("@/data/flag-facts", () => ({ storedShareCounts: () => shares(), storedInterestFacts: async () => ({ operatingIncome: null, interestExpense: null }) }));
 const originalAdvice = process.env.ADVICE_OUTPUT;

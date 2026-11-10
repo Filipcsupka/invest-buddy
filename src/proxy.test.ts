@@ -119,9 +119,15 @@ it.each(["en", "sk"])("opens the %s scanner whatever PAYWALL says", async (local
 
 it("marks ?view= previews noindex and drops a client-sent preview header", async () => {
   delete process.env.AUTH;
+  process.env.OWNER_RESEARCH_PASSWORD = "private-test-password";
+  const ownerAuth = `Basic ${Buffer.from("owner:private-test-password").toString("base64")}`;
   const plain = await proxy(new NextRequest("https://example.com/en/scanner"));
   expect(plain.headers.get("x-robots-tag")).toBeNull();
-  const preview = await proxy(new NextRequest("https://example.com/en/scanner?view=free"));
+  // AUTH off no longer makes every visitor admin: only the owner gets the free preview.
+  const anonymous = await proxy(new NextRequest("https://example.com/en/scanner?view=free"));
+  expect(anonymous.headers.get("x-robots-tag")).toBe("noindex");
+  expect(anonymous.headers.get("x-middleware-request-x-tier-preview")).toBeNull();
+  const preview = await proxy(new NextRequest("https://example.com/en/scanner?view=free", { headers: { authorization: ownerAuth } }));
   expect(preview.status).toBe(200);
   expect(preview.headers.get("x-robots-tag")).toBe("noindex");
   expect(preview.headers.get("x-middleware-request-x-tier-preview")).toBe("free");
