@@ -90,6 +90,8 @@ it("gives the marketing top bar sign-in buttons for visitors and Open app for an
   html = renderToStaticMarkup(<TopBarIdentity locale="en" />);
   expect(text(html)).toContain("Owner");
   expect(html).toMatch(/href="\/en\/dashboard"[^>]*>Open app</);
+  expect(text(html)).not.toContain("Sign in");
+  expect(text(html)).not.toContain("Create free account");
   ready({ kind: "customer", email: "ana@example.com", plan: "plus", markets: false });
   html = renderToStaticMarkup(<TopBarIdentity locale="sk" />);
   expect(text(html)).toContain("Plus");

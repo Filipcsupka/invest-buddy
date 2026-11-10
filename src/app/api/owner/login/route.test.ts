@@ -23,7 +23,7 @@ it("issues a secure site-wide cookie after a correct password", async () => {
   process.env.OWNER_SESSION_SECRET = "a-secret-with-at-least-thirty-two-bytes";
   const response = await POST(request("correct", "sk"));
   expect(response.status).toBe(303);
-  expect(response.headers.get("location")).toBe("/sk");
+  expect(response.headers.get("location")).toBe("/sk/dashboard");
   expect(response.headers.get("set-cookie")).toContain(`${OWNER_SESSION_COOKIE}=`);
   expect(response.headers.get("set-cookie")).toContain("HttpOnly");
   expect(response.headers.get("set-cookie")).toContain("Secure");
@@ -81,7 +81,7 @@ const bindRequest = (password: string, headers: Record<string, string> = {}) => 
 
 it("keeps successful, failed and logout redirects relative behind a proxy", async () => {
   configure();
-  expect((await POST(bindRequest("correct"))).headers.get("location")).toBe("/sk");
+  expect((await POST(bindRequest("correct"))).headers.get("location")).toBe("/sk/dashboard");
   expect((await POST(bindRequest("wrong"))).headers.get("location")).toBe("/sk/owner-sign-in?error=1");
   expect((await logout(bindRequest(""))).headers.get("location")).toBe("/sk/owner-sign-in");
 });

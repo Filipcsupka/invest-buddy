@@ -87,6 +87,9 @@ async function handle(request: NextRequest) {
       response.headers.set("Vary", "Cookie");
       response.headers.set("X-Robots-Tag", "noindex");
     }
+    if (owner && request.nextUrl.pathname === "/api/me" && response.status === 200 && !hasHint(request.headers.get("cookie"))) {
+      response.headers.append("Set-Cookie", sessionHintCookie(secureRequest(request), OWNER_SESSION_SECONDS));
+    }
     return response;
   }
   const start = performance.now();
@@ -142,7 +145,7 @@ async function handle(request: NextRequest) {
     if (owner || section === "account" || section === "owner" || section === "owner-sign-in" || market || (process.env.EODHD_PRIVATE_USE === "on" && privateDataRoute)) response.headers.set("X-Robots-Tag", "noindex");
     if (request.nextUrl.searchParams.has("view")) response.headers.set("X-Robots-Tag", "noindex");
     // The readable sign-in hint lets static pages show the owner state without a server read (nav island, /api/me).
-    if (cookieOwner && !hasHint(request.headers.get("cookie"))) response.headers.append("Set-Cookie", sessionHintCookie(secureRequest(request), OWNER_SESSION_SECONDS));
+    if (owner && documentRequest(request.headers) && !hasHint(request.headers.get("cookie"))) response.headers.append("Set-Cookie", sessionHintCookie(secureRequest(request), OWNER_SESSION_SECONDS));
     response.headers.set("x-request-id", requestId);
     response.headers.set("server-timing", `rid;desc="${requestId}"`);
     return response;
