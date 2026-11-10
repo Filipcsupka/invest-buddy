@@ -6,8 +6,8 @@ import { RecoveryCodes } from "./recovery-codes";
 import { ResetForm } from "./reset-form";
 
 vi.mock("next/navigation", () => ({ usePathname: () => "/en", notFound: () => { throw new Error("NEXT_NOT_FOUND"); } }));
-import SignIn from "@/app/[locale]/sign-in/page";
-import Reset from "@/app/[locale]/reset/page";
+import SignIn from "@/app/[locale]/(marketing)/sign-in/page";
+import Reset from "@/app/[locale]/(marketing)/reset/page";
 
 const render = (props: Partial<Parameters<typeof AuthForm>[0]> = {}) => renderToStaticMarkup(<AuthForm locale="en" next="/en" {...props} />);
 const codes = Array.from({ length: 10 }, (_, i) => `K${i}M4X7P2QZ`);

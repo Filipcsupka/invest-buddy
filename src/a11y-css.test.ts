@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const css = readFileSync("src/app/globals.css", "utf8");
-const modules = ["src/components/status-slider.module.css", "src/components/idea-card.module.css", "src/components/kit/kit.css", "src/app/[locale]/design/design.module.css"].map((path) => readFileSync(path, "utf8"));
+const modules = ["src/components/status-slider.module.css", "src/components/idea-card.module.css", "src/components/kit/kit.css", "src/app/[locale]/(app)/design/design.module.css"].map((path) => readFileSync(path, "utf8"));
 const kit = modules[2];
 
 /** Every declaration block for a selector, including ones inside media queries. */

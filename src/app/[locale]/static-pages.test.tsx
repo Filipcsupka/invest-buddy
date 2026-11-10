@@ -1,9 +1,9 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it } from "vitest";
-import Methodology from "./methodology/page";
-import Sizing from "./sizing/page";
-import Privacy from "./legal/privacy/page";
-import Terms from "./legal/terms/page";
+import Methodology from "./(marketing)/methodology/page";
+import Sizing from "./(app)/sizing/page";
+import Privacy from "./(marketing)/legal/privacy/page";
+import Terms from "./(marketing)/legal/terms/page";
 
 const props = (locale: string) => ({ params: Promise.resolve({ locale }) });
 

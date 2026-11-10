@@ -8,7 +8,7 @@ const universe = vi.fn();
 vi.mock("@/data/store", () => ({ latestScores: () => scores(), instrumentUniverse: () => universe() }));
 
 import SiteImage from "@/app/[locale]/opengraph-image";
-import CompanyImage from "@/app/[locale]/company/[ticker]/opengraph-image";
+import CompanyImage from "@/app/[locale]/(app)/company/[ticker]/opengraph-image";
 
 const MAX_BYTES = 150_000;
 const original = process.env.ADVICE_OUTPUT;
@@ -57,7 +57,7 @@ it("renders the same company image with ADVICE_OUTPUT on and off, and never read
     return bytes((await CompanyImage({ params: Promise.resolve({ locale: "en", ticker }) })) as Response);
   };
   expect(Buffer.from(await render("on")).equals(Buffer.from(await render("off")))).toBe(true);
-  for (const file of ["src/og/card.tsx", "src/app/[locale]/company/[ticker]/opengraph-image.tsx", "src/app/[locale]/opengraph-image.tsx"]) {
+  for (const file of ["src/og/card.tsx", "src/app/[locale]/(app)/company/[ticker]/opengraph-image.tsx", "src/app/[locale]/opengraph-image.tsx"]) {
     const source = readFileSync(file, "utf8");
     expect(source, file).not.toMatch(/flags\(|process\.env\.ADVICE|\.action|\.tier|sizing/);
   }

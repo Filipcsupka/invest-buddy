@@ -48,7 +48,12 @@ it.each(["en", "sk"])("redirects %s HTML owner navigations and keeps the non-HTM
   for (const [accept, status] of [["text/html,application/xhtml+xml", 303], ["application/json", 401], ["*/*", 401]] as const) {
     const response = await proxy(new NextRequest(`http://0.0.0.0:3000/${locale}/owner`, { headers: { accept } }));
     expect(response.status).toBe(status);
-    expect(response.headers.get("location")).toBe(status === 303 ? `/${locale}/owner-sign-in` : null);
+    // Next rejects a relative Location from the proxy with a 500, so the header is absolute on the request origin here. The Next server
+    // makes a same-origin Location relative before sending it (checked on a standalone build with a public Host header), so the bind
+    // address never reaches the browser.
+    const location = response.headers.get("location");
+    expect(location && `${new URL(location).pathname}`).toBe(status === 303 ? `/${locale}/owner-sign-in` : null);
+    if (location) expect(new URL(location).origin).toBe("http://0.0.0.0:3000");
     expect(response.headers.get("www-authenticate")).toBe(status === 401 ? 'Basic realm="Owner"' : null);
     expect(response.headers.get("cache-control")).toBe("private, no-store");
   }

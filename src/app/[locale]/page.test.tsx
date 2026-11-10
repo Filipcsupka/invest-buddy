@@ -8,7 +8,7 @@ import { storySteps } from "@/components/welcome/sections";
 const scores = vi.fn();
 vi.mock("next/headers", () => ({ headers: async () => { throw new Error("headers() must not be read on the Welcome page"); }, cookies: async () => { throw new Error("cookies() must not be read on the Welcome page"); } }));
 vi.mock("@/data/store", () => ({ latestScores: () => scores() }));
-import Welcome from "./page";
+import Welcome from "./(marketing)/page";
 
 const props = (locale: string) => ({ params: Promise.resolve({ locale }) });
 const render = async (locale: string) => renderToStaticMarkup(await Welcome(props(locale)));
@@ -110,6 +110,6 @@ it("keeps the sample universe invented and the story honest", () => {
 });
 
 it("never imports a request API or the data store in the Welcome page source", () => {
-  const source = readFileSync("src/app/[locale]/page.tsx", "utf8");
+  const source = readFileSync("src/app/[locale]/(marketing)/page.tsx", "utf8");
   expect(source).not.toMatch(/next\/headers|@\/data\/store|withPageLog|force-dynamic/);
 });

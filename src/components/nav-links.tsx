@@ -4,13 +4,35 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { SideIcon } from "./nav-icons";
 import { sideStorageKey as sideKey } from "./pre-paint";
+import { useIdentity } from "./auth/identity-store";
+import styles from "./nav-links.module.css";
 
-export function NavLinks({ locale, label, items, sectionLabel }: { locale: string; label: string; sectionLabel?: string; items: { href: string; text: string; icon?: string }[] }) {
+export type NavItem = { href: string; text: string; icon?: string; locked?: boolean };
+export type LockLabels = { soon: string; locked: string };
+
+/**
+ * One sidebar group. An item marked `locked` stays visible but blurred with a "Soon" chip and opens the opens-soon page instead, unless
+ * /api/me says the viewer is the owner. Until that answer arrives the item renders locked, so the server HTML never links a visitor
+ * into an owner-only page. This is UI only; the proxy and each page enforce access.
+ */
+export function NavLinks({ locale, label, items, sectionLabel, lock }: { locale: string; label: string; sectionLabel?: string; items: NavItem[]; lock?: LockLabels }) {
   const pathname = usePathname();
+  const identity = useIdentity();
+  const owner = identity.status === "ready" && identity.me.kind === "owner";
   return (
     <nav aria-label={label} className="nav-links" style={sectionLabel ? { flex: "none" } : undefined}>
       {sectionLabel && <span className="nav-text" style={{ color: "var(--navy-ink-2)", fontSize: "0.75rem", fontWeight: 700, padding: "0.75rem 0.75rem 0.25rem" }}>{sectionLabel}</span>}
       {items.map((item) => {
+        if (item.locked && !owner && lock) {
+          const page = item.href.slice(1).split("/")[0];
+          return (
+            <Link key={item.href} href={`/${locale}/opens-soon?page=${encodeURIComponent(page)}`} prefetch={false} className={styles.locked} aria-label={`${item.text}, ${lock.locked}`} title={`${item.text}: ${lock.locked}`} data-locked="">
+              <SideIcon name={item.icon ?? item.href.slice(1)} />
+              <span className={`nav-text ${styles.blur}`} aria-hidden="true">{item.text}</span>
+              <span className={styles.chip} aria-hidden="true">{lock.soon}</span>
+            </Link>
+          );
+        }
         const href = `/${locale}${item.href}`;
         const current = pathname === href || (pathname.startsWith(`${href}/`) && !(item.href === "/etf" && pathname.startsWith(`${href}/track-record`))) || (item.href === "/dashboard" && pathname.startsWith(`/${locale}/company/`));
         return (

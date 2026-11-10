@@ -112,8 +112,8 @@ describe("one request", () => {
       if (sql.includes("FROM score_results s") && sql.includes("s.ticker=$1")) return { rows: [{ ...row.instrument, audit: row.result, as_of: row.result.asOf }] };
       return { rows: [] };
     };
-    const Company = (await import("../app/[locale]/company/[ticker]/page")).default;
-    const page = await import("../app/[locale]/company/[ticker]/page");
+    const Company = (await import("../app/[locale]/(app)/company/[ticker]/page")).default;
+    const page = await import("../app/[locale]/(app)/company/[ticker]/page");
     const props = { params: Promise.resolve({ locale: "en", ticker: row.instrument.ticker }) };
     await page.generateMetadata(props);
     const html = renderToStaticMarkup(await Company(props));

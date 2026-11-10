@@ -1,16 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import { notFound } from "next/navigation";
-import { Footer, Nav } from "@/components/nav";
 import { sideScript, themeScript } from "@/components/pre-paint";
 import { getMessages, isLocale, locales } from "@/i18n";
 import { Analytics } from "@/components/analytics";
 import { JsonLd } from "@/components/json-ld";
 import { siteJsonLd, siteNoindex, siteUrl } from "@/i18n/metadata";
-import { TierBanner } from "@/components/kit/tier";
-import { headers } from "next/headers";
-import { marketsViewable } from "@/markets/gate";
-import { flags } from "@/config/flags";
-import { getKitMessages } from "@/i18n/kit-messages";
 import "../fonts.css";
 import "../globals.css";
 import "@/components/kit/kit.css";
@@ -41,11 +35,11 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
   };
 }
 
+/** Thin root for both shells: document, theme pre-paint, skip link and analytics. */
 export default async function LocaleLayout({ children, params }: { children: React.ReactNode; params: Promise<{ locale: string }> }) {
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
   const m = getMessages(locale);
-  const kit = getKitMessages(locale);
   return (
     <html lang={locale} suppressHydrationWarning>
       <head>
@@ -56,17 +50,8 @@ export default async function LocaleLayout({ children, params }: { children: Rea
         <a className="skip-link" href="#main">
           {m.common.skipToContent}
         </a>
-        <div className="app-shell">
-          <Nav locale={locale} marketsViewable={flags().MARKETS_VIEWS && marketsViewable(await headers())} />
-          <div className="app-body">
-            {/* Tier logic is a later work package; until it decides a mode, the banner stays hidden for everyone. */}
-            <TierBanner mode="hidden" title={kit.banner.admin} note={kit.banner.adminNote} badgeLabel={kit.tier.paid} />
-            <main id="main" tabIndex={-1}>
-              {children}
-            </main>
-            <Footer locale={locale} />
-          </div>
-        </div>
+        {/* Each route group brings its shell: (marketing) a top bar, (app) the sidebar. Nothing here reads the request, so static pages stay static. */}
+        {children}
         <Analytics />
       </body>
     </html>
