@@ -1,55 +1,72 @@
+import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, expect, it, vi } from "vitest";
-import { scoredUniverse } from "@/data/scored";
 import { FEATURE_TIERS, TIERS, TIER_LIMITS } from "@/config/tiers";
 import { getPricingMessages } from "@/i18n/pricing-messages";
+import { PLUS_PRICE, formatEur, yearlyPerMonth } from "./plans";
 
-vi.mock("next/navigation", () => ({ notFound: () => { throw new Error("NEXT_NOT_FOUND"); } }));
-const scores = vi.fn();
-vi.mock("@/data/store", () => ({ latestScores: () => scores() }));
-vi.mock("@/data/launch-facts", () => ({ recordStartDate: async () => null }));
+vi.mock("next/navigation", () => ({ notFound: () => { throw new Error("NEXT_NOT_FOUND"); }, usePathname: () => "/en/pricing" }));
+vi.mock("next/headers", () => ({ headers: async () => { throw new Error("headers() must not be read on the pricing page"); } }));
 import Pricing from "./page";
-import Home from "../page";
 
-const original = process.env.WAITLIST;
-afterEach(() => { scores.mockReset(); if (original === undefined) delete process.env.WAITLIST; else process.env.WAITLIST = original; });
+const original = { waitlist: process.env.WAITLIST, billing: process.env.BILLING };
+afterEach(() => {
+  for (const [key, env] of [["WAITLIST", original.waitlist], ["BILLING", original.billing]] as const) if (env === undefined) delete process.env[key]; else process.env[key] = env;
+});
 
-const render = async (locale: string) => renderToStaticMarkup(await Pricing({ params: Promise.resolve({ locale }), searchParams: Promise.resolve({}) }));
-const text = (html: string) => html.replace(/<[^>]+>/g, " ");
-/** Any currency sign or code, or a number next to one. */
-const money = /€|\$|\bEUR\b|\beuro|\d+(?:[.,]\d+)?\s*(?:EUR|€)/i;
+const render = async (locale: string) => renderToStaticMarkup(await Pricing({ params: Promise.resolve({ locale }) }));
+const text = (html: string) => html.replace(/<[^>]+>/g, " ").replace(/\u00a0|&nbsp;/g, " ").replace(/\s+/g, " ");
 
 it("is unavailable while WAITLIST is off", async () => {
   delete process.env.WAITLIST;
   await expect(render("en")).rejects.toThrow("NEXT_NOT_FOUND");
 });
 
-it.each([["en", "Beta: free while we test. Paid plans later. No prices yet.", "Join the waitlist"], ["sk", "Beta: zadarmo, kým testujeme. Platené plány neskôr. Zatiaľ bez cien.", "Pridať sa na listinu"]])("shows the beta note and the waitlist form without prices in %s", async (locale, lede, button) => {
+it("formats the Plus prices per locale and keeps the yearly arithmetic true", () => {
+  expect(formatEur("en", PLUS_PRICE.monthlyEur)).toBe("€9.90");
+  expect(formatEur("sk", PLUS_PRICE.monthlyEur).replace(/\s/g, " ")).toBe("9,90 €");
+  expect(formatEur("en", PLUS_PRICE.yearlyEur)).toBe("€99");
+  // "Two months free": a year costs ten monthly payments.
+  expect(Math.round(PLUS_PRICE.monthlyEur * 10 * 100) / 100).toBe(PLUS_PRICE.yearlyEur);
+  expect(yearlyPerMonth()).toBe(8.25);
+});
+
+it.each([["en", "€9.90", "€99", "Two months free, about €8.25 a month", "VAT included"], ["sk", "9,90 €", "99 €", "Dva mesiace zadarmo, približne 8,25 € mesačne", "Vrátane DPH"]])("shows monthly and yearly Plus side by side in %s", async (locale, monthly, yearly, note, vat) => {
   process.env.WAITLIST = "on";
-  const html = await render(locale);
-  expect(text(html)).toContain(lede);
-  expect(html).toContain(button);
-  expect(html).toContain('name="email"');
-  expect(text(html)).not.toMatch(money);
-  expect(html).not.toMatch(/checkout|stripe|subscribe now|lifetime|doživotn/i);
+  const page = text(await render(locale));
+  expect(page).toContain(monthly);
+  expect(page).toContain(yearly);
+  expect(page).toContain(note);
+  expect(page).toContain(vat);
+  expect(page).not.toMatch(/most popular|najobľúbenejš|checked|aria-pressed="true"/i);
+});
+
+it("waits for BILLING: waitlist state while off, a Choose Plus entry while on, never a card field", async () => {
+  process.env.WAITLIST = "on";
+  delete process.env.BILLING;
+  const off = await render("en");
+  expect(text(off)).toContain("Opens soon");
+  expect(text(off)).toContain("Notify me when Plus opens");
+  expect(off).toContain('id="join"');
+  expect(off).not.toContain("Choose Plus");
+  process.env.BILLING = "on";
+  const on = await render("en");
+  expect(text(on)).toContain("Choose Plus");
+  for (const html of [off, on]) expect(html).not.toMatch(/card number|cvc|checkout|stripe/i);
 });
 
 const paid = [...Object.entries(TIERS), ...Object.entries(FEATURE_TIERS)].filter(([, e]) => e.tier === "paid").map(([id]) => id);
-/** Banned promise, urgency and recommendation wording, English and Slovak. */
-const banned = /beat the market|guarantee|\bbuy\b|\bbest\b|limited time|act now|hurry|last chance|don't miss|poraz\w* trh|zaručen|\bkúp\w*|\bnajlepš\w*|len dnes|neváhajte/i;
+const banned = /beat the market|guarantee|\bbuy\b|\bbest\b|limited time|act now|hurry|last chance|don't miss|lifetime|poraz\w* trh|zaručen|\bkúp\w*|\bnajlepš\w*|len dnes|neváhajte|doživotn/i;
 
-it.each(["en", "sk"] as const)("compares free and paid from the tier config, with every paid id as a row, in %s", async (locale) => {
+it.each(["en", "sk"] as const)("compares Free and Plus from the tier config, every paid id as a row, in %s", async (locale) => {
   process.env.WAITLIST = "on";
   const html = await render(locale);
   expect(html).toContain("<table");
-  expect(paid.length).toBeGreaterThan(5);
   for (const id of paid) expect(html, id).toContain(`data-tier-id="${id}"`);
   expect(html.match(/data-tier-id="/g)).toHaveLength(paid.length);
   const pm = getPricingMessages(locale);
   for (const id of paid) expect(pm.rows[id as keyof typeof pm.rows], id).toBeDefined();
-  // A free id never appears as a paid row.
   expect(html).not.toContain('data-tier-id="scanner-rows-full"');
-  expect(text(html)).not.toMatch(money);
   expect(text(html)).not.toMatch(banned);
   expect(text(html)).not.toContain("—");
 });
@@ -61,23 +78,20 @@ it("shows the depth numbers from TIER_LIMITS in the matching cells", async () =>
   expect(en).toContain(`Last ${TIER_LIMITS.free.insiderDays} days`);
   expect(en).toContain(`Saved screens: ${TIER_LIMITS.paid.savedScreens}`);
   expect(en).toContain(`Up to ${TIER_LIMITS.paid.watchlistTickers} tickers`);
-  const sk = text(await render("sk"));
-  expect(sk).toContain(`Posledných ${TIER_LIMITS.free.scoreHistoryDays} dní`);
+  expect(text(await render("sk"))).toContain(`Posledných ${TIER_LIMITS.free.scoreHistoryDays} dní`);
 });
 
-it("keeps the ADR-001 note and the no-price note", async () => {
+it("shows all four lock forms with the printed word Plus and sample stamps, and keeps the ADR-001 note", async () => {
   process.env.WAITLIST = "on";
-  expect(text(await render("en"))).toContain("not personal investment advice");
-  expect(text(await render("en"))).toContain("No price is set");
-  expect(text(await render("sk"))).toContain("nie o osobné investičné poradenstvo");
+  const html = await render("en");
+  for (const form of ["control", "depth", "teaser", "card"]) expect(html).toContain(`data-form="${form}"`);
+  expect(html.match(/<span>Plus<\/span>/g)?.length ?? 0).toBeGreaterThanOrEqual(4);
+  expect(html).toContain(">Sample<");
+  expect(html).not.toMatch(/filter:\s*blur|backdrop-filter/);
+  expect(text(html)).toContain("not personal investment advice");
 });
 
-it("names no price on the landing page either", async () => {
-  process.env.WAITLIST = "on";
-  const rows = await scoredUniverse();
-  scores.mockResolvedValue({ rows, sample: false, lastUpdated: "2026-10-13", stale: false });
-  for (const locale of ["en", "sk"]) {
-    const home = renderToStaticMarkup(await Home({ params: Promise.resolve({ locale }) }));
-    expect(text(home)).not.toMatch(money);
-  }
+it("reads no request API, so the page is the same for every visitor", () => {
+  const source = readFileSync("src/app/[locale]/pricing/page.tsx", "utf8");
+  expect(source).not.toMatch(/next\/headers|searchParams|withPageLog/);
 });

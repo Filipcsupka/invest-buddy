@@ -1,68 +1,29 @@
+import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
-import { afterEach, expect, it, vi } from "vitest";
-import { scoredUniverse } from "@/data/scored";
+import { afterEach, expect, it } from "vitest";
+import Welcome from "./page";
 
-const scores = vi.fn();
-vi.mock("@/data/store", () => ({ latestScores: () => scores() }));
-vi.mock("@/data/launch-facts", () => ({ recordStartDate: async () => "2026-10-05" }));
-import Home from "./page";
-
-const props = (locale: string, query: Record<string, string> = {}) => ({ params: Promise.resolve({ locale }), searchParams: Promise.resolve(query) });
-const original = process.env.WAITLIST;
-afterEach(() => { scores.mockReset(); if (original === undefined) delete process.env.WAITLIST; else process.env.WAITLIST = original; });
-
-const BANNED = /guarantee|beat the market|probability|outperform|limited time|act now|last chance|hurry|zaručen|poraziť trh|pravdepodobnosť|obmedzený čas|nenechajte si ujsť/i;
-
-it.each(["en", "sk"])("hides the waitlist section while WAITLIST is off (%s)", async (locale) => {
-  delete process.env.WAITLIST;
-  scores.mockResolvedValue({ rows: [], sample: false, lastUpdated: null, stale: false });
-  const html = renderToStaticMarkup(await Home(props(locale)));
-  expect(html).not.toContain('id="waitlist"');
-  expect(html).not.toContain('name="consentLaunch"');
-  expect(html).not.toContain(`/${locale}/pricing`);
+const props = (locale: string) => ({ params: Promise.resolve({ locale }) });
+const original = { waitlist: process.env.WAITLIST, billing: process.env.BILLING };
+afterEach(() => {
+  for (const [key, env] of [["WAITLIST", original.waitlist], ["BILLING", original.billing]] as const) if (env === undefined) delete process.env[key]; else process.env[key] = env;
 });
 
-it.each([["en", "Join the waitlist", "tickers scored", "Last score", "Record starts"], ["sk", "Pridať sa do poradovníka", "Ohodnotených tikerov", "Posledné skóre", "Záznam začína"]])("shows form, hero CTA and facts with WAITLIST on (%s)", async (locale, cta, tickers, last, start) => {
+it.each(["en", "sk"])("marks Plus as not open yet and sells nothing while BILLING is off (%s)", async (locale) => {
   process.env.WAITLIST = "on";
-  const rows = await scoredUniverse();
-  scores.mockResolvedValue({ rows, sample: false, lastUpdated: "2026-10-13", stale: false });
-  const html = renderToStaticMarkup(await Home(props(locale)));
-  expect(html).toContain('id="waitlist"');
-  expect(html).toContain('href="#waitlist"');
-  expect(html).toContain(cta);
-  expect(html).toContain('name="email"');
-  expect(html).toContain('name="consentLaunch"');
-  expect(html).toContain('name="website"');
-  expect(html).toContain(tickers);
-  expect(html).toContain(last);
-  expect(html).toContain(start);
-  expect(html).toContain(`/${locale}/pricing`);
-  expect(html).toContain(`/${locale}/methodology`);
-  expect(html).toContain(`/${locale}/track-record`);
-  expect(html).not.toMatch(BANNED);
+  delete process.env.BILLING;
+  const html = renderToStaticMarkup(await Welcome(props(locale)));
+  expect(html).toContain(locale === "en" ? "Opens when the data licence and billing are ready." : "Otvoríme, keď bude pripravená licencia na údaje a platby.");
+  expect(html).not.toMatch(/checkout|stripe|card number|číslo karty/i);
+  expect(html).not.toMatch(/most popular|najobľúbenejš|spots left|zostáva miest/i);
 });
 
-it("omits facts it cannot back when there is no data", async () => {
-  process.env.WAITLIST = "on";
-  scores.mockResolvedValue({ rows: [], sample: false, lastUpdated: null, stale: false });
-  const html = renderToStaticMarkup(await Home(props("en")));
-  expect(html).not.toMatch(/tickers scored|Last score|Record starts/);
-});
-
-it("shows no facts on sample data", async () => {
-  process.env.WAITLIST = "on";
-  const rows = await scoredUniverse();
-  scores.mockResolvedValue({ rows, sample: true, lastUpdated: "2026-10-13", stale: false });
-  const html = renderToStaticMarkup(await Home(props("en")));
-  expect(html).not.toMatch(/tickers scored|Record starts/);
-});
-
-it("passes a validated source to the form", async () => {
-  process.env.WAITLIST = "on";
-  scores.mockResolvedValue({ rows: [], sample: false, lastUpdated: null, stale: false });
-  const sent = async (query: Record<string, string>) => renderToStaticMarkup(await Home(props("en", query)));
-  // The form posts these on submit; the markup carries them through the form's props only, so check the page code path via the resolvers.
-  const { resolveSource } = await import("@/waitlist/source");
-  expect(resolveSource({ utm_source: "News", ref: "x y" }, "landing")).toBe("news");
-  expect(await sent({ v: "b", utm_source: "news" })).toContain('id="waitlist"');
+it("loads the motion libraries only through a dynamic import from the Welcome island", () => {
+  const island = readFileSync("src/components/welcome/welcome-motion.tsx", "utf8");
+  expect(island).toMatch(/import\("\.\/motion-engine"\)/);
+  expect(island).not.toMatch(/from "gsap|from "lenis/);
+  for (const file of ["src/app/[locale]/layout.tsx", "src/app/[locale]/page.tsx", "src/components/welcome/sections.tsx", "src/components/nav.tsx"]) {
+    expect(readFileSync(file, "utf8"), file).not.toMatch(/["']gsap|["']lenis/);
+  }
+  expect(island).toMatch(/prefers-reduced-motion: reduce/);
 });
