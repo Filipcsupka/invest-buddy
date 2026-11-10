@@ -19,7 +19,8 @@ it.each(["en", "sk"] as const)("hides sizing navigation while advice is off (%s)
 it.each(["en", "sk"] as const)("links the scanner and keeps the heat map link (%s)", (locale) => {
   const html = renderToStaticMarkup(<Nav locale={locale} />);
   expect(html).toContain(`href="/${locale}/dashboard"`);
-  expect(html).toContain(locale === "en" ? "Stock screen (data jobs and judge)" : "Akciový skríning (dátové úlohy a posúdenie)");
+  expect(html).toContain(locale === "en" ? "Dashboard" : "Prehľad");
+  expect(html).not.toContain("data jobs and judge");
   expect(html).toContain(`href="/${locale}/scanner"`);
   expect(html).toContain(`href="/${locale}/heatmap"`);
   expect(html).toContain(`href="/${locale}/etf"`);
@@ -27,14 +28,14 @@ it.each(["en", "sk"] as const)("links the scanner and keeps the heat map link (%
   expect(html).toContain(locale === "en" ? "Stocks" : "Akcie");
 });
 
-it("lists Markets locked for everyone and unlocks it only for a verified owner render", () => {
+it("lists Markets as a neutral preview until identity resolves", () => {
   const saved = process.env.MARKETS_VIEWS;
   process.env.MARKETS_VIEWS = "on";
   try {
     const html = renderToStaticMarkup(<Nav locale="en" />);
     for (const route of ["indices", "forex", "crypto", "economy", "congress", "news", "screener"]) {
       expect(html).not.toContain(`href="/en/${route}"`);
-      expect(html).toContain(`href="/en/opens-soon?page=${route}"`);
+      expect(html).toContain(`href="/en/plus-preview?page=${route}"`);
     }
     const owner = renderToStaticMarkup(<Nav locale="en" marketsViewable />);
     for (const route of ["indices", "forex", "crypto", "economy", "congress", "news", "screener"]) expect(owner).toContain(`href="/en/${route}"`);
@@ -53,8 +54,10 @@ it.each(["en", "sk"] as const)("server-renders no per-user state in the %s shell
     // The islands render their pending skeleton on the server: no badge, email, plan, sign-out or owner link in shared HTML.
     expect(html).toContain(locale === "en" ? "Checking sign-in" : "Overujeme prihlásenie");
     expect(html).not.toMatch(/Signed in as owner|Prihlásený ako vlastník|api\/owner\/logout|account\/sign-out|@/);
-    // Vendor pages are locked in the server HTML, so nothing prefetches a gated route for a visitor.
+    // Vendor pages lead to the preview in shared HTML, without flashing a blur before identity resolves.
     for (const route of ["dashboard", "scanner", "track-record", "insiders", "portfolio", "etf"]) expect(html).not.toContain(`href="/${locale}/${route}"`);
+    expect(html).not.toContain('data-locked=""');
+    expect(html).not.toContain("Soon");
     expect(html).toContain(`href="/${locale}/methodology"`);
   } finally {
     for (const [key, value] of [["AUTH", saved.auth], ["MARKETS_VIEWS", saved.markets], ["EODHD_PRIVATE_USE", saved.use]] as const) if (value === undefined) delete process.env[key]; else process.env[key] = value;

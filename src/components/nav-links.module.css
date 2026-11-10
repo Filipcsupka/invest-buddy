@@ -11,6 +11,9 @@
   opacity: 0.55;
 }
 .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
   margin-inline-start: auto;
   padding: 0 var(--s2);
   border: 1px solid var(--navy-line);

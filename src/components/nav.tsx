@@ -39,9 +39,12 @@ export function Nav({ locale, marketsViewable = false }: { locale: Locale; marke
   const target = otherLocale(locale);
   const f = flags();
   const id = getIdentityMessages(locale);
-  const lock = { soon: id.soon, locked: id.locked };
+  const lock = { free: id.freeAccount, plus: id.plus, locked: id.locked };
   const vendorLocked = process.env.EODHD_PRIVATE_USE === "on";
-  const vendor = (items: NavItem[]): NavItem[] => items.map((item) => ({ ...item, locked: vendorLocked && privateSections.has(item.href.slice(1).split("/")[0]) }));
+  const vendor = (items: NavItem[]): NavItem[] => items.map((item) => {
+    const locked = Boolean(item.locked || (vendorLocked && privateSections.has(item.href.slice(1).split("/")[0])));
+    return { ...item, locked, tier: locked ? "plus" : item.tier ?? "free" };
+  });
   const markets: NavItem[] = [
     { href: "/indices", text: m.nav.indices, icon: "indices" },
     { href: "/forex", text: m.nav.forex, icon: "forex" },
@@ -50,7 +53,7 @@ export function Nav({ locale, marketsViewable = false }: { locale: Locale; marke
     { href: "/congress", text: m.nav.congress, icon: "congress" },
     { href: "/news", text: m.nav.news, icon: "news" },
     { href: "/screener", text: m.nav.screener, icon: "scanner" },
-  ].map((item) => ({ ...item, locked: !marketsViewable }));
+  ].map((item) => ({ ...item, locked: !marketsViewable, tier: "plus" }));
   return (
     <header className="site-header">
       <div className="side-top">
@@ -73,7 +76,7 @@ export function Nav({ locale, marketsViewable = false }: { locale: Locale; marke
             { href: "/dashboard", text: m.nav.dashboard, icon: "dashboard" },
             { href: "/scanner", text: m.nav.scanner, icon: "scanner" },
             { href: "/heatmap", text: getHeatmapMessages(locale).navLabel, icon: "heatmap" },
-            ...(ideasEnabled() && flags().ADVICE_OUTPUT ? [{ href: "/ideas", text: m.nav.ideas, icon: "ideas" }] : []),
+            ...(ideasEnabled() && flags().ADVICE_OUTPUT ? [{ href: "/ideas", text: m.nav.ideas, icon: "ideas", locked: true as const }] : []),
             { href: "/track-record", text: m.nav.trackRecord, icon: "track" },
             ...(flags().INSIDERS_PAGE ? [{ href: "/insiders", text: m.nav.insiders, icon: "insiders" }] : []),
             { href: "/portfolio", text: m.nav.portfolio, icon: "portfolio" },

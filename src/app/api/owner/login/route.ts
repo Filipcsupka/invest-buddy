@@ -36,7 +36,7 @@ export async function POST(request: Request): Promise<Response> {
   }
   return new Response(null, { status: 303, headers: {
     ...privateHeaders,
-    Location: `/${locale}`,
+    Location: `/${locale}/dashboard`,
     "Set-Cookie": `${OWNER_SESSION_COOKIE}=${token}; Path=/; Max-Age=${OWNER_SESSION_SECONDS}; HttpOnly; Secure; SameSite=Lax`,
   } });
 }

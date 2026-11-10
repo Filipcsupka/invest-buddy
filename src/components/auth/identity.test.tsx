@@ -7,6 +7,7 @@ vi.mock("next/navigation", () => ({ usePathname: () => "/en/dashboard" }));
 vi.mock("./identity-store", async (importOriginal) => ({ ...(await importOriginal<typeof import("./identity-store")>()), useIdentity: () => state.current }));
 import { IdentityChip, IdentityPanel, TopBarIdentity } from "./identity";
 import { NavLinks } from "../nav-links";
+import { Nav } from "../nav";
 
 afterEach(() => { state.current = { status: "pending" }; });
 const ready = (me: Extract<IdentityState, { status: "ready" }>["me"]) => { state.current = { status: "ready", me }; };
@@ -90,26 +91,62 @@ it("gives the marketing top bar sign-in buttons for visitors and Open app for an
   html = renderToStaticMarkup(<TopBarIdentity locale="en" />);
   expect(text(html)).toContain("Owner");
   expect(html).toMatch(/href="\/en\/dashboard"[^>]*>Open app</);
+  expect(text(html)).not.toContain("Sign in");
+  expect(text(html)).not.toContain("Create free account");
   ready({ kind: "customer", email: "ana@example.com", plan: "plus", markets: false });
   html = renderToStaticMarkup(<TopBarIdentity locale="sk" />);
   expect(text(html)).toContain("Plus");
   expect(text(html)).toContain("Otvoriť aplikáciu");
 });
 
-const items = [{ href: "/dashboard", text: "Stock screen", icon: "dashboard", locked: true }, { href: "/methodology", text: "Methodology" }];
-const lock = { soon: "Soon", locked: "locked, opens soon" };
+const items = [{ href: "/dashboard", text: "Dashboard", icon: "dashboard", locked: true, tier: "plus" as const }, { href: "/methodology", text: "Methodology", tier: "free" as const }];
+const lock = { free: "Free account", plus: "Plus", locked: "Plus, locked" };
 
-it("blurs locked items for everyone but the owner and links them to the opens-soon page", () => {
-  for (const current of [{ status: "server" }, { status: "pending" }, { status: "ready", me: { kind: "anon", markets: false } }, { status: "ready", me: { kind: "customer", email: "a@b.cz", plan: "plus", markets: false } }] as IdentityState[]) {
+it("keeps unresolved links neutral and shows customers tier chips without Soon labels", () => {
+  for (const current of [{ status: "server" }, { status: "pending" }, { status: "ready", me: { kind: "anon", markets: false } }] as IdentityState[]) {
     state.current = current;
     const html = renderToStaticMarkup(<NavLinks locale="en" label="Stocks" items={items} lock={lock} />);
-    expect(html).toContain('href="/en/opens-soon?page=dashboard"');
-    expect(html).toContain('aria-label="Stock screen, locked, opens soon"');
+    expect(html).toContain('href="/en/plus-preview?page=dashboard"');
+    expect(html).not.toContain('data-locked=""');
+    expect(html).not.toContain("Soon");
     expect(html).not.toContain('href="/en/dashboard"');
     expect(html).toContain('href="/en/methodology"');
   }
+  ready({ kind: "customer", email: "a@b.cz", plan: "free", markets: false });
+  const customer = renderToStaticMarkup(<NavLinks locale="en" label="Stocks" items={items} lock={lock} />);
+  expect(customer).toContain('data-locked=""');
+  expect(customer).toContain('aria-label="Dashboard, Plus, locked"');
+  expect(text(customer)).toContain("Plus");
+  expect(text(customer)).toContain("Free account");
+  expect(customer).not.toContain("Soon");
+  const etf = renderToStaticMarkup(<NavLinks locale="en" label="ETFs" items={[{ href: "/etf/track-record", text: "ETF track record", locked: true }]} lock={lock} />);
+  expect(etf).toContain('href="/en/plus-preview?page=etf%2Ftrack-record"');
   ready({ kind: "owner", markets: true });
   const owner = renderToStaticMarkup(<NavLinks locale="en" label="Stocks" items={items} lock={lock} />);
   expect(owner).toContain('href="/en/dashboard"');
-  expect(owner).not.toContain("opens-soon");
+  expect(owner).not.toContain("plus-preview");
+  expect(owner).not.toContain("data-locked");
+  expect(owner).not.toContain("Free account");
+  expect(owner).not.toContain("Plus");
+});
+
+it("unlocks the whole app sidebar for an owner and shows the footer controls", () => {
+  const saved = { privateUse: process.env.EODHD_PRIVATE_USE, markets: process.env.MARKETS_VIEWS, auth: process.env.AUTH, insiders: process.env.INSIDERS_PAGE };
+  Object.assign(process.env, { EODHD_PRIVATE_USE: "on", MARKETS_VIEWS: "on", AUTH: "on", INSIDERS_PAGE: "on" });
+  try {
+    ready({ kind: "owner", markets: true });
+    const html = renderToStaticMarkup(<Nav locale="en" />);
+    for (const route of ["dashboard", "scanner", "heatmap", "track-record", "insiders", "portfolio", "etf", "indices", "forex", "crypto", "economy", "congress", "news", "screener"]) {
+      expect(html, route).toContain(`href="/en/${route}"`);
+    }
+    expect(html).toContain('action="/api/owner/logout"');
+    expect(html).toContain("Owner");
+    expect(html).not.toContain("Owner sign-in");
+    expect(html).not.toContain('data-locked=""');
+    expect(html).not.toContain("Soon");
+  } finally {
+    for (const [key, value] of [["EODHD_PRIVATE_USE", saved.privateUse], ["MARKETS_VIEWS", saved.markets], ["AUTH", saved.auth], ["INSIDERS_PAGE", saved.insiders]] as const) {
+      if (value === undefined) delete process.env[key]; else process.env[key] = value;
+    }
+  }
 });

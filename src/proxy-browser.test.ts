@@ -10,6 +10,7 @@ vi.mock("@/db/pool", () => ({ getPool: () => ({ query: async () => ({ rows: [{ i
 vi.mock("@/entitlements/plan", () => ({ customerPlan: async () => ({ plan: "free", endsAt: null }) }));
 vi.mock("@/data/store", () => ({ instrumentForTicker: async (ticker: string) => (ticker.toUpperCase() === "NVDA" ? { ticker: "NVDA" } : null) }));
 import { proxy } from "./proxy";
+import { GET as meRoute } from "./app/api/me/route";
 
 const keys = ["AUTH", "EODHD_PRIVATE_USE", "OWNER_RESEARCH_PASSWORD", "OWNER_SESSION_SECRET", "MARKETS_VIEWS", "OWNER_VIEW"] as const;
 const saved = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
@@ -123,7 +124,7 @@ it("treats a customer cookie as anonymous when AUTH is off or the session check 
   expect(where(await proxy(request("/en/dashboard", { ...document, cookie })))).toMatch(/^\/en\/sign-in\?/);
 });
 
-it("lets the owner through with the session cookie or Basic, and sets the sign-in hint for the cookie", async () => {
+it("sets the sign-in hint for owner document loads and /api/me with a cookie or Basic", async () => {
   setup();
   const cookie = `${OWNER_SESSION_COOKIE}=${issueOwnerSession(PASSWORD)}`;
   const basic = `Basic ${Buffer.from(`owner:${PASSWORD}`).toString("base64")}`;
@@ -133,9 +134,29 @@ it("lets the owner through with the session cookie or Basic, and sets the sign-i
     expect(viaCookie.headers.get("set-cookie"), path).toMatch(/^ib_signed_in=1; Path=\/; Max-Age=43200; SameSite=Lax; Secure$/);
     expect((await proxy(request(path, { ...prefetch, cookie }))).status, path).toBe(200);
     expect((await proxy(request(path, { authorization: basic }))).status, path).toBe(200);
+    const viaBasic = await proxy(request(path, { ...document, authorization: basic }));
+    expect(viaBasic.headers.get("set-cookie"), path).toBe(viaCookie.headers.get("set-cookie"));
   }
   const hinted = await proxy(request("/en/dashboard", { ...document, cookie: `${cookie}; ib_signed_in=1` }));
   expect(hinted.headers.get("set-cookie")).toBeNull();
+  expect((await proxy(request("/en/dashboard", { ...prefetch, authorization: basic }))).headers.get("set-cookie")).toBeNull();
+  const me = await proxy(request("/api/me", { authorization: basic }));
+  expect(me.status).toBe(200);
+  expect(me.headers.get("set-cookie")).toBe("ib_signed_in=1; Path=/; Max-Age=43200; SameSite=Lax; Secure");
+  const identity = await meRoute(new Request("https://example.com/api/me", { headers: { authorization: basic } }));
+  expect(await identity.json()).toEqual({ kind: "owner", markets: true });
+});
+
+it("never gives an owner hint to anonymous visitors or forged and expired owner cookies", async () => {
+  setup();
+  const expired = issueOwnerSession(PASSWORD, process.env, Date.now() - 13 * 60 * 60 * 1000);
+  for (const cookie of ["", `${OWNER_SESSION_COOKIE}=forged`, `${OWNER_SESSION_COOKIE}=${expired}`]) {
+    expect((await proxy(request("/en/owner-sign-in", { ...document, cookie }))).headers.get("set-cookie"), cookie).toBeNull();
+    const denied = await proxy(request("/en/owner/horizons", { ...document, cookie }));
+    expect(denied.status, cookie).toBe(303);
+    expect(denied.headers.get("set-cookie"), cookie).toBeNull();
+    expect((await proxy(request("/api/me", { cookie }))).headers.get("set-cookie"), cookie).toBeNull();
+  }
 });
 
 it("keeps the owner area redirect for page loads and drops the popup for prefetches", async () => {
