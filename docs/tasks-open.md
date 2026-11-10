@@ -1,25 +1,14 @@
 # Open tasks
 
-## Handoff 2026-11-09
+## Handoff 2026-11-10
 
-Main is at e22ff56. Merged today: #343 to #349 (DB pool and caches, sector fallback and audit, dashboard payload trim, k6 scenarios, parallel company reads, owner sign-in session, customer account schema). Unpushed local branches: `auth-core` (customer accounts with Better Auth), `welcome-ui` (Welcome, sign-in, Plus pricing), `data-rev` (half-year revenue scoring), `auth-spike` (ADR only). Whether any of today's merges are deployed, and whether migrations 133 and 134 ran, was not checked.
+Main and the cluster web image are at 9b55118. Migrations 133 to 137 are applied. Live: perf work (pool, caches, dashboard trim, cold-start fix with migration 137), the owner sign-in cookie, customer account code behind flags, the Welcome page with story and SEC facts, the presentation shell and app shell, no owner password popup, and half-year revenue scoring.
 
-Decisions: Plus 9.90 EUR per month (yearly 99 EUR proposed), free sign-up open, 14-day no-card trial behind `TRIAL`, email and password plus Google with recovery codes and no email provider at launch, Better Auth 1.7.18 pinned.
+Not on yet: AUTH, TRIAL, AUTH_SECRET, AUTH_URL, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, OWNER_SESSION_SECRET and RATE_LIMIT_TRUSTED_HOPS are not set on the web deployment. Customer sign-up shows "opens soon" and the owner cookie sign-in fails closed. Basic auth works.
 
-Blocker for customer-visible scores: no display licence for EODHD, Twelve Data or Alpha Vantage (TASK-064). Plus shows as "opens soon" until it is settled.
+Blocker for customer-visible scores: no display licence for EODHD, Twelve Data or Alpha Vantage (TASK-064).
 
-Tasks T0 to T8 with definition of done, open owner decisions and the planning reports are in the vault: `~/Documents/ops-brain/projects/investing-platform/next-session-2026-11-09.md` and `plans-2026-11-09/`.
-
-Short list:
-- T0 check the live image and migration state (read-only).
-- T1 land auth-core after fixing the three high review findings.
-- T2 land welcome-ui after auth-core, then wire the nav and fix LCP.
-- T3 decide the rules version for data-rev, then merge.
-- T4 Google OAuth client, sealed secrets, flags `AUTH`, `TRIAL`.
-- T5 cache headers and soft purge, infra replicas and memory, k6 baseline on a dedicated node.
-- T6 sector audit run, 2026-11-09 point-in-time recheck, European catalyst dry-run, fix real names in `src/data/fixtures.ts`.
-- T7 free-to-paid funnel wiring.
-- T8 remove merged worktrees and old branches.
+Current state, open owner decisions, remaining tasks with definition of done and the planning reports are in the vault: ~/Documents/ops-brain/projects/investing-platform/next-session-2026-11-09.md (top block) and plans-2026-11-09/.
 
 ## Baseline 2026-11-07 evening and DoD status
 
