@@ -3,7 +3,7 @@ import { REVENUE_CONCEPTS } from "../collectors/sources/frames";
 import { fundamentalsHistory, type Queryable } from "../db/history";
 import { eodhdPrivateUse } from "./eodhd-private-use";
 
-/** SEC companyfacts revenue calculations. Only comparable filed fiscal quarters are used. */
+/** SEC companyfacts quarters and EODHD half-years use only comparable filed periods. */
 export interface SecFact { start?: string; end: string; val: number; accn: string; fy: number; fp: string; form: string; filed: string; frame?: string }
 export interface CompanyFacts { facts: { "us-gaap"?: Record<string, { units: Record<string, SecFact[]> }> } }
 export interface RevenueResult { currentGrowth: number; priorGrowth: number; revenueAccelerating: boolean; revenueDeclining: boolean; period: string; source: string; detail?: string }
@@ -13,6 +13,7 @@ const duration = (fact: SecFact) => fact.start ? day(fact.end) - day(fact.start)
 const valid = (fact: SecFact, asOf: string) => fact.filed <= asOf && fact.end <= asOf && Number.isFinite(fact.val) && fact.val > 0 &&
   Number.isInteger(fact.fy) && Number.isFinite(day(fact.end)) && Number.isFinite(day(fact.filed));
 const fiscalQuarter = (fact: SecFact) => /^Q[1-4]$/.test(fact.fp) && ["10-Q", "10-K", "EODHD"].includes(fact.form) && duration(fact) >= 70 && duration(fact) <= 105;
+const eodhdHalf = (fact: SecFact) => fact.form === "EODHD" && duration(fact) >= 170 && duration(fact) <= 195;
 const annual = (fact: SecFact) => fact.form === "10-K" && fact.fp === "FY" && duration(fact) >= 350 && duration(fact) <= 380;
 const nineMonths = (fact: SecFact) => fact.form === "10-Q" && fact.fp === "Q3" && duration(fact) >= 250 && duration(fact) <= 300;
 
@@ -63,12 +64,46 @@ function quarters(facts: SecFact[], asOf: string): Map<string, RevenueQuarter> {
   return byPeriod;
 }
 
+function halfYears(facts: SecFact[], asOf: string): SecFact[] {
+  const byEnd = new Map<string, SecFact>();
+  for (const fact of latestByFiling(facts.filter((item) => valid(item, asOf)), eodhdHalf)) {
+    if (newer(fact, byEnd.get(fact.end))) byEnd.set(fact.end, fact);
+  }
+  return [...byEnd.values()].sort((a, b) => b.end.localeCompare(a.end));
+}
+
+function halfYearRevenue(facts: SecFact[], asOf: string, source: string): RevenueResult | null {
+  const halves = halfYears(facts, asOf);
+  const [latest, priorHalf, yearAgoHalf, priorYearAgoHalf] = halves;
+  if (!latest || !priorHalf || !yearAgoHalf || !priorYearAgoHalf || day(asOf) - day(latest.filed) > 200) return null;
+  const series = [latest, priorHalf, yearAgoHalf, priorYearAgoHalf];
+  if (series.slice(0, -1).some((fact, index) => day(fact.start!) !== day(series[index + 1].end) + 1)) return null;
+  const yearGap = day(latest.end) - day(yearAgoHalf.end);
+  const priorYearGap = day(priorHalf.end) - day(priorYearAgoHalf.end);
+  if (yearGap < 350 || yearGap > 380 || priorYearGap < 350 || priorYearGap > 380) return null;
+  const currentGrowth = (latest.val / yearAgoHalf.val - 1) * 100;
+  const priorGrowth = (priorHalf.val / priorYearAgoHalf.val - 1) * 100;
+  return { currentGrowth, priorGrowth, revenueAccelerating: currentGrowth > priorGrowth, revenueDeclining: currentGrowth < 0,
+    period: `half ended ${latest.end}`, source };
+}
+
 export function revenueFromCompanyFacts(data: CompanyFacts, asOf: string): RevenueResult | null {
   const gaap = data.facts["us-gaap"] ?? {};
   for (const concept of REVENUE_CONCEPTS) {
     // Each calculation stays within one GAAP concept and one SEC unit.
     const facts = gaap[concept]?.units?.USD;
     if (!facts) continue;
+    const source = `https://data.sec.gov/api/xbrl/companyfacts/CIK${String((data as CompanyFacts & { cik?: number }).cik ?? "").padStart(10, "0")}.json`;
+    // LSE fixture inventory (3 captured issuers): ULVR has half-year spans but lacks currency and several report dates;
+    // SHEL has quarterly spans; HSBA's latest row lacks currency. The captured ULVR is one vendor/parser case, not proof
+    // that any of the other 22 LSE names fail for the same reason. No fixture inventory can split all 25 names by cause.
+    const latestEodhd = facts.filter((fact) => valid(fact, asOf) && fact.form === "EODHD")
+      .sort((a, b) => b.end.localeCompare(a.end))[0];
+    if (latestEodhd && eodhdHalf(latestEodhd)) {
+      const half = halfYearRevenue(facts, asOf, source);
+      if (half) return half;
+      continue;
+    }
     const byPeriod = quarters(facts, asOf);
     const latest = [...byPeriod.values()].sort((a, b) => b.end.localeCompare(a.end))[0];
     if (!latest || day(asOf) - day(latest.filed) > 100) continue;
@@ -82,7 +117,7 @@ export function revenueFromCompanyFacts(data: CompanyFacts, asOf: string): Reven
     const derived = [latest, priorQuarter, yearAgo, priorYearAgo].filter((fact) => fact.derived)
       .map((fact) => `${fact.fp} FY${fact.fy} derived from 10-K (${fact.derived === "fy-minus-9m" ? "FY minus 9M" : "FY minus Q1–Q3"})`);
     return { currentGrowth, priorGrowth, revenueAccelerating: currentGrowth > priorGrowth, revenueDeclining: currentGrowth < 0,
-      period: `${latest.fp} FY${latest.fy}`, source: `https://data.sec.gov/api/xbrl/companyfacts/CIK${String((data as CompanyFacts & { cik?: number }).cik ?? "").padStart(10, "0")}.json`,
+      period: `${latest.fp} FY${latest.fy}`, source,
       ...(derived.length ? { detail: [...new Set(derived)].join("; ") } : {}) };
   }
   return null;
@@ -171,7 +206,7 @@ export async function eodhdRevenueStored(db: Queryable, symbol: string, asOf: st
   }
   for (const facts of byUnit.values()) {
     const value = revenueFromCompanyFacts({ facts: { "us-gaap": { Revenues: { units: { USD: facts } } } } }, asOf);
-    if (value) return { ...value, period: `quarter ended ${[...facts].sort((a, b) => b.end.localeCompare(a.end))[0].end}`,
+    if (value) return { ...value, period: value.period.startsWith("half ended ") ? value.period : `quarter ended ${[...facts].sort((a, b) => b.end.localeCompare(a.end))[0].end}`,
       source: "https://eodhd.com/financial-apis/stock-etfs-fundamental-data-feeds" };
   }
   return null;

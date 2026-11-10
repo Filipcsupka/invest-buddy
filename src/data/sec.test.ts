@@ -3,7 +3,7 @@ import fixture from "./fixtures/sec-companyfacts.json";
 import msft from "./fixtures/sec-msft-synthetic.json";
 import crwd from "./fixtures/sec-crwd-synthetic.json";
 import orcl from "./fixtures/sec-orcl-synthetic.json";
-import { revenueFromCompanyFacts, type CompanyFacts, type SecFact } from "./sec";
+import { eodhdRevenueStored, revenueFromCompanyFacts, type CompanyFacts, type SecFact } from "./sec";
 
 function copy(data: CompanyFacts): CompanyFacts {
   return structuredClone(data);
@@ -76,4 +76,56 @@ it("falls back to a complete revenue concept and retains 100-day freshness", () 
   fallback.facts["us-gaap"]!.Revenues = { units: { USD: [revenueFacts(orcl)[0]] } };
   expect(revenueFromCompanyFacts(fallback, "2026-10-09")?.period).toBe("Q1 FY2027");
   expect(revenueFromCompanyFacts(msft, "2027-01-01")).toBeNull();
+});
+
+const halfRows = ([oldH1, oldH2, newH1, newH2]: number[]): SecFact[] =>
+  ["2024-01-01|2024-06-30|2024-08-01", "2024-07-01|2024-12-31|2025-02-01",
+    "2025-01-01|2025-06-30|2025-08-01", "2025-07-01|2025-12-31|2026-02-01"]
+    .map((dates, index) => {
+      const [start, end, filed] = dates.split("|");
+      return { start, end, filed, val: [oldH1, oldH2, newH1, newH2][index],
+        accn: `eodhd:${end}`, fy: Number(end.slice(0, 4)), fp: end.endsWith("06-30") ? "Q2" : "Q4", form: "EODHD" };
+    });
+
+const halfResult = (facts: SecFact[], asOf: string) =>
+  revenueFromCompanyFacts({ facts: { "us-gaap": { Revenues: { units: { USD: facts } } } } }, asOf);
+
+it("replays half-year scoring: quarter-only unknown becomes +4 revenue points for acceleration", () => {
+  const facts = halfRows([100, 100, 110, 130]);
+  const before = facts.filter((fact) => fact.start && (Date.parse(fact.end) - Date.parse(fact.start)) / 86_400_000 <= 105);
+  expect(halfResult(before, "2026-02-02")).toBeNull();
+  const after = halfResult(facts, "2026-02-02");
+  expect(after).toMatchObject({ period: "half ended 2025-12-31", revenueAccelerating: true, revenueDeclining: false });
+  expect(after?.currentGrowth).toBeCloseTo(30);
+  expect(after?.priorGrowth).toBeCloseTo(10);
+  expect(Number(after?.revenueAccelerating) * 4).toBe(4);
+});
+
+it("a half-year decline is known, but missing comparatives stay unknown", () => {
+  const facts = halfRows([100, 100, 110, 90]);
+  expect(halfResult(facts, "2026-02-02")).toMatchObject({ revenueAccelerating: false, revenueDeclining: true });
+  expect(halfResult(facts.slice(1), "2026-02-02")).toBeNull();
+  expect(halfResult(facts.filter((fact) => fact.end !== "2025-06-30"), "2026-02-02")).toBeNull();
+  expect(halfResult(facts, "2026-02-01")?.period).toBe("half ended 2025-12-31");
+  expect(halfResult(facts, "2026-08-21")).toBeNull();
+});
+
+it("uses 200-day freshness for half-year rows and keeps 100 days for SEC quarters", () => {
+  const facts = halfRows([100, 100, 110, 130]);
+  const filed = Date.parse("2026-02-01T00:00:00Z");
+  const at = (days: number) => new Date(filed + days * 86_400_000).toISOString().slice(0, 10);
+  expect(halfResult(facts, at(200))).not.toBeNull();
+  expect(halfResult(facts, at(201))).toBeNull();
+  expect(revenueFromCompanyFacts(msft, "2027-01-01")).toBeNull();
+});
+
+it("stored half-year lookup retains the first-seen point-in-time gate and period label", async () => {
+  const facts = halfRows([100, 100, 110, 130]);
+  const db = { query: async <R>(sql: string, args: unknown[] = []) => {
+    expect(sql).toContain("first_seen_at::date <= $3::date");
+    return { rows: facts.filter((fact) => fact.filed <= String(args[2])).map((fact) => ({ unit: "GBP", period_start: fact.start,
+      period_end: fact.end, value: String(fact.val), accession: fact.accn, fy: fact.fy, fp: fact.fp, filed: fact.filed })) as R[] };
+  } };
+  expect(await eodhdRevenueStored(db, "ZZH.LSE", "2026-02-02")).toMatchObject({ period: "half ended 2025-12-31", revenueAccelerating: true });
+  expect(await eodhdRevenueStored(db, "ZZH.LSE", "2026-01-31")).toBeNull();
 });

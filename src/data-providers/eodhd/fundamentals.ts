@@ -18,8 +18,8 @@ const availabilityDate = (item: Record<string, unknown>, end: string, reportDate
     .sort().at(-1);
 
 /**
- * Period start from the previous reported period end. A six-month gap is a half-year only when a neighbouring gap is six months
- * too (a semi-annual reporter, as most LSE issuers are); a single missing quarter keeps the three-month fallback.
+ * Period start from the previous reported period end. Consecutive six-month gaps identify a half-year reporter;
+ * a single missing quarter keeps the three-month fallback.
  */
 const periodStart = (ends: string[], index: number): string => {
   const end = ends[index], previousEnd = ends[index - 1];
@@ -32,6 +32,8 @@ const periodStart = (ends: string[], index: number): string => {
   }
   const e = new Date(endDay);
   const targetYear = e.getUTCFullYear();
+  const firstHalf = !previousEnd && isHalfSpan(daysBetween(end, ends[index + 1])) && isHalfSpan(daysBetween(ends[index + 1], ends[index + 2]));
+  if (firstHalf) return new Date(Date.UTC(targetYear, e.getUTCMonth() - 5, 1)).toISOString().slice(0, 10);
   const targetMonth = e.getUTCMonth() - 3;
   const lastDay = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate();
   const previous = Date.UTC(targetYear, targetMonth, Math.min(e.getUTCDate(), lastDay));
