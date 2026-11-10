@@ -10,6 +10,10 @@ import { getLegalMessages } from "@/i18n/legal-messages";
 import { getLaunchMessages } from "@/i18n/launch-messages";
 import { getHeatmapMessages } from "@/i18n/heatmap-messages";
 import { getKitMessages } from "@/i18n/kit-messages";
+import { IdentityChip, IdentityPanel } from "./auth/identity";
+import { getIdentityMessages } from "@/i18n/identity-messages";
+import { PRIVATE_DATA_SECTIONS } from "@/app/private-data-routes";
+import type { NavItem } from "./nav-links";
 
 export function BrandMark() {
   return (
@@ -22,10 +26,31 @@ export function BrandMark() {
   );
 }
 
+const privateSections = new Set<string>(PRIVATE_DATA_SECTIONS);
+
+/**
+ * The app shell sidebar. It reads no request data. Every item is listed; vendor-derived pages (while EODHD_PRIVATE_USE=on) and the
+ * owner-only Markets group render locked until /api/me says the viewer is the owner. `marketsViewable` lets a caller that has already
+ * verified the owner render Markets unlocked on the server; the layout never sets it.
+ */
 export function Nav({ locale, marketsViewable = false }: { locale: Locale; marketsViewable?: boolean }) {
   const m = getMessages(locale);
   const kit = getKitMessages(locale);
   const target = otherLocale(locale);
+  const f = flags();
+  const id = getIdentityMessages(locale);
+  const lock = { soon: id.soon, locked: id.locked };
+  const vendorLocked = process.env.EODHD_PRIVATE_USE === "on";
+  const vendor = (items: NavItem[]): NavItem[] => items.map((item) => ({ ...item, locked: vendorLocked && privateSections.has(item.href.slice(1).split("/")[0]) }));
+  const markets: NavItem[] = [
+    { href: "/indices", text: m.nav.indices, icon: "indices" },
+    { href: "/forex", text: m.nav.forex, icon: "forex" },
+    { href: "/crypto", text: m.nav.crypto, icon: "crypto" },
+    { href: "/economy", text: m.nav.economy, icon: "economy" },
+    { href: "/congress", text: m.nav.congress, icon: "congress" },
+    { href: "/news", text: m.nav.news, icon: "news" },
+    { href: "/screener", text: m.nav.screener, icon: "scanner" },
+  ].map((item) => ({ ...item, locked: !marketsViewable }));
   return (
     <header className="site-header">
       <div className="side-top">
@@ -34,6 +59,7 @@ export function Nav({ locale, marketsViewable = false }: { locale: Locale; marke
           <span className="brand-name nav-text-wide">InvestBuddy</span>
         </Link>
         <SideToggle collapseLabel={kit.shell.collapseSide} expandLabel={kit.shell.expandSide} />
+        <IdentityChip locale={locale} auth={f.AUTH} />
         <MenuToggle openLabel={kit.shell.openMenu} closeLabel={kit.shell.closeMenu} />
       </div>
       <div className="side-panel" id="side-panel">
@@ -42,7 +68,8 @@ export function Nav({ locale, marketsViewable = false }: { locale: Locale; marke
           locale={locale}
           label={m.nav.stocks}
           sectionLabel={m.nav.stocks}
-          items={[
+          lock={lock}
+          items={vendor([
             { href: "/dashboard", text: m.nav.dashboard, icon: "dashboard" },
             { href: "/scanner", text: m.nav.scanner, icon: "scanner" },
             { href: "/heatmap", text: getHeatmapMessages(locale).navLabel, icon: "heatmap" },
@@ -52,24 +79,17 @@ export function Nav({ locale, marketsViewable = false }: { locale: Locale; marke
             { href: "/portfolio", text: m.nav.portfolio, icon: "portfolio" },
             { href: "/methodology", text: m.nav.methodology, icon: "methodology" },
             ...(flags().ADVICE_OUTPUT ? [{ href: "/sizing", text: m.nav.sizing, icon: "sizing" }] : []),
-            ...(flags().WAITLIST ? [{ href: "/pricing", text: getLaunchMessages(locale).pricing.title, icon: "pricing" }] : []),
-          ]}
+            { href: "/pricing", text: getLaunchMessages(locale).pricing.title, icon: "pricing" },
+          ])}
         />
-        <NavLinks locale={locale} label={m.nav.etfs} sectionLabel={m.nav.etfs} items={[
+        <NavLinks locale={locale} label={m.nav.etfs} sectionLabel={m.nav.etfs} lock={lock} items={vendor([
           { href: "/etf", text: m.nav.etfResearch, icon: "scanner" },
           { href: "/etf/track-record", text: m.nav.etfTrackRecord, icon: "track" },
-        ]} />
-        {marketsViewable && <NavLinks locale={locale} label={m.nav.markets} sectionLabel={m.nav.markets} items={[
-          { href: "/indices", text: m.nav.indices, icon: "indices" },
-          { href: "/forex", text: m.nav.forex, icon: "forex" },
-          { href: "/crypto", text: m.nav.crypto, icon: "crypto" },
-          { href: "/economy", text: m.nav.economy, icon: "economy" },
-          { href: "/congress", text: m.nav.congress, icon: "congress" },
-          { href: "/news", text: m.nav.news, icon: "news" },
-          { href: "/screener", text: m.nav.screener, icon: "scanner" },
-        ]} />}
+        ])} />
+        {f.MARKETS_VIEWS && <NavLinks locale={locale} label={m.nav.markets} sectionLabel={m.nav.markets} lock={lock} items={markets} />}
         </div>
         <div className="side-foot">
+          <IdentityPanel locale={locale} auth={f.AUTH} />
           {flags().WAITLIST && (
             <Link className="button cta side-cta" href={`/${locale}/pricing`}>
               <span className="nav-text">{getLaunchMessages(locale).landing.ctaWaitlist}</span>
@@ -86,16 +106,20 @@ export function Nav({ locale, marketsViewable = false }: { locale: Locale; marke
   );
 }
 
-export async function Footer({ locale }: { locale: Locale }) {
+/**
+ * Site footer. `data` reads the latest scores for the sample or live note; static marketing pages pass false, so their HTML never
+ * holds data read at build time.
+ */
+export async function Footer({ locale, data: withData = true }: { locale: Locale; data?: boolean }) {
   const m = getMessages(locale);
-  const data = await latestScores();
+  const data = withData ? await latestScores() : null;
   return (
     <footer className="site-footer">
       <div className="frame footer-inner">
         <p className="footer-note">
           <BrandMark />
-          <span>{data.sample ? m.footer.note : m.footer.liveNote}</span>
-          {data.sample && <span className="stamp">{m.common.sample}</span>}
+          {data ? <span>{data.sample ? m.footer.note : m.footer.liveNote}</span> : <span>InvestBuddy</span>}
+          {data?.sample && <span className="stamp">{m.common.sample}</span>}
         </p>
         <p className="footer-built">{getKitMessages(locale).shell.builtFor}</p>
         <nav aria-label={m.footer.legal} className="footer-links">

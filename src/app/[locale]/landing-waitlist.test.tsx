@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, expect, it } from "vitest";
-import Welcome from "./page";
+import Welcome from "./(marketing)/page";
 
 const props = (locale: string) => ({ params: Promise.resolve({ locale }) });
 const original = { waitlist: process.env.WAITLIST, billing: process.env.BILLING };
@@ -22,7 +22,7 @@ it("loads the motion libraries only through a dynamic import from the Welcome is
   const island = readFileSync("src/components/welcome/welcome-motion.tsx", "utf8");
   expect(island).toMatch(/import\("\.\/motion-engine"\)/);
   expect(island).not.toMatch(/from "gsap|from "lenis/);
-  for (const file of ["src/app/[locale]/layout.tsx", "src/app/[locale]/page.tsx", "src/components/welcome/sections.tsx", "src/components/nav.tsx"]) {
+  for (const file of ["src/app/[locale]/layout.tsx", "src/app/[locale]/(marketing)/page.tsx", "src/components/welcome/sections.tsx", "src/components/nav.tsx"]) {
     expect(readFileSync(file, "utf8"), file).not.toMatch(/["']gsap|["']lenis/);
   }
   expect(island).toMatch(/prefers-reduced-motion: reduce/);

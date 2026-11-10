@@ -11,9 +11,9 @@ const idea = vi.fn();
 vi.mock("@/data/store", () => ({ latestScores: () => scores(), latestScoreSummaries: () => scores(), scoreForTicker: async (ticker: string) => { const data = await scores(); return { ...data, rows: data.rows.find((item: { instrument: { ticker: string } }) => item.instrument.ticker === ticker) ?? null }; }, latestPortfolio: () => portfolio(), instrumentUniverse: () => universe(), instrumentForTicker: async (ticker: string) => (await universe()).find((item: { ticker: string }) => item.ticker === ticker.toUpperCase()) ?? null }));
 vi.mock("@/data/ideas-store", () => ({ companyIdea: () => idea(), companyReview: async () => null, ideasEnabled: () => true }));
 
-import Home from "./[locale]/page";
-import Dashboard from "./[locale]/dashboard/page";
-import Company from "./[locale]/company/[ticker]/page";
+import Home from "./[locale]/(marketing)/page";
+import Dashboard from "./[locale]/(app)/dashboard/page";
+import Company from "./[locale]/(app)/company/[ticker]/page";
 import { proxy } from "@/proxy";
 
 const original = { advice: process.env.ADVICE_OUTPUT, mode: process.env.DATA_MODE };

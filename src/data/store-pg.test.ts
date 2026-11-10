@@ -4,7 +4,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { AUDIT_BAR_LIMIT, LISTING_BAR_LIMIT } from "./audit-sql";
 import { windowSessions } from "../heatmap/aggregate";
-import { SCANNER_FLOOR } from "../app/[locale]/scanner/floor";
+import { SCANNER_FLOOR } from "../app/[locale]/(app)/scanner/floor";
 
 /** Every migration applied, so migration 137 and the store queries run as written. */
 const db = new PGlite();

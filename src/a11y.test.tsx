@@ -15,11 +15,11 @@ vi.mock("@/db/track-record", () => ({ recordHistory: async () => ({ snapshotCoun
 vi.mock("@/db/record-benchmark", () => ({ recordBenchmark: async () => [] }));
 vi.mock("@/db/insiders", () => ({ insiderEvents: () => insiders() }));
 
-import Dashboard from "./app/[locale]/dashboard/page";
-import Company from "./app/[locale]/company/[ticker]/page";
-import Insiders from "./app/[locale]/insiders/page";
-import Methodology from "./app/[locale]/methodology/page";
-import TrackRecord from "./app/[locale]/track-record/page";
+import Dashboard from "./app/[locale]/(app)/dashboard/page";
+import Company from "./app/[locale]/(app)/company/[ticker]/page";
+import Insiders from "./app/[locale]/(app)/insiders/page";
+import Methodology from "./app/[locale]/(marketing)/methodology/page";
+import TrackRecord from "./app/[locale]/(app)/track-record/page";
 import { Footer, Nav } from "@/components/nav";
 import { scoredUniverse } from "@/data/scored";
 
@@ -107,10 +107,24 @@ describe.each(["en", "sk"])("public pages (%s)", (locale) => {
   });
 });
 
-it("layout puts the skip link before the nav and targets the focusable main", () => {
-  const layout = readFileSync("src/app/[locale]/layout.tsx", "utf8");
-  expect(layout.indexOf('href="#main"')).toBeGreaterThan(0);
-  expect(layout.indexOf('href="#main"')).toBeLessThan(layout.indexOf("<Nav "));
-  expect(layout).toMatch(/<main id="main" tabIndex=\{-1\}>/);
-  expect(layout).toMatch(/<html lang=\{locale\}/);
+it("layout puts the skip link before either shell and both shells target the focusable main", () => {
+  const root = readFileSync("src/app/[locale]/layout.tsx", "utf8");
+  expect(root.indexOf('href="#main"')).toBeGreaterThan(0);
+  expect(root.indexOf('href="#main"')).toBeLessThan(root.indexOf("{children}"));
+  expect(root).toMatch(/<html lang=\{locale\}/);
+  for (const shell of ["src/app/[locale]/(app)/layout.tsx", "src/app/[locale]/(marketing)/layout.tsx"]) {
+    expect(readFileSync(shell, "utf8"), shell).toMatch(/<main id="main" tabIndex=\{-1\}>/);
+  }
+});
+
+it("keeps the static shell free of build-time flags and data", () => {
+  expect(readFileSync("src/components/nav-top.tsx", "utf8")).not.toMatch(/flags\(|@\/data\//);
+  expect(readFileSync("src/app/[locale]/(marketing)/layout.tsx", "utf8")).toContain("<Footer locale={locale} data={false} />");
+  expect(readFileSync("src/app/[locale]/(marketing)/pricing/page.tsx", "utf8")).not.toMatch(/flags\(|notFound/);
+});
+
+it("keeps the root and marketing layouts free of request reads so their pages stay static", () => {
+  for (const file of ["src/app/[locale]/layout.tsx", "src/app/[locale]/(marketing)/layout.tsx", "src/app/[locale]/(app)/layout.tsx", "src/components/nav.tsx", "src/components/nav-top.tsx"]) {
+    expect(readFileSync(file, "utf8"), file).not.toMatch(/next\/headers|headers\(\)|cookies\(\)/);
+  }
 });

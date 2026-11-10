@@ -1,0 +1,272 @@
+/* Signed-in state in the app shell. The sidebar is navy in both themes, so colours come from the navy tokens. */
+.panel {
+  display: grid;
+  gap: var(--s2);
+  min-width: 0;
+}
+.status {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-width: 0;
+  min-height: 1.5rem;
+  margin: 0;
+  color: var(--navy-ink-2);
+  font-size: var(--t-sm);
+}
+.panel[data-quiet] .status {
+  display: none;
+}
+.stateText {
+  color: var(--navy-ink);
+  font-weight: 600;
+}
+.email {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--navy-ink);
+  font-weight: 600;
+}
+.badge,
+.plan {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  min-height: 1.375rem;
+  padding: 0 var(--s2);
+  border: 1px solid var(--navy-line);
+  border-radius: 999px;
+  color: var(--navy-ink);
+  font-size: var(--t-xs);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.badge {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.plan[data-plan="plus"],
+.plan[data-plan="trial"] {
+  border-color: var(--signal);
+  background: color-mix(in srgb, var(--signal) 22%, transparent);
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+  min-height: 2.75rem;
+}
+.action {
+  flex: 1 1 100%;
+}
+.link,
+.signOut {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  padding: 0 var(--s3);
+  border: 1px solid var(--navy-line);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--navy-ink);
+  font: inherit;
+  font-size: var(--t-sm);
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+.link:hover,
+.signOut:hover {
+  border-color: var(--navy-ink-2);
+  background: var(--navy-2);
+}
+.signOutForm {
+  display: contents;
+}
+.quiet {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  color: var(--navy-ink-2);
+  font-size: var(--t-sm);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+.quiet:hover {
+  color: var(--navy-ink);
+}
+.skeleton,
+.skeletonButton,
+.skeletonCompact,
+.skeletonChip {
+  display: block;
+  border-radius: var(--radius);
+  background: var(--navy-2);
+}
+.skeleton {
+  width: 9rem;
+  height: 0.875rem;
+}
+.skeletonButton {
+  width: 6rem;
+  height: 2.75rem;
+}
+.skeletonChip {
+  width: 5.5rem;
+  height: 2rem;
+}
+
+/* Rail: one short word instead of the full panel. */
+.compact {
+  display: none;
+}
+.skeletonCompact {
+  width: 2.75rem;
+  height: 1.375rem;
+}
+@media (min-width: 900px) and (max-width: 1199px) {
+  :global(:root:not([data-side="full"])) .status,
+  :global(:root:not([data-side="full"])) .actions {
+    display: none;
+  }
+  :global(:root:not([data-side="full"])) .panel {
+    justify-items: center;
+  }
+  :global(:root:not([data-side="full"])) .compact {
+    display: inline-flex;
+    justify-content: center;
+    min-height: 1.75rem;
+    padding: 0 var(--s1);
+    font-size: var(--t-xs);
+  }
+}
+@media (min-width: 1200px) {
+  :global(:root[data-side="rail"]) .status,
+  :global(:root[data-side="rail"]) .actions {
+    display: none;
+  }
+  :global(:root[data-side="rail"]) .panel {
+    justify-items: center;
+  }
+  :global(:root[data-side="rail"]) .compact {
+    display: inline-flex;
+    justify-content: center;
+    min-height: 1.75rem;
+    padding: 0 var(--s1);
+    font-size: var(--t-xs);
+  }
+}
+
+/* Phone header chip, between the brand and the menu button. */
+.chip {
+  display: none;
+}
+@media (max-width: 899px) {
+  .chip {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    margin-inline-start: auto;
+  }
+}
+.chipState {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: 2.75rem;
+  color: var(--navy-ink);
+  font-size: var(--t-sm);
+  font-weight: 600;
+  text-decoration: none;
+}
+.chipText {
+  white-space: nowrap;
+}
+.chipSignIn {
+  min-height: 2.5rem;
+  padding: 0 var(--s3);
+}
+@media (max-width: 359px) {
+  .chipText {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+/* Marketing top bar. */
+.top {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-width: 0;
+  min-height: 2.75rem;
+}
+.topLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  padding: 0 var(--s3);
+  border-radius: var(--radius);
+  color: var(--navy-ink);
+  font-size: var(--t-sm);
+  font-weight: 650;
+  text-decoration: none;
+}
+.topLink:hover {
+  background: var(--navy-2);
+}
+.topAction {
+  min-height: 2.5rem;
+  padding: 0 var(--s4);
+  white-space: nowrap;
+}
+.topQuiet {
+  color: var(--navy-ink-2);
+  font-size: var(--t-sm);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+.topQuiet:hover {
+  color: var(--navy-ink);
+}
+.topState {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  min-width: 0;
+  color: var(--navy-ink);
+  font-size: var(--t-sm);
+  font-weight: 600;
+}
+.topText {
+  white-space: nowrap;
+}
+.topEmail {
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.skeletonTop {
+  display: block;
+  width: 12rem;
+  height: 2.5rem;
+  border-radius: var(--radius);
+  background: var(--navy-2);
+}
+@media (max-width: 719px) {
+  .topEmail {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+}
