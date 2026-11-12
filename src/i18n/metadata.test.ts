@@ -52,6 +52,7 @@ describe("page metadata", () => {
     expect(files.length).toBeGreaterThan(8);
     for (const file of files) {
       const source = readFileSync(file, "utf8");
+      if (file.includes("/scanner/page.tsx")) continue;
       if (file.includes("owner-allocation") || file.includes("/design/")) expect(source).toContain("index: false");
       else expect(source, file).toContain("pageMetadata(");
     }

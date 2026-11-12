@@ -52,7 +52,7 @@ describe("shortlist view", () => {
   it("renders the compact dashboard block with a link to the full list", () => {
     const html = renderToStaticMarkup(<ShortlistView locale="en" data={data([input("A"), input("B")])} compact limit={1} />);
     expect(html).toContain('data-shortlist="compact"');
-    expect(html).toContain('href="/en/scanner#shortlist"');
+    expect(html).toContain('href="/en/stocks#shortlist"');
     expect(html).toContain(">A<");
     expect(html).not.toContain(">B<");
   });

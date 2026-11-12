@@ -13,8 +13,9 @@ import { isEtfDataPath } from "@/components/etf/tabs";
 import { PRIVATE_DATA_SECTIONS } from "@/app/private-data-routes";
 import { hasCustomerCookie } from "@/auth/cookie";
 import type { Viewer } from "@/viewer/viewer";
+import { marketsViewable } from "@/markets/gate";
 
-const marketSections = new Set(["indices", "forex", "crypto", "economy", "congress", "news", "screener"]);
+const marketSections = new Set(["indices", "economy", "calendar", "congress", "news", "screener"]);
 const privateDataSections = new Set<string>(PRIVATE_DATA_SECTIONS);
 const privateHeaders = { "Cache-Control": "private, no-store", "X-Robots-Tag": "noindex" };
 
@@ -100,15 +101,23 @@ async function handle(request: NextRequest) {
   const [, locale, section, ticker] = request.nextUrl.pathname.split("/");
   const featureFlags = flags();
   const privateDataRoute = privateDataSections.has(section);
+  if (section === "forex" || section === "crypto") return withPrivate(statusPage("notFound", 404, locale === "sk" ? "sk" : "en", requestId));
+  if (section === "insiders" && !featureFlags.INSIDERS_PAGE) return withPrivate(statusPage("notFound", 404, locale === "sk" ? "sk" : "en", requestId));
+  if (section === "scanner" && (locale === "en" || locale === "sk")) {
+    const response = NextResponse.redirect(sameOrigin(request, `/${locale}/stocks${request.nextUrl.search}`), 308);
+    response.headers.set("X-Robots-Tag", "noindex");
+    response.headers.set("x-request-id", requestId);
+    return response;
+  }
   // Vendor-derived pages: the owner and customers with an active Plus plan (paid or trial). owner-allocation stays owner-only.
   if (process.env.EODHD_PRIVATE_USE === "on" && privateDataRoute) {
     const who = await viewer();
     const allowed = section === "owner-allocation" ? who?.owner === true : Boolean(who && canUseVendorData(who));
     if (!allowed) return denied(request, locale, section, Boolean(who));
   }
-  // Owner-only EODHD ETF tabs under /etf/fund/{key}/{tab} share the market gate.
-  const market = marketSections.has(section) || isEtfDataPath(request.nextUrl.pathname);
-  if (market && featureFlags.MARKETS_VIEWS && !(await ownerRequest())) {
+  // ETF data tabs and insiders (while markets are enabled) share the market gate.
+  const market = marketSections.has(section) || (section === "insiders" && featureFlags.MARKETS_VIEWS) || isEtfDataPath(request.nextUrl.pathname);
+  if (market && featureFlags.MARKETS_VIEWS && !marketsViewable((await viewer()) ?? resolveViewer(featureFlags))) {
     return denied(request, locale, section, Boolean(await viewer()));
   }
   // Owner pages: anonymous browsers go to sign-in, a signed-in non-owner gets the 404 page, other clients a plain 401.

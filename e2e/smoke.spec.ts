@@ -61,7 +61,7 @@ test.describe("public profiles", () => {
     const profile = page.locator("[data-profile-block]");
     await expect(profile.getByRole("heading", { name: "Company profile" })).toBeVisible();
     await expect(profile).toContainText("Profiles not computed yet");
-    await page.goto("/en/scanner");
+    await page.goto("/en/stocks");
     await expect(page.getByRole("link", { name: /Sustained growers/ })).toBeVisible();
     await expect(page.getByRole("link", { name: /Higher volatility, event-driven/ })).toBeVisible();
     await page.getByRole("link", { name: /Sustained growers/ }).click();
@@ -102,4 +102,13 @@ test.describe("chrome", () => {
     const response = await page.goto("/xx/dashboard");
     expect(response?.status()).toBe(404);
   });
+});
+
+test("legacy scanner redirects to Stocks and removed markets return 404", async ({ page }) => {
+  await page.goto("/en/scanner?state=watch");
+  await expect(page).toHaveURL(/\/en\/stocks\?state=watch$/);
+  for (const path of ["forex", "forex/EURUSD", "crypto", "crypto/BTC-USD"]) {
+    const response = await page.goto(`/en/${path}`);
+    expect(response?.status(), path).toBe(404);
+  }
 });

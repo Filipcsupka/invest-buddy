@@ -44,7 +44,7 @@ export function filtersHref(locale: Locale, filters: ScannerFilters, floor: bool
   add("sort", filters.sort !== "score" && filters.sort);
   if (!floor) params.set("floor", "off");
   const query = params.toString();
-  return `/${locale}/scanner${query ? `?${query}` : ""}`;
+  return `/${locale}/stocks${query ? `?${query}` : ""}`;
 }
 export function filterScores(rows: StoreRow[], filters: ScannerFilters, heldTickers: ReadonlySet<string>, locale: Locale = "en", streaks: Readonly<Record<string, RuleStreak>> = {}, floor: Readonly<Record<string, FloorMetrics>> = {}, horizons: Readonly<Record<string, PublicHorizon>> = {}): StoreRow[] {
   const preset = filters.preset ? presetById(filters.preset) : undefined;

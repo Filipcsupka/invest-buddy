@@ -47,7 +47,6 @@ async function Congress({ params, searchParams }: LocaleParams & { searchParams?
   const filtered = Boolean(ticker || member || chamber);
   return <div className="frame page">
     <RecordHead title={c.title} lede={c.lede} meta={<Disclaimer text={getMessages(locale).common.disclaimer} />} />
-    <p className="notice">{m.common.ownerNote}</p>
     <KpiRow count={4}>
       <KpiCard featured label={c.kpiTrades} note={stats.latest ? fill(m.common.updated, { date: formatDate(locale, stats.latest) }) : undefined}>{formatNumber(locale, stats.trades)}</KpiCard>
       <KpiCard label={c.kpiMembers}>{formatNumber(locale, stats.members)}</KpiCard>

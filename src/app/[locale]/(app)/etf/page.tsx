@@ -37,7 +37,7 @@ async function EtfPage({ params, searchParams }: Props) {
   const assetClass = classes.find((item) => item === query.assetClass);
   const call = calls.find((item) => item === query.call);
   const [{ picks, run, sample: picksSample }, catalog] = await Promise.all([etfList(), etfCatalogList(query)]);
-  // Vendor yield and 1-year return are internal EODHD data: shown only to the authenticated owner.
+  // Vendor yield and 1-year return require vendor data access.
   const vendor = await etfOwnerView() ? await etfListStats(catalog.funds.map((fund) => fund.listingKey)) : null;
   const scores = await etfScoreView() ? await latestEtfScores(catalog.funds.map((fund) => fund.listingKey)) : null;
   const d = getEtfDetailMessages(locale);

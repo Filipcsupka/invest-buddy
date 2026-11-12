@@ -39,6 +39,7 @@ it("checks the owner gate before reading data", async () => {
 
 it("renders the rates tab with the curve, changes in basis points and the Treasury source", async () => {
   const html = await render();
+  expect(html).not.toContain("Owner-only view");
   expect(html).toContain("US Treasury par yield curve");
   expect(html).toContain("4.72 %");
   expect(html).toContain("+22 bp");

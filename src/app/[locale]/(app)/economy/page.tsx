@@ -194,7 +194,6 @@ async function Economy({ params, searchParams }: LocaleParams & { searchParams?:
 
   return <div className="frame page">
     <RecordHead title={e.title} lede={e.lede} meta={<Disclaimer text={getMessages(locale).common.disclaimer} />} />
-    <p className="notice">{m.common.ownerNote}</p>
     <div className="rp-stack">
       <nav className={`kit-tabs ${styles.tabs}`} aria-label={e.tabs.label}>
         {TABS.map((item) => <Link key={item} href={href(item)} aria-current={tab === item ? "page" : undefined}>{e.tabs[item]}</Link>)}

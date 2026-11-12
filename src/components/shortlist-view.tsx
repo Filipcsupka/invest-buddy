@@ -110,7 +110,7 @@ export function ShortlistView({ locale, data, compact = false, limit = 5 }: { lo
         {rowMarkers(locale, row).map((text) => <span key={text} className="tag">{text}</span>)}
       </li>)}</ol> : <p className={styles.note}>{fill(m.empty, { state })}</p>}
       <Lens locale={locale} data={data} />
-      <p className={styles.note}><Link href={`/${locale}/scanner#shortlist`}>{m.more}</Link></p>
+      <p className={styles.note}><Link href={`/${locale}/stocks#shortlist`}>{m.more}</Link></p>
     </section>;
   }
   const groups = data.concentration.groups;

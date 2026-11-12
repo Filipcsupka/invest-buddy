@@ -26,14 +26,14 @@ describe("scanner floor page", () => {
     expect(Number(total)).toBeGreaterThan(Number(count));
     expect(rowCount(html)).toBe(Number(count));
     expect(html).toContain(remove);
-    expect(html).toContain(`href="/${locale}/scanner?floor=off"`);
+    expect(html).toContain(`href="/${locale}/stocks?floor=off"`);
     expect(html).toMatch(hidden);
     expect(html).not.toContain(noData);
 
     const off = await render(locale, { floor: "off" });
     expect(rowCount(off)).toBe(Number(total));
     expect(off).toContain('name="floor" value="off"');
-    expect(off).toContain(`href="/${locale}/scanner"`);
+    expect(off).toContain(`href="/${locale}/stocks"`);
     expect(off).not.toContain(remove);
   });
 

@@ -9,6 +9,19 @@ vi.mock("@/viewer/get-viewer", async (importOriginal) => {
 });
 import Scanner, { generateMetadata } from "./page";
 
+it.each(["en", "sk"])("shows the restored state tally above stock filters (%s)", async (locale) => {
+  const oldMode = process.env.DATA_MODE;
+  process.env.DATA_MODE = "fixture";
+  try {
+    const html = renderToStaticMarkup(await Scanner({ params: Promise.resolve({ locale }), searchParams: Promise.resolve({}) }));
+    expect(html).toContain(locale === "en" ? "Tickers by rule state" : "Tickery podľa stavu pravidiel");
+    expect(html.match(/data-state="(setup|watch|wait|ignore|broken|insufficient)"/g)?.length).toBeGreaterThanOrEqual(6);
+    expect(html.indexOf('aria-label="' + (locale === "en" ? "Tickers by rule state" : "Tickery podľa stavu pravidiel") + '"')).toBeLessThan(html.indexOf('name="state"'));
+  } finally {
+    if (oldMode === undefined) delete process.env.DATA_MODE; else process.env.DATA_MODE = oldMode;
+  }
+});
+
 describe("scanner route", () => {
   it("is visible without the paywall flag, with Paid badges for admin on the advanced filters and the streak", async () => {
     const saved = { PAYWALL: process.env.PAYWALL, AUTH: process.env.AUTH, DATA_MODE: process.env.DATA_MODE };
@@ -48,8 +61,8 @@ describe("scanner route", () => {
     it("keeps search, state, sector, floor toggle, rule presets and every ticker", async () => {
       const markup = await render({});
       for (const name of ["q", "state", "sector"]) expect(markup).toContain(`name="${name}"`);
-      expect(markup).toContain("/en/scanner?floor=off");
-      expect(markup).toContain('href="/en/scanner?preset=trend-volume"');
+      expect(markup).toContain("/en/stocks?floor=off");
+      expect(markup).toContain('href="/en/stocks?preset=trend-volume"');
       expect(markup).toContain('data-paywall-candidate="scanner-rows-full"');
       expect(markup).not.toContain("data-tier-lock=\"scanner-rows-full\"");
       expect(markup).toContain('href="/en/company/NVDA"');
@@ -86,7 +99,7 @@ describe("scanner route", () => {
       expect(markup).not.toContain('href="/en/company/AMD"');
       const metadata = await generateMetadata(props);
       expect(metadata.robots).toEqual({ index: false, follow: true });
-      expect(metadata.alternates?.canonical).toBe("/en/scanner");
+      expect(metadata.alternates?.canonical).toBe("/en/stocks");
     } finally {
       if (paywall === undefined) delete process.env.PAYWALL; else process.env.PAYWALL = paywall;
       if (mode === undefined) delete process.env.DATA_MODE; else process.env.DATA_MODE = mode;
@@ -98,7 +111,7 @@ describe("scanner route", () => {
     process.env.DATA_MODE = "fixture";
     try {
       const markup = renderToStaticMarkup(await Scanner({ params: Promise.resolve({ locale: "en" }), searchParams: Promise.resolve({ q: "NVDA", floor: "off", state: "watch" }) }));
-      expect(markup).toContain('href="/en/scanner?q=NVDA&amp;state=watch&amp;floor=off#scanner-group-watch"');
+      expect(markup).toContain('href="/en/stocks?q=NVDA&amp;state=watch&amp;floor=off#scanner-group-watch"');
       expect(markup).toMatch(/aria-label="Show \d+ tickers in Watching"/);
       expect(markup).toContain('id="scanner-group-watch"');
     } finally {
@@ -132,7 +145,7 @@ describe("scanner route", () => {
       const out: Record<string, string> = {};
       for (const locale of ["en", "sk"]) {
         out[locale] = renderToStaticMarkup(await Scanner({ params: Promise.resolve({ locale }), searchParams: Promise.resolve({ preset: "trend-volume" }) }));
-        expect(out[locale]).toContain(`href="/${locale}/scanner?preset=growth-earnings"`);
+        expect(out[locale]).toContain(`href="/${locale}/stocks?preset=growth-earnings"`);
         expect(out[locale]).toContain('name="preset" value="trend-volume"');
         expect(out[locale]).toContain('aria-current="true"');
         expect(out[locale]).toMatch(/\d+ (of|z) 10/);

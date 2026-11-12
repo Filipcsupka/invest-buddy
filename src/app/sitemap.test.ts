@@ -19,9 +19,9 @@ describe("sitemap", () => {
     expect(urls.some((url) => /\/(?:dashboard|company|etf|scanner|portfolio)(?:\/|$)/.test(url))).toBe(false);
     expect(entries.every((entry) => entry.lastModified === undefined)).toBe(true);
   });
-  it("lists the dashboard, scanner and heat map in both locales", async () => {
+  it("lists the dashboard, stocks and heat map in both locales", async () => {
     const urls = (await sitemap()).map((entry) => entry.url);
-    for (const path of ["dashboard", "scanner", "heatmap"]) {
+    for (const path of ["dashboard", "stocks", "heatmap"]) {
       expect(urls.some((url) => url.endsWith(`/en/${path}`)), path).toBe(true);
       expect(urls.some((url) => url.endsWith(`/sk/${path}`)), path).toBe(true);
     }

@@ -19,7 +19,7 @@ export function AssetTable({ locale, rows, caption, basePath }: { locale: Locale
     </tr></thead>
     <tbody>{rows.map((row) => <tr key={row.symbol}>
       <th scope="row"><Link href={`/${locale}/${basePath}/${encodeURIComponent(row.code)}`}>{row.name}</Link><span className={s.code}>{row.code}{row.currency && row.currency !== "NA" ? ` · ${row.currency}` : ""}</span></th>
-      <td className={s.right}>{level(locale, row.assetClass, row.last)}</td>
+      <td className={s.right}>{level(locale, row.last)}</td>
       <td>{day(locale, row.lastDate)}</td>
       <td className={s.right}>{signedRatio(locale, row.change1d)}</td>
       <td className={s.right}>{signedRatio(locale, row.change5d)}</td>

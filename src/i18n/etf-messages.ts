@@ -64,7 +64,7 @@ export const getEtfMessages = (locale: Locale): EtfMessages => locale === "sk" ?
 // Owner-only ETF detail from market data. Facts only: no calls, scores or states for these fields.
 const detailEn = {
   tabsLabel: "Fund data sections", overview: "Overview", holdings: "Holdings", exposure: "Exposure", performance: "Performance", dividends: "Dividends",
-  ownerOnly: "Owner only. Vendor data is not cleared for public display.", vendorData: "Vendor fund data", vendorLede: "Stored market fund data for this listing.",
+  ownerOnly: "Stored fund data for subscribed viewers.", vendorData: "Vendor fund data", vendorLede: "Stored market fund data for this listing.",
   openVendorData: "Open vendor data", noData: "No data", noStats: "No vendor fund data has been stored for this listing yet.",
   priceChart: "Price history", noBars: "No stored price bars for this listing.", vendorSymbol: "Vendor symbol", asOf: "Data as of", origin: "Collected by",
   originJob: "weekly ETF job", originEnrich: "catalog enrichment",
@@ -82,7 +82,7 @@ const detailEn = {
 };
 const detailSk: typeof detailEn = {
   tabsLabel: "Časti údajov o fonde", overview: "Prehľad", holdings: "Pozície", exposure: "Expozícia", performance: "Výkonnosť", dividends: "Dividendy",
-  ownerOnly: "Len pre vlastníka. Údaje dodávateľa nie sú schválené na verejné zobrazenie.", vendorData: "Údaje dodávateľa o fonde", vendorLede: "Uložené trhové údaje o tomto zápise.",
+  ownerOnly: "Uložené údaje o fonde pre predplatiteľov.", vendorData: "Údaje dodávateľa o fonde", vendorLede: "Uložené trhové údaje o tomto zápise.",
   openVendorData: "Otvoriť údaje dodávateľa", noData: "Bez údajov", noStats: "Pre tento zápis zatiaľ nie sú uložené údaje dodávateľa.",
   priceChart: "Vývoj ceny", noBars: "Pre tento zápis nie sú uložené cenové údaje.", vendorSymbol: "Symbol dodávateľa", asOf: "Údaje k", origin: "Zdroj zberu",
   originJob: "týždenná úloha ETF", originEnrich: "obohatenie katalógu",

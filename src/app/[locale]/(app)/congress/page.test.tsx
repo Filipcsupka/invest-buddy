@@ -28,6 +28,7 @@ it("checks the owner gate before reading data", async () => {
 
 it("shows disclosures with the filed amount range, the late flag and the filing link", async () => {
   const html = await render({ member: "sessions", ticker: "dis", chamber: "house" });
+  expect(html).not.toContain("Owner-only view");
   expect(trades).toHaveBeenCalledWith({ ticker: "DIS", member: "sessions", chamber: "house" });
   expect(html).toContain("$1,001 - $15,000");
   expect(html).toContain("Filed late");

@@ -3,8 +3,6 @@ import type { ReactNode } from "react";
 /** Sidebar icons: one 20px grid, 1.75 stroke, round caps. Drawn here, not from a font. */
 const paths: Record<string, ReactNode> = {
   indices: <path d="M3 15.5 7 11l3 2 6-8M3 17h14" />,
-  forex: <path d="M3 6h13m-3-3 3 3-3 3M17 14H4m3-3-3 3 3 3" />,
-  crypto: <><circle cx="10" cy="10" r="7"/><path d="M8 5v10m3-10v10M7 7h4a2 2 0 0 1 0 4H7m0 0h4a2 2 0 0 1 0 4H7"/></>,
   economy: <path d="M3 17h14M5 14V8m4 6V4m4 10v-4m4 4V6" />,
   congress: <path d="M3 7 10 3l7 4M4 8h12M5 9v6m5-6v6m5-6v6M3 16h14" />,
   news: <path d="M4 3h12v14H4zM7 7h6M7 10h6M7 13h4" />,

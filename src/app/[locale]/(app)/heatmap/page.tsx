@@ -50,7 +50,7 @@ async function Heatmap({ params, searchParams }: Props) {
   return <div className={appPageClass}>
     <AppPageHead title={h.title} sample={data.sample} sampleText={m.common.sample} lede={h.lede}
       meta={session ? <MetaChip>{fill(h.asOf, { date: formatDate(locale, session) })}</MetaChip> : undefined}
-      actions={<><Link className="button secondary" href={`/${locale}/dashboard`}>{m.nav.dashboard}</Link><Link className="button secondary" href={`/${locale}/scanner`}>{m.nav.scanner}</Link></>} />
+      actions={<><Link className="button secondary" href={`/${locale}/dashboard`}>{m.nav.dashboard}</Link><Link className="button secondary" href={`/${locale}/stocks`}>{m.nav.stocks}</Link></>} />
     <HeadDisclosure text={m.common.operatorDisclosure} />
     <div className={styles.toolbar}>
       <nav aria-label={h.metricLabel} className={styles.toggle}>

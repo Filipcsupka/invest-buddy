@@ -1,10 +1,10 @@
 import type { Locale } from "./index";
 
-/** Copy for the owner-only market views (indices, forex, crypto, screener, market cap). Kept apart from messages.ts so parallel branches do not collide. */
+/** Copy for the market views (indices, screener, market cap). Kept apart from messages.ts so parallel branches do not collide. */
 const en = {
-  owner: "Owner only",
+  owner: "Market data",
   noValue: "—",
-  source: "Source: end-of-day market data, stored by the nightly jobs. Not shown publicly.",
+  source: "Source: end-of-day market data, stored by the nightly jobs. Available to subscribers.",
   factsOnly: "Facts only. This page has no scores, states or calls.",
   back: "Back to the list",
   lastClose: "Last close",
@@ -28,31 +28,13 @@ const en = {
     table: "Tracked indices",
     detailLede: "Daily closes for this index and its constituents as listed by the vendor.",
     components: "Constituents",
-    componentsLede: "Members and weights from the vendor's index data, as of {date}.",
+    componentsLede: "Index members as of {date}.",
     componentsNone: "No constituent list is stored for this index.",
-    weightMissing: "The vendor did not give weights for this index.",
     code: "Code",
     exchange: "Exchange",
     sector: "Sector",
     industry: "Industry",
-    weight: "Weight",
     count: "{n} constituents",
-  },
-  forex: {
-    title: "Forex",
-    lede: "Last stored close and change for the tracked currency pairs.",
-    table: "Tracked currency pairs",
-    detailLede: "Daily closes for this currency pair.",
-    matrix: "Cross rates",
-    matrixLede: "One unit of the row currency in the column currency, from the latest stored closes. Cells marked * are computed through USD because no direct pair is stored. Closing dates can differ by pair.",
-    matrixCaption: "Cross-rate matrix: row currency priced in column currency",
-    derived: "computed through USD",
-  },
-  crypto: {
-    title: "Crypto",
-    lede: "Last stored close and change for the tracked cryptocurrencies, priced in USD.",
-    table: "Tracked cryptocurrencies",
-    detailLede: "Daily closes for this cryptocurrency in USD. Crypto trades every day; the latest bar can still be open when the job runs.",
   },
   screener: {
     title: "Screener",
@@ -101,9 +83,9 @@ const en = {
 export type MarketsMessages = typeof en;
 
 const sk: MarketsMessages = {
-  owner: "Len pre vlastníka",
+  owner: "Trhové údaje",
   noValue: "—",
-  source: "Zdroj: denné trhové údaje uložené nočnými úlohami. Verejne sa nezobrazujú.",
+  source: "Zdroj: denné trhové údaje uložené nočnými úlohami. Dostupné predplatiteľom.",
   factsOnly: "Iba fakty. Stránka neobsahuje skóre, stavy ani odporúčania.",
   back: "Späť na zoznam",
   lastClose: "Posledná uzávierka",
@@ -127,31 +109,13 @@ const sk: MarketsMessages = {
     table: "Sledované indexy",
     detailLede: "Denné uzávierky indexu a jeho zložky podľa údajov dodávateľa.",
     components: "Zložky indexu",
-    componentsLede: "Členovia a váhy z indexových údajov dodávateľa k {date}.",
+    componentsLede: "Zložky indexu k {date}.",
     componentsNone: "Pre tento index nie je uložený zoznam zložiek.",
-    weightMissing: "Dodávateľ pre tento index neuviedol váhy.",
     code: "Kód",
     exchange: "Burza",
     sector: "Sektor",
     industry: "Odvetvie",
-    weight: "Váha",
     count: "Počet zložiek: {n}",
-  },
-  forex: {
-    title: "Meny",
-    lede: "Posledná uložená uzávierka a zmena sledovaných menových párov.",
-    table: "Sledované menové páry",
-    detailLede: "Denné uzávierky menového páru.",
-    matrix: "Krížové kurzy",
-    matrixLede: "Jedna jednotka meny v riadku vyjadrená v mene stĺpca, z posledných uložených uzávierok. Bunky označené * sú prepočítané cez USD, lebo priamy pár nie je uložený. Dátumy uzávierok sa môžu medzi pármi líšiť.",
-    matrixCaption: "Matica krížových kurzov: mena v riadku vyjadrená v mene stĺpca",
-    derived: "prepočítané cez USD",
-  },
-  crypto: {
-    title: "Kryptomeny",
-    lede: "Posledná uložená uzávierka a zmena sledovaných kryptomien v USD.",
-    table: "Sledované kryptomeny",
-    detailLede: "Denné uzávierky kryptomeny v USD. Kryptomeny sa obchodujú každý deň; posledný deň môže byť pri behu úlohy ešte otvorený.",
   },
   screener: {
     title: "Skener trhu",

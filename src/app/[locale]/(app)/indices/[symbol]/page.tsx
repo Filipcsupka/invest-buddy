@@ -10,7 +10,7 @@ import { RecordCard } from "@/components/record-parts";
 import t from "@/components/etf/etf.module.css";
 import { resolveLocale } from "@/app/[locale]/locale";
 import { AssetDetailPage } from "../_components/asset-pages";
-import { day, percentOf } from "../_components/format";
+import { day } from "../_components/format";
 import s from "../_components/markets.module.css";
 
 export const dynamic = "force-dynamic";
@@ -29,20 +29,17 @@ async function IndexPage({ params }: Props) {
   if (!vendor || !detail) notFound();
   const m = getMarketsMessages(locale);
   const components = await indexComponents(vendor);
-  const weighted = components.rows.some((row) => row.weight !== null);
-  return <AssetDetailPage locale={locale} assetClass="index" detail={detail} lede={m.indices.detailLede} basePath="indices">
+  return <AssetDetailPage locale={locale} detail={detail} lede={m.indices.detailLede} basePath="indices">
     <RecordCard id="components" title={m.indices.components} lede={components.asOf ? fill(m.indices.componentsLede, { date: day(locale, components.asOf) }) : undefined}
       meta={components.rows.length ? <span className="num">{fill(m.indices.count, { n: components.rows.length })}</span> : undefined} flush={components.rows.length > 0}>
       {components.rows.length ? <>
-        {weighted ? null : <p className={t.note}>{m.indices.weightMissing}</p>}
         <div className={t.tableWrap}><table className={t.table}>
           <caption className="visually-hidden">{m.indices.components}</caption>
           <thead><tr><th scope="col">{m.indices.code}</th><th scope="col">{m.name}</th><th scope="col">{m.indices.sector}</th><th scope="col">{m.indices.industry}</th>
-            {weighted ? <th scope="col" className={s.right}>{m.indices.weight}</th> : null}</tr></thead>
+            </tr></thead>
           <tbody>{components.rows.map((row) => <tr key={row.code}>
             <th scope="row">{row.code}{row.exchange ? <span className={s.code}>{row.exchange}</span> : null}</th>
             <td>{row.name ?? m.noValue}</td><td>{row.sector ?? m.noValue}</td><td>{row.industry ?? m.noValue}</td>
-            {weighted ? <td className={s.right}>{percentOf(locale, row.weight)}</td> : null}
           </tr>)}</tbody>
         </table></div>
       </> : <p className={t.note}>{m.indices.componentsNone}</p>}
