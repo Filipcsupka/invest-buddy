@@ -57,8 +57,7 @@ async function main() {
       process.stdout.write(`${company.symbol}: ${added.length ? added.map((r) => `${r.form} ${r.accession}`).join(", ") : "none"}\n`);
     }
   } finally { await pool.end(); }
-  process.stdout.write(`watch: ${count} new filings, ${fundamentals} fundamentals\n`);
-  if (missing) process.exitCode = 1;
-  return { filings: count, fundamentals, missingCiks: missing, failures: missing };
+  process.stdout.write(`watch: ${count} new filings, ${fundamentals} fundamentals, ${missing} missing CIKs skipped\n`);
+  return { filings: count, fundamentals, missingCiks: missing, failures: 0 };
 }
 if (/(?:^|[/\\])watch\.(?:ts|js)$/.test(process.argv[1] ?? "")) void runLoggedJob("watch", main);

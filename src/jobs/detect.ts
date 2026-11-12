@@ -93,27 +93,34 @@ export function parseArgs(args: string[]) {
   return { out, since };
 }
 
+export const FILINGS_SQL = `SELECT w.symbol,w.accession,w.form,w.items || ',' || COALESCE((
+      SELECT substring(d.body from '(?i)Item[[:space:]]+(2[.]02|4[.]02|5[.]02|7[.]01|8[.]01)')
+      FROM source_documents d WHERE d.symbol=w.symbol AND d.meta->>'accession'=w.accession
+        AND d.doc_type IN ('8-K','8-K/A') LIMIT 1), '') AS items FROM filing_watch w
+      WHERE w.symbol = ANY($1::text[]) AND ($2::date IS NULL OR w.filed_at >= $2::date) AND NOT EXISTS (
+        SELECT 1 FROM extraction_runs e WHERE e.symbol=w.symbol AND e.status='ok' AND e.applied_at IS NOT NULL AND e.created_at >= w.first_seen_at)`;
+
+// 380 calendar days covers the latest 252 trading bars for current names; stale names with long gaps may have a shorter window.
+export const BARS_SQL = `WITH ranked AS (
+      SELECT ticker,bar_date,close,max(high) OVER (PARTITION BY ticker ORDER BY bar_date ROWS BETWEEN 251 PRECEDING AND CURRENT ROW) AS high,
+        lag(close) OVER (PARTITION BY ticker ORDER BY bar_date) AS previous,
+        row_number() OVER (PARTITION BY ticker ORDER BY bar_date DESC) AS rn FROM daily_bars
+      WHERE ticker = ANY($1::text[]) AND bar_date >= current_date - 380)
+      SELECT ticker AS symbol,close::text,high::text,previous::text FROM ranked WHERE rn=1 AND previous IS NOT NULL`;
+
 async function main() {
   const { out, since } = parseArgs(process.argv.slice(2));
   if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required");
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
   try {
-    const filings = await pool.query<Filing>(`SELECT w.symbol,w.accession,w.form,w.items || ',' || COALESCE((
-      SELECT substring(d.body from '(?i)Item[[:space:]]+(2[.]02|4[.]02|5[.]02|7[.]01|8[.]01)')
-      FROM source_documents d WHERE d.symbol=w.symbol AND d.meta->>'accession'=w.accession
-        AND d.doc_type IN ('8-K','8-K/A') LIMIT 1), '') AS items FROM filing_watch w
-      WHERE ($1::date IS NULL OR w.filed_at >= $1::date) AND NOT EXISTS (
-        SELECT 1 FROM extraction_runs e WHERE e.symbol=w.symbol AND e.status='ok' AND e.applied_at IS NOT NULL AND e.created_at >= w.first_seen_at)`, [since]);
+    const universe = (await loadUniverse(pool)).map((u) => u.symbol);
+    const filings = await pool.query<Filing>(FILINGS_SQL, [universe, since]);
     const docs = await pool.query<{ symbol: string; accession: string; date: string; owner_cik: string | null; trades: InsiderFiling["trades"]; is_new: boolean }>(`SELECT d.symbol,d.meta->>'accession' AS accession,to_char(d.published_at AT TIME ZONE 'UTC','YYYY-MM-DD') AS date,
       d.meta->>'ownerCik' AS owner_cik,d.meta->'trades' AS trades,NOT EXISTS (
         SELECT 1 FROM extraction_runs e WHERE e.symbol=d.symbol AND e.status='ok' AND e.applied_at IS NOT NULL AND d.meta->>'accession'=ANY(e.accessions)) AS is_new
       FROM source_documents d WHERE d.doc_type='4' AND d.published_at >= now() - interval '400 days' AND d.symbol IS NOT NULL`);
     const today = new Date().toISOString().slice(0, 10);
-    const bars = await pool.query<{ symbol: string; close: string; high: string; previous: string }>(`WITH ranked AS (
-      SELECT ticker,bar_date,close,max(high) OVER (PARTITION BY ticker ORDER BY bar_date ROWS BETWEEN 251 PRECEDING AND CURRENT ROW) AS high,
-        lag(close) OVER (PARTITION BY ticker ORDER BY bar_date) AS previous,
-        row_number() OVER (PARTITION BY ticker ORDER BY bar_date DESC) AS rn FROM daily_bars)
-      SELECT ticker AS symbol,close::text,high::text,previous::text FROM ranked WHERE rn=1 AND previous IS NOT NULL`);
+    const bars = await pool.query<{ symbol: string; close: string; high: string; previous: string }>(BARS_SQL, [universe]);
     const valuations = await pool.query<{ symbol: string; current: string; previous: string }>(`WITH ranked AS (
       SELECT symbol,(value->>'pe')::numeric AS pe,lag((value->>'pe')::numeric) OVER (PARTITION BY symbol ORDER BY as_of) AS previous,
         row_number() OVER (PARTITION BY symbol ORDER BY as_of DESC) AS rn FROM collected_facts WHERE fact_key='valuation_pe')
@@ -127,7 +134,6 @@ async function main() {
         AND ($1::date IS NULL OR d.published_at >= $1::date)
         AND NOT EXISTS (SELECT 1 FROM extraction_runs e WHERE e.symbol=d.symbol AND e.status='ok'
           AND e.applied_at IS NOT NULL AND e.applied_at >= d.fetched_at)`, [since]);
-    const universe = (await loadUniverse(pool)).map((u) => u.symbol);
     const consensus = await pool.query<CatalystConsensus>(`SELECT i.ticker AS symbol, c.as_of::text AS "asOf", c.value
       FROM instruments i LEFT JOIN LATERAL (
         SELECT as_of,value FROM consensus_findings WHERE symbol=i.ticker AND field='productCatalyst'

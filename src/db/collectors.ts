@@ -1,6 +1,6 @@
 import type pg from "pg";
 import type { CollectedDocument } from "../collectors/types";
-import type { Form4Transaction, FilingFile } from "../collectors/edgar";
+import type { Form4Transaction, FilingFile, CachedEdgarDocument } from "../collectors/edgar";
 import { archiveFiling } from "../data/filing-archive";
 import type { EpsHistoryBatch, HolderEvent } from "../collectors/sources/common";
 import type { MacroObservation } from "../collectors/macro-observations";
@@ -33,6 +33,7 @@ export interface SourceState {
   apiRequestsSince(source: string, since: string): Promise<number>;
 }
 export interface CollectorRepository extends SourceState {
+  cachedEdgarDocuments?(cik: number, accessions: string[]): Promise<CachedEdgarDocument[]>;
   upsertDocument(doc: CollectedDocument): Promise<{ id: number; written: boolean }>;
   upsertInsiderTransactions?(accession: string, ticker: string, filedAt: string, rows: Form4Transaction[]): Promise<void>;
   markSecInsiderChecked?(ticker: string, checkedAt: string): Promise<void>;
@@ -57,6 +58,10 @@ export class MemoryCollectorRepository implements CollectorRepository {
   readonly holderEvents = new Map<string, HolderEvent>();
   readonly macroObservations: MacroObservation[] = [];
   readonly epsHistory: EpsHistoryRow[] = [];
+  async cachedEdgarDocuments(cik: number, accessions: string[]) {
+    const wanted = new Set(accessions);
+    return [...this.documents.values()].filter((doc) => doc.source === "edgar" && doc.url.startsWith(`https://www.sec.gov/Archives/edgar/data/${cik}/`) && wanted.has(String(doc.meta.accession))).map((doc) => ({ ...doc, storedId: doc.id, storedSymbol: doc.symbol }));
+  }
   async upsertEpsHistory(batch: EpsHistoryBatch) { return insertMemoryEpsHistory(this.epsHistory, batch); }
   async upsertMacroObservations(rows: MacroObservation[]) { return insertMemoryMacroObservations(this.macroObservations, rows); }
   async upsertHolderEvent(event: HolderEvent) {
@@ -80,7 +85,10 @@ export class MemoryCollectorRepository implements CollectorRepository {
   }
   async upsertDocument(doc: CollectedDocument) {
     const old = this.documents.get(doc.url);
-    if (old?.contentHash === doc.contentHash) return { id: old.id, written: false };
+    if (old?.contentHash === doc.contentHash) {
+      if (old.symbol !== doc.symbol) this.documents.set(doc.url, { ...doc, id: old.id });
+      return { id: old.id, written: false };
+    }
     const id = old?.id ?? this.documents.size + 1;
     this.documents.set(doc.url, { ...doc, id });
     return { id, written: true };
@@ -138,6 +146,15 @@ export async function loadInsider(pool: pg.Pool, symbol: string, asOf: string, m
 }
 export class PostgresCollectorRepository implements CollectorRepository {
   constructor(private readonly pool: pg.Pool) {}
+  async cachedEdgarDocuments(cik: number, accessions: string[]) {
+    if (!accessions.length) return [];
+    const result = await this.pool.query<{ id: string; source: string; symbol: string | null; doc_type: string; url: string; published_at: Date; body: string; meta: Record<string, unknown>; content_hash: string; source_id: string }>(
+      `SELECT id,source,symbol,doc_type,url,published_at,body,meta,content_hash,source_id FROM source_documents
+       WHERE source='edgar' AND url LIKE $1 AND meta->>'accession'=ANY($2::text[])`,
+      [`https://www.sec.gov/Archives/edgar/data/${cik}/%`, accessions]);
+    return result.rows.map((row) => ({ source: row.source, symbol: row.symbol, docType: row.doc_type, url: row.url,
+      publishedAt: new Date(row.published_at).toISOString(), body: row.body, meta: row.meta, contentHash: row.content_hash, sourceId: row.source_id, storedId: Number(row.id), storedSymbol: row.symbol }));
+  }
   async markSecInsiderChecked(ticker: string, checkedAt: string) {
     await this.pool.query(`INSERT INTO sec_insider_refresh (ticker,checked_at) VALUES ($1,$2)
       ON CONFLICT (ticker) DO UPDATE SET checked_at=GREATEST(sec_insider_refresh.checked_at,EXCLUDED.checked_at)`, [ticker, checkedAt]);
@@ -156,7 +173,7 @@ export class PostgresCollectorRepository implements CollectorRepository {
       (accession,line_no,ticker,owner_cik,owner_name,reporting_owners,is_director,is_officer,is_ten_percent_owner,is_other,
        transaction_date,code,shares,price,acquired_disposed,derivative,shares_after,filed_at,plan_10b5_1)
       VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
-      ON CONFLICT (accession,line_no) DO NOTHING`,
+      ON CONFLICT (accession,line_no) DO UPDATE SET ticker=EXCLUDED.ticker WHERE insider_transactions.ticker<>EXCLUDED.ticker`,
       [accession,row.lineNo,ticker,row.ownerCik,row.ownerName,JSON.stringify(row.reportingOwners),row.isDirector,row.isOfficer,row.isTenPercentOwner,row.isOther,
         row.transactionDate,row.code,row.shares,row.price,row.acquiredDisposed,row.derivative,row.sharesAfter,filedAt,row.plan10b5]);
   }
