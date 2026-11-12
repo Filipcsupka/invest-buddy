@@ -129,6 +129,14 @@ Each row quotes one current dictionary string containing buy, add, start, reduce
 
 The shortlist on the scanner and dashboard (docs/shortlist.md) is visible to the owner and to Plus and trial customers; everyone else gets a lock card. Its strings describe checks, order and sector counts. None contains buy, add, start, reduce, sell or a Slovak equivalent, and none shows an amount. `shortlist.tradedValue` ("Traded value {n} USD a day") is market liquidity, not a position size. `shortlist.lede` says the rule state of each name stays the same and that a check without data does not remove a name. The ranked order is still a lawyer question (legal-pack.md).
 
+## Cross-market dashboard (`dashboard-messages.*`)
+
+The dashboard shows ranked stocks and ETFs under published rules, index context, and dated historical returns. The panel uses “Portfolio structure (example)” / “Štruktúra portfólia (príklad)” and labels each sleeve. It gives no sleeve weight or amount. The concentration sentence uses the configured reference threshold; it does not assign a portfolio allocation.
+
+The period view says “Highest rule scores” / “Najvyššie skóre podľa pravidiel” for stocks and ETFs. Indices have no score and are ordered by the 200-day trend state. Returns are labelled “past, not a forecast” / “minulosť, nie prognóza”; missing bars and stale daily prices have explicit labels. The reference mixes appear in a separate sourced panel. Market view links describe navigation only.
+
+The ranked order is still an open lawyer question in `legal-pack.md`. This dashboard extends the question across stocks and ETFs and places past returns nearby. Review that combined presentation before public release.
+
 ## Status label (ST1)
 
 `status.advice.setup` ("Buy zone", "Zóna nákupu") and `status.headlineAdvice.setup` are used only when `ADVICE_OUTPUT` is on. With the flag off the green state reads "Conditions met" / "Podmienky splnené".

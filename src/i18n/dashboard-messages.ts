@@ -1,0 +1,46 @@
+import type { Locale } from "@/i18n";
+
+const copy = {
+  en: {
+    title: "Portfolio structure (example)",
+    lede: "How portfolios are commonly built from different parts, with the highest rule scores in each part today. Same view for every visitor. Not advice.",
+    growth: "Growth stocks", core: "Core funds", defensive: "Defensive funds", indices: "Index context", cash: "Cash",
+    scoreNote: "Highest score under the published rules. A score does not say how much to hold, or whether to hold.",
+    stockEmpty: "No names meet the shortlist checks yet.", fundEmpty: "No rated funds yet", indexEmpty: "No index bars yet",
+    cashNote: "An uninvested share is part of any structure; no amount is assigned here.",
+    score: "Rule score", ter: "TER", aum: "AUM", dataDate: "Data date", index: "Tracks", noValue: "No data",
+    ma200: "vs 200d MA", above: "Above", below: "Below", oneYear: "1y return", volatility: "1y volatility",
+    concentration: (count: number, total: number, sector: string, threshold: number) => `${count} of ${total} names are in ${sector}, above the ${threshold}% reference line.`,
+    unknownSector: (count: number) => `${count} names have no verified sector group.`,
+    referenceTitle: "Published structure examples", referenceLede: "These describe common layouts. They are separate from the names and scores above.",
+    coreSatellite: "Core-satellite", coreSatelliteBody: "A broad index core alongside selected active holdings.",
+    threeFund: "Three-fund", threeFundBody: "Total US equity, international equity and bond funds.",
+    sixtyForty: "60/40", sixtyFortyBody: "A published stock and bond reference mix, not a target for this screen.",
+    source: "Source", openStocks: "Open Stocks view", openEtfs: "Open ETFs", openIndices: "Open Indices",
+    periodTitle: "Highest rule scores", periodLede: "Stocks and funds follow stored rule scores. Indices are ordered by their 200-day trend state, without a score.",
+    periodStocks: "Stocks", periodFunds: "ETFs", periodReturn: "Return over period (past, not a forecast)", periodReturnShort: "Past return", periodToday: "Today", periodMonth: "1 month", periodQuarter: "Quarter (3M)", periodYear: "1 year",
+    periodScoreDate: "Score date", periodPriceDate: "Price date", periodGap: "Price history has a gap", periodInsufficient: "Insufficient price history", periodStale: "Last price is stale", marketLinks: "Market views", periodNoScores: "No rated names yet", periodTrend: "200-day trend",
+  },
+  sk: {
+    title: "Štruktúra portfólia (príklad)",
+    lede: "Ako sa portfóliá bežne skladajú z rôznych častí, s najvyšším skóre podľa pravidiel v každej časti dnes. Rovnaký pohľad pre každého návštevníka. Nejde o poradenstvo.",
+    growth: "Rastové akcie", core: "Základné fondy", defensive: "Defenzívne fondy", indices: "Kontext indexov", cash: "Hotovosť",
+    scoreNote: "Najvyššie skóre podľa zverejnených pravidiel. Skóre nehovorí, koľko držať ani či držať.",
+    stockEmpty: "Žiadna firma zatiaľ nespĺňa podmienky užšieho výberu.", fundEmpty: "Zatiaľ nie sú hodnotené fondy", indexEmpty: "Zatiaľ nie sú údaje o indexoch",
+    cashNote: "Neinvestovaná časť je súčasťou každej štruktúry; žiadna suma tu nie je určená.",
+    score: "Skóre pravidiel", ter: "TER", aum: "AUM", dataDate: "Dátum údajov", index: "Sleduje", noValue: "Bez údajov",
+    ma200: "voči MA200", above: "Nad", below: "Pod", oneYear: "Ročná zmena", volatility: "Ročná volatilita",
+    concentration: (count: number, total: number, sector: string, threshold: number) => `${count} z ${total} firiem je v skupine ${sector}, nad referenčnou hranicou ${threshold} %.`,
+    unknownSector: (count: number) => `${count} firiem nemá overenú sektorovú skupinu.`,
+    referenceTitle: "Zverejnené príklady štruktúry", referenceLede: "Opisujú bežné usporiadanie. Sú oddelené od firiem a skóre vyššie.",
+    coreSatellite: "Jadro a satelity", coreSatelliteBody: "Široký indexový základ doplnený vybranými aktívnymi pozíciami.",
+    threeFund: "Tri fondy", threeFundBody: "Celkový americký akciový, medzinárodný akciový a dlhopisový fond.",
+    sixtyForty: "60/40", sixtyFortyBody: "Zverejnený referenčný pomer akcií a dlhopisov, nie cieľ tohto prehľadu.",
+    source: "Zdroj", openStocks: "Otvoriť akcie", openEtfs: "Otvoriť ETF", openIndices: "Otvoriť indexy",
+    periodTitle: "Najvyššie skóre podľa pravidiel", periodLede: "Akcie a fondy sú zoradené podľa uloženého skóre. Indexy podľa stavu voči 200-dňovému priemeru, bez skóre.",
+    periodStocks: "Akcie", periodFunds: "ETF", periodReturn: "Zmena za obdobie (minulosť, nie prognóza)", periodReturnShort: "Minulá zmena", periodToday: "Dnes", periodMonth: "1 mesiac", periodQuarter: "Štvrťrok (3M)", periodYear: "1 rok",
+    periodScoreDate: "Dátum skóre", periodPriceDate: "Dátum ceny", periodGap: "V histórii cien chýbajú údaje", periodInsufficient: "Nedostatočná história cien", periodStale: "Posledná cena je zastaraná", marketLinks: "Prehľady trhov", periodNoScores: "Zatiaľ nie sú hodnotené položky", periodTrend: "200-dňový trend",
+  },
+} as const;
+
+export const dashboardCopy = (locale: Locale) => copy[locale];

@@ -24,8 +24,13 @@ import { MacroEvents } from "@/components/macro-events";
 import { storedMacroEvents } from "@/data/macro-calendar-store";
 import { DataStatus } from "@/components/data-status";
 import { getViewer } from "@/viewer/get-viewer";
-import { latestShortlist, shortlistAccess } from "@/data/shortlist";
+import { latestShortlist, shortlistAccess, shortlistViewEnabled } from "@/data/shortlist";
+import { canUseVendorData } from "@/viewer/viewer";
 import { ShortlistLock, ShortlistView } from "@/components/shortlist-view";
+import { PortfolioStructure } from "@/components/dashboard/portfolio-structure";
+import { PeriodHighlights } from "@/components/dashboard/period-highlights";
+import { assembleCrossMarket, assemblePeriodRows, latestCrossMarketData, latestPeriodPrices, parseDashboardPeriod } from "@/data/cross-market-dashboard";
+import { dashboardCopy } from "@/i18n/dashboard-messages";
 import { fill, formatDate, getMessages, plural } from "@/i18n";
 import { pageMetadata } from "@/i18n/metadata";
 import { resolveLocale, type LocaleParams } from "@/app/[locale]/locale";
@@ -39,11 +44,28 @@ export async function generateMetadata({ params }: LocaleParams): Promise<Metada
   return pageMetadata(locale, "/dashboard", m.meta.dashboardTitle, m.meta.dashboardDescription);
 }
 
-async function Dashboard({ params }: LocaleParams) {
+async function Dashboard({ params, searchParams }: LocaleParams & { searchParams?: Promise<{ period?: string }> }) {
   const locale = await resolveLocale(params);
+  const period = parseDashboardPeriod((await searchParams)?.period);
   const m = getMessages(locale);
-  const access = shortlistAccess(await getViewer());
-  const [data, portfolio, moved, horizons, macroSchedule, shortlist] = await Promise.all([latestScoreSummaries(), latestPortfolio(), latestStateChanges(), publicHorizons(), storedMacroEvents(new Date().toISOString().slice(0, 10)), access === "full" ? latestShortlist() : null]);
+  const viewer = await getViewer();
+  const access = viewer.preview ? (shortlistViewEnabled() ? "locked" : "hidden") : shortlistAccess(viewer);
+  const marketAccess = !viewer.preview && canUseVendorData(viewer);
+  const marketBundle = marketAccess ? Promise.all([access === "full" ? latestShortlist() : null, latestCrossMarketData()]).then(async ([shortlist, crossMarket]) => {
+    const structure = assembleCrossMarket(shortlist, crossMarket.funds, crossMarket.indices, crossMarket.sample);
+    const seenIndices = new Set<string>();
+    const symbols = [...crossMarket.funds].sort((a, b) => b.scorePercent - a.scorePercent || a.key.localeCompare(b.key))
+      .filter((fund) => {
+        const index = fund.trackedIndex?.trim().toLowerCase();
+        if (!index) return true;
+        if (seenIndices.has(index)) return false;
+        seenIndices.add(index);
+        return true;
+      }).slice(0, 5).flatMap((fund) => fund.vendorSymbol ? [fund.vendorSymbol] : []);
+    const periodPrices = await latestPeriodPrices(structure.stocks.map((stock) => stock.ticker), symbols);
+    return { shortlist, crossMarket, structure, periodPrices };
+  }) : Promise.resolve(null);
+  const [data, portfolio, moved, horizons, macroSchedule, market] = await Promise.all([latestScoreSummaries(), latestPortfolio(), latestStateChanges(), publicHorizons(), storedMacroEvents(new Date().toISOString().slice(0, 10)), marketBundle]);
   const k = getKitMessages(locale);
   const changes: StateChange[] = moved.map(({ ticker, from, to }) => {
     const [fromLabel, toLabel] = [m.status.labels[from], m.status.labels[to]];
@@ -59,6 +81,13 @@ async function Dashboard({ params }: LocaleParams) {
       lede={data.lastUpdated ? fill(m.dashboard.lede, { date: formatDate(locale, session), count: plural(locale, data.sample ? m.plurals.sampleTickers : m.plurals.tickers, rows.length) }) : undefined}
       meta={<DataStatus locale={locale} lastUpdated={data.lastUpdated} stale={data.stale} />}
       actions={<><Link className="button secondary" href={`/${locale}/heatmap`}>{h.navLabel}</Link><Link className="button secondary" href={`/${locale}/methodology`}>{m.nav.methodology}</Link></>} />
+    {access === "locked" && !marketAccess && <ShortlistLock locale={locale} />}
+    {market && <><PeriodHighlights locale={locale} period={period} rows={assemblePeriodRows(market.structure, market.crossMarket.funds, period, market.periodPrices)} sample={market.crossMarket.sample} /><PortfolioStructure locale={locale} data={market.structure} /></>}
+    {market && <nav className={styles.marketLinks} aria-label={dashboardCopy(locale).marketLinks}>
+      <Link className="button secondary" href={`/${locale}/stocks`}>{dashboardCopy(locale).openStocks}</Link>
+      <Link className="button secondary" href={`/${locale}/etf`}>{dashboardCopy(locale).openEtfs}</Link>
+      <Link className="button secondary" href={`/${locale}/indices`}>{dashboardCopy(locale).openIndices}</Link>
+    </nav>}
     <div className={styles.strip}>
       {changes.length ? <StateStrip label={stripLabel} changes={changes} empty={k.strip.empty} pauseLabel={k.strip.pause} playLabel={k.strip.play} /> : <section className={styles.stripEmpty} aria-label={stripLabel}>
         <div className={styles.stripEmptyHead}><span className={styles.stripEmptyIcon} aria-hidden="true"><IconBandWatch /></span><div><p className={styles.stripEmptyLabel}>{stripLabel}</p><p className={styles.stripEmptyText}>{k.strip.empty}</p></div></div>
@@ -66,7 +95,7 @@ async function Dashboard({ params }: LocaleParams) {
       </section>}
     </div>
     <ScoreStrip locale={locale} rows={rows} />
-    {access === "locked" ? <ShortlistLock locale={locale} /> : shortlist ? <ShortlistView locale={locale} data={shortlist} compact /> : null}
+    {access === "full" && market?.shortlist ? <ShortlistView locale={locale} data={market.shortlist} compact /> : null}
     <HeadDisclosure text={m.common.operatorDisclosure} />
     <StateFilterProvider>
     <ScannerTable locale={locale} rows={rows} profiles={Object.fromEntries(Object.entries(horizons).map(([ticker, h]) => [ticker, h.profile]))} aside={<MacroEvents locale={locale} schedule={macroSchedule} />} heldTickers={portfolio?.weights.filter((p) => p.weightPercent > 0).map((p) => p.symbol.toUpperCase()) ?? []} text={{
