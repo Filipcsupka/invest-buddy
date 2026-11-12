@@ -6,7 +6,7 @@ import type { Locale } from "./index";
  */
 const en = {
   common: {
-    ownerNote: "Owner-only view. EODHD data is stored for private use and is not cleared for public display.",
+    ownerNote: "Owner-only view. Market data is stored for private use and is not cleared for public display.",
     source: "Source: {source}.",
     noData: "No data stored yet. The collector job has not run, or it is suspended.",
     apply: "Apply",
@@ -33,7 +33,7 @@ const en = {
     monthChange: "1 month",
     bp: "{n} bp",
     sourceCol: "Source",
-    sources: { treasury: "US Treasury", eodhd: "EODHD" },
+    sources: { treasury: "US Treasury", eodhd: "Market data" },
     realTitle: "Real yields (TIPS)",
     billTitle: "Treasury bills",
     billRate: "Coupon-equivalent rate",
@@ -41,7 +41,7 @@ const en = {
     longTypes: { BC_20year: "20-year composite", Over_10_Years: "Over 10 years", Real_Rate: "Long-term real rate" } as Record<string, string>,
     policyTitle: "Effective federal funds rate",
     policyNote: "Monthly average, FRED series FEDFUNDS ({date}).",
-    curveSourceNote: "3-month, 2-year and 10-year yields come from the US Treasury when it has the same day; EODHD fills the other maturities.",
+    curveSourceNote: "3-month, 2-year and 10-year yields come from the US Treasury when it has the same day; market data fills the other maturities.",
     upcomingTitle: "Upcoming releases",
     upcomingLede: "Next 14 days. Times are UTC, as sent by the vendor.",
     recentTitle: "Recent releases",
@@ -90,7 +90,7 @@ const en = {
     aria: "Daily news sentiment for {symbol}, {count} days from {first} to {last}. Latest {last}: {value} from {articles} articles.",
     latest: "Latest {value} ({articles} articles)",
     empty: "No sentiment stored for this symbol.",
-    note: "EODHD daily score from -1 to 1, built from news text.",
+    note: "Daily market-data score from -1 to 1, built from news text.",
   },
   congress: {
     title: "Congress trades",
@@ -128,7 +128,7 @@ export type FlowMessages = typeof en;
 
 const sk: FlowMessages = {
   common: {
-    ownerNote: "Zobrazenie iba pre vlastníka. Údaje EODHD sú uložené na súkromné použitie a nie sú schválené na verejné zobrazenie.",
+    ownerNote: "Zobrazenie iba pre vlastníka. Trhové údaje sú uložené na súkromné použitie a nie sú schválené na verejné zobrazenie.",
     source: "Zdroj: {source}.",
     noData: "Zatiaľ nie sú uložené žiadne údaje. Zberná úloha ešte nebežala alebo je pozastavená.",
     apply: "Použiť",
@@ -155,7 +155,7 @@ const sk: FlowMessages = {
     monthChange: "1 mesiac",
     bp: "{n} b. b.",
     sourceCol: "Zdroj",
-    sources: { treasury: "Ministerstvo financií USA", eodhd: "EODHD" },
+    sources: { treasury: "Ministerstvo financií USA", eodhd: "Market data" },
     realTitle: "Reálne výnosy (TIPS)",
     billTitle: "Štátne pokladničné poukážky",
     billRate: "Sadzba ekvivalentná kupónu",
@@ -163,7 +163,7 @@ const sk: FlowMessages = {
     longTypes: { BC_20year: "20-ročná zložená", Over_10_Years: "Nad 10 rokov", Real_Rate: "Dlhodobá reálna sadzba" },
     policyTitle: "Efektívna sadzba federálnych fondov",
     policyNote: "Mesačný priemer, séria FRED FEDFUNDS ({date}).",
-    curveSourceNote: "3-mesačný, 2-ročný a 10-ročný výnos pochádza z ministerstva financií USA, ak má údaj za ten istý deň; ostatné splatnosti dopĺňa EODHD.",
+    curveSourceNote: "3-mesačný, 2-ročný a 10-ročný výnos pochádza z ministerstva financií USA, ak má údaj za ten istý deň; ostatné splatnosti dopĺňajú trhové dáta.",
     upcomingTitle: "Nadchádzajúce správy",
     upcomingLede: "Najbližších 14 dní. Časy sú v UTC, ako ich posiela dodávateľ.",
     recentTitle: "Nedávne správy",
@@ -212,7 +212,7 @@ const sk: FlowMessages = {
     aria: "Denný sentiment správ pre {symbol}, {count} dní od {first} do {last}. Posledný {last}: {value} z {articles} článkov.",
     latest: "Posledný {value} ({articles} článkov)",
     empty: "Pre tento symbol nie je uložený žiadny sentiment.",
-    note: "Denné skóre EODHD od -1 po 1, vypočítané z textu správ.",
+    note: "Denné skóre trhových dát od -1 po 1, vypočítané z textu správ.",
   },
   congress: {
     title: "Obchody členov Kongresu",
