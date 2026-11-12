@@ -11,7 +11,7 @@ afterEach(() => {
 it("allows public pages, closes the API and owner page, and names the sitemap", () => {
   delete process.env.SITE_NOINDEX;
   process.env.EODHD_PRIVATE_USE = "off";
-  expect(robots()).toEqual({ rules: { userAgent: "*", allow: "/", disallow: ["/api/", ...["en", "sk"].flatMap((locale) => [...["owner-allocation", "indices", "forex", "crypto", "economy", "congress", "news", "screener"].map((route) => `/${locale}/${route}`), `/${locale}/owner/`])] }, sitemap: `${siteUrl}/sitemap.xml` });
+  expect(robots()).toEqual({ rules: { userAgent: "*", allow: "/", disallow: ["/api/", ...["en", "sk"].flatMap((locale) => [...["owner-allocation", "indices", "economy", "calendar", "congress", "news", "screener"].map((route) => `/${locale}/${route}`), `/${locale}/owner/`])] }, sitemap: `${siteUrl}/sitemap.xml` });
 });
 
 it("keeps private vendor routes out of crawlers when private use is on", () => {

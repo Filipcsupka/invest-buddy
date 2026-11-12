@@ -38,7 +38,7 @@ const navigation = { rsc: "1", "next-router-state-tree": "%5B%5D", accept: "*/*"
 const fetchCall = { accept: "*/*", "sec-fetch-dest": "empty", "sec-fetch-mode": "cors" };
 const curl = { accept: "*/*" };
 
-const gated = ["/en/dashboard", "/en/scanner", "/en/track-record", "/en/heatmap", "/en/etf", "/en/company/NVDA", "/en/insiders", "/sk/indices"];
+const gated = ["/en/dashboard", "/en/stocks", "/en/track-record", "/en/heatmap", "/en/etf", "/en/company/NVDA", "/en/insiders", "/sk/indices"];
 /** Next makes a same-origin Location relative on the way out; here the raw header is absolute on the request origin. */
 const where = (response: Response) => { const raw = response.headers.get("location"); if (!raw) return null; const url = new URL(raw); expect(url.origin).toBe("https://example.com"); return `${url.pathname}${url.search}`; };
 const request = (path: string, headers: Record<string, string> = {}) => new NextRequest(`https://example.com${path}`, { headers });

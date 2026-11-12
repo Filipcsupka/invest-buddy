@@ -9,7 +9,8 @@ import "@/components/record-pages.css";
 import { InsiderPanel } from "@/components/insider-panel";
 import { PaywallSegment } from "@/components/paywall-segment";
 import { flags } from "@/config/flags";
-import { getViewer, limitFor } from "@/viewer/get-viewer";
+import { assertViewable } from "@/markets/gate";
+import { canUseVendorData, getViewer, limitFor } from "@/viewer/get-viewer";
 import { withinDays } from "./depth";
 import { insiderEvents } from "@/db/insiders";
 import { formatNumber, getMessages } from "@/i18n";
@@ -29,6 +30,9 @@ const CODES = ["P", "S", "A", "M", "F"] as const;
 async function Insiders({ params, searchParams }: LocaleParams & { searchParams?: Promise<{ ticker?: string | string[]; code?: string | string[] }> }) {
   const locale = await resolveLocale(params);
   if (!flags().INSIDERS_PAGE) notFound();
+  if (flags().MARKETS_VIEWS) await assertViewable();
+  const viewer = await getViewer();
+  if (process.env.EODHD_PRIVATE_USE === "on" && !canUseVendorData(viewer)) notFound();
   const m = getMessages(locale);
   const rp = getRecordPagesMessages(locale).insiders;
   const query = await searchParams;
@@ -36,7 +40,6 @@ async function Insiders({ params, searchParams }: LocaleParams & { searchParams?
   const ticker = first(query?.ticker)?.trim().toUpperCase().slice(0, 12);
   const rawCode = first(query?.code)?.trim().toUpperCase();
   const code = CODES.find((item) => item === rawCode);
-  const viewer = await getViewer();
   const all = withinDays(await insiderEvents(ticker || undefined), limitFor(viewer, "insiderDays"));
   const events = code ? all.filter((event) => event.code === code) : all;
   const href = (next?: string) => {

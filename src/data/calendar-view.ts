@@ -15,8 +15,8 @@ export async function upcomingCalendar(today: string): Promise<CalendarView> {
       FROM (SELECT DISTINCT ON (ticker) ticker, report_date, time_of_day, observed_on
         FROM earnings_calendar_snapshots
         WHERE source_id = 'eodhd' AND observed_on <= $1::date AND observed_on >= $1::date - 14
-        ORDER BY ticker, observed_on DESC, report_date DESC) latest
-      WHERE report_date BETWEEN $1::date AND $1::date + 90
+          AND report_date BETWEEN $1::date AND $1::date + 90
+        ORDER BY ticker, observed_on DESC, report_date ASC) latest
       ORDER BY report_date, ticker LIMIT 100`, [today]);
     return { earnings: result.rows, macro };
   } catch {

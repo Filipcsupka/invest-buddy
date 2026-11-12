@@ -13,6 +13,7 @@ it("reads only recent stored market earnings and upcoming macro events", async (
     expect(view.macro).toEqual([{ kind: "CPI", date: "2026-12-10", label: "current" }]);
     expect(state.sql).toContain("source_id = 'eodhd'");
     expect(state.sql).toContain("observed_on >= $1::date - 14");
+    expect(state.sql).toMatch(/WHERE source_id = 'eodhd'[\s\S]*report_date BETWEEN \$1::date AND \$1::date \+ 90[\s\S]*ORDER BY ticker, observed_on DESC, report_date ASC\) latest/);
     expect(state.params).toEqual(["2026-11-12"]);
   } finally { if (oldMode === undefined) delete process.env.DATA_MODE; else process.env.DATA_MODE = oldMode; }
 });

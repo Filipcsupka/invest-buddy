@@ -1,7 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import type { Locale } from "@/i18n";
-import type { AssetClass } from "@/db/asset-bars";
 import type { AssetDetail, AssetSummary } from "@/db/markets";
 import { getMarketsMessages } from "@/i18n/markets-messages";
 import { KpiCard, KpiRow, RecordCard, RecordHead } from "@/components/record-parts";
@@ -27,7 +26,7 @@ export function AssetListPage({ locale, title, lede, caption, basePath, rows, ch
 }
 
 /** Index detail with key figures, a price chart and optional extra sections. */
-export function AssetDetailPage({ locale, assetClass, detail, lede, basePath, children }: { locale: Locale; assetClass: AssetClass; detail: AssetDetail; lede: string; basePath: string; children?: ReactNode }) {
+export function AssetDetailPage({ locale, detail, lede, basePath, children }: { locale: Locale; detail: AssetDetail; lede: string; basePath: string; children?: ReactNode }) {
   const m = getMarketsMessages(locale);
   const { summary, bars } = detail;
   const first = bars[0]?.date, last = bars.at(-1)?.date;
@@ -37,7 +36,7 @@ export function AssetDetailPage({ locale, assetClass, detail, lede, basePath, ch
     <div className={t.stack}>
       {summary.last === null ? <p className={t.note}>{m.noBars}</p> : <>
         <KpiRow count={4}>
-          <KpiCard label={m.lastClose} featured note={day(locale, summary.lastDate)}>{level(locale, assetClass, summary.last)}</KpiCard>
+          <KpiCard label={m.lastClose} featured note={day(locale, summary.lastDate)}>{level(locale, summary.last)}</KpiCard>
           <KpiCard label={m.change1d}>{signedRatio(locale, summary.change1d)}</KpiCard>
           <KpiCard label={m.change5d}>{signedRatio(locale, summary.change5d)}</KpiCard>
           <KpiCard label={m.changeYtd}>{signedRatio(locale, summary.changeYtd)}</KpiCard>
@@ -45,8 +44,8 @@ export function AssetDetailPage({ locale, assetClass, detail, lede, basePath, ch
         <RecordCard id="chart" title={m.chart} meta={<span className="num">{m.bars}: {bars.length}</span>}>
           <MarketPriceChart bars={bars} locale={locale} name={summary.name} count={260} />
           <dl className={t.facts}>
-            <div><dt>{m.high52}</dt><dd className="num">{level(locale, assetClass, detail.high52)}</dd></div>
-            <div><dt>{m.low52}</dt><dd className="num">{level(locale, assetClass, detail.low52)}</dd></div>
+            <div><dt>{m.high52}</dt><dd className="num">{level(locale, detail.high52)}</dd></div>
+            <div><dt>{m.low52}</dt><dd className="num">{level(locale, detail.low52)}</dd></div>
             <div><dt>{m.date}</dt><dd className="num">{first && last ? `${day(locale, first)} – ${day(locale, last)}` : m.noValue}</dd></div>
           </dl>
         </RecordCard>

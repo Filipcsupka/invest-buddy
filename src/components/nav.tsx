@@ -81,12 +81,13 @@ export function Nav({ locale }: { locale: Locale }) {
             { href: "/heatmap", text: getHeatmapMessages(locale).navLabel, icon: "heatmap" },
             { href: "/track-record", text: m.nav.trackRecord, icon: "track" },
             { href: "/portfolio", text: m.nav.portfolio, icon: "portfolio" },
+            ...(f.INSIDERS_PAGE && !f.MARKETS_VIEWS ? [{ href: "/insiders", text: m.nav.insiders, icon: "insiders" }] : []),
             ...(ideasEnabled() && f.ADVICE_OUTPUT ? [{ href: "/ideas", text: m.nav.ideas, icon: "ideas", locked: true as const }] : []),
             ...(f.ADVICE_OUTPUT ? [{ href: "/sizing", text: m.nav.sizing, icon: "sizing" }] : []),
           ])} />
-          <NavLinks locale={locale} label={m.nav.etfs} sectionLabel={m.nav.etfs} lock={lock} items={etfItems} />
-          {f.MARKETS_VIEWS && <NavLinks locale={locale} label={m.nav.indices} sectionLabel={m.nav.indices} lock={lock} items={[{ href: "/indices", text: m.nav.indices, icon: "indices", locked: true }]} />}
-          {f.MARKETS_VIEWS && <NavLinks locale={locale} label={sections.marketsCalendar} sectionLabel={sections.marketsCalendar} lock={lock} separator items={marketItems} />}
+          <NavLinks locale={locale} label={m.nav.etfs} sectionLabel={m.nav.etfs} lock={lock} items={etfItems.map((item) => ({ ...item, tier: "plus" }))} />
+          {f.MARKETS_VIEWS && <NavLinks locale={locale} label={m.nav.indices} sectionLabel={m.nav.indices} lock={lock} items={[{ href: "/indices", text: m.nav.indices, icon: "indices", locked: true, tier: "plus" }]} />}
+          {f.MARKETS_VIEWS && <NavLinks locale={locale} label={sections.marketsCalendar} sectionLabel={sections.marketsCalendar} lock={lock} separator items={marketItems.map((item) => ({ ...item, tier: "plus" }))} />}
           <NavLinks locale={locale} label={m.nav.learn} sectionLabel={m.nav.learn} lock={lock} items={[
             { href: "/methodology", text: m.nav.methodology, icon: "methodology", tier: "open" },
             { href: "/pricing", text: getLaunchMessages(locale).pricing.title, icon: "pricing", tier: "open" },

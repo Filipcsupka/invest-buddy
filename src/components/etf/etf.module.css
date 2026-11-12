@@ -43,7 +43,6 @@
 .pagination a { min-height: 2.75rem; display: inline-flex; align-items: center; padding: 0.4rem 0.9rem; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--sheet); }
 .facts dd { overflow-wrap: anywhere; }
 .tabs { margin: 0 0 1.5rem; }
-.ownerNote { margin: 0 0 1rem; color: var(--ink-2); font-size: 0.875rem; }
 .exposureGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)); gap: 1.5rem; }
 .weightCell { display: flex; align-items: center; gap: 0.5rem; justify-content: flex-end; }
 .weightBar { display: inline-block; height: 0.5rem; max-width: 6rem; min-width: 1px; border-radius: 999px; background: var(--rule-strong); }

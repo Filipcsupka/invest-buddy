@@ -11,6 +11,15 @@ import { RecordCard, RecordHead } from "@/components/record-parts";
 import "@/components/record-pages.css";
 
 export const dynamic = "force-dynamic";
+const sessionLabel = (value: string | null, m: ReturnType<typeof getCalendarMessages>) => {
+  switch (value?.toLowerCase()) {
+    case "aftermarket":
+    case "post-market": return m.postMarket;
+    case "beforemarket":
+    case "pre-market": return m.preMarket;
+    default: return m.unknown;
+  }
+};
 export async function generateMetadata({ params }: LocaleParams): Promise<Metadata> {
   const locale = await resolveLocale(params);
   const m = getCalendarMessages(locale);
@@ -25,7 +34,8 @@ async function CalendarPage({ params }: LocaleParams) {
   return <div className="frame page">
     <RecordHead title={m.title} lede={m.lede} />
     <RecordCard id="earnings" title={m.earnings} flush>
-      {earnings.length ? <DataTable label={m.earnings} density="compact"><thead><tr><th scope="col">{m.date}</th><th scope="col">{m.ticker}</th><th scope="col">{m.time}</th></tr></thead><tbody>{earnings.map((row) => <tr key={`${row.ticker}-${row.date}`}><td>{row.date}</td><td><Link href={`/${locale}/company/${encodeURIComponent(row.ticker)}`}>{row.ticker}</Link></td><td>{row.timeOfDay === "post-market" ? m.postMarket : row.timeOfDay === "pre-market" ? m.preMarket : row.timeOfDay ?? m.unknown}</td></tr>)}</tbody></DataTable> : <p>{m.emptyEarnings}</p>}
+      {earnings.length ? <DataTable label={m.earnings} density="compact"><thead><tr><th scope="col">{m.date}</th><th scope="col">{m.ticker}</th><th scope="col">{m.time}</th></tr></thead><tbody>{earnings.map((row) => <tr key={`${row.ticker}-${row.date}`}><td>{row.date}</td><td><Link href={`/${locale}/company/${encodeURIComponent(row.ticker)}`}>{row.ticker}</Link></td><td>{sessionLabel(row.timeOfDay, m)}</td></tr>)}</tbody></DataTable> : <p>{m.emptyEarnings}</p>}
+      {earnings.length === 100 && <p className="notice">{m.earningsLimit}</p>}
     </RecordCard>
     <RecordCard id="macro" title={m.macro} flush>
       {macro.length ? <DataTable label={m.macro} density="compact"><thead><tr><th scope="col">{m.date}</th><th scope="col">{m.event}</th></tr></thead><tbody>{macro.map((row) => <tr key={`${row.kind}-${row.date}`}><td>{row.date}</td><td>{m.macroKinds[row.kind as keyof typeof m.macroKinds] ?? row.label}</td></tr>)}</tbody></DataTable> : <p>{m.emptyMacro}</p>}

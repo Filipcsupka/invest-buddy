@@ -29,7 +29,7 @@ async function IndexPage({ params }: Props) {
   if (!vendor || !detail) notFound();
   const m = getMarketsMessages(locale);
   const components = await indexComponents(vendor);
-  return <AssetDetailPage locale={locale} assetClass="index" detail={detail} lede={m.indices.detailLede} basePath="indices">
+  return <AssetDetailPage locale={locale} detail={detail} lede={m.indices.detailLede} basePath="indices">
     <RecordCard id="components" title={m.indices.components} lede={components.asOf ? fill(m.indices.componentsLede, { date: day(locale, components.asOf) }) : undefined}
       meta={components.rows.length ? <span className="num">{fill(m.indices.count, { n: components.rows.length })}</span> : undefined} flush={components.rows.length > 0}>
       {components.rows.length ? <>

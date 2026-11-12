@@ -155,16 +155,13 @@ async function Scanner({ params, searchParams }: Props) {
       meta={<DataStatus locale={locale} lastUpdated={data.lastUpdated} stale={data.stale} />}
       actions={<><Link className="button secondary" href={`/${locale}/heatmap`}>{h.navLabel}</Link><Link className="button secondary" href={`/${locale}/methodology`}>{m.nav.methodology}</Link></>} />
     <HeadDisclosure text={m.common.operatorDisclosure} />
-    <section aria-label={locale === "sk" ? "Prehľad stavov" : "State overview"} className={styles.stateOverview}>
-      {stateOrder.map((state) => <span key={state} className={styles.stateTally}><strong>{stateLabels[state]}</strong> <span>{stateCounts[state]}</span></span>)}
-    </section>
+    <ScannerBento locale={locale} counts={stateCounts} total={stateBase.length} labels={stateLabels}
+      href={(state) => `${filtersHref(locale, { ...filters, state }, filters.floor)}#scanner-group-${state}`} />
     <PresetBar locale={locale} filters={filters} counts={presetCounts} total={data.rows.length} viewer={viewer} />
     {access === "locked" ? <ShortlistLock locale={locale} /> : shortlist ? <ShortlistView locale={locale} data={shortlist} /> : null}
     <div className={styles.wrap}><div className={styles.layout}>
     <aside className={styles.rail} aria-label={sc.filters}><FilterForm locale={locale} filters={filters} sectors={sectors} viewer={viewer} /></aside>
     <div className={styles.results}>
-    <ScannerBento locale={locale} counts={stateCounts} total={stateBase.length} labels={stateLabels}
-      href={(state) => `${filtersHref(locale, { ...filters, state }, filters.floor)}#scanner-group-${state}`} />
     <div className={styles.toolbar}>
       <p className={styles.summary} aria-live="polite">{fill(filters.floor ? fl.result : fl.resultOff, { count: visible.length, total: data.rows.length })}{" "}
         <Link className={styles.floorLink} href={filtersHref(locale, filters, !filters.floor)}>{filters.floor ? fl.remove : fl.apply}</Link></p>

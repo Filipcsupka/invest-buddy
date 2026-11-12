@@ -14,9 +14,9 @@ it.each(["en", "sk"])("shows the restored state tally above stock filters (%s)",
   process.env.DATA_MODE = "fixture";
   try {
     const html = renderToStaticMarkup(await Scanner({ params: Promise.resolve({ locale }), searchParams: Promise.resolve({}) }));
-    expect(html).toContain(locale === "en" ? "State overview" : "Prehľad stavov");
-    expect(html.match(/stateTally/g)?.length).toBe(6);
-    expect(html.indexOf("stateOverview")).toBeLessThan(html.indexOf('name="state"'));
+    expect(html).toContain(locale === "en" ? "Tickers by rule state" : "Tickery podľa stavu pravidiel");
+    expect(html.match(/data-state="(setup|watch|wait|ignore|broken|insufficient)"/g)?.length).toBeGreaterThanOrEqual(6);
+    expect(html.indexOf('aria-label="' + (locale === "en" ? "Tickers by rule state" : "Tickery podľa stavu pravidiel") + '"')).toBeLessThan(html.indexOf('name="state"'));
   } finally {
     if (oldMode === undefined) delete process.env.DATA_MODE; else process.env.DATA_MODE = oldMode;
   }

@@ -40,6 +40,25 @@ it.each(["en", "sk"] as const)("opens the sections for owner, Plus and active tr
   }
 });
 
+it.each(["plus", "trial"] as const)("labels ETF and market links Plus for %s customers", (plan) => {
+  Object.assign(process.env, { MARKETS_VIEWS: "on", EODHD_PRIVATE_USE: "on", INSIDERS_PAGE: "on" });
+  as({ kind: "customer", email: "a@b.cz", plan, markets: false });
+  const html = renderToStaticMarkup(<Nav locale="en" />);
+  for (const route of ["etf", "etf/track-record", "indices", "economy", "calendar", "news", "congress", "insiders", "screener"]) {
+    const link = html.match(new RegExp(`<a[^>]*href="/en/${route}"[^>]*>[\\s\\S]*?<\\/a>`))?.[0];
+    expect(link, route).toContain('data-tier="plus"');
+    expect(link, route).not.toContain('data-tier="free"');
+  }
+});
+
+it("shows insiders in Stocks when markets are off", () => {
+  Object.assign(process.env, { MARKETS_VIEWS: "off", EODHD_PRIVATE_USE: "on", INSIDERS_PAGE: "on" });
+  as({ kind: "customer", email: "a@b.cz", plan: "plus", markets: false });
+  const html = renderToStaticMarkup(<Nav locale="en" />);
+  expect(links(html)).toContain("/en/insiders");
+  expect(links(html)).not.toContain("/en/indices");
+});
+
 it("never offers Forex, Crypto, or the old scanner link", () => {
   Object.assign(process.env, { MARKETS_VIEWS: "on", EODHD_PRIVATE_USE: "on" });
   as({ kind: "owner", markets: true });

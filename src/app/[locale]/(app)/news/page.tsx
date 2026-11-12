@@ -47,7 +47,6 @@ async function News({ params, searchParams }: LocaleParams & { searchParams?: Pr
   const tagOptions = tag && !tags.some((item) => item.tag === tag) ? [{ tag, count: 0 }, ...tags] : tags;
   return <div className="frame page">
     <RecordHead title={n.title} lede={n.lede} meta={<Disclaimer text={getMessages(locale).common.disclaimer} />} />
-    <p className="notice">{m.common.ownerNote}</p>
     <div className="rp-stack">
       <div className="rp-filter" role="search" aria-label={m.common.filters}>
         <form method="get" action={`/${locale}/news`}>

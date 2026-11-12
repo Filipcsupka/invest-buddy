@@ -6,7 +6,6 @@ import type { Locale } from "./index";
  */
 const en = {
   common: {
-    ownerNote: "Owner-only view. Market data is stored for private use and is not cleared for public display.",
     source: "Source: {source}.",
     noData: "No data stored yet. The collector job has not run, or it is suspended.",
     apply: "Apply",
@@ -128,7 +127,6 @@ export type FlowMessages = typeof en;
 
 const sk: FlowMessages = {
   common: {
-    ownerNote: "Zobrazenie iba pre vlastníka. Trhové údaje sú uložené na súkromné použitie a nie sú schválené na verejné zobrazenie.",
     source: "Zdroj: {source}.",
     noData: "Zatiaľ nie sú uložené žiadne údaje. Zberná úloha ešte nebežala alebo je pozastavená.",
     apply: "Použiť",

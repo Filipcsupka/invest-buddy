@@ -28,6 +28,7 @@ it("checks the owner gate before reading data", async () => {
 
 it("lists headlines with links, tickers and the vendor score, and passes filters", async () => {
   const html = await render({ ticker: "aapl", tag: "earnings" });
+  expect(html).not.toContain("Owner-only view");
   expect(feed).toHaveBeenCalledWith({ ticker: "AAPL", tag: "EARNINGS" });
   expect(html).toContain('href="https://example.com/a"');
   expect(html).toContain('rel="noopener noreferrer nofollow"');

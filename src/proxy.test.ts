@@ -19,10 +19,10 @@ const ownerCookie = { cookie: "__Host-ib_session=owner" };
 const customerCookie = { cookie: "__Host-ib_session=customer" };
 const browserDoc = { "sec-fetch-dest": "document", accept: "text/html" };
 
-const original = { mode: process.env.DATA_MODE, ideas: process.env.IDEAS_PAGE, owner: process.env.OWNER_VIEW, paywall: process.env.PAYWALL, auth: process.env.AUTH, advice: process.env.ADVICE_OUTPUT, markets: process.env.MARKETS_VIEWS, privateUse: process.env.EODHD_PRIVATE_USE };
+const original = { mode: process.env.DATA_MODE, ideas: process.env.IDEAS_PAGE, owner: process.env.OWNER_VIEW, paywall: process.env.PAYWALL, auth: process.env.AUTH, advice: process.env.ADVICE_OUTPUT, markets: process.env.MARKETS_VIEWS, privateUse: process.env.EODHD_PRIVATE_USE, insiders: process.env.INSIDERS_PAGE };
 afterEach(() => {
   universe.mockReset();
-  for (const [key, value] of [["DATA_MODE", original.mode], ["IDEAS_PAGE", original.ideas], ["OWNER_VIEW", original.owner], ["PAYWALL", original.paywall], ["AUTH", original.auth], ["ADVICE_OUTPUT", original.advice], ["MARKETS_VIEWS", original.markets], ["EODHD_PRIVATE_USE", original.privateUse]] as const) {
+  for (const [key, value] of [["DATA_MODE", original.mode], ["IDEAS_PAGE", original.ideas], ["OWNER_VIEW", original.owner], ["PAYWALL", original.paywall], ["AUTH", original.auth], ["ADVICE_OUTPUT", original.advice], ["MARKETS_VIEWS", original.markets], ["EODHD_PRIVATE_USE", original.privateUse], ["INSIDERS_PAGE", original.insiders]] as const) {
     if (value === undefined) delete process.env[key]; else process.env[key] = value;
   }
 });
@@ -84,6 +84,26 @@ it("keeps market routes private even when the flag is on", async () => {
   expect(response.status).toBe(200);
   expect(response.headers.get("x-robots-tag")).toBe("noindex");
   expect(response.headers.get("cache-control")).toBe("private, no-store");
+});
+
+it.each(["en", "sk"])('returns a permanent HTTP redirect from /scanner with filters (%s)', async (locale) => {
+  process.env.EODHD_PRIVATE_USE = "on";
+  const response = await proxy(new NextRequest(`https://example.com/${locale}/scanner?state=watch&q=NVDA`));
+  expect(response.status).toBe(308);
+  expect(response.headers.get("location")).toBe(`https://example.com/${locale}/stocks?state=watch&q=NVDA`);
+});
+
+it("keeps insiders available when its flag is on and markets are off", async () => {
+  process.env.AUTH = "on";
+  process.env.INSIDERS_PAGE = "on";
+  process.env.MARKETS_VIEWS = "off";
+  process.env.EODHD_PRIVATE_USE = "off";
+  expect((await proxy(new NextRequest("https://example.com/en/insiders"))).status).toBe(200);
+  process.env.EODHD_PRIVATE_USE = "on";
+  expect((await proxy(new NextRequest("https://example.com/en/insiders"))).status).toBe(401);
+  expect((await proxy(new NextRequest("https://example.com/en/insiders", { headers: { cookie: "__Host-ib_session=plus" } }))).status).toBe(200);
+  process.env.INSIDERS_PAGE = "off";
+  expect((await proxy(new NextRequest("https://example.com/en/insiders", { headers: ownerCookie }))).status).toBe(404);
 });
 
 it("gates the owner ETF data tabs like market routes and leaves the public fund page open", async () => {
@@ -152,35 +172,36 @@ it.each(["en", "sk"])("keeps %s ideas unavailable while advice is off", async (l
   expect((await proxy(new NextRequest(`https://example.com/${locale}/ideas`))).status).toBe(200);
 });
 
-it.each(["en", "sk"])("opens the %s scanner whatever PAYWALL says", async (locale) => {
+it.each(["en", "sk"])("redirects the %s scanner whatever PAYWALL says", async (locale) => {
   for (const paywall of ["on", "off", undefined]) {
     if (paywall === undefined) delete process.env.PAYWALL; else process.env.PAYWALL = paywall;
     const response = await proxy(new NextRequest(`https://example.com/${locale}/scanner?min=12`));
-    expect(response.status, String(paywall)).toBe(200);
+    expect(response.status, String(paywall)).toBe(308);
+    expect(response.headers.get("location")).toBe(`https://example.com/${locale}/stocks?min=12`);
     expect(response.headers.get("x-request-id")).toBeTruthy();
   }
 });
 
 it("marks ?view= previews noindex and drops a client-sent preview header", async () => {
   process.env.AUTH = "on";
-  const plain = await proxy(new NextRequest("https://example.com/en/scanner"));
+  const plain = await proxy(new NextRequest("https://example.com/en/stocks"));
   expect(plain.headers.get("x-robots-tag")).toBeNull();
   // AUTH off no longer makes every visitor admin: only the owner gets the free preview.
-  const anonymous = await proxy(new NextRequest("https://example.com/en/scanner?view=free"));
+  const anonymous = await proxy(new NextRequest("https://example.com/en/stocks?view=free"));
   expect(anonymous.headers.get("x-robots-tag")).toBe("noindex");
   expect(anonymous.headers.get("x-middleware-request-x-tier-preview")).toBeNull();
-  const preview = await proxy(new NextRequest("https://example.com/en/scanner?view=free", { headers: ownerCookie }));
+  const preview = await proxy(new NextRequest("https://example.com/en/stocks?view=free", { headers: ownerCookie }));
   expect(preview.status).toBe(200);
   expect(preview.headers.get("x-robots-tag")).toBe("noindex");
   expect(preview.headers.get("x-middleware-request-x-tier-preview")).toBe("free");
-  const spoof = await proxy(new NextRequest("https://example.com/en/scanner", { headers: { "x-tier-preview": "free" } }));
+  const spoof = await proxy(new NextRequest("https://example.com/en/stocks", { headers: { "x-tier-preview": "free" } }));
   expect(spoof.headers.get("x-middleware-request-x-tier-preview")).toBeNull();
 });
 
 it("does not forward the preview for a non-admin viewer", async () => {
   process.env.AUTH = "on";
   try {
-    const response = await proxy(new NextRequest("https://example.com/en/scanner?view=free"));
+    const response = await proxy(new NextRequest("https://example.com/en/stocks?view=free"));
     expect(response.headers.get("x-middleware-request-x-tier-preview")).toBeNull();
   } finally { delete process.env.AUTH; }
 });
@@ -235,7 +256,7 @@ it.each(["en", "sk"])("hides the %s design kit page in a production build unless
 
 it("replaces a malformed incoming id", async () => {
   process.env.PAYWALL = "on";
-  const response = await proxy(new NextRequest("https://example.com/en/scanner", { headers: { "x-request-id": "bad id<script>" } }));
+  const response = await proxy(new NextRequest("https://example.com/en/stocks", { headers: { "x-request-id": "bad id<script>" } }));
   expect(response.headers.get("x-request-id")).toMatch(/^[0-9a-f-]{36}$/);
 });
 

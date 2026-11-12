@@ -1,6 +1,7 @@
 import type { Locale } from "@/i18n";
 import { getWelcomeStoryMessages } from "@/i18n/welcome-messages-story";
 import { SideIcon } from "@/components/nav-icons";
+import { flags } from "@/config/flags";
 import { ChipTag, type Chip } from "./chip";
 import s from "./story.module.css";
 
@@ -8,27 +9,39 @@ type Items = ReturnType<typeof getWelcomeStoryMessages>["areas"]["previewItems"]
 type Groups = ReturnType<typeof getWelcomeStoryMessages>["areas"]["previewGroups"];
 
 /**
- * The signed-in left panel as a customer sees it after sign-up. It lists the same entries and groups as the real app sidebar
- * (src/components/nav.tsx) and nothing else: no ETF, Markets, watchlist, alerts or export entry, because the real panel has none for
- * customers. Chips follow src/config/tiers.ts and the licence gate: Free account, Plus (locked while the private data gate is on), Open.
+ * The signed-in left panel as a customer sees it after sign-up. It lists the main entries and groups from the real app sidebar
+ * (src/components/nav.tsx). Chips follow the licence gate and current plan access.
  * The page area beside it is drawn sample art, blurred, with no figures in it; nothing real is hidden behind the blur.
  */
 function panel(): { group: keyof Groups; items: { key: keyof Items; icon: string; chip?: Chip }[] }[] {
+  const f = flags();
   const vendorChip: Chip = process.env.EODHD_PRIVATE_USE === "on" ? "plus" : "free";
   return [
+    { group: "dashboard", items: [{ key: "dashboard", icon: "dashboard", chip: vendorChip }] },
     {
       group: "stocks",
       items: [
-        { key: "dashboard", icon: "dashboard", chip: vendorChip },
-        { key: "scanner", icon: "scanner", chip: vendorChip },
+        { key: "stocks", icon: "scanner", chip: vendorChip },
         { key: "heatmap", icon: "heatmap", chip: vendorChip },
         { key: "record", icon: "track", chip: vendorChip },
-        { key: "insiders", icon: "insiders", chip: vendorChip },
         { key: "portfolio", icon: "portfolio", chip: vendorChip },
+        ...(f.INSIDERS_PAGE && !f.MARKETS_VIEWS ? [{ key: "insiders" as const, icon: "insiders", chip: vendorChip }] : []),
       ],
     },
+    { group: "etfs", items: [{ key: "etfResearch", icon: "scanner", chip: "plus" }, { key: "etfRecord", icon: "track", chip: "plus" }] },
+    ...(f.MARKETS_VIEWS ? [
+      { group: "indices" as const, items: [{ key: "indices" as const, icon: "indices", chip: "plus" as const }] },
+      { group: "markets" as const, items: [
+        { key: "economy" as const, icon: "economy", chip: "plus" as const },
+        { key: "calendar" as const, icon: "economy", chip: "plus" as const },
+        { key: "news" as const, icon: "news", chip: "plus" as const },
+        { key: "congress" as const, icon: "congress", chip: "plus" as const },
+        ...(f.INSIDERS_PAGE ? [{ key: "insiders" as const, icon: "insiders", chip: "plus" as const }] : []),
+        { key: "screener" as const, icon: "scanner", chip: "plus" as const },
+      ] },
+    ] : []),
     { group: "learn", items: [{ key: "method", icon: "methodology", chip: "open" }, { key: "pricing", icon: "pricing", chip: "open" }] },
-    { group: "later", items: [{ key: "economy", icon: "economy" }, { key: "etfResearch", icon: "scanner" }] },
+    { group: "later", items: [{ key: "myPortfolio", icon: "portfolio" }] },
   ];
 }
 
@@ -53,7 +66,7 @@ export function AppPreview({ locale }: { locale: Locale }) {
             <p key={`${group.group}-label`}>{t.previewGroups[group.group]}</p>,
             <ul key={group.group}>
               {group.items.map((item, i) => (
-                <li key={item.key} data-current={group.group === "stocks" && i === 0 ? "" : undefined} data-later={group.group === "later" ? "" : undefined}>
+                <li key={item.key} data-current={group.group === "dashboard" && i === 0 ? "" : undefined} data-later={group.group === "later" ? "" : undefined}>
                   <SideIcon name={item.icon} />
                   {t.previewItems[item.key]}
                   {item.chip ? <ChipTag chip={item.chip} label={t.chips[item.chip]} /> : null}

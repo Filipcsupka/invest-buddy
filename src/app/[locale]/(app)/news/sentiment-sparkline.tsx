@@ -30,7 +30,7 @@ export function SentimentSparklineView({ locale, symbol, points }: { locale: Loc
   );
 }
 
-/** Reads the stored series and renders it. For company, ETF and crypto pages; the page owner decides where it goes. */
+/** Reads and renders the stored news sentiment series. */
 export async function SentimentSparkline({ locale, symbol, days = 30 }: { locale: Locale; symbol: string; days?: number }) {
   return <SentimentSparklineView locale={locale} symbol={symbol} points={await sentimentSeries(symbol, days)} />;
 }
