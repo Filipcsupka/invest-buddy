@@ -1,6 +1,6 @@
 /** Owner allocation placeholders. The owner must confirm every value and the broker fee before use. */
 export const ALLOCATION_CONFIG = {
-  version: "2026-10-18.1",
+  version: "2026-11-12.1",
   // Draft share of total portfolio held in event-driven names.
   eventSleeveCapPercent: 20,
   // Draft event-driven per-name limit as a fraction of sizingCap().
@@ -49,4 +49,8 @@ export const ALLOCATION_CONFIG = {
   estimatedFeeEur: 0.35,
   // Draft maximum fee burden: a EUR 0.35 fee on EUR 40 is below one percent.
   maxFeePercent: 1,
+  // Draft share of total portfolio value, cash included, held in one sector group (docs/sizing-guide.md). Owner has not signed off.
+  sectorCapPercent: 30,
+  // Draft number of open positions; the Guide (section 10) holds 5 to 15 names. Owner has not signed off.
+  maxPositions: 15,
 } as const;

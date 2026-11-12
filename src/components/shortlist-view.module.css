@@ -1,0 +1,15 @@
+/* Shortlist block on the scanner and dashboard: concentration line, sector groups, ranked rows. */
+.shortlist { display: grid; gap: var(--s3); min-width: 0; padding: var(--s4); border: 1px solid var(--rule); border-radius: var(--radius-lg); background: var(--sheet); box-shadow: var(--shadow-1); }
+.head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s1) var(--s4); }
+.title { margin: 0; font-family: var(--display); font-size: var(--t-h3); font-weight: 800; letter-spacing: -0.02em; }
+.summary, .note { margin: 0; color: var(--ink-2); font-size: var(--t-sm); }
+.lens { display: flex; flex-wrap: wrap; gap: var(--s1) var(--s2); margin: 0; padding: 0; list-style: none; font-size: var(--t-sm); font-variant-numeric: tabular-nums; }
+.lens > li { padding: 0 var(--s2); border: 1px solid var(--rule); border-radius: var(--radius); }
+.lens > li[data-flagged="true"] { border-color: var(--signal); background: var(--signal-tint); font-weight: 600; }
+.group { display: grid; gap: var(--s2); min-width: 0; }
+.groupTitle { margin: 0; font-family: var(--display); font-size: var(--t-base); font-weight: 800; }
+.markers { display: flex; flex-wrap: wrap; gap: var(--s1); }
+.compact { display: grid; gap: var(--s1); margin: 0; padding: 0; list-style: none; font-size: var(--t-sm); }
+.compact > li { display: flex; flex-wrap: wrap; gap: var(--s1) var(--s2); align-items: baseline; min-width: 0; }
+.rank { color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.dropped > summary { cursor: pointer; font-weight: 600; }
