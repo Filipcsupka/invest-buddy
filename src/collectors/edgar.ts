@@ -145,25 +145,35 @@ export function eightKExhibits(items: IndexItem[], primary: string, itemCodes: s
 
 export const filingBase = (cik: number, accession: string) => `https://www.sec.gov/Archives/edgar/data/${cik}/${accession.replace(/-/g, "")}/`;
 
-export async function collectEdgar(symbol: string, cik: number, since: string, get: Get = getText, form4Since = since, archive?: FilingArchive, existingUrls?: ReadonlySet<string>): Promise<CollectedDocument[]> {
+export interface CachedEdgarDocument extends CollectedDocument { storedId?: number; storedSymbol?: string | null }
+export type CachedFilings = (cik: number, accessions: string[]) => Promise<CachedEdgarDocument[]>;
+export async function collectEdgar(symbol: string, cik: number, since: string, get: Get = getText, form4Since = since, archive?: FilingArchive, loadCached?: CachedFilings): Promise<CachedEdgarDocument[]> {
   if (!Number.isSafeInteger(cik) || cik <= 0) throw new Error(`Invalid CIK for ${symbol}`);
   const submissions = JSON.parse(await get(`https://data.sec.gov/submissions/CIK${String(cik).padStart(10, "0")}.json`)) as { filings: { recent: Recent } };
-  const docs: CollectedDocument[] = [];
-  for (const row of filingRows(submissions.filings.recent, since, form4Since)) {
+  const rows = filingRows(submissions.filings.recent, since, form4Since);
+  const cached = new Map((await loadCached?.(cik, rows.map((row) => row.accession)) ?? []).map((doc) => [doc.url, doc]));
+  const docs: CachedEdgarDocument[] = [];
+  for (const row of rows) {
     const base = filingBase(cik, row.accession);
     const file = row.form === "4" ? form4RawPath(row.primary) : row.primary;
     const url = filingUrl(base, file);
-    if (existingUrls?.has(url)) continue;
-    const raw = await get(url);
     const meta: Record<string, unknown> = { accession: row.accession, items: row.items };
-    if (row.form === "4") { meta.trades = parseForm4(raw); meta.ownerCik = form4OwnerCik(raw); meta.transactions = parseForm4Transactions(raw); }
-    else await archive?.({ ticker: symbol, cik, accession: row.accession, form: row.form, docType: row.form, name: row.primary, url, filedAt: row.date, items: row.items, body: raw });
-    docs.push(sourceDocument({ source: "edgar", symbol, docType: row.form,
-      url, publishedAt: `${row.date}T00:00:00Z`, body: raw, meta }, LICENSES.sec));
+    const stored = cached.get(url);
+    if (stored) docs.push({ ...stored, symbol });
+    else {
+      const raw = await get(url);
+      if (row.form === "4") { meta.trades = parseForm4(raw); meta.ownerCik = form4OwnerCik(raw); meta.transactions = parseForm4Transactions(raw); }
+      else await archive?.({ ticker: symbol, cik, accession: row.accession, form: row.form, docType: row.form, name: row.primary, url, filedAt: row.date, items: row.items, body: raw });
+      docs.push(sourceDocument({ source: "edgar", symbol, docType: row.form,
+        url, publishedAt: `${row.date}T00:00:00Z`, body: raw, meta }, LICENSES.sec));
+    }
     if (row.form === "8-K" || row.form === "8-K/A") {
+      // Check the index even when the primary is cached: a stopped run may have missed its exhibits.
       const index = JSON.parse(await get(`${base}index.json`)) as { directory?: { item?: IndexItem[] } };
       for (const exhibit of eightKExhibits(index.directory?.item ?? [], row.primary, row.items)) {
         const exhibitUrl = filingUrl(base, exhibit.name);
+        const storedExhibit = cached.get(exhibitUrl);
+        if (storedExhibit) { docs.push({ ...storedExhibit, symbol }); continue; }
         const body = await get(exhibitUrl);
         await archive?.({ ticker: symbol, cik, accession: row.accession, form: row.form, docType: exhibit.docType, name: exhibit.name, url: exhibitUrl, filedAt: row.date, items: row.items, body });
         docs.push(sourceDocument({ source: "edgar", symbol, docType: exhibit.docType, url: exhibitUrl,

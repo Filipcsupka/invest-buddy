@@ -57,6 +57,19 @@ describe("M3 Form 4 trade without a price", () => {
 });
 
 describe("M4 document evidence windows", () => {
+  it("loads cached EDGAR rows by CIK and accession with their evidence ids", async () => {
+    let sql = "", params: unknown[] = [];
+    const pool = { query: async (query: string, values: unknown[]) => {
+      sql = query; params = values;
+      return { rows: [{ id: "42", source: "edgar", symbol: "GOOGL", doc_type: "8-K", url: "https://www.sec.gov/Archives/edgar/data/1652044/000165204426000001/form8k.htm",
+        published_at: new Date("2026-10-01T00:00:00Z"), body: "Routine notice", meta: { accession: "0001652044-26-000001", display_allowed: true }, content_hash: "hash", source_id: "sec" }] };
+    } };
+    const docs = await new PostgresCollectorRepository(pool as never).cachedEdgarDocuments(1652044, ["0001652044-26-000001"]);
+    expect(sql).toContain("source='edgar'");
+    expect(sql).toContain("meta->>'accession'=ANY($2::text[])");
+    expect(params).toEqual(["https://www.sec.gov/Archives/edgar/data/1652044/%", ["0001652044-26-000001"]]);
+    expect(docs[0]).toMatchObject({ symbol: "GOOGL", docType: "8-K", storedId: 42, storedSymbol: "GOOGL", body: "Routine notice" });
+  });
   it("keeps SEC filings for their evidence windows", () => {
     expect(documentRetentionDays("4")).toBe(400);
     expect(documentRetentionDays("8-K EX-99.1")).toBe(100);

@@ -100,6 +100,7 @@ export const FILINGS_SQL = `SELECT w.symbol,w.accession,w.form,w.items || ',' ||
       WHERE w.symbol = ANY($1::text[]) AND ($2::date IS NULL OR w.filed_at >= $2::date) AND NOT EXISTS (
         SELECT 1 FROM extraction_runs e WHERE e.symbol=w.symbol AND e.status='ok' AND e.applied_at IS NOT NULL AND e.created_at >= w.first_seen_at)`;
 
+// 380 calendar days covers the latest 252 trading bars for current names; stale names with long gaps may have a shorter window.
 export const BARS_SQL = `WITH ranked AS (
       SELECT ticker,bar_date,close,max(high) OVER (PARTITION BY ticker ORDER BY bar_date ROWS BETWEEN 251 PRECEDING AND CURRENT ROW) AS high,
         lag(close) OVER (PARTITION BY ticker ORDER BY bar_date) AS previous,

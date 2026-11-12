@@ -74,6 +74,19 @@ it("keeps filing, 52-week drawdown and P/E gate results when queries are bounded
   } finally { await db.close(); }
 });
 
+it("retains a 52-week high across weekends near the 380-day bound", async () => {
+  const db = new PGlite();
+  try {
+    await db.exec(`CREATE TABLE daily_bars (ticker text, bar_date date, close numeric, high numeric);
+      INSERT INTO daily_bars (ticker,bar_date,close,high)
+      SELECT 'NVDA',current_date - n,90,CASE WHEN n BETWEEN 348 AND 352 THEN 130 ELSE 90 END
+      FROM generate_series(0,370) AS days(n) WHERE extract(isodow FROM current_date - n) <= 5;`);
+    const rows = (await db.query<{ high: string }>(BARS_SQL, [["NVDA"]])).rows;
+    expect(rows).toHaveLength(1);
+    expect(Number(rows[0].high)).toBe(130);
+  } finally { await db.close(); }
+});
+
 it("validates detect arguments", () => {
   expect(parseArgs(["--output", "/tmp/gate.json", "--since", "2026-10-01"])).toEqual({ out: "/tmp/gate.json", since: "2026-10-01" });
   expect(() => parseArgs(["--since", "2026-02-30"])).toThrow();

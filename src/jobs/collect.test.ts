@@ -1,7 +1,7 @@
 import { documentRetentionDays } from "../db/collectors";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { collectEdgar, foreignFilerStatus, parseForm4, parseForm4Transactions } from "../collectors/edgar";
 import { collectFred } from "../collectors/fred";
 import { getText, resetSecLimiter, secSlot, RateLimitLockout } from "../collectors/http";
@@ -168,17 +168,55 @@ describe("collectors", () => {
     expect(result.failures).toEqual([{ ticker: "FAIL", reason: "SEC unavailable" }]);
   });
 
-  it("does not fetch SEC filing files whose primary URLs are already stored", async () => {
+  it("refreshes run-dated catalyst facts from cached filings without downloading their bodies", async () => {
     const repo = new MemoryCollectorRepository();
     const fetched: string[] = [];
-    const fetch = async (url: string) => { fetched.push(url); return get(url); };
+    const fetch = async (url: string) => { fetched.push(url); return url.endsWith("form8k.htm") || url.endsWith("ex99-1.htm") ? "Routine financial results." : get(url); };
     await runCollect(repo, ["NVDA"], { since: "2026-09-01", sources: ["edgar"], get: fetch, now: () => new Date("2026-10-05T12:00:00Z") });
-    const existingSecUrls = new Set([...repo.documents.values()].filter((doc) => doc.source === "edgar").map((doc) => doc.url));
+    expect(repo.facts.get("NVDA:catalyst_8k:2026-10-05")?.value).toMatchObject({ present: false, checked: 2 });
     fetched.length = 0;
-    const second = await runCollect(repo, ["NVDA"], { since: "2026-09-01", sources: ["edgar"], get: fetch, existingSecUrls, now: () => new Date("2026-10-06T12:00:00Z") });
-    expect(second).toMatchObject({ documentsParsed: 0, documentsWritten: 0, failures: [], exitCode: 0 });
-    expect(fetched.every((url) => url.includes("company_tickers.json") || url.includes("submissions/"))).toBe(true);
-    expect(fetched).toHaveLength(2);
+    const upsert = vi.spyOn(repo, "upsertDocument");
+    const second = await runCollect(repo, ["NVDA"], { since: "2026-09-01", sources: ["edgar"], get: fetch, now: () => new Date("2026-10-06T12:00:00Z") });
+    expect(second).toMatchObject({ documentsParsed: 3, documentsWritten: 0, failures: [], exitCode: 0 });
+    expect(repo.facts.get("NVDA:catalyst_8k:2026-10-06")?.value).toMatchObject({ present: false, checked: 2 });
+    expect(fetched).toHaveLength(3); // ticker list, submissions and the 8-K index
+    expect(fetched.some((url) => /form8k\.htm|ex99-1\.htm|ownership\.xml/.test(url))).toBe(false);
+    expect(upsert).not.toHaveBeenCalled();
+    upsert.mockRestore();
+    await runCollect(repo, ["NVDA"], { since: "2026-09-01", sources: ["edgar"], get: fetch, refetch: true, now: () => new Date("2026-10-07T12:00:00Z") });
+    expect(fetched.some((url) => url.endsWith("form8k.htm"))).toBe(true);
+  });
+
+  it("maps one CIK's filings and facts to both share classes", async () => {
+    const repo = new MemoryCollectorRepository();
+    const fetched: string[] = [];
+    const accession = "0001652044-26-000001";
+    const fetch = async (url: string) => {
+      fetched.push(url);
+      if (url.endsWith("company_tickers.json")) return JSON.stringify({ a: { ticker: "GOOG", cik_str: 1652044 }, b: { ticker: "GOOGL", cik_str: 1652044 } });
+      if (url.includes("submissions/")) return JSON.stringify({ filings: { recent: { form: ["8-K"], accessionNumber: [accession], primaryDocument: ["form8k.htm"], filingDate: ["2026-10-01"], items: ["8.01"] } } });
+      if (url.endsWith("index.json")) return JSON.stringify({ directory: { item: [{ name: "form8k.htm", type: "8-K" }] } });
+      return "Item 8.01 Other Events. Routine administrative notice.";
+    };
+    const result = await runCollect(repo, ["GOOGL", "GOOG"], { since: "2026-09-01", sources: ["edgar"], get: fetch,
+      storedCiks: new Map([["GOOGL", 1652044]]), now: () => new Date("2026-10-05T12:00:00Z") });
+    expect(result).toMatchObject({ succeeded: 2, failures: [], exitCode: 0 });
+    expect(fetched.filter((url) => url.endsWith("form8k.htm"))).toHaveLength(1);
+    expect(repo.documents.size).toBe(1);
+    expect([...repo.documents.values()][0].symbol).toBe("GOOGL");
+    for (const symbol of ["GOOG", "GOOGL"]) expect(repo.facts.get(`${symbol}:catalyst_8k:2026-10-05`)?.value).toMatchObject({ present: false, checked: 1 });
+  });
+
+  it("fetches an exhibit missing from a cached 8-K", async () => {
+    const repo = new MemoryCollectorRepository();
+    await runCollect(repo, ["NVDA"], { since: "2026-09-01", sources: ["edgar"], get, now: () => new Date("2026-10-05T12:00:00Z") });
+    const exhibit = [...repo.documents.values()].find((doc) => doc.docType === "8-K EX-99.1")!;
+    repo.documents.delete(exhibit.url);
+    const fetched: string[] = [];
+    await runCollect(repo, ["NVDA"], { since: "2026-09-01", sources: ["edgar"], get: async (url) => { fetched.push(url); return get(url); }, now: () => new Date("2026-10-06T12:00:00Z") });
+    expect(fetched).toContain(exhibit.url);
+    expect(fetched.some((url) => url.endsWith("form8k.htm"))).toBe(false);
+    expect(repo.documents.has(exhibit.url)).toBe(true);
   });
 
   it("does not match common ticker words in unrelated RSS text", () => {
