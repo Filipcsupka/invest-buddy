@@ -1,6 +1,7 @@
 import type { Locale } from "./index";
 
 const en = {
+  scoreTitle: "ETF rating", scoreColumn: "Rating", scoreNotRated: "Not rated", scoreLine: "Meets {earned} of {max} evidenced points", scoreNote: "Informational screening, not personal advice.", scoreConcentrated: "Concentrated holdings", scoreMethod: "The rating counts evidenced cost, size, structure and trend rules. Missing facts reduce the evidenced maximum; fewer than 28 of 35 evidenced points leaves the fund unrated.",
   picksTitle: "This week's picks", picksExplainer: "The catalog supplies a shortlist. Each week a deeper review checks fresh news and records a screening call with reasons.",
   catalogTitle: "ETF catalog", catalogLede: "ETF listings from Xetra and US exchanges with their available facts. Some fields may still be pending enrichment.",
   catalogEmpty: "The ETF catalog has not been loaded yet.", catalogNoMatch: "No catalog funds match these filters.",
@@ -29,6 +30,7 @@ const en = {
   noEvidence: "No evidence recorded.", noHistory: "No call history recorded.", noDetailOutcomes: "No measured outcomes yet.",
 };
 const sk: typeof en = {
+  scoreTitle: "Hodnotenie ETF", scoreColumn: "Hodnotenie", scoreNotRated: "Bez hodnotenia", scoreLine: "Spĺňa {earned} z {max} doložených bodov", scoreNote: "Informačný skríning, nie osobné poradenstvo.", scoreConcentrated: "Koncentrované pozície", scoreMethod: "Hodnotenie počíta doložené pravidlá nákladov, veľkosti, štruktúry a trendu. Chýbajúce údaje znižujú doložené maximum; pri menej než 28 z 35 bodov fond nemá hodnotenie.",
   picksTitle: "Tipy na tento týždeň", picksExplainer: "Z katalógu vzniká užší zoznam. Každý týždeň podrobnejší výskum preverí nové správy a zapíše informačný signál s dôvodmi.",
   catalogTitle: "Katalóg ETF", catalogLede: "ETF z Xetry a amerických búrz s dostupnými údajmi. Niektoré polia ešte čakajú na doplnenie.",
   catalogEmpty: "Katalóg ETF ešte nebol načítaný.", catalogNoMatch: "Filtrom nezodpovedá žiadny fond v katalógu.",
