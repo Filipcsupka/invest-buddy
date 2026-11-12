@@ -52,8 +52,8 @@ describe("scanner floor", () => {
     expect(hasFilters(parseFilters({}))).toBe(false);
     expect(hasFilters(parseFilters({ floor: "off" }))).toBe(true);
     const filters = parseFilters({ sector: "Cloud", sort: "ticker" });
-    expect(filtersHref("en", filters, false)).toBe("/en/scanner?sector=Cloud&sort=ticker&floor=off");
-    expect(filtersHref("sk", parseFilters({ floor: "off" }), true)).toBe("/sk/scanner");
+    expect(filtersHref("en", filters, false)).toBe("/en/stocks?sector=Cloud&sort=ticker&floor=off");
+    expect(filtersHref("sk", parseFilters({ floor: "off" }), true)).toBe("/sk/stocks");
   });
 
   it("has matching EN and SK keys, plural forms and no advice wording", () => {

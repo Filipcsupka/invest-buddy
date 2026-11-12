@@ -135,7 +135,7 @@ it("unlocks the whole app sidebar for an owner and shows the footer controls", (
   try {
     ready({ kind: "owner", markets: true });
     const html = renderToStaticMarkup(<Nav locale="en" />);
-    for (const route of ["dashboard", "scanner", "heatmap", "track-record", "insiders", "portfolio", "etf", "indices", "forex", "crypto", "economy", "congress", "news", "screener"]) {
+    for (const route of ["dashboard", "stocks", "heatmap", "track-record", "insiders", "portfolio", "etf", "indices", "economy", "calendar", "congress", "news", "screener"]) {
       expect(html, route).toContain(`href="/en/${route}"`);
     }
     expect(html).toContain('action="/api/auth/account/sign-out"');

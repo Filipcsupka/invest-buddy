@@ -13,7 +13,7 @@ import s from "./markets.module.css";
 
 export const OwnerStamp = ({ locale }: { locale: Locale }) => <span className={s.owner}>{getMarketsMessages(locale).owner}</span>;
 
-/** The list page shared by indices, forex and crypto. */
+/** List of tracked indices. */
 export function AssetListPage({ locale, title, lede, caption, basePath, rows, children }: { locale: Locale; title: string; lede: string; caption: string; basePath: string; rows: AssetSummary[]; children?: ReactNode }) {
   const m = getMarketsMessages(locale);
   return <div className="frame page">
@@ -26,7 +26,7 @@ export function AssetListPage({ locale, title, lede, caption, basePath, rows, ch
   </div>;
 }
 
-/** The detail page shared by indices, forex and crypto: key figures, a price chart and optional extra sections. */
+/** Index detail with key figures, a price chart and optional extra sections. */
 export function AssetDetailPage({ locale, assetClass, detail, lede, basePath, children }: { locale: Locale; assetClass: AssetClass; detail: AssetDetail; lede: string; basePath: string; children?: ReactNode }) {
   const m = getMarketsMessages(locale);
   const { summary, bars } = detail;

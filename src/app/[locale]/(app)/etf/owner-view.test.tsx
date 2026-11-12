@@ -50,7 +50,7 @@ it("adds yield and 1-year return columns and the tab links for the owner", async
   expect(list).toContain("No data");
   const fund = renderToStaticMarkup(await FundPage({ params: Promise.resolve({ locale: "sk", key: "DE0000000001" }) }));
   expect(fund).toContain('href="/sk/etf/fund/DE0000000001/holdings"');
-  expect(fund).toContain("Len pre vlastníka");
+  expect(fund).toContain("Uložené údaje o fonde pre predplatiteľov");
 });
 
 it.each(["owner", "plus", "trial", "free", "anonymous"])("shows ETF score to %s viewer according to vendor permission", async (viewer) => {

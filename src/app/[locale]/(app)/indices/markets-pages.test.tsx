@@ -17,10 +17,6 @@ vi.mock("@/db/screener", async (original) => ({ ...(await original<typeof import
 
 const Indices = (await import("./page")).default;
 const IndexDetail = (await import("./[symbol]/page")).default;
-const Forex = (await import("../forex/page")).default;
-const Pair = (await import("../forex/[pair]/page")).default;
-const Crypto = (await import("../crypto/page")).default;
-const Coin = (await import("../crypto/[symbol]/page")).default;
 const Screener = (await import("../screener/page")).default;
 
 const owner = "owner-session";
@@ -40,7 +36,6 @@ describe("owner gate", () => {
     data.summaries = [summary({})];
     await expect(Indices(params())).rejects.toMatchObject({ digest: expect.stringContaining("404") });
     await expect(Screener({ ...params(), searchParams: Promise.resolve({}) })).rejects.toMatchObject({ digest: expect.stringContaining("404") });
-    await expect(Crypto(params())).rejects.toMatchObject({ digest: expect.stringContaining("404") });
   });
 });
 
@@ -54,7 +49,7 @@ describe("indices", () => {
     expect(out).toContain("−0.30 %");
     expect(out).toContain("+15.00 %");
     expect(out).toContain('role="img" aria-label="S&amp;P 500 Index: last 3 closes');
-    expect(out).toContain("Owner only");
+    expect(out).toContain("Market data");
     expect(out).not.toMatch(/\b(buy|sell|score|setup|follow)\b/i);
   });
   it("shows an honest empty state before the bars job has run", async () => {
@@ -67,7 +62,7 @@ describe("indices", () => {
     const out = await html(IndexDetail(params({ symbol: "gspc" })));
     expect(out).toContain("Constituents");
     expect(out).toContain("Assurant, Inc.");
-    expect(out).toContain("0.02 %");
+    expect(out).not.toContain("0.02 %");
     expect(out).toContain("chart-plot");
     expect(out).toContain("1 constituents");
   });
@@ -75,33 +70,11 @@ describe("indices", () => {
     data.detail = detail({});
     data.components = { asOf: "2026-11-08", rows: [{ code: "RWE", exchange: "XETRA", name: "RWE AG", sector: null, industry: null, weight: null }] };
     const out = await html(IndexDetail(params({ symbol: "GDAXI" })));
-    expect(out).toContain("did not give weights");
+    expect(out).not.toContain("Weight");
     expect(out).not.toContain(">Weight<");
     data.detail = null;
     await expect(IndexDetail(params({ symbol: "NOPE" }))).rejects.toMatchObject({ digest: expect.stringContaining("404") });
     await expect(IndexDetail(params({ symbol: "../x" }))).rejects.toMatchObject({ digest: expect.stringContaining("404") });
-  });
-});
-
-describe("forex and crypto", () => {
-  it("shows pairs and a cross-rate matrix with USD-derived cells marked", async () => {
-    data.summaries = [summary({ symbol: "EURUSD.FOREX", code: "EURUSD", name: "EUR/USD", assetClass: "fx", last: 1.1228 }), summary({ symbol: "USDJPY.FOREX", code: "USDJPY", name: "USD/JPY", assetClass: "fx", last: 150 })];
-    const out = await html(Forex(params()));
-    expect(out).toContain('href="/en/forex/EURUSD"');
-    expect(out).toContain("1.12280");
-    expect(out).toContain("Cross rates");
-    expect(out).toContain('<abbr title="computed through USD">*</abbr>');
-    expect(out).toContain("168.42");
-  });
-  it("renders pair and coin detail pages and the crypto list in Slovak", async () => {
-    data.detail = detail({ symbol: "EURUSD.FOREX", code: "EURUSD", name: "EUR/USD", assetClass: "fx", last: 1.1228 });
-    expect(await html(Pair(params({ pair: "eurusd" })))).toContain("EUR/USD");
-    data.detail = detail({ symbol: "BTC-USD.CC", code: "BTC-USD", name: "Bitcoin", assetClass: "crypto", last: 75943.9 });
-    expect(await html(Coin(params({ symbol: "btc-usd" })))).toContain("Crypto trades every day");
-    data.summaries = [summary({ symbol: "BTC-USD.CC", code: "BTC-USD", name: "Bitcoin", assetClass: "crypto", last: 75943.9 })];
-    const sk = await html(Crypto({ params: Promise.resolve({ locale: "sk" }) }));
-    expect(sk).toContain("Sledované kryptomeny");
-    expect(sk).toContain('href="/sk/crypto/BTC-USD"');
   });
 });
 

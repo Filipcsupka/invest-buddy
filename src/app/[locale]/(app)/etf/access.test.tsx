@@ -43,13 +43,13 @@ it.each(viewers)("enforces page and vendor tab access for %s", async (_name, vie
   }
   for (const tab of ETF_TABS) {
     const result = TabPage({ params: Promise.resolve({ locale: "en", key: "TEST", tab }) });
-    if (viewer.owner) expect(renderToStaticMarkup(await result)).toContain("Owner only");
+    if (allowed) expect(renderToStaticMarkup(await result)).toContain("frame page");
     else await expect(result).rejects.toThrow(/404|NOT_FOUND/);
   }
-  if (viewer.owner) await expect(assertViewable()).resolves.toBeUndefined();
+  if (allowed) await expect(assertViewable()).resolves.toBeUndefined();
   else await expect(assertViewable()).rejects.toThrow(/404|NOT_FOUND/);
 });
-it.each([[false, false, true], [true, false, false], [false, true, false]])("gates anonymous catalog access for vendor=%s private=%s", async (vendor, privateMode, allowed) => {
+it.each([[false, false, false], [true, false, false], [false, true, false]])("gates anonymous catalog access for vendor=%s private=%s", async (vendor, privateMode, allowed) => {
   vi.stubEnv("DATA_MODE", "db");
   vi.stubEnv("EODHD_PRIVATE_USE", privateMode ? "on" : "off");
   state.viewer = { tier: "free", preview: false };

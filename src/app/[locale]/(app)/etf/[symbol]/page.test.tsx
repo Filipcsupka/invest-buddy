@@ -1,3 +1,4 @@
+vi.mock("@/app/[locale]/(app)/owner/data/access", () => ({ requireEtfDataAccess: async () => undefined }));
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, expect, it, vi } from "vitest";
 import { sampleEtfPicks } from "@/data/etf-fixtures";

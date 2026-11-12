@@ -9,6 +9,7 @@ import { flags } from "@/config/flags";
 import { getLegalMessages } from "@/i18n/legal-messages";
 import { getLaunchMessages } from "@/i18n/launch-messages";
 import { getHeatmapMessages } from "@/i18n/heatmap-messages";
+import { getNavSectionsMessages } from "@/i18n/nav-sections-messages";
 import { getKitMessages } from "@/i18n/kit-messages";
 import { IdentityChip, IdentityPanel } from "./auth/identity";
 import { getIdentityMessages } from "@/i18n/identity-messages";
@@ -31,8 +32,7 @@ const privateSections = new Set<string>(PRIVATE_DATA_SECTIONS);
 /**
  * The app shell sidebar. It reads no request data, so the shared HTML is the same for everyone. Entries a customer can really use are
  * rendered for all viewers; vendor-derived pages (while EODHD_PRIVATE_USE=on) render locked until /api/me says who is signed in.
- * Entries with no licensed data behind them (ETF research and track record, the Markets views) sit in groups that render only after
- * /api/me confirms the owner, so a customer or a visitor never receives them. Server gates in the proxy stay the authority.
+ * Market and ETF links use the same Plus preview pattern. Server gates in the proxy stay the authority.
  * Docs: docs/app-panel-audit.md.
  */
 export function Nav({ locale }: { locale: Locale }) {
@@ -47,18 +47,18 @@ export function Nav({ locale }: { locale: Locale }) {
     const locked = Boolean(item.locked || (vendorLocked && privateSections.has(item.href.slice(1).split("/")[0])));
     return { ...item, locked, tier: locked ? "plus" : item.tier ?? "free" };
   });
-  const ownerMarkets: NavItem[] = [
-    { href: "/indices", text: m.nav.indices, icon: "indices" },
-    { href: "/forex", text: m.nav.forex, icon: "forex" },
-    { href: "/crypto", text: m.nav.crypto, icon: "crypto" },
-    { href: "/economy", text: m.nav.economy, icon: "economy" },
-    { href: "/congress", text: m.nav.congress, icon: "congress" },
-    { href: "/news", text: m.nav.news, icon: "news" },
-    { href: "/screener", text: m.nav.screener, icon: "scanner" },
+  const sections = getNavSectionsMessages(locale);
+  const marketItems: NavItem[] = [
+    { href: "/economy", text: m.nav.economy, icon: "economy", locked: true },
+    { href: "/calendar", text: sections.calendar, icon: "economy", locked: true },
+    { href: "/news", text: m.nav.news, icon: "news", locked: true },
+    { href: "/congress", text: m.nav.congress, icon: "congress", locked: true },
+    ...(f.INSIDERS_PAGE ? [{ href: "/insiders", text: m.nav.insiders, icon: "insiders", locked: true }] : []),
+    { href: "/screener", text: m.nav.screener, icon: "scanner", locked: true },
   ];
-  const ownerEtfs: NavItem[] = [
-    { href: "/etf", text: m.nav.etfResearch, icon: "scanner" },
-    { href: "/etf/track-record", text: m.nav.etfTrackRecord, icon: "track" },
+  const etfItems: NavItem[] = [
+    { href: "/etf", text: m.nav.etfResearch, icon: "scanner", locked: true },
+    { href: "/etf/track-record", text: m.nav.etfTrackRecord, icon: "track", locked: true },
   ];
   return (
     <header className="site-header">
@@ -73,35 +73,25 @@ export function Nav({ locale }: { locale: Locale }) {
       </div>
       <div className="side-panel" id="side-panel">
         <div className="side-scroll">
-          <NavLinks
-            locale={locale}
-            label={m.nav.stocks}
-            sectionLabel={m.nav.stocks}
-            lock={lock}
-            items={vendor([
-              { href: "/dashboard", text: m.nav.dashboard, icon: "dashboard" },
-              { href: "/scanner", text: m.nav.scanner, icon: "scanner" },
-              { href: "/heatmap", text: getHeatmapMessages(locale).navLabel, icon: "heatmap" },
-              ...(ideasEnabled() && flags().ADVICE_OUTPUT ? [{ href: "/ideas", text: m.nav.ideas, icon: "ideas", locked: true as const }] : []),
-              { href: "/track-record", text: m.nav.trackRecord, icon: "track" },
-              ...(flags().INSIDERS_PAGE ? [{ href: "/insiders", text: m.nav.insiders, icon: "insiders" }] : []),
-              { href: "/portfolio", text: m.nav.portfolio, icon: "portfolio" },
-              ...(flags().ADVICE_OUTPUT ? [{ href: "/sizing", text: m.nav.sizing, icon: "sizing" }] : []),
-            ])}
-          />
-          <NavLinks
-            locale={locale}
-            label={m.nav.learn}
-            sectionLabel={m.nav.learn}
-            lock={lock}
-            items={[
-              { href: "/methodology", text: m.nav.methodology, icon: "methodology", tier: "open" },
-              { href: "/pricing", text: getLaunchMessages(locale).pricing.title, icon: "pricing", tier: "open" },
-            ]}
-          />
-          <NavLinks locale={locale} label={m.nav.etfs} sectionLabel={m.nav.etfs} lock={lock} audience="owner" items={ownerEtfs} />
-          {f.MARKETS_VIEWS && <NavLinks locale={locale} label={m.nav.markets} sectionLabel={m.nav.markets} lock={lock} audience="owner" items={ownerMarkets} />}
-          <NavLater label={m.nav.comingLater} items={[{ icon: "economy", text: m.nav.economy }, { icon: "scanner", text: m.nav.etfResearch }]} />
+          <NavLinks locale={locale} label={m.nav.dashboard} lock={lock} items={vendor([
+            { href: "/dashboard", text: m.nav.dashboard, icon: "dashboard" },
+          ])} />
+          <NavLinks locale={locale} label={m.nav.stocks} sectionLabel={m.nav.stocks} lock={lock} items={vendor([
+            { href: "/stocks", text: m.nav.stocks, icon: "scanner" },
+            { href: "/heatmap", text: getHeatmapMessages(locale).navLabel, icon: "heatmap" },
+            { href: "/track-record", text: m.nav.trackRecord, icon: "track" },
+            { href: "/portfolio", text: m.nav.portfolio, icon: "portfolio" },
+            ...(ideasEnabled() && f.ADVICE_OUTPUT ? [{ href: "/ideas", text: m.nav.ideas, icon: "ideas", locked: true as const }] : []),
+            ...(f.ADVICE_OUTPUT ? [{ href: "/sizing", text: m.nav.sizing, icon: "sizing" }] : []),
+          ])} />
+          <NavLinks locale={locale} label={m.nav.etfs} sectionLabel={m.nav.etfs} lock={lock} items={etfItems} />
+          {f.MARKETS_VIEWS && <NavLinks locale={locale} label={m.nav.indices} sectionLabel={m.nav.indices} lock={lock} items={[{ href: "/indices", text: m.nav.indices, icon: "indices", locked: true }]} />}
+          {f.MARKETS_VIEWS && <NavLinks locale={locale} label={sections.marketsCalendar} sectionLabel={sections.marketsCalendar} lock={lock} separator items={marketItems} />}
+          <NavLinks locale={locale} label={m.nav.learn} sectionLabel={m.nav.learn} lock={lock} items={[
+            { href: "/methodology", text: m.nav.methodology, icon: "methodology", tier: "open" },
+            { href: "/pricing", text: getLaunchMessages(locale).pricing.title, icon: "pricing", tier: "open" },
+          ]} />
+          <NavLater label={m.nav.comingLater} items={[{ icon: "portfolio", text: sections.myPortfolioSoon }]} />
         </div>
         <div className="side-foot">
           <IdentityPanel locale={locale} auth={f.AUTH} />

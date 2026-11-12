@@ -1,13 +1,11 @@
 import { notFound } from "next/navigation";
 import { getPool } from "@/db/pool";
 import { getViewer, isOwner } from "@/viewer/get-viewer";
+import { etfScoreView } from "@/components/etf/owner";
 
 /** Public ETF pages cannot render catalog or pick data once EODHD enrichment is present. */
 export async function requireEtfDataAccess() {
-  const db = getPool();
-  const privateMode = process.env.EODHD_PRIVATE_USE === "on";
-  const vendor = db ? (await db.query<{ present: boolean }>("SELECT EXISTS (SELECT 1 FROM etf_catalog WHERE enrichment_source='eodhd') AS present")).rows[0]?.present : false;
-  if ((privateMode || vendor) && !isOwner(await getViewer())) notFound();
+  if (!await etfScoreView()) notFound();
 }
 
 /** A ticker's vendor bars and private score inputs stay behind the owner session. */

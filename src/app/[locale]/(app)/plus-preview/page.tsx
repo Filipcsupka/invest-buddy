@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getMessages } from "@/i18n";
+import { getNavSectionsMessages } from "@/i18n/nav-sections-messages";
 import { getHeatmapMessages } from "@/i18n/heatmap-messages";
 import { getIdentityMessages } from "@/i18n/identity-messages";
 import { pageMetadata } from "@/i18n/metadata";
@@ -9,8 +10,8 @@ import { resolveLocale, type LocaleParams } from "../../locale";
 type Props = LocaleParams & { searchParams?: Promise<Record<string, string | string[] | undefined>> };
 
 const navKeys = {
-  dashboard: "dashboard", company: "dashboard", scanner: "scanner", ideas: "ideas", "track-record": "trackRecord", insiders: "insiders", portfolio: "portfolio",
-  etf: "etfResearch", "etf/track-record": "etfTrackRecord", indices: "indices", forex: "forex", crypto: "crypto", economy: "economy", congress: "congress", news: "news", screener: "screener",
+  dashboard: "dashboard", company: "dashboard", stocks: "stocks", scanner: "scanner", ideas: "ideas", "track-record": "trackRecord", insiders: "insiders", portfolio: "portfolio",
+  etf: "etfResearch", "etf/track-record": "etfTrackRecord", indices: "indices", calendar: "economy", economy: "economy", congress: "congress", news: "news", screener: "screener",
 } as const;
 
 export async function generateMetadata({ params }: LocaleParams): Promise<Metadata> {
@@ -26,7 +27,7 @@ export default async function PlusPreview({ params, searchParams }: Props) {
   const t = getIdentityMessages(locale).plusPage;
   const key = raw && Object.prototype.hasOwnProperty.call(t.areas, raw) ? raw as keyof typeof t.areas : null;
   const nav = getMessages(locale).nav;
-  const name = key === "heatmap" ? getHeatmapMessages(locale).navLabel : key ? nav[navKeys[key as keyof typeof navKeys]] : null;
+  const name = key === "heatmap" ? getHeatmapMessages(locale).navLabel : key === "calendar" ? getNavSectionsMessages(locale).calendar : key ? nav[navKeys[key as keyof typeof navKeys]] : null;
   const description = key ? t.areas[key] : t.body;
   return <article className="frame page">
     <section className="kit-card" style={{ display: "grid", gap: "var(--s4)", maxWidth: "40rem", padding: "var(--s6)" }}>

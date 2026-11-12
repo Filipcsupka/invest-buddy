@@ -1,3 +1,5 @@
+import { vi } from "vitest";
+vi.mock("@/app/[locale]/(app)/owner/data/access", () => ({ requireEtfDataAccess: async () => undefined }));
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, expect, it } from "vitest";
 import Page from "./page";

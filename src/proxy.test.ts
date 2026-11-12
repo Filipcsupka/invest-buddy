@@ -29,9 +29,10 @@ afterEach(() => {
 
 it("keeps vendor-backed pages private while allowing public content and health probes", async () => {
   process.env.EODHD_PRIVATE_USE = "on";
+  process.env.MARKETS_VIEWS = "on";
   process.env.AUTH = "on";
   universe.mockResolvedValue([{ ticker: "NVDA" }]);
-  for (const path of ["dashboard", "scanner", "company/NVDA", "etf", "heatmap", "insiders", "portfolio", "track-record"]) {
+  for (const path of ["dashboard", "stocks", "company/NVDA", "etf", "heatmap", "insiders", "portfolio", "track-record"]) {
     const url = `https://example.com/en/${path}`;
     const blocked = await proxy(new NextRequest(url));
     expect(blocked.status, path).toBe(401);
@@ -47,9 +48,10 @@ it("keeps vendor-backed pages private while allowing public content and health p
 
 it("opens vendor-backed pages to Plus and trial customers, not to free customers or owner-allocation", async () => {
   process.env.EODHD_PRIVATE_USE = "on";
+  process.env.MARKETS_VIEWS = "on";
   process.env.AUTH = "on";
   universe.mockResolvedValue([{ ticker: "NVDA" }]);
-  for (const path of ["dashboard", "scanner", "company/NVDA", "heatmap", "insiders", "portfolio", "track-record"]) {
+  for (const path of ["dashboard", "stocks", "company/NVDA", "heatmap", "insiders", "portfolio", "track-record"]) {
     const url = `https://example.com/en/${path}`;
     for (const who of ["plus", "trial"]) {
       const response = await proxy(new NextRequest(url, { headers: { cookie: `__Host-ib_session=${who}` } }));
@@ -66,7 +68,7 @@ it("opens vendor-backed pages to Plus and trial customers, not to free customers
 
 it("leaves public data routes unchanged when private use is off", async () => {
   process.env.EODHD_PRIVATE_USE = "off";
-  for (const path of ["dashboard", "scanner", "etf", "heatmap", "portfolio", "track-record"]) {
+  for (const path of ["dashboard", "stocks", "etf", "heatmap", "portfolio", "track-record"]) {
     expect((await proxy(new NextRequest(`https://example.com/en/${path}`))).status, path).toBe(200);
   }
 });
@@ -272,4 +274,25 @@ it.each(["/en", "/sk/methodology", "/en/company/ZZZZ", "/api/health", "/unknown-
   } finally {
     keys.forEach((key, i) => { if (saved[i] === undefined) delete process.env[key]; else process.env[key] = saved[i]; });
   }
+});
+
+it.each(["en", "sk"])("gates each paid section for five viewer states (%s)", async (locale) => {
+  process.env.AUTH = "on";
+  process.env.EODHD_PRIVATE_USE = "on";
+  process.env.MARKETS_VIEWS = "on";
+  process.env.INSIDERS_PAGE = "on";
+  for (const route of ["etf", "etf/track-record", "indices", "indices/GSPC", "economy", "calendar", "news", "congress", "insiders", "screener"]) {
+    const url = `https://example.com/${locale}/${route}`;
+    expect((await proxy(new NextRequest(url))).status, `anon ${route}`).toBe(401);
+    expect((await proxy(new NextRequest(url, { headers: customerCookie }))).status, `free ${route}`).toBe(401);
+    for (const who of ["owner", "plus", "trial"]) {
+      expect((await proxy(new NextRequest(url, { headers: { cookie: `__Host-ib_session=${who}` } }))).status, `${who} ${route}`).toBe(200);
+    }
+  }
+});
+
+it.each(["forex", "forex/EURUSD", "crypto", "crypto/BTC-USD"])("returns 404 for removed %s routes", async (route) => {
+  process.env.AUTH = "on";
+  process.env.MARKETS_VIEWS = "on";
+  expect((await proxy(new NextRequest(`https://example.com/en/${route}`, { headers: ownerCookie }))).status).toBe(404);
 });

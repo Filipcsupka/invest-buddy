@@ -95,3 +95,5 @@
     background: transparent;
   }
 }
+
+.separated { border-block-start: 1px solid var(--navy-line); margin-block-start: var(--s3); padding-block-start: var(--s2); }

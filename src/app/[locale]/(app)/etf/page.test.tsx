@@ -1,3 +1,5 @@
+import { vi } from "vitest";
+vi.mock("@/components/etf/owner", async (original) => ({ ...await original<typeof import("@/components/etf/owner")>(), requireEtfScreeningAccess: async () => undefined }));
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, expect, it } from "vitest";
 import Page from "./page";

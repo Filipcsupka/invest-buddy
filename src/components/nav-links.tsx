@@ -28,15 +28,15 @@ function Chip({ tier, label, locked }: { tier: string; label: string; locked?: b
  * the preview, so the shared HTML never prefetches owner-only pages. A group with `audience="owner"` renders nothing until the owner is
  * confirmed: customers and visitors never receive those entries.
  */
-export function NavLinks({ locale, label, items, sectionLabel, lock, audience = "everyone" }: { locale: string; label: string; sectionLabel?: string; items: NavItem[]; lock?: LockLabels; audience?: Audience }) {
+export function NavLinks({ locale, label, items, sectionLabel, lock, audience = "everyone", separator = false }: { locale: string; label: string; sectionLabel?: string; items: NavItem[]; lock?: LockLabels; audience?: Audience; separator?: boolean }) {
   const pathname = usePathname();
   const identity = useIdentity();
   const owner = identity.status === "ready" && identity.me.kind === "owner";
   const customer = identity.status === "ready" && identity.me.kind === "customer";
-  const plus = identity.status === "ready" && identity.me.kind === "customer" && identity.me.plan !== "free";
+  const plus = identity.status === "ready" && identity.me.kind === "customer" && (identity.me.plan === "plus" || identity.me.plan === "trial");
   if (audience === "owner" && !owner) return null;
   return (
-    <nav aria-label={label} className="nav-links" data-audience={audience}>
+    <nav aria-label={label} className={separator ? `nav-links ${styles.separated}` : "nav-links"} data-audience={audience}>
       {sectionLabel && (
         <span className="nav-group nav-text">
           {sectionLabel}
@@ -70,24 +70,15 @@ export function NavLinks({ locale, label, items, sectionLabel, lock, audience = 
   );
 }
 
-/**
- * A quiet group of areas that have no licensed data yet. Plain text, not links: there is no page a customer could open, nothing is
- * blurred or locked, and the owner (who has the real links) does not see it.
- */
+/** A visible placeholder for planned sections that have no route yet. */
 export function NavLater({ label, items }: { label: string; items: { icon: string; text: string }[] }) {
-  const identity = useIdentity();
-  if (identity.status === "ready" && identity.me.kind === "owner") return null;
-  return (
-    <nav aria-label={label} className="nav-links nav-later">
-      <span className="nav-group nav-text">{label}</span>
-      {items.map((item) => (
-        <span key={item.text} className="nav-later-item">
-          <SideIcon name={item.icon} />
-          <span className="nav-text">{item.text}</span>
-        </span>
-      ))}
-    </nav>
-  );
+  return <nav aria-label={label} className="nav-links nav-later">
+    <span className="nav-group nav-text">{label}</span>
+    {items.map((item) => <span key={item.text} className="nav-later-item">
+      <SideIcon name={item.icon} />
+      <span className="nav-text">{item.text}</span>
+    </span>)}
+  </nav>;
 }
 
 export function LanguageSwitch({ locale, target, name, action, cookie }: { locale: string; target: string; name: string; action: string; cookie: string }) {

@@ -2,10 +2,9 @@ import { formatCompact, formatDate, formatNumber, type Locale } from "@/i18n";
 import type { AssetClass } from "@/db/asset-bars";
 import { getMarketsMessages } from "@/i18n/markets-messages";
 
-/** Digits for a price level: currency pairs need four or more, indices and coins two (small coins more). */
+/** Digits for a price level: indices use two decimal places. */
 export function priceDigits(assetClass: AssetClass, value: number): number {
   if (assetClass === "fx") return value >= 20 ? 3 : 5;
-  if (assetClass === "crypto" && value < 1) return 4;
   return 2;
 }
 const none = (locale: Locale) => getMarketsMessages(locale).noValue;

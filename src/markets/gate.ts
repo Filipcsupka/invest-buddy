@@ -1,13 +1,14 @@
 import { notFound } from "next/navigation";
 import { flags } from "@/config/flags";
-import { getViewer, isOwner, type Viewer } from "@/viewer/get-viewer";
+import { getViewer } from "@/viewer/get-viewer";
+import { canUseVendorData, isOwner, type Viewer } from "@/viewer/viewer";
 
-/** Market views are owner-only (session user id in OWNER_USER_IDS). A feature flag never authenticates a visitor. */
-export function marketsViewable(viewer: Pick<Viewer, "owner">, env: Record<string, string | undefined> = process.env): boolean {
-  return flags(env).MARKETS_VIEWS && isOwner(viewer);
+/** Market data requires an owner session or an active Plus entitlement. */
+export function marketsViewable(viewer: Viewer, env: Record<string, string | undefined> = process.env): boolean {
+  return flags(env).MARKETS_VIEWS && !viewer.preview && canUseVendorData(viewer, env) && (isOwner(viewer) || Boolean(viewer.userId && (viewer.plan === "plus" || viewer.plan === "trial")));
 }
 
 export async function assertViewable(source = "eodhd"): Promise<void> {
-  // Source is accepted for collector-specific page loaders; every market view stays owner-only until display rights are cleared.
+  // Source is accepted for collector-specific page loaders.
   if (source.length === 0 || !marketsViewable(await getViewer())) notFound();
 }
