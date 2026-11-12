@@ -145,7 +145,7 @@ export function eightKExhibits(items: IndexItem[], primary: string, itemCodes: s
 
 export const filingBase = (cik: number, accession: string) => `https://www.sec.gov/Archives/edgar/data/${cik}/${accession.replace(/-/g, "")}/`;
 
-export async function collectEdgar(symbol: string, cik: number, since: string, get: Get = getText, form4Since = since, archive?: FilingArchive): Promise<CollectedDocument[]> {
+export async function collectEdgar(symbol: string, cik: number, since: string, get: Get = getText, form4Since = since, archive?: FilingArchive, existingUrls?: ReadonlySet<string>): Promise<CollectedDocument[]> {
   if (!Number.isSafeInteger(cik) || cik <= 0) throw new Error(`Invalid CIK for ${symbol}`);
   const submissions = JSON.parse(await get(`https://data.sec.gov/submissions/CIK${String(cik).padStart(10, "0")}.json`)) as { filings: { recent: Recent } };
   const docs: CollectedDocument[] = [];
@@ -153,6 +153,7 @@ export async function collectEdgar(symbol: string, cik: number, since: string, g
     const base = filingBase(cik, row.accession);
     const file = row.form === "4" ? form4RawPath(row.primary) : row.primary;
     const url = filingUrl(base, file);
+    if (existingUrls?.has(url)) continue;
     const raw = await get(url);
     const meta: Record<string, unknown> = { accession: row.accession, items: row.items };
     if (row.form === "4") { meta.trades = parseForm4(raw); meta.ownerCik = form4OwnerCik(raw); meta.transactions = parseForm4Transactions(raw); }

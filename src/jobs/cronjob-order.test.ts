@@ -98,18 +98,24 @@ describe("daily pipeline order", () => {
     expect(minutes("collect").days).toBe("1-6");
     expect(new Set(chain.filter((name) => name !== "collect").map((name) => minutes(name).days))).toEqual(new Set(["2-6"]));
   });
-  it("starts each step after the previous step's job deadline", () => {
+  it("starts each step after the previous step's job deadline, except detect's safety window", () => {
     for (let i = 1; i < chain.length; i++) {
+      if (chain[i - 1] === "detect" && chain[i] === "extract") continue;
       expect(minutes(chain[i]).at, `${chain[i]} after ${chain[i - 1]} deadline`).toBeGreaterThanOrEqual(minutes(chain[i - 1]).at + deadline(chain[i - 1]));
     }
   });
-  it("caps the start window so a late start plus the job deadline ends before the next step", () => {
+  it("caps the start window so a late start plus the job deadline ends before the next step, except detect", () => {
     for (let i = 0; i < chain.length - 1; i++) {
       const [name, next] = [chain[i], chain[i + 1]];
       expect(startWindow(name), `${name} start window`).toBeLessThanOrEqual(5);
+      if (name === "detect" && next === "extract") continue;
       expect(minutes(name).at + startWindow(name) + deadline(name), `${name} latest end vs ${next}`).toBeLessThanOrEqual(minutes(next).at);
     }
     expect(startWindow("judge")).toBeLessThanOrEqual(5);
+  });
+  it("gives detect a 20-minute safety deadline while extract retains its 01:50 start", () => {
+    expect(deadline("detect")).toBe(20);
+    expect(minutes("extract").at - minutes("detect").at).toBe(15);
   });
   it("keeps both AI jobs inside the 00:00 to 07:00 window", () => {
     for (const name of ["extract", "judge"]) {

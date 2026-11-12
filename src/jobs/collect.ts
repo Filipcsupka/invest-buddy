@@ -21,7 +21,7 @@ import { CATALYST_FACT_KEY, CATALYST_WINDOW_DAYS, catalystFromDocuments, type Ca
 
 const companies = universe.instruments as Company[];
 const daysAgo = (date: Date, days: number) => new Date(date.getTime() - days * 86400000).toISOString().slice(0, 10);
-export interface CollectOptions { since?: string; sources?: string[]; dryRun?: boolean; now?: () => Date; get?: (url: string) => Promise<string>; http?: SourceHttp; cusips?: CusipStore; companies?: Company[]; secSymbols?: Record<string, string>; storedCiks?: Map<string, number>; usage?: UsageLedger }
+export interface CollectOptions { since?: string; sources?: string[]; dryRun?: boolean; now?: () => Date; get?: (url: string) => Promise<string>; http?: SourceHttp; cusips?: CusipStore; companies?: Company[]; secSymbols?: Record<string, string>; storedCiks?: Map<string, number>; existingSecUrls?: ReadonlySet<string>; usage?: UsageLedger }
 /** Phase A collectors (edgar, rss, fred) run as before. Phase A2 sources (`EXTRA_SOURCES`) run through the source registry. */
 export async function runCollect(repository: CollectorRepository, symbols: string[], options: CollectOptions = {}) {
   const companies = options.companies ?? universe.instruments as Company[];
@@ -31,7 +31,7 @@ export async function runCollect(repository: CollectorRepository, symbols: strin
   if (!extra.length) return first!;
   const now = options.now?.() ?? new Date();
   const second = await runExtraSources(repository, extra, { since: options.since ?? daysAgo(now, extra.length === 1 && extra[0] === "getcurrent" ? 3 : 30), now, dryRun: options.dryRun, http: options.http, cusips: options.cusips, companies, symbols, usage: options.usage });
-  if (!first) return second;
+  if (!first) return { ...second, missingCiks: 0 };
   return { ...first, sources: requested, requested: first.requested + second.requested, succeeded: first.succeeded + second.succeeded, failures: [...first.failures, ...second.failures],
     documentsWritten: first.documentsWritten + second.documentsWritten, factsWritten: first.factsWritten + second.factsWritten, stoppedReason: first.stoppedReason ?? second.stoppedReason,
     documentsParsed: first.documentsParsed + second.documentsParsed, factsComputed: first.factsComputed + second.factsComputed, exitCode: first.exitCode || second.exitCode };
@@ -44,13 +44,13 @@ async function runLegacyCollect(repository: CollectorRepository, symbols: string
   const since = options.since ?? daysAgo(now, 100);
   const sources = options.sources ?? ["edgar", "rss"];
   const run: CollectorRun = { startedAt: now.toISOString(), sources, requested: symbols.length, succeeded: 0, failures: [], documentsWritten: 0, factsWritten: 0, stoppedReason: null };
-  let documentsParsed = 0, factsComputed = 0;
+  let documentsParsed = 0, factsComputed = 0, attempted = 0;
   const get = options.get;
   if (sources.length === 1 && sources[0] === "fred") {
     const key = process.env.FRED_API_KEY;
     if (!key) {
       process.stderr.write("FRED_API_KEY absent; skipping FRED\n");
-      return { ...run, requested: 0, documentsParsed, factsComputed, exitCode: 0 };
+      return { ...run, requested: 0, documentsParsed, factsComputed, missingCiks: 0, exitCode: 0 };
     }
     try {
       const doc = await collectFred(key, get);
@@ -59,18 +59,23 @@ async function runLegacyCollect(repository: CollectorRepository, symbols: string
         if ((await repository.upsertDocument(doc)).written) run.documentsWritten++;
         await repository.recordRun({ ...run, requested: 1, succeeded: 1 });
       }
-      return { ...run, requested: 1, succeeded: 1, documentsParsed, factsComputed, exitCode: 0 };
+      return { ...run, requested: 1, succeeded: 1, documentsParsed, factsComputed, missingCiks: 0, exitCode: 0 };
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
       const failed = { ...run, requested: 1, failures: [{ ticker: "FRED", reason }], stoppedReason: reason };
       if (!options.dryRun) await repository.recordRun(failed);
-      return { ...failed, documentsParsed, factsComputed, exitCode: 1 };
+      return { ...failed, documentsParsed, factsComputed, missingCiks: 0, exitCode: 1 };
     }
   }
   let ciks: Map<string, number> | undefined;
+  const secCiks = new Map<string, number>();
   let rss: CollectedDocument[] = [];
   try {
     if (sources.includes("edgar")) ciks = await companyCiks(get);
+    if (ciks) for (const symbol of symbols) {
+      const cik = resolveCik(symbol, options.storedCiks ?? new Map(), ciks, options.secSymbols);
+      if (cik) secCiks.set(symbol, cik);
+    }
     // The press release feed is optional. A slow or blocked feed must not stop the SEC collection, so it is recorded as a failure of its own.
     if (sources.includes("rss")) {
       try {
@@ -92,13 +97,15 @@ async function runLegacyCollect(repository: CollectorRepository, symbols: string
     run.stoppedReason = reason;
     run.failures = symbols.map((ticker) => ({ ticker, reason }));
     if (!options.dryRun) await repository.recordRun(run);
-    return { ...run, documentsParsed, factsComputed, exitCode: 1 };
+    return { ...run, documentsParsed, factsComputed, missingCiks: 0, exitCode: 1 };
   }
   for (const [index, symbol] of symbols.entries()) {
     try {
-      const cik = resolveCik(symbol, options.storedCiks ?? new Map(), ciks, options.secSymbols);
-      if (sources.includes("edgar") && !cik) throw new Error(`No EDGAR CIK for ${symbol}`);
-      const docs = [ ...(cik ? await collectEdgar(symbol, cik, since, get, daysAgo(now, 90), options.dryRun ? undefined : repository.archiveFiling?.bind(repository)) : []), ...rss.filter((doc) => (doc.meta.symbols as string[]).includes(symbol)) ];
+      const cik = secCiks.get(symbol);
+      const matchedRss = rss.filter((doc) => (doc.meta.symbols as string[]).includes(symbol));
+      if (sources.includes("edgar") && !cik && !matchedRss.length) continue;
+      attempted++;
+      const docs = [ ...(cik ? await collectEdgar(symbol, cik, since, get, daysAgo(now, 90), options.dryRun ? undefined : repository.archiveFiling?.bind(repository), options.existingSecUrls) : []), ...matchedRss ];
       documentsParsed += docs.length;
       const ids = new Map<string, number>();
       for (const doc of docs) {
@@ -126,7 +133,8 @@ async function runLegacyCollect(repository: CollectorRepository, symbols: string
     }
   }
   if (!options.dryRun) await repository.recordRun(run);
-  return { ...run, documentsParsed, factsComputed, exitCode: collectExitCode(run.stoppedReason, run.failures.filter((failure) => failure.ticker !== "rss").length, symbols.length) };
+  return { ...run, documentsParsed, factsComputed, missingCiks: sources.includes("edgar") ? symbols.length - secCiks.size : 0,
+    exitCode: collectExitCode(run.stoppedReason, run.failures.filter((failure) => failure.ticker !== "rss").length, attempted) };
 }
 
 /** A lockout or any other stop is always a failed run, whatever share of tickers had already finished. */
@@ -215,12 +223,16 @@ async function main() {
     const unknown = symbols.filter((s) => !activeCompanies.some((c) => c.symbol === s));
     if (unknown.length) throw new Error(`Unknown ticker(s): ${unknown.join(", ")}`);
     const repository = pool ? new PostgresCollectorRepository(pool) : new MemoryCollectorRepository();
-    const result = await runCollect(repository, symbols, { since, sources: names as SourceName[] | undefined, dryRun, cusips: pool ? new PostgresCusipStore(pool) : new MemoryCusipStore(), companies: activeCompanies, secSymbols: pool ? await loadVendorSymbols(pool, "sec") : undefined, storedCiks: pool ? await loadStoredCiks(pool) : undefined, usage: pool ? new PostgresUsageLedger(pool) : undefined });
-    process.stdout.write(`Collect: ${result.succeeded}/${result.requested} tickers, ${result.documentsParsed} documents parsed, ${result.factsComputed} facts computed, ${result.documentsWritten} documents written, ${result.factsWritten} facts written${dryRun ? " (dry run, nothing stored)" : ""}\n`);
+    const collectSince = since ?? daysAgo(new Date(), 100);
+    const existingSecUrls = pool && !dryRun && (!names || names.includes("edgar"))
+      ? new Set((await pool.query<{ url: string }>("SELECT url FROM source_documents WHERE source_id='sec' AND published_at >= $1::date", [collectSince])).rows.map((row) => row.url))
+      : undefined;
+    const result = await runCollect(repository, symbols, { since, sources: names as SourceName[] | undefined, dryRun, cusips: pool ? new PostgresCusipStore(pool) : new MemoryCusipStore(), companies: activeCompanies, secSymbols: pool ? await loadVendorSymbols(pool, "sec") : undefined, storedCiks: pool ? await loadStoredCiks(pool) : undefined, existingSecUrls, usage: pool ? new PostgresUsageLedger(pool) : undefined });
+    process.stdout.write(`Collect: ${result.succeeded}/${result.requested} tickers, ${result.missingCiks ?? 0} missing CIKs skipped, ${result.documentsParsed} documents parsed, ${result.factsComputed} facts computed, ${result.documentsWritten} documents written, ${result.factsWritten} facts written${dryRun ? " (dry run, nothing stored)" : ""}\n`);
     for (const failure of result.failures) process.stderr.write(`Failed ${failure.ticker}: ${safeReason(failure.reason)}\n`);
     if (result.stoppedReason) process.stderr.write("Stopped: source limit reached\n");
     process.exitCode = result.exitCode;
-    return { requested: result.requested, succeeded: result.succeeded, failures: result.failures.length, documentsWritten: result.documentsWritten, factsWritten: result.factsWritten };
+    return { requested: result.requested, succeeded: result.succeeded, missingCiks: result.missingCiks ?? 0, failures: result.failures.length, documentsWritten: result.documentsWritten, factsWritten: result.factsWritten };
   } finally { await pool?.end(); }
 }
 if (/(?:^|[/\\])collect\.(?:ts|js)$/.test(process.argv[1] ?? "")) void runLoggedJob("collect", main);
