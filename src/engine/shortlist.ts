@@ -1,4 +1,4 @@
-import { floorMetrics } from "@/app/[locale]/(app)/scanner/floor";
+import { floorMetrics, type SCANNER_FLOOR } from "@/app/[locale]/(app)/scanner/floor";
 import { sessionsBetween } from "@/data/trading-calendar";
 import type { SectorGroup } from "@/universe/sector-groups";
 import type { StateKey } from "@/i18n/rules";
@@ -119,7 +119,8 @@ export function drawdownPercent(bars: readonly ShortlistBar[], sessions: number)
 /** Average daily traded value in USD from the scanner floor math. Non-USD and unknown quotes give null, never a converted guess. */
 export function tradedValueUsd(bars: readonly ShortlistBar[], currency: string | null, sessions: number): number | null {
   if ((currency ?? "").trim().toUpperCase() !== "USD") return null;
-  const value = floorMetrics(bars, null, sessions).avgDollarVolume;
+  // floorMetrics types its window as the scanner floor's literal; the shortlist config passes the same value.
+  const value = floorMetrics(bars, null, sessions as typeof SCANNER_FLOOR.days).avgDollarVolume;
   return finite(value) ? Math.round(value) : null;
 }
 
