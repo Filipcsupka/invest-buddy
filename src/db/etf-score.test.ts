@@ -33,6 +33,19 @@ it("uses US catalog AUM when fund-stat currency is unknown", async () => {
   } };
   expect((await readEtfScoreFacts("X", "2026-11-12", db as never))?.aumEur).toBe(50_000_000);
 });
+it.each([
+  ["missing stats", null],
+  ["unsupported asset currency", { total_assets: 200_000_000, total_assets_currency: "GBP" }],
+  ["missing fund-stat AUM", { total_assets: null, total_assets_currency: "USD" }],
+] as const)("uses US catalog AUM with %s", async (_case, fundStats) => {
+  const db = { query: async (sql: string) => {
+    if (sql.includes("FROM etf_catalog")) return { rows: [{ name: "Plain fund", instrument_type: "ETF", listing_region: "US", trading_currency: "USD", aum_usd_m: 100, last_seen: "2026-11-12" }] };
+    if (sql.includes("FROM etf_fund_stats")) return { rows: fundStats ? [fundStats] : [] };
+    if (sql.includes("EURUSD.FOREX")) return { rows: [{ close: 2 }] };
+    return { rows: [] };
+  } };
+  expect((await readEtfScoreFacts("X", "2026-11-12", db as never))?.aumEur).toBe(50_000_000);
+});
 it("does not infer fund currency from a European listing", async () => {
   const db = { query: async (sql: string) => {
     if (sql.includes("FROM etf_catalog")) return { rows: [{ name: "Plain fund", instrument_type: "ETF", listing_region: "EU", trading_currency: "USD", aum_usd_m: 100, last_seen: "2026-11-12" }] };

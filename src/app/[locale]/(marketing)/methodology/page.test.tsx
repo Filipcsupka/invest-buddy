@@ -19,6 +19,13 @@ describe("methodology page", () => {
     expect(html).not.toContain("abstract_id=962461");
     expect(html).not.toContain("eodhd.com");
   });
+  it.each([
+    ["en", ["AUM, trading liquidity, fund age or trend evidence", "more than 30 days", "ISIN mismatch", "not_etf", "insufficient-data results hide the percentage"]],
+    ["sk", ["AUM, likvidite obchodovania, veku fondu alebo trende", "starším než 30 dní", "nesúladom ISIN", "not_etf", "nedostatok údajov skryjú percento"]],
+  ] as const)("explains ETF evidence and hidden percentages in %s", async (locale, phrases) => {
+    const html = renderToStaticMarkup(await Methodology(props(locale)));
+    for (const phrase of phrases) expect(html).toContain(phrase);
+  });
   it.each(["en", "sk"] as const)("shows version, band steps, worked figures, limits and data provider in %s", async (locale) => {
     process.env.DATA_MODE = "db";
     const html = renderToStaticMarkup(await Methodology(props(locale)));

@@ -5,11 +5,14 @@ export type ReplicationKind = "full" | "sampling" | "fund_of_funds" | "synthetic
 export function normalizeReplication(raw: string | null | undefined): ReplicationKind {
   const value = raw?.trim().toLowerCase() ?? "";
   if (!value) return null;
-  if (/\b(?:options?|covered[ -]?call|buffer|flex|leverag(?:e|ed|ing)|inverse|[2-9]x|1\.5x)\b|(?:^|[^\w])-1x\b/.test(value)) return "overlay";
-  if (/\bnon[ -]?physical\b|\b(?:synthetic|swap|derivatives?)\b/.test(value)) return "synthetic";
+  if (/\b(?:options?[ -]?(?:overlay|income|strategy)|covered[ -]?call|buffer|flex[ -]?options?|leverag(?:e|ed|ing)|inverse|[2-9]x|1\.5x)\b|(?:^|[^\w])-1x\b/.test(value)) return "overlay";
+  if (/\bnon[ -]?physical\b/.test(value)) return "synthetic";
+  if (/\bnon[ -]?synthetic\b/.test(value)) return "full";
   if (/\b(?:fund of funds?|fund of etfs?|etf of etfs?)\b/.test(value)) return "fund_of_funds";
   if (/\b(?:sampl(?:e|ed|ing)|optimis(?:e|ed)|optimiz(?:e|ed))\b/.test(value)) return "sampling";
-  if (/\b(?:physical|full(?: replication| replicate| replication)?|full replicat(?:e|ion))\b/.test(value)) return "full";
+  if (/\b(?:physical|physically(?: backed)?|full(?: replication| replicate| replication)?|full replicat(?:e|ion))\b/.test(value)) return "full";
+  if (/\b(?:synthetic|swap)\b/.test(value)) return "synthetic";
+  if (/\bderivatives?\b/.test(value.replace(/\bderivatives?\s+for\s+(?:efficient portfolio management|(?:portfolio )?hedging)\b/g, ""))) return "synthetic";
   return null;
 }
 
@@ -96,7 +99,7 @@ export function etfScore(f: EtfScoreFacts): EtfScoreResult {
   add("drawdown1y", "trend", 1, hasTrend && f.assetClass === "equity" && known(f.maxDrawdown1y) ? f.maxDrawdown1y > B.maxEquityDrawdown ? 1 : 0 : null);
   const rejections: string[] = [];
   const scopeText = `${f.name} ${f.riskType ?? ""}`;
-  if (/\b(?:leveraged(?![ -]?loan\b)|inverse|bear|daily[ -]?reset|flex|covered[ -]?call|buffer|options?|option[ -]?income|levdax|ultra(?![ -]?(?:short|term|duration)\b)|[2-9]\d*x|x[2-9]\d*|1\.5x)\b|(?:^|[^\w])-1x\b|(?<!ultra-)(?<!ultra )\bshort(?![ -]?(?:term|duration|dated)\b)/i.test(scopeText)) rejections.push("leveraged_inverse_daily_reset");
+  if (/\b(?:leveraged(?![ -]?loan\b)|inverse|bear|daily[ -]?reset|flex[ -]?options?|covered[ -]?call|buffer|options?[ -]?(?:overlay|income|strategy)|levdax|ultra(?:short|pro)\b|ultra(?![ -]?(?:short|term|duration)\b)|[2-9]\d*x|x[2-9]\d*|1\.5x)\b|(?:^|[^\w])-1x\b|\bshort(?:[ -]?(?:s&p\s?\d+|qqq|dow\s?\d+|dax\b|nasdaq\b|russell\b|ftse\b)|\b(?=[^,;]{0,50}\b(?:index|daily)\b))/i.test(scopeText)) rejections.push("leveraged_inverse_daily_reset");
   if (replication === "overlay") rejections.push("options_overlay");
   if (f.instrumentType === "ETC" || f.instrumentType === "ETN") rejections.push("not_etf_instrument");
   if (known(f.terPct) && f.terPct > 1.5) rejections.push("ter_over_1_5");
@@ -109,7 +112,7 @@ export function etfScore(f: EtfScoreFacts): EtfScoreResult {
   const earned = rules.reduce((sum, rule) => sum + rule.earned, 0);
   const evidencedMax = rules.reduce((sum, rule) => sum + (rule.evidenced ? rule.max : 0), 0);
   const cost = rules.some((rule) => rule.id === "ter" && rule.evidenced);
-  const other = rules.some((rule) => rule.evidenced && (rule.group === "size" || rule.group === "trend" || (rule.group === "structure" && rule.id !== "domicile" && rule.id !== "ucits")));
+  const other = rules.some((rule) => rule.evidenced && (rule.id === "aum" || rule.id === "liquidity" || rule.id === "age" || rule.group === "trend"));
   if (!cost || !other) rejections.push("insufficient_evidence");
   const state = rejections.length ? "not_rated" : "rated";
   return { rulesVersion: ETF_RULES_VERSION, rules, earned, evidencedMax, percent: state === "rated" ? Math.round(earned / evidencedMax * 100) : null, state, rejections,
