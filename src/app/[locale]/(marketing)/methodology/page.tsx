@@ -18,6 +18,7 @@ import { getRecordPagesMessages } from "@/i18n/record-pages-messages";
 import { ruleGroups } from "@/i18n/rules";
 import { resolveLocale, type LocaleParams } from "@/app/[locale]/locale";
 import { profileCopy } from "@/i18n/profile-messages";
+import { ETF_RULES_VERSION } from "@/engine/etf-score-config";
 
 export async function generateMetadata({ params }: LocaleParams): Promise<Metadata> {
   const locale = await resolveLocale(params);
@@ -54,6 +55,7 @@ async function Methodology({ params }: LocaleParams) {
     { id: "source-labels", label: m.sources.legendTitle },
     { id: "limits", label: m.methodology.limitsTitle },
     { id: "data", label: m.methodology.dataTitle },
+    { id: "etf-rating", label: locale === "sk" ? "Hodnotenie ETF" : "ETF rating" },
   ];
   const sourceLines = [m.sources.legendComputed, m.sources.legendSec, m.sources.legendTwo, m.sources.legendChecked, m.sources.legendSingle, m.sources.legendUnknown];
   const ruleCount = ruleGroups.reduce((sum, group) => sum + group.rules.length, 0);
@@ -173,6 +175,38 @@ async function Methodology({ params }: LocaleParams) {
 
         <RecordCard id="data" title={m.methodology.dataTitle}>
           <p className="prose">{process.env.DATA_MODE === "fixture" ? m.methodology.dataBody : m.methodology.dataBodyLive}</p>
+        </RecordCard>
+
+        <RecordCard id="etf-rating" title={locale === "sk" ? "Hodnotenie ETF" : "ETF rating"}>
+          <p className="prose">{locale === "sk" ? `Verzia ${ETF_RULES_VERSION}. Informačný prehľad delí získané body bodmi s doloženými údajmi. Na zobrazenie percenta treba TER a aspoň jeden údaj o AUM, likvidite obchodovania, veku fondu alebo trende. Samotný text o replikácii či obale nestačí. Zobrazuje sa počet skupín s údajmi zo štyroch a zoznam chýbajúcich údajov.` : `Version ${ETF_RULES_VERSION}. This informational screen divides earned points by points with data. A percentage needs TER plus at least one of AUM, trading liquidity, fund age or trend evidence. Replication or wrapper text alone does not qualify. Each result shows the number of groups with data out of four and its missing facts.`}</p>
+          <ul className="rp-list">
+            {(locale === "sk" ? [
+              "Náklady (10): TER do 0,10 % / 0,20 % / 0,30 % / 0,50 % / 0,75 % získa 10 / 8 / 6 / 4 / 2 bodov; vyšší TER 0. Nulový a chýbajúci TER je chýbajúci údaj.",
+              "Veľkosť a objem obchodovania (10): AUM v EUR od 50 mil. / 100 mil. / 500 mil. / 1 mld. získa 1 / 3 / 5 / 6 bodov. Medián dennej hodnoty obchodov z 20 čerstvých dní od 100 tis. / 1 mil. EUR získa 2 / 4 body. Nulové AUM a nulový objem sú chýbajúce údaje.",
+              "Štruktúra (10): plná fyzická replikácia 3, výber vzorky alebo fond fondov 2, syntetická 1, opčná alebo páková 0. Potvrdený UCITS má 3 body; vek od 1 / 3 / 5 rokov má 1 / 2 / 3 body. Domicil má najviac 1 bod podľa podkladovej americkej akciovej expozície. Text o replikácii je uložený v katalógu, nie potvrdený správcom.",
+              "Trend (5): pri najmenej 200 čerstvých cenách sa hodnotí cena nad 200-dňovým priemerom s pásmom 2 %, vzťah 50- a 200-dňového priemeru, výnos 12 až 1 mesiac a ročný pokles akciového fondu. Posledná cena musí byť nanajvýš 7 dní stará.",
+              "Mimo rozsahu sú ETN, ETC, pákové a inverzné fondy a opčné stratégie. Známy TER nad 1,50 %, AUM pod 20 mil. EUR, vek pod rok alebo hodnota obchodov pod 100 tis. EUR znamenajú nesplnené pravidlo. To isté platí pre záznam s nesúladom ISIN, označením not_etf alebo s posledným výskytom starším než 30 dní. Cena pod oboma priemermi znamená prerušený trend. Pri AUM pod 50 mil. EUR sa zobrazuje Upozornenie. Mimo rozsahu, nesplnené pravidlo, prerušený trend a nedostatok údajov skryjú percento; Upozornenie ho ponechá.",
+            ] : [
+              "Cost (10): TER at or below 0.10% / 0.20% / 0.30% / 0.50% / 0.75% earns 10 / 8 / 6 / 4 / 2 points; higher TER earns 0. Zero or missing TER is a missing fact.",
+              "Size and trading volume (10): AUM in EUR at or above 50m / 100m / 500m / 1bn earns 1 / 3 / 5 / 6 points. Median daily close × volume from 20 fresh bars at or above EUR 100k / 1m earns 2 / 4 points. Zero AUM or volume is missing data.",
+              "Structure (10): full physical replication earns 3, sampling or fund of funds 2, synthetic 1, and options or leverage overlay 0. Confirmed UCITS earns 3; age at or above 1 / 3 / 5 years earns 1 / 2 / 3. Domicile earns up to 1 point according to underlying US equity exposure. Replication text comes from the stored catalog and is not issuer-confirmed.",
+              "Trend (5): at least 200 fresh prices support the close above the 200-day average with a 2% band, the 50- versus 200-day average, the 12-to-1-month return and one-year equity drawdown. The latest price must be no more than seven days old.",
+              "ETNs, ETCs, leveraged or inverse funds and options strategies are out of scope. Known TER above 1.50%, AUM below EUR 20m, age under one year or trading value below EUR 100k fails a rule. An ISIN mismatch, not_etf detail status or listing last seen more than 30 days ago also fails a rule. A close below both averages marks a broken trend. AUM below EUR 50m adds a Caution state. Failed, out-of-scope, broken-trend and insufficient-data results hide the percentage; Caution keeps it.",
+            ]).map((line) => <li key={line}>{line}</li>)}
+          </ul>
+          <p className="prose">{locale === "sk" ? "Prahy a body sú pravidlá produktu. Podklady k smeru pravidiel:" : "The bands and points are product rules. Sources for the criteria:"}</p>
+          <ul className="rp-list">
+            <li><a href="https://www.justetf.com/en-de/academy/make-the-right-etf-selection.html">{locale === "sk" ? "justETF, výber ETF" : "justETF, ETF selection"}</a></li>
+            <li><a href="https://www.justetf.com/en/academy/die-richtige-etf-auswahl.html">{locale === "sk" ? "justETF, kritériá výberu" : "justETF, selection criteria"}</a></li>
+            <li><a href="https://www.morningstar.com/funds/etfs-2023-tale-success-failure">{locale === "sk" ? "Morningstar, zánik ETF" : "Morningstar, ETF closures"}</a></li>
+            <li><a href="https://www.morningstar.com/funds/why-funds-die">{locale === "sk" ? "Morningstar, prečo fondy zanikajú" : "Morningstar, why funds close"}</a></li>
+            <li><a href="https://www.ssga.com/us/en/individual/insights/how-to-evaluate-etfs-6-things-that-matter-most">{locale === "sk" ? "State Street, hodnotenie ETF" : "State Street, ETF evaluation"}</a></li>
+            <li><a href="https://www.ssga.com/us/en/institutional/insights/considerations-for-non-us-investors-us-etfs-vs-irish-ucits">{locale === "sk" ? "State Street, americké ETF a írske UCITS" : "State Street, US ETFs and Irish UCITS"}</a></li>
+            <li><a href="https://www.wisdomtree.com/gb/insights/blog/dispelling-the-myth-etf-trading-volume-does-not-equal-etf-liquidity">{locale === "sk" ? "WisdomTree, objem obchodovania a likvidita" : "WisdomTree, trading volume and liquidity"}</a></li>
+            <li><a href="https://www.esma.europa.eu/sites/default/files/library/2015/11/2012-44_0.pdf">{locale === "sk" ? "ESMA, usmernenia pre ETF" : "ESMA, ETF guidelines"}</a></li>
+            <li><a href="https://mebfaber.com/2007/02/10/published-errrsort-of/">Faber, A Quantitative Approach to Tactical Asset Allocation, The Journal of Wealth Management (2007)</a></li>
+            <li><a href="https://alphaarchitect.com/2014/09/are-uber-simple-asset-allocation-systems-robust/">{locale === "sk" ? "Faber, komentár k trendovým pravidlám" : "Faber, trend-rule commentary"}</a></li>
+          </ul>
         </RecordCard>
       </ReadingLayout>
     </article>

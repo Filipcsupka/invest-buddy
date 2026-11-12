@@ -3,6 +3,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { withPageLog } from "@/app/page-log";
 import { etfDetail } from "@/db/etf";
+import { etfCatalogKeyForPick } from "@/db/etf-catalog";
+import { latestEtfScores } from "@/db/etf-score";
+import { etfScoreView } from "@/components/etf/owner";
+import { EtfStoredScore } from "@/components/etf/score";
+import { AdrLine } from "@/components/disclaimer";
+import { getMessages } from "@/i18n";
 import { getEtfMessages } from "@/i18n/etf-messages";
 import { pageMetadata } from "@/i18n/metadata";
 import { RecordCard, RecordHead } from "@/components/record-parts";
@@ -30,10 +36,14 @@ async function EtfDetailPage({ params }: Props) {
   if (!detail) notFound();
   const { pick, history, outcomes, sample } = detail;
   const m = getEtfMessages(locale);
+  const canScore = await etfScoreView();
+  const listingKey = canScore ? await etfCatalogKeyForPick(pick) : null;
+  const score = listingKey ? (await latestEtfScores([listingKey])).get(listingKey) : null;
   const field = (value: string | null) => value || m.noValue;
   return <div className="frame page">
     <RecordHead title={`${pick.symbol} · ${pick.name}`} lede={m.detailLede} stamp={sample ? <span className="stamp">{m.sample}</span> : undefined} meta={<><CallBadge call={pick.call} locale={locale} /> <VerificationBadge status={pick.verificationStatus} locale={locale} /></>} actions={<Link className="button secondary" href={`/${locale}/etf`}>{m.back}</Link>} />
     <div className={s.stack}>
+      {canScore ? <RecordCard id="etf-score" title={m.scoreTitle} lede={m.scoreNote}><EtfStoredScore score={score} m={m} /><p>{m.scoreMethod}</p><AdrLine text={getMessages(locale).common.disclaimer} /></RecordCard> : null}
       <RecordCard id="etf-thesis" title={m.thesis}><p className={s.lead}>{pick.thesis || m.noValue}</p></RecordCard>
       <RecordCard id="etf-happened" title={m.whatHappened}>{pick.whatHappened.length ? <ul className={s.list}>{pick.whatHappened.map((item, index) => <li key={index}>{item}</li>)}</ul> : <p>{m.noValue}</p>}</RecordCard>
       <RecordCard id="etf-matters" title={m.whyItMatters}><p className={s.lead}>{pick.whyItMatters || m.noValue}</p></RecordCard>
