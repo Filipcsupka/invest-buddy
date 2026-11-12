@@ -13,6 +13,7 @@ vi.mock("@/data/store", () => ({ latestScoreSummaries: () => scores(), latestSco
 vi.mock("@/viewer/get-viewer", () => ({ getViewer: () => viewer() }));
 vi.mock("@/data/cross-market-dashboard", async (importOriginal) => ({ ...await importOriginal<typeof import("@/data/cross-market-dashboard")>(), latestCrossMarketData: () => marketData(), latestPeriodPrices: () => periodPrices() }));
 import Dashboard, * as page from "./page";
+import { PortfolioStructure } from "@/components/dashboard/portfolio-structure";
 
 const props = (locale = "sk", period?: string) => ({ params: Promise.resolve({ locale }), searchParams: Promise.resolve(period ? { period } : {}) });
 const originalMode = process.env.DATA_MODE;
@@ -98,6 +99,7 @@ describe("cross-market dashboard", () => {
     expect(html).toContain('/' + locale + '/dashboard?period=3m');
     expect(html).toContain('aria-current="page"');
     expect(html).toContain(locale === "en" ? "Return over period (past, not a forecast)" : "Zmena za obdobie (minulosť, nie prognóza)");
+    expect(html).toContain(locale === "en" ? "Insufficient price history" : "Nedostatočná história cien");
     expect(html).toContain(locale === "en" ? "Portfolio structure (example)" : "Štruktúra portfólia (príklad)");
     expect(html).toContain(locale === "en" ? "No names meet the shortlist checks yet." : "Žiadna firma zatiaľ nespĺňa podmienky užšieho výberu.");
     expect(html).toContain("Global sample equity fund");
@@ -106,6 +108,10 @@ describe("cross-market dashboard", () => {
     expect(html).toContain('href="/' + locale + '/stocks"');
     expect(html).toContain('href="/' + locale + '/etf"');
     expect(html).toContain('href="/' + locale + '/indices"');
+    expect(html).toContain(locale === "en" ? 'aria-label="Market views"' : 'aria-label="Prehľady trhov"');
+    expect(html).toContain('AU-Adviser_guide-Vanguard_Core-Satellite_Model_Portfolios_with_LIS.pdf');
+    expect(html).toContain('9781119487333/f06.xhtml');
+    expect(html).toContain('the_vanguard_asset_allocation_model_an_investment_solution_for_active_passive_factor_portfolios.pdf');
     expect(html).toContain(locale === "en" ? "Informational screening only" : "Iba informačný prehľad");
     const panel = html.slice(html.indexOf('id="portfolio-structure-title"'), html.indexOf('id="structure-references-title"'));
     expect(panel).not.toMatch(/\b(?:buy|sell|recommend|best|top picks)\b/i);
@@ -122,6 +128,56 @@ describe("cross-market dashboard", () => {
     expect(html).toContain("Portfolio structure (example)");
     expect(html).toContain("No rated funds yet");
     expect(marketData).toHaveBeenCalledOnce();
+  });
+
+  it("keeps the cross-market panel when the shortlist is hidden", async () => {
+    const previous = process.env.SHORTLIST_VIEW;
+    process.env.SHORTLIST_VIEW = "off";
+    try {
+      viewer.mockResolvedValue({ tier: "admin", preview: false, owner: true });
+      scores.mockResolvedValue({ rows: [], sample: false, lastUpdated: null, stale: false });
+      portfolio.mockResolvedValue(null);
+      marketData.mockResolvedValue({ sample: false, funds: [], indices: [] });
+      const html = renderToStaticMarkup(await Dashboard(props("en")));
+      expect(html).toContain("Portfolio structure (example)");
+      expect(html).not.toContain("Shortlist checks");
+      expect(marketData).toHaveBeenCalledOnce();
+    } finally { if (previous === undefined) delete process.env.SHORTLIST_VIEW; else process.env.SHORTLIST_VIEW = previous; }
+  });
+
+  it("shows the free lock during owner preview and does not read market data", async () => {
+    viewer.mockResolvedValue({ tier: "free", preview: true, owner: true });
+    scores.mockResolvedValue({ rows: [], sample: false, lastUpdated: null, stale: false });
+    portfolio.mockResolvedValue(null);
+    const html = renderToStaticMarkup(await Dashboard(props("en")));
+    expect(html).not.toContain("Portfolio structure (example)");
+    expect(html).not.toContain('href="/en/indices"');
+    expect(marketData).not.toHaveBeenCalled();
+    expect(html).toContain('data-tier-lock="scanner-shortlist"');
+  });
+
+  it("uses the concentration threshold carried by the data", () => {
+    const html = renderToStaticMarkup(<PortfolioStructure locale="en" data={{ sample: false, stocks: [], core: [], defensive: [], indices: [],
+      concentration: { total: 2, thresholdPercent: 25, unknownCount: 0, groups: [{ sector: "Technology", count: 2, sharePercent: 100, flagged: true, tickers: ["A", "B"] }] } }} />);
+    expect(html).toContain("above the 25% reference line");
+    expect(html).not.toContain("above the 30% reference line");
+  });
+
+  it("starts price reads while the independent dashboard score read is pending", async () => {
+    const previous = process.env.SHORTLIST_VIEW;
+    process.env.SHORTLIST_VIEW = "off";
+    try {
+      viewer.mockResolvedValue({ tier: "admin", preview: false, owner: true });
+      let release!: (value: { rows: never[]; sample: boolean; lastUpdated: null; stale: boolean }) => void;
+      scores.mockImplementation(() => new Promise((resolve) => { release = resolve; }));
+      portfolio.mockResolvedValue(null);
+      marketData.mockResolvedValue({ sample: false, funds: [], indices: [] });
+      const render = Dashboard(props("en"));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(periodPrices).toHaveBeenCalledOnce();
+      release({ rows: [], sample: false, lastUpdated: null, stale: false });
+      await render;
+    } finally { if (previous === undefined) delete process.env.SHORTLIST_VIEW; else process.env.SHORTLIST_VIEW = previous; }
   });
 
   it("keeps vendor-backed sleeves behind the existing lock", async () => {

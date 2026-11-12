@@ -18,7 +18,7 @@ function ProductRows({ locale, rows, type }: { locale: Locale; rows: DashboardPe
       <div className={styles.rowHead}><Link href={href}>{row.name}</Link><span className={styles.code}>{type === "funds" ? "" : row.code}</span></div>
       <div className={styles.rowFacts}>
         {row.scorePercent !== null ? <span>{m.score} <strong>{number(locale, row.scorePercent)}</strong></span> : <span>{m.periodTrend} <strong>{row.trend === null ? m.noValue : row.trend ? m.above : m.below}</strong></span>}
-        <span>{m.periodReturnShort} <strong>{row.returnPercent === null ? m.periodGap : number(locale, row.returnPercent, true)}</strong></span>
+        <span>{m.periodReturnShort} <strong>{row.priceStatus === "stale" ? m.periodStale : row.priceStatus === "gap" ? m.periodGap : row.returnPercent === null ? m.periodInsufficient : number(locale, row.returnPercent, true)}</strong></span>
       </div>
       <div className={styles.dates}>{row.scoreDate && <time dateTime={row.scoreDate}>{m.periodScoreDate}: {formatDate(locale, row.scoreDate)}</time>}
         {row.priceDate && <time dateTime={row.priceDate}>{m.periodPriceDate}: {formatDate(locale, row.priceDate)}</time>}</div>
@@ -33,7 +33,7 @@ export function PeriodHighlights({ locale, period, rows, sample }: { locale: Loc
     <nav className={styles.tabs} aria-label={m.periodTitle}>{tabs.map((tab) => <Link key={tab.key} href={`/${locale}/dashboard?period=${tab.key}`} aria-current={period === tab.key ? "page" : undefined} className={period === tab.key ? styles.active : undefined}>{m[tab.label]}</Link>)}</nav>
     <p className={styles.returnNote}>{m.periodReturn}</p>
     <div className={styles.products}>
-      <section><h3>{m.growth}</h3><ProductRows locale={locale} rows={rows.stocks} type="stocks" /></section>
+      <section><h3>{m.periodStocks}</h3><ProductRows locale={locale} rows={rows.stocks} type="stocks" /></section>
       <section><h3>{m.periodFunds}</h3><ProductRows locale={locale} rows={rows.funds} type="funds" /></section>
       <section><h3>{m.indices}</h3><ProductRows locale={locale} rows={rows.indices} type="indices" /></section>
     </div>

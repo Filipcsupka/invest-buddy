@@ -3,7 +3,7 @@ import type { ShortlistData } from "@/data/shortlist";
 import { latestShortlist } from "@/data/shortlist";
 import type { ShortlistRow } from "@/engine/shortlist";
 import type { SectorGroup } from "@/universe/sector-groups";
-import { assembleCrossMarket, assemblePeriodRows, indexMetrics, latestCrossMarketData, latestPeriodPrices, parseDashboardPeriod, returnOverPeriod, selectDashboardFunds, selectDashboardStocks, type DashboardFund } from "./cross-market-dashboard";
+import { assembleCrossMarket, assemblePeriodRows, indexMetrics, latestCrossMarketData, latestPeriodPrices, parseDashboardPeriod, periodReturn, FUNDS_SQL, BROAD_REGIONS, selectDashboardFunds, selectDashboardStocks, type DashboardFund } from "./cross-market-dashboard";
 
 const asOf = "2026-11-10";
 const sectors: SectorGroup[] = ["Technology", "Healthcare", "Industrials", "Financial Services", "Energy", "Utilities"];
@@ -21,11 +21,11 @@ const fund = (key: string, assetClass: string, trackedIndex: string | null, scor
   ({ key, name: key, symbol: key, assetClass, region, trackedIndex, scorePercent, terPercent, aumUsdM: 1200, asOf: "2026-11-06" });
 
 describe("cross-market dashboard assembly", () => {
-  it("keeps only F1 and F2 passes, at most three names per sector and fifteen overall", () => {
+  it("keeps shortlist names without failed F1 or F2 checks, at most three per sector and fifteen overall", () => {
     const rows = [stock(0, "Technology", false), ...Array.from({ length: 24 }, (_, index) => stock(index + 1, sectors[Math.floor(index / 4) % sectors.length]))];
     const result = selectDashboardStocks(shortlist(rows));
     expect(result.stocks).toHaveLength(15);
-    expect(result.stocks).not.toContainEqual(expect.objectContaining({ ticker: "S0" }));
+    expect(result.stocks).toContainEqual(expect.objectContaining({ ticker: "S0" }));
     expect(result.stocks.filter((row) => row.sector === "Technology")).toHaveLength(3);
     expect(result.stocks.every((row) => row.asOf === asOf)).toBe(true);
     expect(result.concentration.total).toBe(15);
@@ -41,6 +41,19 @@ describe("cross-market dashboard assembly", () => {
     expect(selected.core.map((item) => item.key)).toEqual(["a", "c"]);
     expect(selected.defensive.map((item) => item.key)).toEqual(["f", "g", "h"]);
     expect(selected.core[0].asOf).toBe("2026-11-06");
+    expect(BROAD_REGIONS).toContain("north america");
+    expect(BROAD_REGIONS).toContain("international");
+    expect(BROAD_REGIONS).toContain("developed markets excluding united states and canada");
+    expect(selectDashboardFunds([fund("world", "equity", "World index", 90, "All World"), fund("developed", "equity", "Developed index", 89, "Developed Markets")]).core.map((item) => item.key)).toEqual(["world", "developed"]);
+  });
+
+  it("selects core and defensive candidates independently of the overall score cap", () => {
+    expect(FUNDS_SQL).toMatch(/overall AS[\s\S]*LIMIT 100[\s\S]*core AS[\s\S]*LIMIT 25[\s\S]*defensive AS[\s\S]*LIMIT 25/);
+    expect(FUNDS_SQL).toMatch(/DISTINCT ON \(lower\(trim\(tracked_index\)\)\)/);
+    const crowded = Array.from({ length: 120 }, (_, index) => fund(`thematic${index}`, "equity", `Theme ${index}`, 100, "Europe"));
+    const selected = selectDashboardFunds([...crowded, fund("core", "equity", "World", 70), fund("bond", "bond", "Aggregate", 60)]);
+    expect(selected.core.map((item) => item.key)).toEqual(["core"]);
+    expect(selected.defensive.map((item) => item.key)).toEqual(["bond"]);
   });
 
   it("computes dated index context and returns empty sleeves when ratings are absent", () => {
@@ -57,19 +70,34 @@ describe("cross-market dashboard assembly", () => {
     expect(empty.indices).toEqual([]);
   });
 
-  it("accepts only supported periods and leaves a gap without enough stored bars", () => {
+  it("uses calendar offsets, flags stale daily data, and shows missing bars as gaps", () => {
     expect(["1d", "1m", "3m", "1y"].map(parseDashboardPeriod)).toEqual(["1d", "1m", "3m", "1y"]);
     expect(parseDashboardPeriod("all")).toBe("1d");
-    expect(parseDashboardPeriod(["1y"])).toBe("1d");
-    expect(returnOverPeriod([100, 105], "1d")).toBeCloseTo(5);
-    expect(returnOverPeriod([100, 105], "1m")).toBeNull();
+    const dates = ["2025-11-10", "2026-08-10", "2026-09-10", "2026-10-10", "2026-11-09", "2026-11-10"];
+    const closes = [50, 60, 70, 80, 100, 105];
+    expect(periodReturn({ dates, closes }, "1d", "2026-11-12").value).toBeCloseTo(5);
+    expect(periodReturn({ dates, closes }, "1d", "2026-11-16")).toEqual({ value: null, status: "stale" });
+    expect(periodReturn({ dates, closes }, "1m").status).toBe("gap");
+    const dailyDates = Array.from({ length: 366 }, (_, day) => new Date(Date.UTC(2025, 10, 10 + day)).toISOString().slice(0, 10));
+    const dailyCloses = dailyDates.map((_, day) => 100 + day);
+    expect(periodReturn({ dates: dailyDates, closes: dailyCloses }, "1m").value).toBeCloseTo((465 / 434 - 1) * 100);
+    expect(periodReturn({ dates: dailyDates, closes: dailyCloses }, "1y").value).toBeCloseTo(365);
+    const gapDates = dailyDates.filter((day) => day < "2026-10-01" || day > "2026-10-15");
+    expect(periodReturn({ dates: gapDates, closes: gapDates.map((_, day) => 100 + day) }, "1m")).toEqual({ value: null, status: "gap" });
     const structure = assembleCrossMarket(shortlist([stock(1, "Technology")]), [fund("F1", "bond", "Index")], [
-      { code: "IDX", name: "Index", asOf: "2026-11-11", closes: [100, 101], aboveMa200: null, return1y: null, volatility1y: null },
+      { code: "IDX", name: "Index", asOf: "2026-11-10", dates: dailyDates, closes: dailyCloses, aboveMa200: null, return1y: null, volatility1y: null },
     ], false);
-    const rows = assemblePeriodRows(structure, [fund("F1", "bond", "Index")], "1m", { stocks: { S1: { asOf: "2026-11-11", closes: [100, 101] } }, funds: {} });
-    expect(rows.stocks[0]).toMatchObject({ scoreDate: asOf, priceDate: "2026-11-11", returnPercent: null });
-    expect(rows.funds[0]).toMatchObject({ scoreDate: "2026-11-06", priceDate: null, returnPercent: null });
-    expect(rows.indices[0]).toMatchObject({ scorePercent: null, priceDate: "2026-11-11", returnPercent: null });
+    const rows = assemblePeriodRows(structure, [fund("F1", "bond", "Index")], "1m", { stocks: { S1: { asOf: "2026-11-10", dates: dailyDates, closes: dailyCloses } }, funds: {} });
+    expect(rows.stocks[0]).toMatchObject({ scoreDate: asOf, priceDate: "2026-11-10", priceStatus: null });
+    expect(rows.funds[0]).toMatchObject({ scoreDate: "2026-11-06", priceDate: null, priceStatus: "insufficient" });
+    expect(rows.indices[0]).toMatchObject({ scorePercent: null, priceDate: "2026-11-10", priceStatus: null });
+  });
+
+  it("deduplicates period ETFs and excludes volatility indices", () => {
+    const funds = [fund("a", "equity", "S&P 500", 95), fund("b", "equity", "s&p 500", 94), fund("c", "bond", "Aggregate", 90)];
+    const structure = assembleCrossMarket(null, funds, [{ code: "VIX", name: "Volatility Index", asOf, dates: [], closes: [], aboveMa200: null, return1y: null, volatility1y: null }], false);
+    expect(structure.indices).toEqual([]);
+    expect(assemblePeriodRows(structure, funds, "1m", { stocks: {}, funds: {} }).funds.map((row) => row.code)).toEqual(["a", "c"]);
   });
 
   it("fills each sample sleeve and period from fixture data", async () => {

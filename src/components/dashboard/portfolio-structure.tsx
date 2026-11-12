@@ -42,7 +42,7 @@ export function PortfolioStructure({ locale, data }: { locale: Locale; data: Cro
             <div className={styles.facts}><span>{m.score} <strong>{percent(locale, stock.scorePercent)}</strong></span></div>
             <time dateTime={stock.asOf}>{m.dataDate}: {formatDate(locale, stock.asOf)}</time>
           </li>)}</ul> : <p className={styles.empty}>{m.stockEmpty}</p>}
-          {flagged.map((group) => <p className={styles.check} key={group.sector}>{m.concentration(group.count, data.concentration.total, sectorGroupLabel(locale, group.sector))}</p>)}
+          {flagged.map((group) => <p className={styles.check} key={group.sector}>{m.concentration(group.count, data.concentration.total, sectorGroupLabel(locale, group.sector), data.concentration.thresholdPercent)}</p>)}
           {data.concentration.unknownCount > 0 && <p className={styles.note}>{m.unknownSector(data.concentration.unknownCount)}</p>}
         </section>
         <section className={styles.sleeve} aria-label={m.core}><h3>{m.core}</h3><FundRows locale={locale} funds={data.core} /></section>
@@ -54,8 +54,8 @@ export function PortfolioStructure({ locale, data }: { locale: Locale; data: Cro
     </section>
     <aside className={styles.references} aria-labelledby="structure-references-title"><div><h2 id="structure-references-title">{m.referenceTitle}</h2><p>{m.referenceLede}</p></div>
       <ul><li><strong>{m.coreSatellite}</strong><span>{m.coreSatelliteBody}</span><a href="https://fund-docs.vanguard.com/AU-Adviser_guide-Vanguard_Core-Satellite_Model_Portfolios_with_LIS.pdf" target="_blank" rel="noopener noreferrer">{m.source}</a></li>
-        <li><strong>{m.threeFund}</strong><span>{m.threeFundBody}</span><a href="https://oreilly.com/library/view/the-bogleheads-guide/9781119487333/c03.xhtml" target="_blank" rel="noopener noreferrer">{m.source}</a></li>
-        <li><strong>{m.sixtyForty}</strong><span>{m.sixtyFortyBody}</span><a href="https://corporate.vanguard.com/content/dam/corp/research/pdf/rational_rebalancing_analytical_approach_to_multiasset_portfolio_rebalancing.pdf" target="_blank" rel="noopener noreferrer">{m.source}</a></li></ul>
+        <li><strong>{m.threeFund}</strong><span>{m.threeFundBody}</span><a href="https://www.oreilly.com/library/view/the-bogleheads-guide/9781119487333/f06.xhtml" target="_blank" rel="noopener noreferrer">{m.source}</a></li>
+        <li><strong>{m.sixtyForty}</strong><span>{m.sixtyFortyBody}</span><a href="https://corporate.vanguard.com/content/dam/corp/research/pdf/the_vanguard_asset_allocation_model_an_investment_solution_for_active_passive_factor_portfolios.pdf" target="_blank" rel="noopener noreferrer">{m.source}</a></li></ul>
     </aside>
   </>;
 }
