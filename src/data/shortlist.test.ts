@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ruleGroups } from "@/i18n/rules";
 import type { StoreRow } from "./store";
+import type { Viewer } from "@/viewer/viewer";
 import { evidencedPoints, quoteCurrency, shortlistAccess, shortlistInputs, shortlistViewEnabled } from "./shortlist";
 
 const hits = (...met: string[]) => ruleGroups.flatMap((group) => group.rules).map((rule) => ({ id: rule.id, label: rule.id, detail: "", points: rule.points, matched: met.includes(rule.id), unknown: rule.id === "catalyst" }));
@@ -16,11 +17,21 @@ describe("shortlist access", () => {
     expect(shortlistViewEnabled({ SHORTLIST_VIEW: "on" })).toBe(true);
     expect(shortlistViewEnabled({ SHORTLIST_VIEW: "off" })).toBe(false);
   });
-  it("shows owner and paid viewers the list and free viewers the lock", () => {
-    expect(shortlistAccess({ tier: "admin" }, {})).toBe("full");
-    expect(shortlistAccess({ tier: "paid" }, {})).toBe("full");
-    expect(shortlistAccess({ tier: "free" }, {})).toBe("locked");
-    expect(shortlistAccess({ tier: "admin" }, { SHORTLIST_VIEW: "off" })).toBe("hidden");
+  const owner: Viewer = { tier: "admin", preview: false, owner: true, userId: null };
+  const plus: Viewer = { tier: "paid", preview: false, owner: false, userId: "u1", plan: "plus" };
+  const trial: Viewer = { tier: "paid", preview: false, owner: false, userId: "u2", plan: "trial" };
+  const freeCustomer: Viewer = { tier: "free", preview: false, owner: false, userId: "u3", plan: "free" };
+  // PAYWALL off: an anonymous visitor and a signed-in free customer both resolve to the "paid" soft tier.
+  const anonymousSoft: Viewer = { tier: "paid", preview: false };
+  const freeSoft: Viewer = { tier: "paid", preview: false, owner: false, userId: "u4", plan: "free" };
+  it("shows the owner, Plus and trial the list", () => {
+    for (const viewer of [owner, plus, trial]) expect(shortlistAccess(viewer, {})).toBe("full");
+  });
+  it("locks it for free customers and for anonymous visitors while PAYWALL is off", () => {
+    for (const viewer of [freeCustomer, anonymousSoft, freeSoft, { tier: "free", preview: false } as Viewer]) expect(shortlistAccess(viewer, {})).toBe("locked");
+  });
+  it("hides it for everyone with SHORTLIST_VIEW off", () => {
+    for (const viewer of [owner, plus, anonymousSoft]) expect(shortlistAccess(viewer, { SHORTLIST_VIEW: "off" })).toBe("hidden");
   });
 });
 

@@ -7,7 +7,7 @@ import { evidencedMaxOf } from "@/engine/relative";
 import { buildShortlist, sectorConcentration, type Shortlist, type ShortlistInput, type SectorConcentration } from "@/engine/shortlist";
 import { SHORTLIST_CONFIG } from "@/engine/shortlist-config";
 import { stateKey } from "@/i18n/score-text";
-import type { Viewer } from "@/viewer/viewer";
+import { canUseVendorData, type Viewer } from "@/viewer/viewer";
 import { nextEarnings } from "./catalyst-calendar";
 import { readListingFacts, sectorGroupsFor, type ListingFacts } from "./shortlist-sectors";
 import { latestScores, type StoreRow } from "./store";
@@ -17,12 +17,13 @@ import { CACHE_TAGS, webCached } from "./web-cache";
 export const shortlistViewEnabled = (env: Record<string, string | undefined> = process.env): boolean => env.SHORTLIST_VIEW !== "off";
 
 /**
- * Who sees the shortlist: the owner and paid viewers (Plus, trial, and everyone while PAYWALL is off) get it; a free viewer gets the
- * lock card, the same state as the other paid scanner parts; with SHORTLIST_VIEW off nobody sees it.
+ * Who sees the shortlist. It is built from vendor-backed data, so the gate is `canUseVendorData`: the owner and customers with an
+ * active Plus or trial plan get it. Everyone else, including anonymous visitors while PAYWALL is off, gets the lock card and the
+ * loader is not called. With SHORTLIST_VIEW off nobody sees it.
  */
-export function shortlistAccess(viewer: Pick<Viewer, "tier">, env: Record<string, string | undefined> = process.env): "full" | "locked" | "hidden" {
+export function shortlistAccess(viewer: Viewer, env: Record<string, string | undefined> = process.env): "full" | "locked" | "hidden" {
   if (!shortlistViewEnabled(env)) return "hidden";
-  return viewer.tier === "free" ? "locked" : "full";
+  return canUseVendorData(viewer, env) ? "full" : "locked";
 }
 
 export interface EarningsFact { reportDate: string | null; stale: boolean }
