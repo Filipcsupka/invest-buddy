@@ -47,6 +47,7 @@ export const EXPECTED_JOBS: ExpectedJob[] = [
   { cronJob: "etf-catalog-sync", schedule: "10 5 * * 0", enabled: true, runJob: null, graceMinutes: 25, note: "Xetra catalog sync; not in job_runs" },
   { cronJob: "etf-enrich", schedule: "40 5 * * 0", enabled: true, runJob: null, graceMinutes: 1500, note: "pending catalog enrichment; not in job_runs" },
   { cronJob: "etf-outcomes", schedule: "50 6 * * *", enabled: true, runJob: "etf-outcomes", graceMinutes: 20 },
+  { cronJob: "etf-score", schedule: "30 2 * * *", enabled: false, runJob: "etf-score", graceMinutes: 35, note: "suspended; enable only after deploying an image containing the score runner" },
   { cronJob: "eodhd-etf", schedule: "10 1 * * *", enabled: false, runJob: "eodhd-etf", graceMinutes: 60 },
   { cronJob: "review-calendar", schedule: "0 11 * * 6", enabled: true, runJob: null, graceMinutes: 110, note: "several containers, not one job name" },
   { cronJob: "thirteenf-q3", schedule: "0 8 20 11 *", enabled: false, runJob: null, graceMinutes: 70, note: "yearly, shares the job name thirteenf" },

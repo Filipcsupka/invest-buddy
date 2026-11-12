@@ -10,6 +10,8 @@ Not on yet: AUTH, TRIAL, AUTH_SECRET, AUTH_URL, OWNER_USER_IDS and RATE_LIMIT_TR
 
 Owner sign-in change (in review, not deployed): the separate owner login (password, Basic auth, owner cookie and the separate sign-in page) is removed. The owner signs in at `/sign-in` with email and password, and the account whose user id is in `OWNER_USER_IDS` is the owner. Google sign-in is removed from the UI. Until prod has `AUTH=on`, `AUTH_SECRET`, `AUTH_URL` and `OWNER_USER_IDS` (register the owner account first, then read its id), nobody can open the owner pages after this ships, so set them before the deploy. The infra repo is not changed here. If the web deployment still sets the old owner password or session secret, the app ignores them and they can be removed in an infra change. See docs/customer-auth.md.
 
+ETF rating rules (N3): [methodology, thresholds, and data gaps](etf-score.md). The new score job is suspended until its migration and run order are reviewed.
+
 Blocker for customer-visible scores: no display licence for EODHD, Twelve Data or Alpha Vantage (TASK-064).
 
 Current state, open owner decisions, remaining tasks with definition of done and the planning reports are in the vault: ~/Documents/ops-brain/projects/investing-platform/next-session-2026-11-09.md (top block) and plans-2026-11-09/.
