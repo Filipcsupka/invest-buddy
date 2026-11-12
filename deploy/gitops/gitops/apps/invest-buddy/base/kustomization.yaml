@@ -28,5 +28,6 @@ resources:
   - backup-cronjob.yaml
   - etf-cronjobs.yaml
   - etf-detail-cronjob.yaml
+  - etf-score-cronjob.yaml
   - markets-cronjob.yaml
   - research-config.yaml

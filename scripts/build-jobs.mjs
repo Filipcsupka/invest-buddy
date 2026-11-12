@@ -28,6 +28,7 @@ const regularJobs = [
   "thirteenf.ts",
   "outcomes.ts",
   "etf-outcomes.ts",
+  "etf-score.ts",
   "etf-catalog.ts",
   "symbols-sync.ts",
   "alert-test.ts",
