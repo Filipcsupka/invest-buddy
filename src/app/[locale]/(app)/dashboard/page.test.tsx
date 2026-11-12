@@ -6,7 +6,7 @@ import { toRow } from "@/components/view-model";
 
 const scores = vi.fn();
 const portfolio = vi.fn();
-vi.mock("@/data/store", () => ({ latestScoreSummaries: () => scores(), latestPortfolio: () => portfolio() }));
+vi.mock("@/data/store", () => ({ latestScoreSummaries: () => scores(), latestScores: () => scores(), latestPortfolio: () => portfolio() }));
 import Dashboard, * as page from "./page";
 
 const props = (locale = "sk") => ({ params: Promise.resolve({ locale }) });

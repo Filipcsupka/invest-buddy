@@ -22,4 +22,11 @@ describe("private owner allocation data", () => {
     expect(data.result?.suggestions.find((s) => s.symbol === "NVDA")).toMatchObject({ tier: "ADD_THIRD", amountEur: 0, reason: "ADD_HISTORY_UNKNOWN" });
     expect(data.result?.carriedCashEur).toBe(600);
   });
+  it("passes the sector group of each name to the sector cap", async () => {
+    process.env.DATA_MODE = "fixture";
+    const data = await ownerAllocation();
+    // NVDA is listed as AI & semiconductors in the fixture universe, which is the Technology group.
+    expect(data.result?.suggestions.find((s) => s.symbol === "NVDA")?.sectorChecked).toBe(true);
+    expect(Array.isArray(data.result?.overLimit)).toBe(true);
+  });
 });

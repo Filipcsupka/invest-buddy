@@ -1,5 +1,6 @@
 import type { StoreRow } from "@/data/store";
-import { sectorLabel, stateKey } from "@/i18n/score-text";
+import { sectorLabel } from "@/i18n/score-text";
+import { displayedState } from "@/components/view-model";
 import type { Locale } from "@/i18n";
 import { stateOrder, type StateKey } from "@/i18n/rules";
 import type { RuleStreak } from "@/db/rules-streak";
@@ -49,7 +50,8 @@ export function filterScores(rows: StoreRow[], filters: ScannerFilters, heldTick
   const preset = filters.preset ? presetById(filters.preset) : undefined;
   const q = filters.q.toLocaleLowerCase();
   return rows.filter(({ instrument, result }) => (!q || `${instrument.ticker} ${instrument.name} ${instrument.sector} ${sectorLabel(locale, instrument.sector)}`.toLocaleLowerCase(locale).includes(q))
-    && (!filters.state || filters.state === stateKey(result.state))
+    // The displayed state, so a filtered state matches the group the row is shown in (docs/shortlist.md, "State filter").
+    && (!filters.state || filters.state === displayedState(result))
     && (filters.min === null || result.total >= filters.min)
     && (filters.max === null || result.total <= filters.max)
     && (!filters.sector || instrument.sector === filters.sector)

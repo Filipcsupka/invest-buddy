@@ -46,4 +46,25 @@ describe("owner allocation page", () => {
     expect(html).toContain("25.00%");
     expect(html).toContain("Days held");
   });
+  it("lists holdings over a limit without a sale instruction and marks names with no sector", async () => {
+    enabled.mockReturnValue(true);
+    data.mockResolvedValue({ sample: false, baseline: { asOf: "2026-11-10", cashEur: 200, monthlyContributionEur: 200 }, result: {
+      reserveEur: 0, carriedCashEur: 200, cashDrag: false,
+      suggestions: [{ symbol: "NEW", tier: "STARTER", amountEur: 0, recycledEur: 0, reason: "SECTOR_CAP", capped: true, sectorChecked: true },
+        { symbol: "ODD", tier: "STARTER", amountEur: 0, recycledEur: 0, reason: "MAX_POSITIONS", capped: false, sectorChecked: false }],
+      overLimit: [{ kind: "SECTOR_CAP", key: "Technology", value: 35, limit: 30 }, { kind: "MAX_POSITIONS", key: "positions", value: 17, limit: 15 }],
+    } });
+    const en = renderToStaticMarkup(await OwnerAllocationPage(props()));
+    expect(en).toContain("The sector cap limits this order.");
+    expect(en).toContain("The open position limit is reached, so a new name waits.");
+    expect(en).toContain("Sector not known, so the sector cap was not checked.");
+    expect(en).toContain("Holdings over a limit");
+    expect(en).toContain("Technology: 35.0% of total value including cash, cap 30.0%");
+    expect(en).toContain("17 open positions, limit 15");
+    expect(en).toContain("one sector at most 30% of total value including cash, at most 15 open positions");
+    expect(en).not.toMatch(/\bsell\b(?! to bring)/i);
+    const sk = renderToStaticMarkup(await OwnerAllocationPage(props("sk")));
+    expect(sk).toContain("Technológie: 35,0 % celkovej hodnoty vrátane hotovosti, limit 30,0 %");
+    expect(sk).toContain("Objednávku obmedzil limit na jeden sektor.");
+  });
 });
