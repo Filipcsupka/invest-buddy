@@ -26,6 +26,10 @@ import { DataStatus } from "@/components/data-status";
 import { getViewer } from "@/viewer/get-viewer";
 import { latestShortlist, shortlistAccess } from "@/data/shortlist";
 import { ShortlistLock, ShortlistView } from "@/components/shortlist-view";
+import { PortfolioStructure } from "@/components/dashboard/portfolio-structure";
+import { PeriodHighlights } from "@/components/dashboard/period-highlights";
+import { assembleCrossMarket, assemblePeriodRows, latestCrossMarketData, latestPeriodPrices, parseDashboardPeriod } from "@/data/cross-market-dashboard";
+import { dashboardCopy } from "@/i18n/dashboard-messages";
 import { fill, formatDate, getMessages, plural } from "@/i18n";
 import { pageMetadata } from "@/i18n/metadata";
 import { resolveLocale, type LocaleParams } from "@/app/[locale]/locale";
@@ -39,11 +43,14 @@ export async function generateMetadata({ params }: LocaleParams): Promise<Metada
   return pageMetadata(locale, "/dashboard", m.meta.dashboardTitle, m.meta.dashboardDescription);
 }
 
-async function Dashboard({ params }: LocaleParams) {
+async function Dashboard({ params, searchParams }: LocaleParams & { searchParams?: Promise<{ period?: string }> }) {
   const locale = await resolveLocale(params);
+  const period = parseDashboardPeriod((await searchParams)?.period);
   const m = getMessages(locale);
   const access = shortlistAccess(await getViewer());
-  const [data, portfolio, moved, horizons, macroSchedule, shortlist] = await Promise.all([latestScoreSummaries(), latestPortfolio(), latestStateChanges(), publicHorizons(), storedMacroEvents(new Date().toISOString().slice(0, 10)), access === "full" ? latestShortlist() : null]);
+  const [data, portfolio, moved, horizons, macroSchedule, shortlist, crossMarket] = await Promise.all([latestScoreSummaries(), latestPortfolio(), latestStateChanges(), publicHorizons(), storedMacroEvents(new Date().toISOString().slice(0, 10)), access === "full" ? latestShortlist() : null, access === "full" ? latestCrossMarketData() : null]);
+  const structure = access === "full" && crossMarket ? assembleCrossMarket(shortlist, crossMarket.funds, crossMarket.indices, crossMarket.sample) : null;
+  const periodPrices = structure && crossMarket ? await latestPeriodPrices(structure.stocks.map((stock) => stock.ticker), [...crossMarket.funds].sort((a, b) => b.scorePercent - a.scorePercent || a.key.localeCompare(b.key)).slice(0, 5).flatMap((fund) => fund.vendorSymbol ? [fund.vendorSymbol] : [])) : null;
   const k = getKitMessages(locale);
   const changes: StateChange[] = moved.map(({ ticker, from, to }) => {
     const [fromLabel, toLabel] = [m.status.labels[from], m.status.labels[to]];
@@ -59,6 +66,12 @@ async function Dashboard({ params }: LocaleParams) {
       lede={data.lastUpdated ? fill(m.dashboard.lede, { date: formatDate(locale, session), count: plural(locale, data.sample ? m.plurals.sampleTickers : m.plurals.tickers, rows.length) }) : undefined}
       meta={<DataStatus locale={locale} lastUpdated={data.lastUpdated} stale={data.stale} />}
       actions={<><Link className="button secondary" href={`/${locale}/heatmap`}>{h.navLabel}</Link><Link className="button secondary" href={`/${locale}/methodology`}>{m.nav.methodology}</Link></>} />
+    {access === "locked" ? <ShortlistLock locale={locale} /> : structure && crossMarket && periodPrices ? <><PeriodHighlights locale={locale} period={period} rows={assemblePeriodRows(structure, crossMarket.funds, period, periodPrices)} sample={crossMarket.sample} /><PortfolioStructure locale={locale} data={structure} /></> : null}
+    {access === "full" && <nav className={styles.marketLinks} aria-label={dashboardCopy(locale).title}>
+      <Link className="button secondary" href={`/${locale}/stocks`}>{dashboardCopy(locale).openStocks}</Link>
+      <Link className="button secondary" href={`/${locale}/etf`}>{dashboardCopy(locale).openEtfs}</Link>
+      <Link className="button secondary" href={`/${locale}/indices`}>{dashboardCopy(locale).openIndices}</Link>
+    </nav>}
     <div className={styles.strip}>
       {changes.length ? <StateStrip label={stripLabel} changes={changes} empty={k.strip.empty} pauseLabel={k.strip.pause} playLabel={k.strip.play} /> : <section className={styles.stripEmpty} aria-label={stripLabel}>
         <div className={styles.stripEmptyHead}><span className={styles.stripEmptyIcon} aria-hidden="true"><IconBandWatch /></span><div><p className={styles.stripEmptyLabel}>{stripLabel}</p><p className={styles.stripEmptyText}>{k.strip.empty}</p></div></div>
@@ -66,7 +79,7 @@ async function Dashboard({ params }: LocaleParams) {
       </section>}
     </div>
     <ScoreStrip locale={locale} rows={rows} />
-    {access === "locked" ? <ShortlistLock locale={locale} /> : shortlist ? <ShortlistView locale={locale} data={shortlist} compact /> : null}
+    {access === "full" && shortlist ? <ShortlistView locale={locale} data={shortlist} compact /> : null}
     <HeadDisclosure text={m.common.operatorDisclosure} />
     <StateFilterProvider>
     <ScannerTable locale={locale} rows={rows} profiles={Object.fromEntries(Object.entries(horizons).map(([ticker, h]) => [ticker, h.profile]))} aside={<MacroEvents locale={locale} schedule={macroSchedule} />} heldTickers={portfolio?.weights.filter((p) => p.weightPercent > 0).map((p) => p.symbol.toUpperCase()) ?? []} text={{
