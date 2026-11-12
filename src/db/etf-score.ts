@@ -20,7 +20,7 @@ export function etfBarFacts(bars: readonly EtfBar[], eurPerUnit: number | null) 
   let high = 0, maxDrawdown1y: number | null = sorted.length >= 252 ? 0 : null;
   for (const bar of year) { high = Math.max(high, bar.close); if (maxDrawdown1y !== null) maxDrawdown1y = Math.min(maxDrawdown1y, bar.close / high - 1); }
   const recent = tail(20);
-  const values = eurPerUnit !== null && recent.length === 20 && recent.every((b) => b.volume !== null && b.volume >= 0) ? recent.map((b) => b.close * b.volume! * eurPerUnit).sort((a, b) => a - b) : [];
+  const values = eurPerUnit !== null && recent.length === 20 && recent.every((b) => b.volume !== null && b.volume >= 0) && recent.some((b) => b.volume! > 0) ? recent.map((b) => b.close * b.volume! * eurPerUnit).sort((a, b) => a - b) : [];
   const medianValueTradedEur = values.length === 20 ? (values[9] + values[10]) / 2 : null;
   return { barsCount: sorted.length, close, sma50, sma200, return12to1m, maxDrawdown1y, medianValueTradedEur };
 }
@@ -56,10 +56,14 @@ export async function readEtfScoreFacts(listingKey: string, asOf: string, db: Qu
   const s = stats.rows[0];
   const currency = str(s?.total_assets_currency);
   const eurPerUnit = currency === "EUR" ? 1 : currency === "USD" && n(fx.rows[0]?.close) ? 1 / n(fx.rows[0]?.close)! : null;
-  const aum = aumEur(n(s?.total_assets), str(s?.total_assets_currency), eurPerUnit);
+  const explicitAum = aumEur(n(s?.total_assets), currency, eurPerUnit);
+  const usdListing = str(c.listing_region) === "US" && str(c.trading_currency) === "USD";
+  const catalogAum = usdListing && (n(c.aum_usd_m) ?? 0) > 0 ? aumEur(n(c.aum_usd_m)! * 1_000_000, "USD", n(fx.rows[0]?.close) ? 1 / n(fx.rows[0]?.close)! : null) : null;
+  const aum = explicitAum.value !== null ? explicitAum : catalogAum?.value !== null && catalogAum !== null ? catalogAum : explicitAum;
   const barRows = bars.rows.map((r) => ({ date: day(r.date), close: n(r.close) ?? 0, volume: n(r.volume), currency: str(r.currency) }));
   const lastBar = barRows.filter((b) => b.close > 0).map((b) => b.date).sort().at(-1);
-  const freshBars = lastBar && Date.parse(asOf) - Date.parse(lastBar) <= 7 * 86_400_000 ? barRows : [];
+  const barAge = lastBar ? Date.parse(asOf) - Date.parse(lastBar) : NaN;
+  const freshBars = barAge >= 0 && barAge <= 7 * 86_400_000 ? barRows : [];
   const barCurrency = str(c.trading_currency);
   const barFx = barCurrency === "EUR" ? 1 : barCurrency === "USD" && n(fx.rows[0]?.close) ? 1 / n(fx.rows[0]?.close)! : null;
   const validBarFx = barRows.every((b) => !b.currency || b.currency === barCurrency) ? barFx : null;
@@ -73,7 +77,7 @@ export async function readEtfScoreFacts(listingKey: string, asOf: string, db: Qu
   const sector = exposure.rows.filter((r) => r.kind === "sector").map((r) => n(r.weight_pct) ?? 0);
 
   return { asOf, instrumentType: str(c.instrument_type) ?? "", name: str(c.name) ?? "", riskType: str(c.theme), detailStatus: str(c.detail_status), lastSeen: day(c.last_seen),
-    terPct: n(s?.ongoing_charge_pct) ?? n(s?.net_expense_ratio_pct), aumEur: aum.value, aumCurrencyReason: aum.reason,
+    terPct: n(s?.ongoing_charge_pct) ?? n(s?.net_expense_ratio_pct) ?? n(c.ter_pct), aumEur: aum.value, aumCurrencyReason: aum.reason,
     replication: str(c.replication), ucitsConfirmed: null, inceptionDate: s?.inception_date ? day(s.inception_date) : null,
     domicile: str(c.domicile), assetClass: str(c.asset_class), usEquityWeightPct: usEquityWeight(exposure.rows, h),
     ...etfBarFacts(freshBars, validBarFx), topTenWeightPct: topTen, maxCountryWeightPct: completeCountries || (maxCountry ?? 0) > 70 ? maxCountry : null,

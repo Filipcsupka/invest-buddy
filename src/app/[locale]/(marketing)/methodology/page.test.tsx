@@ -9,6 +9,16 @@ const originalMode = process.env.DATA_MODE;
 afterEach(() => { process.env.DATA_MODE = originalMode; });
 
 describe("methodology page", () => {
+  it.each([["en", "ETF rating", "Sources for the criteria"], ["sk", "Hodnotenie ETF", "chýbajúcich údajov"]])("documents stored ETF rules in %s", async (locale, title, phrase) => {
+    const html = renderToStaticMarkup(await Methodology(props(locale)));
+    expect(html).toContain('id="etf-rating"');
+    expect(html).toContain(title);
+    expect(html).toContain(phrase);
+    expect(html).toContain("etf-v2-2026-11-12");
+    expect(html).toContain("The Journal of Wealth Management");
+    expect(html).not.toContain("abstract_id=962461");
+    expect(html).not.toContain("eodhd.com");
+  });
   it.each(["en", "sk"] as const)("shows version, band steps, worked figures, limits and data provider in %s", async (locale) => {
     process.env.DATA_MODE = "db";
     const html = renderToStaticMarkup(await Methodology(props(locale)));

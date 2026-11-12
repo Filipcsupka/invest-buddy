@@ -140,6 +140,15 @@ export async function etfCatalogDetail(key: string, db: Query | null = getPool()
   const result = await db.query<Row>(DETAIL_SQL, [key]);
   return result.rows[0] ? { fund: mapCatalogFund(result.rows[0]), sample: false } : null;
 }
+/** Match a pick to its own listing before reading a stored score. */
+export async function etfCatalogKeyForPick(pick: { isin: string | null; exchange: string | null; symbol: string }, db: Query | null = getPool()): Promise<string | null> {
+  const matches = (fund: CatalogFund) => (pick.exchange === null || fund.exchange === pick.exchange) &&
+    (pick.isin ? fund.isin === pick.isin : pick.exchange !== null && fund.mnemonic === pick.symbol);
+  if (process.env.DATA_MODE === "fixture") return sampleEtfCatalog.find(matches)?.listingKey ?? null;
+  if (!db || (!pick.isin && !pick.exchange)) return null;
+  const result = await db.query<{ listing_key: string }>(`SELECT listing_key FROM etf_catalog WHERE ($1::text IS NOT NULL AND isin=$1 AND ($2::text IS NULL OR exchange=$2)) OR ($1::text IS NULL AND $2::text IS NOT NULL AND exchange=$2 AND mnemonic=$3) ORDER BY listing_key LIMIT 1`, [pick.isin, pick.exchange, pick.symbol]);
+  return result.rows[0]?.listing_key ?? null;
+}
 function statsFrom(funds: CatalogFund[]): CatalogStats {
   return { size: funds.length, enriched: funds.filter((f) => f.enrichmentStatus === "ok").length,
     shortlist: funds.filter((f) => f.shortlist).length, lastSync: funds.reduce<string | null>((latest, f) => !latest || f.lastSeen > latest ? f.lastSeen : latest, null) };

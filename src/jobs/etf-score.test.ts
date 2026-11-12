@@ -15,7 +15,7 @@ it("scores catalog fixtures and upserts point-in-time results", async () => {
   const result = await runEtfScore(db as never, "2026-11-12");
   expect(result).toMatchObject({ processed: 1, rated: 1, failures: 0, deleted: 0 });
   const write = calls.find((c) => c.sql.includes("INSERT INTO etf_scores"));
-  expect(write?.values?.slice(0, 3)).toEqual(["FUND1", "2026-11-12", "etf-v1-2026-11-12"]);
+  expect(write?.values?.slice(0, 3)).toEqual(["FUND1", "2026-11-12", "etf-v2-2026-11-12"]);
   expect(JSON.parse(String(write?.values?.[3]))).toHaveLength(11);
   expect(write?.values?.[6]).toBe("rated");
 });

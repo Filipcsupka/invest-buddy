@@ -32,6 +32,7 @@ it("adds yield and 1-year return columns and the tab links for the owner", async
   listStats.mockResolvedValue(new Map([["DE0000000001", { yieldPct: null, ret1yPct: 12.2351, asOf: "2026-11-06" }]]));
   const list = renderToStaticMarkup(await ListPage({ params: Promise.resolve({ locale: "en" }), searchParams: Promise.resolve({}) }));
   expect(list).toContain("1y return");
+  expect((list.match(/<table /g) ?? []).length).toBe((list.match(/data-adr-line=""/g) ?? []).length);
   expect(list).toContain("12.24 %");
   expect(list).toContain("No data");
   const fund = renderToStaticMarkup(await FundPage({ params: Promise.resolve({ locale: "sk", key: "DE0000000001" }) }));
@@ -43,12 +44,12 @@ it.each(["owner", "plus", "trial", "free", "anonymous"])("shows ETF score to %s 
   process.env.DATA_MODE = "fixture";
   owner.mockReturnValue(viewer === "owner");
   scoreAccess.mockReturnValue(!["free", "anonymous"].includes(viewer));
-  scores.mockResolvedValue(new Map([["DE0000000001", { state: "rated", earned: 28, evidencedMax: 35, percent: 80, concentration: { concentrated: false } }]]));
+  scores.mockResolvedValue(new Map([["DE0000000001", { state: "rated", rules: [], rejections: [], earned: 28, evidencedMax: 35, percent: 80, concentration: { concentrated: false } }]]));
   listStats.mockResolvedValue(new Map());
   const list = renderToStaticMarkup(await ListPage({ params: Promise.resolve({ locale: "en" }), searchParams: Promise.resolve({}) }));
   const fund = renderToStaticMarkup(await FundPage({ params: Promise.resolve({ locale: "en", key: "DE0000000001" }) }));
   if (["free", "anonymous"].includes(viewer)) { expect(list).not.toContain("Meets 28 of 35"); expect(fund).not.toContain("Meets 28 of 35"); expect(scores).not.toHaveBeenCalled(); }
-  else { expect(list).toContain("80% · Meets 28 of 35"); expect(fund).toContain("80% · Meets 28 of 35"); expect(list + fund).not.toMatch(/Buy zone|Avoid|BUY_ZONE|Nákupná zóna|Vyhnúť sa/); }
+  else { expect(list).toContain("80% · Rules met"); expect(fund).toContain("Meets 28 of 35"); expect(list + fund).not.toMatch(/Buy zone|Avoid|BUY_ZONE|Nákupná zóna|Vyhnúť sa/); }
 });
 
 it("distinguishes missing scores from computed unrated scores", async () => {
@@ -57,8 +58,8 @@ it("distinguishes missing scores from computed unrated scores", async () => {
   scores.mockResolvedValue(new Map());
   let html = renderToStaticMarkup(await FundPage({ params: Promise.resolve({ locale: "en", key: "DE0000000001" }) }));
   expect(html).toContain("Rating not computed");
-  scores.mockResolvedValue(new Map([["DE0000000001", { state: "not_rated" }]]));
+  scores.mockResolvedValue(new Map([["DE0000000001", { state: "not_rated", rules: [], rejections: ["insufficient_evidence"], earned: 0, evidencedMax: 0, percent: null }]]));
   html = renderToStaticMarkup(await FundPage({ params: Promise.resolve({ locale: "en", key: "DE0000000001" }) }));
-  expect(html).toContain("Not rated");
+  expect(html).toContain("Insufficient data");
   expect(html).not.toContain("Rating not computed");
 });
