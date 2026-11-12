@@ -1,5 +1,5 @@
 import { marketsViewable } from "@/markets/gate";
-import { getViewer, canUseVendorData } from "@/viewer/get-viewer";
+import { getViewer, canUseVendorData, isOwner } from "@/viewer/get-viewer";
 import { getPool } from "@/db/pool";
 import { notFound } from "next/navigation";
 
@@ -10,7 +10,7 @@ export async function etfOwnerView(): Promise<boolean> {
 
 /** Score and catalog data use the existing paid vendor-data permission. */
 export async function etfScoreView(): Promise<boolean> {
-  try { return canUseVendorData(await getViewer()); } catch { return false; }
+  try { const viewer = await getViewer(); return !viewer.preview && canUseVendorData(viewer) && (isOwner(viewer) || viewer.plan === "plus" || viewer.plan === "trial"); } catch { return false; }
 }
 
 /** Keep private ETF data out of the free route when vendor enrichment is present. */

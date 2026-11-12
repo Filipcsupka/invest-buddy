@@ -27,7 +27,7 @@ export interface EtfScoreFacts {
   maxSectorWeightPct: number | null;
   holdingsCount: number | null;
 }
-export interface EtfRuleHit { id: string; group: "cost" | "size" | "structure" | "trend"; max: number; earned: number; evidenced: boolean }
+export interface EtfRuleHit { id: string; group: "cost" | "size" | "structure" | "trend"; max: number; earned: number; evidenced: boolean; reason?: string }
 export interface EtfScoreResult {
   rulesVersion: string; rules: EtfRuleHit[]; earned: number; evidencedMax: number; percent: number | null;
   state: "rated" | "not_rated"; rejections: string[];
@@ -42,6 +42,7 @@ export function etfScore(f: EtfScoreFacts): EtfScoreResult {
   const add = (id: string, group: EtfRuleHit["group"], max: number, earned: number | null) => rules.push({ id, group, max, earned: earned ?? 0, evidenced: earned !== null });
   add("ter", "cost", 10, known(f.terPct) && f.terPct >= 0 ? B.ter.find(([limit]) => f.terPct! <= limit)?.[1] ?? 0 : null);
   add("aum", "size", 6, known(f.aumEur) && f.aumEur >= 0 ? B.aum.find(([min]) => f.aumEur! >= min)?.[1] ?? 0 : null);
+  if (!rules.at(-1)!.evidenced) rules.at(-1)!.reason = f.aumCurrencyReason ?? "missing_aum";
   add("liquidity", "size", 4, known(f.medianValueTradedEur) && f.medianValueTradedEur >= 0 ? B.liquidity.find(([min]) => f.medianValueTradedEur! >= min)?.[1] ?? 0 : null);
   const replication = f.replication?.toLowerCase().trim();
   add("replication", "structure", 3, !replication ? null : /full|physical/.test(replication) && !/sampl/.test(replication) ? 3 : /sampl/.test(replication) ? 2 : /swap|synthetic/.test(replication) ? 1 : 0);

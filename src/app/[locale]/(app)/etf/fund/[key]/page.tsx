@@ -38,13 +38,14 @@ async function EtfFundPage({ params }: Props) {
   const detail = fund.pickSymbol ? await etfDetail(fund.pickSymbol) : null;
   const m = getEtfMessages(locale);
   const owner = await etfOwnerView();
-  const score = await etfScoreView() ? (await latestEtfScores([fund.listingKey])).get(fund.listingKey) : null;
+  const canScore = await etfScoreView();
+  const score = canScore ? (await latestEtfScores([fund.listingKey])).get(fund.listingKey) : null;
   const d = getEtfDetailMessages(locale);
   const field = (value: string | null) => value || m.noValue;
   return <div className="frame page">
     <RecordHead title={fund.name} lede={m.fundLede} stamp={sample ? <span className="stamp">{m.sample}</span> : undefined} actions={<Link className="button secondary" href={`/${locale}/etf#etf-catalog`}>{m.back}</Link>} />
     <div className={s.stack}>
-      {score ? <RecordCard id="fund-score" title={m.scoreTitle} lede={m.scoreNote}><p>{score.state === "rated" ? m.scoreLine.replace("{earned}", String(score.earned)).replace("{max}", String(score.evidencedMax)) : m.scoreNotRated}</p><p>{m.scoreMethod}</p>{score.concentration?.concentrated ? <p>{m.scoreConcentrated}</p> : null}</RecordCard> : null}
+      {canScore ? <RecordCard id="fund-score" title={m.scoreTitle} lede={m.scoreNote}><p>{score?.state === "rated" ? `${score.percent}% · ${m.scoreLine.replace("{earned}", String(score.earned)).replace("{max}", String(score.evidencedMax))}` : m.scoreNotRated}</p><p>{m.scoreMethod}</p>{score?.concentration?.concentrated ? <p>{m.scoreConcentrated}</p> : null}</RecordCard> : null}
       <RecordCard id="fund-details" title={m.fundDetails}><dl className={s.facts}>
         <div><dt>{m.listingKey}</dt><dd>{fund.listingKey}</dd></div><div><dt>{m.isin}</dt><dd>{field(fund.isin)}</dd></div><div><dt>{m.listingRegion}</dt><dd>{fund.listingRegion === "US" ? m.us : fund.listingRegion === "EU" ? m.eu : m.noValue}</dd></div><div><dt>WKN</dt><dd>{field(fund.wkn)}</dd></div><div><dt>{m.ticker}</dt><dd>{field(fund.mnemonic)}</dd></div><div><dt>{m.instrumentType}</dt><dd>{fund.instrumentType.replace("_", " ")}</dd></div>
         <div><dt>{m.exchange}</dt><dd>{fund.exchange}</dd></div><div><dt>{m.theme}</dt><dd>{field(fund.theme)}</dd></div><div><dt>{m.issuer}</dt><dd>{field(fund.issuer)}</dd></div><div><dt>{m.assetClass}</dt><dd>{fund.assetClass ? m[fund.assetClass] : m.noValue}</dd></div><div><dt>{m.region}</dt><dd>{field(fund.region)}</dd></div><div><dt>{m.index}</dt><dd>{field(fund.trackedIndex)}</dd></div>

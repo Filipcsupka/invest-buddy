@@ -17,15 +17,18 @@ describe("ETF rule thresholds", () => {
   it.each([["2025-11-12", 1], ["2023-11-12", 2], ["2021-11-12", 3]])("inception %s earns %s", (inceptionDate, earned) => expect(hit({ inceptionDate: String(inceptionDate) }, "age").earned).toBe(earned));
   it("applies the IE domicile point to US-equity exposure", () => { expect(hit({ domicile: "IE" }, "domicile").earned).toBe(1); expect(hit({ domicile: "LU" }, "domicile").earned).toBe(0); expect(hit({ assetClass: "bond", domicile: "LU" }, "domicile").earned).toBe(1); });
   it("uses the 2 percent SMA band and trend boundaries", () => { expect(hit({ close: 102 }, "sma200").earned).toBe(0); expect(hit({ close: 102.01 }, "sma200").earned).toBe(2); expect(hit({ sma50: 100 }, "sma50").earned).toBe(0); expect(hit({ return12to1m: 0 }, "return12to1m").earned).toBe(0); expect(hit({ maxDrawdown1y: -0.2 }, "drawdown1y").earned).toBe(0); });
+  it("records why AUM is unevidenced", () => expect(hit({ aumEur: null, aumCurrencyReason: "ambiguous_aum_currency" }, "aum").reason).toBe("ambiguous_aum_currency"));
   it("counts complete evidence and concentration separately", () => { expect(score()).toMatchObject({ earned: 35, evidencedMax: 35, percent: 100, state: "rated" }); expect(score({ topTenWeightPct: 51 }).concentration.concentrated).toBe(true); expect(score({ maxCountryWeightPct: 71 }).concentration.concentrated).toBe(true); expect(score({ topTenWeightPct: 50, maxCountryWeightPct: 70 }).concentration.concentrated).toBe(false); });
   it("omits missing evidence and all trend with under 200 bars", () => { expect(hit({ terPct: null }, "ter").evidenced).toBe(false); const s = score({ barsCount: 199 }); expect(s.rules.filter((r) => r.group === "trend").every((r) => !r.evidenced)).toBe(true); expect(s.evidencedMax).toBe(30); });
+  it("starts trend evidence at 200 bars", () => { expect(hit({ barsCount: 200 }, "sma200").evidenced).toBe(true); expect(hit({ barsCount: 199 }, "sma200").evidenced).toBe(false); });
   it("requires at least 80 percent evidenced", () => { expect(score({ replication: null, ucitsConfirmed: null, terPct: null }).rejections).toContain("insufficient_evidence"); expect(score({ replication: null, ucitsConfirmed: null, return12to1m: null }).evidencedMax).toBe(28); });
 });
 describe("ETF exclusions", () => {
   it.each([
-    [{ name: "2x leveraged daily fund" }, "leveraged_inverse_daily_reset"], [{ name: "Inverse index fund" }, "leveraged_inverse_daily_reset"],
+    [{ name: "2x leveraged daily fund" }, "leveraged_inverse_daily_reset"], [{ name: "Inverse index fund" }, "leveraged_inverse_daily_reset"], [{ name: "Daily-reset fund" }, "leveraged_inverse_daily_reset"],
     [{ instrumentType: "ETC" }, "not_etf_instrument"], [{ instrumentType: "ETN" }, "not_etf_instrument"],
     [{ inceptionDate: "2026-01-01" }, "age_under_one_year"], [{ aumEur: 19_999_999 }, "aum_under_20m_eur"],
     [{ detailStatus: "isin_mismatch" }, "isin_mismatch"], [{ detailStatus: "not_etf" }, "not_etf"], [{ lastSeen: "2026-10-12" }, "stale_listing"],
   ] as const)("marks %o as %s", (change, reason) => { const result = score(change); expect(result.state).toBe("not_rated"); expect(result.rejections).toContain(reason); expect(result.percent).toBeNull(); });
+  it("keeps the rejection boundaries inclusive", () => { expect(score({ aumEur: 20_000_000 }).rejections).not.toContain("aum_under_20m_eur"); expect(score({ inceptionDate: "2025-11-12" }).rejections).not.toContain("age_under_one_year"); expect(score({ lastSeen: "2026-10-13" }).rejections).not.toContain("stale_listing"); });
 });

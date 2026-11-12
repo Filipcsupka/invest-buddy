@@ -43,10 +43,10 @@ it.each(["owner", "plus", "free"])("shows ETF score to %s viewer according to ve
   process.env.DATA_MODE = "fixture";
   owner.mockReturnValue(viewer === "owner");
   scoreAccess.mockReturnValue(viewer !== "free");
-  scores.mockResolvedValue(new Map([["DE0000000001", { state: "rated", earned: 28, evidencedMax: 35, concentration: { concentrated: false } }]]));
+  scores.mockResolvedValue(new Map([["DE0000000001", { state: "rated", earned: 28, evidencedMax: 35, percent: 80, concentration: { concentrated: false } }]]));
   listStats.mockResolvedValue(new Map());
   const list = renderToStaticMarkup(await ListPage({ params: Promise.resolve({ locale: "en" }), searchParams: Promise.resolve({}) }));
   const fund = renderToStaticMarkup(await FundPage({ params: Promise.resolve({ locale: "en", key: "DE0000000001" }) }));
   if (viewer === "free") { expect(list).not.toContain("Meets 28 of 35"); expect(fund).not.toContain("Meets 28 of 35"); expect(scores).not.toHaveBeenCalled(); }
-  else { expect(list).toContain("Meets 28 of 35"); expect(fund).toContain("Meets 28 of 35"); }
+  else { expect(list).toContain("80% · Meets 28 of 35"); expect(fund).toContain("80% · Meets 28 of 35"); }
 });

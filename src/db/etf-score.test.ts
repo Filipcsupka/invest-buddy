@@ -1,4 +1,6 @@
 import { expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { parseEtfData } from "./etf-detail";
 import { aumEur, etfBarFacts, readEtfScoreFacts } from "./etf-score";
 
 it("infers EUR AUM only from matching fund and listing currencies", () => {
@@ -20,4 +22,11 @@ it("reads only point-in-time inputs", async () => {
   expect(facts?.terPct).toBe(0.2);
   expect(facts?.aumCurrencyReason).toBe("missing_aum");
   expect(seen.filter((sql) => sql.includes("etf_fund_stats") || sql.includes("etf_holdings") || sql.includes("etf_exposure") || sql.includes("asset_bars")).every((sql) => sql.includes("<=$"))).toBe(true);
+});
+
+it.each(["exsa", "vusa"])("infers EUR assets from the %s market-data fixture", (name) => {
+  const raw = JSON.parse(readFileSync(`src/data-providers/eodhd/fixtures/real/etf-${name}.json`, "utf8"));
+  const data = parseEtfData(raw.response);
+  expect(data?.tradingCurrency).toBe("EUR");
+  expect(aumEur(data!.totalAssets, null, data!.tradingCurrency, "EUR", 1)).toEqual({ value: data!.totalAssets, reason: "inferred_matching_currencies" });
 });
