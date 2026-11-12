@@ -120,6 +120,14 @@ Each row quotes one current dictionary string containing buy, add, start, reduce
 | `sk.ownerAllocation.reasons.RESERVE_LIMIT` | Owner | Novú pozíciu obmedzila rezerva na prikúpenie. |
 | `sk.ownerAllocation.reasons.ADD_ALREADY_THIS_MONTH` | Owner | Pri tomto tickeri už bolo v mesiaci zaznamenané prikúpenie. |
 | `sk.ownerAllocation.reasons.ADD_HISTORY_UNKNOWN` | Owner | Chýba história vykonaných prikúpení; pred pridelením sumy ju treba potvrdiť. |
+| `en.ownerAllocation.reasons.MAX_POSITIONS` | Owner | The open position limit is reached, so a new name waits. |
+| `en.ownerAllocation.overLimitNote` | Owner | Shown for review only. The allocation never sells to bring a holding back under a limit. |
+| `sk.ownerAllocation.reasons.MAX_POSITIONS` | Owner | Limit počtu otvorených pozícií je naplnený, nová firma preto čaká. |
+| `sk.ownerAllocation.overLimitNote` | Owner | Len na kontrolu. Rozdelenie nikdy nepredáva, aby pozíciu vrátilo pod limit. |
+
+## Shortlist (`shortlist.*`)
+
+The shortlist on the scanner and dashboard (docs/shortlist.md) is visible to the owner and paid viewers; free viewers get a lock card. Its strings describe checks, order and sector counts. None contains buy, add, start, reduce, sell or a Slovak equivalent, and none shows an amount. `shortlist.tradedValue` ("Traded value {n} USD a day") is market liquidity, not a position size. `shortlist.lede` says the rule state of each name stays the same. The ranked order is still a lawyer question (legal-pack.md).
 
 ## Status label (ST1)
 

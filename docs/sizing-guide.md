@@ -54,6 +54,15 @@ The calculation takes each signal in score order. It uses the tier percentage of
 
 About one third of the monthly contribution is reserved for adds. New positions cannot spend that reserve, while a qualifying add can. An add to one ticker is limited to once per calendar month; the Flex baseline currently has no executed trade dates, so the owner view shows **wait** for adds until that history is confirmed. It does not treat an idea as an executed order. If no signal qualifies, all free cash carries forward. When free cash exceeds three monthly contributions, the page flags possible cash drag for review but never forces a purchase. There is no stop-loss distance in the formula: this is a long-term thesis process, and an invalidated thesis belongs in the separate thesis-break checklist.
 
+Two portfolio limits apply to every order (config version `2026-11-12.1`):
+
+- Sector cap: one sector group (docs/shortlist.md) may hold at most 30% of total portfolio value, cash included. Existing holdings and amounts already assigned in the same run count toward it. An order is cut to the room left in the sector, or waits with reason `SECTOR_CAP` when that room is below the minimum order. A name with no known sector group skips this check, and the owner page says so.
+- Position count: at most 15 open positions. A new name waits with reason `MAX_POSITIONS` when 15 are open, counting names opened earlier in the same run. Adds to held names are not affected.
+
+Holdings that are already above the sector cap, the per-name cap or the position count are listed on the owner page under "Holdings over a limit". The allocation never sells to bring them back under a limit. The public portfolio page shows weights of invested value only; these limits use total value including cash, and the two are not mixed.
+
+The 30% cap is anchored on the SEC staff 25% industry concentration test ([Oppenheimer proxy, sec.gov](https://www.sec.gov/Archives/edgar/data/0000074658/000072888913000623/nyboardproxy.htm)) and MSCI capped indexes ([methodology](https://www.msci.com/indexes/documents/methodology/3_MSCI_Capped_Indexes_Methodology_20240521.pdf)); neither sets a limit for a personal account. The 15-position limit is the top of the Guide's 5 to 15 names.
+
 All numeric choices in `src/engine/allocation-config.ts` are placeholders for owner sign-off. In particular, the owner needs to settle tier percentages and order ceilings, the one-third reserve, the cash-drag threshold, and the minimum order and fee assumptions for IBKR. The worked EUR 200 example describes the owner's preference, not an empirical return rule.
 
 The research is background for these design choices, not proof that a given percentage is optimal:

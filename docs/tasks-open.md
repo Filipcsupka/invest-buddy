@@ -1,5 +1,7 @@
 # Open tasks
 
+Shortlist, sector groups and portfolio limits (N1, N2 of docs/tasks-2026-11-12.md): docs/shortlist.md. Replay counts on stored scores are still to be run.
+
 ## Handoff 2026-11-10
 
 Main and the cluster web image are at 9b55118. Migrations 133 to 137 are applied. Live: perf work (pool, caches, dashboard trim, cold-start fix with migration 137), the owner sign-in cookie, customer account code behind flags, the Welcome page with story and SEC facts, the presentation shell and app shell, no owner password popup, and half-year revenue scoring.
