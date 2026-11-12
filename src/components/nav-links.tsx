@@ -33,6 +33,7 @@ export function NavLinks({ locale, label, items, sectionLabel, lock, audience = 
   const identity = useIdentity();
   const owner = identity.status === "ready" && identity.me.kind === "owner";
   const customer = identity.status === "ready" && identity.me.kind === "customer";
+  const plus = identity.status === "ready" && identity.me.kind === "customer" && identity.me.plan !== "free";
   if (audience === "owner" && !owner) return null;
   return (
     <nav aria-label={label} className="nav-links" data-audience={audience}>
@@ -43,7 +44,7 @@ export function NavLinks({ locale, label, items, sectionLabel, lock, audience = 
         </span>
       )}
       {items.map((item) => {
-        if (item.locked && !owner && lock) {
+        if (item.locked && !owner && !plus && lock) {
           const page = item.href.slice(1);
           const showLock = customer;
           return (

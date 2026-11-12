@@ -14,7 +14,7 @@ First customers are served from EODHD data only: US equity scoring, SEC filings,
 
 ## What "licensed for customers" means here
 
-While `EODHD_PRIVATE_USE=on`, every EODHD-derived route is owner-only, because the vendor terms on the current plan forbid showing the data to others (TASK-064 is open). Customers will see those pages only once that switch is off, which needs the display licence. Until then the panel shows these entries locked with a Plus chip and a preview page, and the entries open with a Free account chip when the switch goes off. The market views (indices, forex, crypto, economy, congress, news, screener) are owner-only whatever the licence says, because `marketsViewable` requires the owner session.
+While `EODHD_PRIVATE_USE=on`, every EODHD-derived route opens for the owner and for customers with an active Plus plan (paid or trial); free accounts and visitors are redirected to sign-in or the "opens soon" page, and the panel shows those entries locked with a Plus chip and a preview page. `owner-allocation` stays owner-only. Owner decision 2026-11-12: output is informational screening only, so Plus customers see the scores. The vendor display licence (TASK-064) is still open. The market views (indices, forex, crypto, economy, congress, news, screener) are owner-only whatever the licence says, because `marketsViewable` requires the owner session.
 
 ## Table
 

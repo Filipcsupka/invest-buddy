@@ -3,7 +3,7 @@ import { instrumentForTicker } from "@/data/store";
 import { ideasEnabled } from "@/data/ideas-store";
 import { ownerViewEnabled } from "@/data/owner-allocation";
 import { designViewEnabled, flags } from "@/config/flags";
-import { PREVIEW_HEADER, resolveViewer } from "@/viewer/viewer";
+import { PREVIEW_HEADER, canUseVendorData, resolveViewer } from "@/viewer/viewer";
 import { withContentSecurityPolicy } from "@/security/headers";
 import { rateLimit, rateLimitRetryAfter } from "@/security/rate-limit";
 import { writeHttpLog } from "@/app/api/ingest/request-log";
@@ -100,7 +100,12 @@ async function handle(request: NextRequest) {
   const [, locale, section, ticker] = request.nextUrl.pathname.split("/");
   const featureFlags = flags();
   const privateDataRoute = privateDataSections.has(section);
-  if (process.env.EODHD_PRIVATE_USE === "on" && privateDataRoute && !(await ownerRequest())) return denied(request, locale, section, Boolean(await viewer()));
+  // Vendor-derived pages: the owner and customers with an active Plus plan (paid or trial). owner-allocation stays owner-only.
+  if (process.env.EODHD_PRIVATE_USE === "on" && privateDataRoute) {
+    const who = await viewer();
+    const allowed = section === "owner-allocation" ? who?.owner === true : Boolean(who && canUseVendorData(who));
+    if (!allowed) return denied(request, locale, section, Boolean(who));
+  }
   // Owner-only EODHD ETF tabs under /etf/fund/{key}/{tab} share the market gate.
   const market = marketSections.has(section) || isEtfDataPath(request.nextUrl.pathname);
   if (market && featureFlags.MARKETS_VIEWS && !(await ownerRequest())) {

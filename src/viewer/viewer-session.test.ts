@@ -51,7 +51,7 @@ it.each([
   if (row) state.entitlements["7"] = { user_id: "7", provider_customer_id: null, provider_subscription_id: null, ...row };
   const viewer = await viewerFromHeaders(new Headers(customerCookie), session("7"));
   expect(viewer).toMatchObject({ tier, plan, owner: false, userId: "7", preview: false });
-  expect(canUseVendorData(viewer, { EODHD_PRIVATE_USE: "on", VENDOR_DISPLAY_LICENSE: "on" })).toBe(false);
+  expect(canUseVendorData(viewer, { EODHD_PRIVATE_USE: "on" })).toBe(plan !== "free");
 });
 
 it("gives a paid tier to every customer while PAYWALL is off", async () => {
