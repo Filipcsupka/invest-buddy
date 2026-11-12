@@ -24,13 +24,22 @@ export function etfBarFacts(bars: readonly EtfBar[], eurPerUnit: number | null) 
   const medianValueTradedEur = values.length === 20 ? (values[9] + values[10]) / 2 : null;
   return { barsCount: sorted.length, close, sma50, sma200, return12to1m, maxDrawdown1y, medianValueTradedEur };
 }
-export function aumEur(totalAssets: number | null, explicitCurrency: string | null, fundCurrency: string | null, listingCurrency: string | null, eurPerUnit: number | null) {
+export function aumEur(totalAssets: number | null, explicitCurrency: string | null, eurPerUnit: number | null) {
   if (totalAssets === null) return { value: null, reason: "missing_aum" };
-  const currency = explicitCurrency ?? (fundCurrency && listingCurrency && fundCurrency === listingCurrency ? fundCurrency : null);
-  if (!currency) return { value: null, reason: "ambiguous_aum_currency" };
-  if (currency === "EUR") return { value: totalAssets, reason: explicitCurrency ? null : "inferred_matching_currencies" };
+  if (!explicitCurrency) return { value: null, reason: "ambiguous_aum_currency" };
+  if (explicitCurrency === "EUR") return { value: totalAssets, reason: null };
   if (eurPerUnit === null) return { value: null, reason: "missing_fx" };
-  return { value: totalAssets * eurPerUnit, reason: explicitCurrency ? null : "inferred_matching_currencies" };
+  return { value: totalAssets * eurPerUnit, reason: null };
+}
+/** Regional totals are bounds, not US weights. Partial holdings can only prove a majority. */
+export function usEquityWeight(exposure: RecordRow[], holdings: RecordRow[]): number | null {
+  const direct = exposure.find((r) => r.kind === "region" && /^(united states|us|usa)$/i.test(str(r.label) ?? ""));
+  if (direct) return n(direct.weight_pct);
+  const usLower = holdings.filter((r) => /^(united states|us|usa)$/i.test(str(r.country) ?? "")).reduce((sum, r) => sum + (n(r.weight_pct) ?? 0), 0);
+  if (usLower > 50) return usLower;
+  const northAmerica = exposure.find((r) => r.kind === "region" && /^north america$/i.test(str(r.label) ?? ""));
+  const upper = n(northAmerica?.weight_pct);
+  return upper !== null && upper <= 50 ? upper : null;
 }
 /** Point-in-time inputs. Latest detail, holdings and exposure must be on or before asOf. */
 export async function readEtfScoreFacts(listingKey: string, asOf: string, db: Query | null = getPool()): Promise<EtfScoreFacts | null> {
@@ -42,13 +51,15 @@ export async function readEtfScoreFacts(listingKey: string, asOf: string, db: Qu
     db.query<RecordRow>(`SELECT weight_pct,country FROM etf_holdings WHERE listing_key=$1 AND as_of<=$2::date ORDER BY weight_pct DESC NULLS LAST`, [listingKey, asOf]),
     db.query<RecordRow>(`SELECT kind,label,weight_pct FROM etf_exposure WHERE listing_key=$1 AND as_of<=$2::date`, [listingKey, asOf]),
     c.vendor_symbol ? db.query<RecordRow>(`SELECT bar_date::text AS date,close,volume,currency FROM asset_bars WHERE vendor_symbol=$1 AND bar_date<=$2::date ORDER BY bar_date DESC LIMIT 260`, [c.vendor_symbol, asOf]) : Promise.resolve({ rows: [] as RecordRow[] }),
-    db.query<RecordRow>(`SELECT close FROM asset_bars WHERE vendor_symbol='EURUSD.FOREX' AND bar_date<=$1::date ORDER BY bar_date DESC LIMIT 1`, [asOf]),
+    db.query<RecordRow>(`SELECT close FROM asset_bars WHERE vendor_symbol='EURUSD.FOREX' AND bar_date<=$1::date AND bar_date >= $1::date - 7 ORDER BY bar_date DESC LIMIT 1`, [asOf]),
   ]);
   const s = stats.rows[0];
-  const currency = str(s?.total_assets_currency) ?? str(s?.trading_currency) ?? str(c.trading_currency);
+  const currency = str(s?.total_assets_currency);
   const eurPerUnit = currency === "EUR" ? 1 : currency === "USD" && n(fx.rows[0]?.close) ? 1 / n(fx.rows[0]?.close)! : null;
-  const aum = aumEur(n(s?.total_assets), str(s?.total_assets_currency), str(s?.trading_currency), str(c.trading_currency), eurPerUnit);
+  const aum = aumEur(n(s?.total_assets), str(s?.total_assets_currency), eurPerUnit);
   const barRows = bars.rows.map((r) => ({ date: day(r.date), close: n(r.close) ?? 0, volume: n(r.volume), currency: str(r.currency) }));
+  const lastBar = barRows.filter((b) => b.close > 0).map((b) => b.date).sort().at(-1);
+  const freshBars = lastBar && Date.parse(asOf) - Date.parse(lastBar) <= 7 * 86_400_000 ? barRows : [];
   const barCurrency = str(c.trading_currency);
   const barFx = barCurrency === "EUR" ? 1 : barCurrency === "USD" && n(fx.rows[0]?.close) ? 1 / n(fx.rows[0]?.close)! : null;
   const validBarFx = barRows.every((b) => !b.currency || b.currency === barCurrency) ? barFx : null;
@@ -56,13 +67,16 @@ export async function readEtfScoreFacts(listingKey: string, asOf: string, db: Qu
   const topTen = h.length >= 10 && h.slice(0, 10).every((r) => n(r.weight_pct) !== null) ? h.slice(0, 10).reduce((sum, r) => sum + n(r.weight_pct)!, 0) : null;
   const countryWeights = new Map<string, number>();
   for (const r of h) if (str(r.country) && n(r.weight_pct) !== null) countryWeights.set(str(r.country)!, (countryWeights.get(str(r.country)!) ?? 0) + n(r.weight_pct)!);
+  const maxCountry = countryWeights.size ? Math.max(...countryWeights.values()) : null;
+  // Holdings_Count can itself be truncated by the provider. Require portfolio weight coverage.
+  const completeCountries = h.every((r) => str(r.country) && n(r.weight_pct) !== null) && h.reduce((sum, r) => sum + n(r.weight_pct)!, 0) >= 99.99;
   const sector = exposure.rows.filter((r) => r.kind === "sector").map((r) => n(r.weight_pct) ?? 0);
-  const us = exposure.rows.filter((r) => r.kind === "region" && /united states|^us$/i.test(str(r.label) ?? "")).map((r) => n(r.weight_pct) ?? 0);
-  return { asOf, instrumentType: str(c.instrument_type) ?? "", name: str(c.name) ?? "", detailStatus: str(c.detail_status), lastSeen: day(c.last_seen),
-    terPct: n(c.ter_pct), aumEur: aum.value, aumCurrencyReason: aum.reason,
+
+  return { asOf, instrumentType: str(c.instrument_type) ?? "", name: str(c.name) ?? "", riskType: str(c.theme), detailStatus: str(c.detail_status), lastSeen: day(c.last_seen),
+    terPct: n(s?.ongoing_charge_pct) ?? n(s?.net_expense_ratio_pct), aumEur: aum.value, aumCurrencyReason: aum.reason,
     replication: str(c.replication), ucitsConfirmed: null, inceptionDate: s?.inception_date ? day(s.inception_date) : null,
-    domicile: str(c.domicile), assetClass: str(c.asset_class), usEquityWeightPct: us.length ? Math.max(...us) : null,
-    ...etfBarFacts(barRows, validBarFx), topTenWeightPct: topTen, maxCountryWeightPct: countryWeights.size ? Math.max(...countryWeights.values()) : null,
+    domicile: str(c.domicile), assetClass: str(c.asset_class), usEquityWeightPct: usEquityWeight(exposure.rows, h),
+    ...etfBarFacts(freshBars, validBarFx), topTenWeightPct: topTen, maxCountryWeightPct: completeCountries || (maxCountry ?? 0) > 70 ? maxCountry : null,
     maxSectorWeightPct: sector.length ? Math.max(...sector) : null, holdingsCount: n(s?.holdings_count) };
 }
 export async function latestEtfScores(keys: readonly string[], db: Query | null = getPool()): Promise<Map<string, EtfScoreResult>> {

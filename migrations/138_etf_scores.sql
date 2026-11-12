@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS etf_scores (
   earned smallint NOT NULL CHECK (earned BETWEEN 0 AND 35),
   evidenced_max smallint NOT NULL CHECK (evidenced_max BETWEEN 0 AND 35),
   state text NOT NULL CHECK (state IN ('rated','not_rated')),
+  CHECK (earned <= evidenced_max),
   PRIMARY KEY (listing_key, as_of, rules_version)
 );
-CREATE INDEX IF NOT EXISTS etf_scores_latest_idx ON etf_scores(listing_key, as_of DESC);
+-- Rollback: DROP TABLE etf_scores; no other table depends on it.

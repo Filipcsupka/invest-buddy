@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { marketsViewable } from "@/markets/gate";
 import { getViewer, canUseVendorData, isOwner } from "@/viewer/get-viewer";
 import { getPool } from "@/db/pool";
@@ -14,10 +15,10 @@ export async function etfScoreView(): Promise<boolean> {
 }
 
 /** Keep private ETF data out of the free route when vendor enrichment is present. */
-export async function requireEtfScreeningAccess(): Promise<void> {
+export const requireEtfScreeningAccess = cache(async (): Promise<void> => {
   if (process.env.DATA_MODE === "fixture") return;
   const db = getPool();
   const privateMode = process.env.EODHD_PRIVATE_USE === "on";
   const vendor = db ? (await db.query<{ present: boolean }>("SELECT EXISTS (SELECT 1 FROM etf_catalog WHERE enrichment_source='eodhd') AS present")).rows[0]?.present : false;
   if ((privateMode || vendor) && !await etfScoreView()) notFound();
-}
+});

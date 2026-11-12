@@ -4,6 +4,7 @@ export interface EtfScoreFacts {
   asOf: string;
   instrumentType: string;
   name: string;
+  riskType?: string | null;
   detailStatus: string | null;
   lastSeen: string;
   terPct: number | null;
@@ -45,7 +46,7 @@ export function etfScore(f: EtfScoreFacts): EtfScoreResult {
   if (!rules.at(-1)!.evidenced) rules.at(-1)!.reason = f.aumCurrencyReason ?? "missing_aum";
   add("liquidity", "size", 4, known(f.medianValueTradedEur) && f.medianValueTradedEur >= 0 ? B.liquidity.find(([min]) => f.medianValueTradedEur! >= min)?.[1] ?? 0 : null);
   const replication = f.replication?.toLowerCase().trim();
-  add("replication", "structure", 3, !replication ? null : /full|physical/.test(replication) && !/sampl/.test(replication) ? 3 : /sampl/.test(replication) ? 2 : /swap|synthetic/.test(replication) ? 1 : 0);
+  add("replication", "structure", 3, !replication ? null : /full/.test(replication) && !/sampl/.test(replication) ? 3 : /sampl/.test(replication) ? 2 : /swap|synthetic/.test(replication) ? 1 : /physical/.test(replication) ? null : 0);
   add("ucits", "structure", 3, f.ucitsConfirmed === null ? null : f.ucitsConfirmed ? 3 : 0);
   const age = f.inceptionDate ? years(f.asOf, f.inceptionDate) : null;
   add("age", "structure", 3, age === null || !Number.isFinite(age) || age < 0 ? null : B.age.find(([min]) => age >= min)?.[1] ?? 0);
@@ -57,7 +58,7 @@ export function etfScore(f: EtfScoreFacts): EtfScoreResult {
   add("return12to1m", "trend", 1, hasTrend && known(f.return12to1m) ? f.return12to1m > 0 ? 1 : 0 : null);
   add("drawdown1y", "trend", 1, hasTrend && f.assetClass === "equity" && known(f.maxDrawdown1y) ? f.maxDrawdown1y > B.maxEquityDrawdown ? 1 : 0 : null);
   const rejections: string[] = [];
-  if (/leveraged|inverse|daily[ -]?reset|[23]x\b/i.test(f.name)) rejections.push("leveraged_inverse_daily_reset");
+  if (/leveraged|inverse|daily[ -]?reset|\bshort(?![ -]?(?:term|duration|dated))|\blev(?:dax|\b)|\bultra(?![ -]?(?:short|term|duration))|\b[2-9]\d*x\b|\bx[2-9]\d*\b/i.test(`${f.name} ${f.riskType ?? ""} ${f.instrumentType}`)) rejections.push("leveraged_inverse_daily_reset");
   if (f.instrumentType === "ETC" || f.instrumentType === "ETN") rejections.push("not_etf_instrument");
   if (age !== null && age >= 0 && age < 1) rejections.push("age_under_one_year");
   if (known(f.aumEur) && f.aumEur < 20_000_000) rejections.push("aum_under_20m_eur");
