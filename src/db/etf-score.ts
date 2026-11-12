@@ -2,6 +2,7 @@ import type pg from "pg";
 import { getPool } from "./pool";
 import { etfScore, type EtfScoreFacts, type EtfScoreResult } from "@/engine/etf-score";
 import { ETF_RULES_VERSION } from "@/engine/etf-score-config";
+import { sampleEtfScores } from "@/data/etf-fixtures";
 
 type Query = Pick<pg.Pool, "query">;
 type RecordRow = Record<string, unknown>;
@@ -84,7 +85,11 @@ export async function readEtfScoreFacts(listingKey: string, asOf: string, db: Qu
     maxSectorWeightPct: sector.length ? Math.max(...sector) : null, holdingsCount: n(s?.holdings_count) };
 }
 export async function latestEtfScores(keys: readonly string[], db: Query | null = getPool()): Promise<Map<string, EtfScoreResult>> {
-  if (!db || !keys.length || process.env.DATA_MODE === "fixture") return new Map();
+  if (process.env.DATA_MODE === "fixture") return new Map(keys.flatMap((key) => {
+    const score = sampleEtfScores.get(key);
+    return score ? [[key, score] as const] : [];
+  }));
+  if (!db || !keys.length) return new Map();
   const result = await db.query<{ listing_key: string; rules_version: string; rule_hits: EtfScoreResult["rules"]; earned: number; evidenced_max: number; state: EtfScoreResult["state"]; rejections: string[]; concentration: EtfScoreResult["concentration"] }>(`SELECT DISTINCT ON (listing_key) listing_key,rules_version,rule_hits,earned,evidenced_max,state,rejections,concentration FROM etf_scores WHERE listing_key=ANY($1::text[]) AND rules_version=$2 ORDER BY listing_key,as_of DESC`, [keys, ETF_RULES_VERSION]);
   return new Map(result.rows.map((r) => [r.listing_key, { rulesVersion: r.rules_version, rules: r.rule_hits, earned: Number(r.earned), evidencedMax: Number(r.evidenced_max), percent: r.state === "rated" ? Math.round(Number(r.earned) / Number(r.evidenced_max) * 100) : null, state: r.state, rejections: r.rejections, concentration: r.concentration }]));
 }

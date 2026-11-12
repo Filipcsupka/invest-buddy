@@ -24,6 +24,19 @@ it("keeps vendor columns and tab links off the public pages", async () => {
   expect(fund).not.toContain("/etf/fund/DE0000000001/holdings");
 });
 
+it.each([
+  ["en", "3 rated · 34 with data · 38 listed", "Rating"],
+  ["sk", "3 hodnotených · 34 s údajmi · 38 v zozname", "Hodnotenie"],
+])("shows the default rating order and catalog counts in %s", async (locale, summary, label) => {
+  process.env.DATA_MODE = "fixture";
+  owner.mockReturnValue(false);
+  scoreAccess.mockReturnValue(false);
+  const html = renderToStaticMarkup(await ListPage({ params: Promise.resolve({ locale }), searchParams: Promise.resolve({}) }));
+  expect(html).toContain(summary);
+  expect(html).toContain(`<option value="rating" selected="">${label}</option>`);
+  expect(html.indexOf("Emerging markets sample fund")).toBeLessThan(html.indexOf("Global aggregate bond sample fund"));
+});
+
 it("adds yield and 1-year return columns and the tab links for the owner", async () => {
   process.env.DATA_MODE = "fixture";
   owner.mockReturnValue(true);

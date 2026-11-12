@@ -1,4 +1,6 @@
 import type { EtfHistory, EtfOutcome, EtfPick, EtfRun } from "@/db/etf";
+import type { EtfScoreResult } from "@/engine/etf-score";
+import { ETF_RULES_VERSION } from "@/engine/etf-score-config";
 
 // All prices, sizes, calls and commentary below are invented sample data.
 const base: Omit<EtfPick, "symbol" | "name" | "assetClass" | "call" | "terPct" | "aumUsdM" | "price"> = {
@@ -53,3 +55,26 @@ export const sampleEtfCatalog: import("@/db/etf-catalog").CatalogFund[] = Array.
     firstSeen: "2026-10-20", lastSeen: "2026-10-21", shortlist: index < 9, pickSymbol: pick?.symbol ?? null,
   };
 });
+
+// Illustrative ratings for the sample catalog; the same values drive its order and score display.
+const sampleRatingPercents = [
+  ["DE0000000001", 80], ["DE0000000002", 100], ["DE0000000003", 60],
+] as const;
+const sampleRulePoints = [
+  ["ter", "cost", 10], ["aum", "size", 6], ["liquidity", "size", 4],
+  ["replication", "structure", 3], ["ucits", "structure", 3], ["age", "structure", 3], ["domicile", "structure", 1],
+  ["sma200", "trend", 2], ["sma50", "trend", 1], ["return12to1m", "trend", 1], ["drawdown1y", "trend", 1],
+] as const;
+export const sampleEtfScores = new Map<string, EtfScoreResult>(sampleRatingPercents.map(([key, percent]): [string, EtfScoreResult] => {
+  let remaining = percent * 35 / 100;
+  const rules = sampleRulePoints.map(([id, group, max]) => {
+    const earned = Math.min(max, remaining);
+    remaining -= earned;
+    return { id, group, max, earned, evidenced: true };
+  });
+  return [key, {
+    rulesVersion: ETF_RULES_VERSION, rules, earned: percent * 35 / 100, evidencedMax: 35,
+    percent, state: "rated", rejections: [],
+    concentration: { topTenWeightPct: null, maxCountryWeightPct: null, maxSectorWeightPct: null, holdingsCount: null, concentrated: false },
+  }];
+}));
