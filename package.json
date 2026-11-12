@@ -60,7 +60,8 @@
     "symbols:sync": "tsx src/jobs/symbols-sync.ts",
     "fundamentals:eodhd": "tsx src/jobs/eodhd-fundamentals.ts",
     "etf:enrich": "node scanner/run-etf-enrich.mjs",
-    "etf:research": "node scanner/run-etf-research.mjs"
+    "etf:research": "node scanner/run-etf-research.mjs",
+    "etf:score": "tsx src/jobs/etf-score.ts"
   },
   "dependencies": {
     "better-auth": "1.7.18",
