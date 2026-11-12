@@ -99,7 +99,7 @@ it("gives the marketing top bar sign-in buttons for visitors and Open app for an
 });
 
 const items = [{ href: "/dashboard", text: "Dashboard", icon: "dashboard", locked: true, tier: "plus" as const }, { href: "/methodology", text: "Methodology", tier: "free" as const }];
-const lock = { free: "Free account", plus: "Plus", locked: "Plus, locked" };
+const lock = { open: "Open", free: "Free", plus: "Plus", locked: "Plus, locked", owner: "Owner only" };
 
 it("keeps unresolved links neutral and shows customers tier chips without Soon labels", () => {
   for (const current of [{ status: "server" }, { status: "pending" }, { status: "ready", me: { kind: "anon", markets: false } }] as IdentityState[]) {
@@ -116,7 +116,7 @@ it("keeps unresolved links neutral and shows customers tier chips without Soon l
   expect(customer).toContain('data-locked=""');
   expect(customer).toContain('aria-label="Dashboard, Plus, locked"');
   expect(text(customer)).toContain("Plus");
-  expect(text(customer)).toContain("Free account");
+  expect(text(customer)).toContain("Free");
   expect(customer).not.toContain("Soon");
   const etf = renderToStaticMarkup(<NavLinks locale="en" label="ETFs" items={[{ href: "/etf/track-record", text: "ETF track record", locked: true }]} lock={lock} />);
   expect(etf).toContain('href="/en/plus-preview?page=etf%2Ftrack-record"');
@@ -125,7 +125,7 @@ it("keeps unresolved links neutral and shows customers tier chips without Soon l
   expect(owner).toContain('href="/en/dashboard"');
   expect(owner).not.toContain("plus-preview");
   expect(owner).not.toContain("data-locked");
-  expect(owner).not.toContain("Free account");
+  expect(owner).not.toContain("Free");
   expect(owner).not.toContain("Plus");
 });
 

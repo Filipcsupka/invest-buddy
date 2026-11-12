@@ -79,7 +79,7 @@ async function Congress({ params, searchParams }: LocaleParams & { searchParams?
       </div>
       <RecordCard id="congress-feed" title={c.tableTitle} lede={c.tableNote} meta={<span className="rp-pill">{formatNumber(locale, trades.length)}</span>} flush={trades.length > 0}>
         {trades.length === 0 ? <p className="rp-empty">{filtered ? c.noMatch : m.common.noData}</p> : <CongressTable locale={locale} trades={trades} label={c.tableTitle} />}
-        <p className={styles.note}>{c.lateNote} {fill(m.common.source, { source: "EODHD congressional trades (House and Senate periodic transaction reports)" })}</p>
+        <p className={styles.note}>{c.lateNote} {fill(m.common.source, { source: "Market data congressional trades (House and Senate periodic transaction reports)" })}</p>
       </RecordCard>
     </div>
   </div>;

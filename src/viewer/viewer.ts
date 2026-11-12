@@ -51,10 +51,12 @@ export function requireFeature(viewer: Viewer, id: TierId): Response | null {
 }
 
 /**
- * Licensed vendor data (EODHD) for this viewer. Only the owner gets it while EODHD_PRIVATE_USE=on,
- * and nobody else gets it until VENDOR_DISPLAY_LICENSE=on records a display licence.
+ * Vendor-derived data (scores, prices, EPS) for this viewer. The owner always gets it. A customer with an active Plus
+ * entitlement (paid or trial, not the PAYWALL-off soft tier) gets it too. Everyone else needs VENDOR_DISPLAY_LICENSE=on
+ * while EODHD_PRIVATE_USE is off.
  */
 export function canUseVendorData(viewer: Viewer, env: Record<string, string | undefined> = process.env): boolean {
   if (isOwner(viewer)) return true;
+  if (viewer.userId && (viewer.plan === "plus" || viewer.plan === "trial")) return true;
   return env.EODHD_PRIVATE_USE !== "on" && env.VENDOR_DISPLAY_LICENSE === "on";
 }

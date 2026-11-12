@@ -46,7 +46,7 @@ export function IdentityPanel({ locale, auth }: { locale: Locale; auth: boolean 
         {!me && <><span className={styles.skeleton} aria-hidden="true" /><span className="visually-hidden">{t.loading}</span></>}
         {me?.kind === "anon" && !quiet && <span className={styles.stateText}>{t.anon}</span>}
         {me?.kind === "owner" && <><span className={styles.badge}>{t.owner}</span><span className={styles.stateText}>{t.ownerState}</span></>}
-        {me?.kind === "customer" && <><PlanChip t={t} me={me} locale={locale} /><span className={styles.email} title={me.email}><span className="visually-hidden">{t.signedIn}: </span>{me.email}</span></>}
+        {me?.kind === "customer" && <><span className={styles.email} title={me.email}><span className="visually-hidden">{t.signedIn}: </span>{me.email}</span><PlanChip t={t} me={me} locale={locale} /></>}
       </p>
       <div className={styles.actions}>
         {!me && <span className={styles.skeletonButton} aria-hidden="true" />}

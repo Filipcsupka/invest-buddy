@@ -7,6 +7,8 @@ vi.mock("@/viewer/get-viewer", () => ({
   viewerFromHeaders: async (headers: Headers) => {
     const cookie = headers.get("cookie") ?? "";
     if (cookie.includes("ib_session=owner")) return { tier: "admin", preview: false, owner: true, userId: "1" };
+    if (cookie.includes("ib_session=plus")) return { tier: "paid", preview: false, owner: false, userId: "3", plan: "plus" };
+    if (cookie.includes("ib_session=trial")) return { tier: "paid", preview: false, owner: false, userId: "4", plan: "trial" };
     if (cookie.includes("ib_session=customer")) return { tier: "paid", preview: false, owner: false, userId: "2" };
     return { tier: "free", preview: false };
   },
@@ -41,6 +43,25 @@ it("keeps vendor-backed pages private while allowing public content and health p
   for (const path of ["/en", "/en/methodology", "/en/legal/terms", "/api/health", "/_next/static/test.js", "/favicon.svg"]) {
     expect((await proxy(new NextRequest(`https://example.com${path}`))).status, path).toBe(200);
   }
+});
+
+it("opens vendor-backed pages to Plus and trial customers, not to free customers or owner-allocation", async () => {
+  process.env.EODHD_PRIVATE_USE = "on";
+  process.env.AUTH = "on";
+  universe.mockResolvedValue([{ ticker: "NVDA" }]);
+  for (const path of ["dashboard", "scanner", "company/NVDA", "heatmap", "insiders", "portfolio", "track-record"]) {
+    const url = `https://example.com/en/${path}`;
+    for (const who of ["plus", "trial"]) {
+      const response = await proxy(new NextRequest(url, { headers: { cookie: `__Host-ib_session=${who}` } }));
+      expect(response.status, `${who} ${path}`).toBe(200);
+      expect(response.headers.get("cache-control"), path).toBe("private, no-store");
+      expect(response.headers.get("x-robots-tag"), path).toBe("noindex");
+    }
+    expect((await proxy(new NextRequest(url, { headers: customerCookie }))).status, `free ${path}`).toBe(401);
+  }
+  process.env.OWNER_VIEW = "on";
+  const plusAllocation = await proxy(new NextRequest("https://example.com/en/owner-allocation", { headers: { cookie: "__Host-ib_session=plus" } }));
+  expect(plusAllocation.status).toBe(401);
 });
 
 it("leaves public data routes unchanged when private use is off", async () => {

@@ -14,6 +14,19 @@
   color: var(--navy-ink-2);
   font-size: var(--t-sm);
 }
+/* Account block, as in the Welcome panel: a round mark, the email, the tier chip, then Account and Sign out. */
+.panel[data-state="customer"] .status::before,
+.panel[data-state="owner"] .status::before {
+  content: "";
+  flex: none;
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--signal), var(--navy-2));
+}
+.panel[data-state="customer"] .plan {
+  margin-inline-start: auto;
+}
 .panel[data-quiet] .status {
   display: none;
 }
@@ -48,10 +61,15 @@
   border-color: var(--accent);
   color: var(--accent);
 }
+.plan[data-plan="free"] {
+  border-color: rgb(155 212 250 / 0.45);
+  color: #9bd4fa;
+}
 .plan[data-plan="plus"],
 .plan[data-plan="trial"] {
-  border-color: var(--signal);
-  background: color-mix(in srgb, var(--signal) 22%, transparent);
+  border-color: rgb(201 179 255 / 0.45);
+  background: rgb(201 179 255 / 0.1);
+  color: #d9c9ff;
 }
 .actions {
   display: flex;

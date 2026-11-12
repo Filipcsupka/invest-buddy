@@ -18,6 +18,7 @@ const en = {
   openApp: "Open app",
   siteNav: "Site",
   freeAccount: "Free account",
+  open: "Open",
   plus: "Plus",
   locked: "Plus, locked",
   plusPage: {
@@ -68,6 +69,7 @@ const sk: IdentityMessages = {
   openApp: "Otvoriť aplikáciu",
   siteNav: "Stránka",
   freeAccount: "Bezplatný účet",
+  open: "Otvorené",
   plus: "Plus",
   locked: "Plus, zamknuté",
   plusPage: {

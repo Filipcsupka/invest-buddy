@@ -4,7 +4,7 @@ import type { Locale } from "./index";
 const en = {
   owner: "Owner only",
   noValue: "—",
-  source: "Source: EODHD end-of-day data, stored by the nightly jobs. Not shown publicly.",
+  source: "Source: end-of-day market data, stored by the nightly jobs. Not shown publicly.",
   factsOnly: "Facts only. This page has no scores, states or calls.",
   back: "Back to the list",
   lastClose: "Last close",
@@ -90,7 +90,7 @@ const en = {
   },
   marketCap: {
     title: "Market cap history",
-    lede: "Weekly market capitalisation from EODHD, owner view only.",
+    lede: "Weekly market capitalisation from market data, owner view only.",
     chartName: "Market cap (bn)",
     chartAria: "{name} weekly market cap: {count} weeks, {first} to {last}",
     latest: "Latest week",
@@ -103,7 +103,7 @@ export type MarketsMessages = typeof en;
 const sk: MarketsMessages = {
   owner: "Len pre vlastníka",
   noValue: "—",
-  source: "Zdroj: denné údaje EODHD uložené nočnými úlohami. Verejne sa nezobrazujú.",
+  source: "Zdroj: denné trhové údaje uložené nočnými úlohami. Verejne sa nezobrazujú.",
   factsOnly: "Iba fakty. Stránka neobsahuje skóre, stavy ani odporúčania.",
   back: "Späť na zoznam",
   lastClose: "Posledná uzávierka",
@@ -189,7 +189,7 @@ const sk: MarketsMessages = {
   },
   marketCap: {
     title: "Vývoj trhovej kapitalizácie",
-    lede: "Týždenná trhová kapitalizácia z EODHD, len pre vlastníka.",
+    lede: "Týždenná trhová kapitalizácia z trhových dát, len pre vlastníka.",
     chartName: "Kapitalizácia (mld.)",
     chartAria: "{name} týždenná kapitalizácia: {count} týždňov, {first} až {last}",
     latest: "Posledný týždeň",

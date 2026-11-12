@@ -33,8 +33,8 @@ it("shows the owner every data family and its stored date", async () => {
   const html = renderToStaticMarkup(await Page(props));
   expect(html).toContain("Daily bars");
   expect(html).toContain("2026-11-05");
-  expect(html).toContain("No stored EODHD rows yet");
-  expect(html).toContain("EODHD ETF catalog");
+  expect(html).toContain("No stored market data rows yet");
+  expect(html).toContain("Market data ETF catalog");
 });
 
 it("uses Slovak source and exchange labels", async () => {

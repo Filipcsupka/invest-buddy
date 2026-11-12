@@ -1,0 +1,16 @@
+/* Same look as the Welcome page strip (story.module.css .strip), with links. */
+.card { display: grid; gap: var(--s3); padding: var(--s4) var(--s5); margin-block-end: var(--s4); }
+.title { margin: 0; font-family: var(--display); font-size: var(--t-base); font-weight: 800; letter-spacing: -0.01em; }
+.strip { display: flex; gap: 3px; margin: 0; padding: 0; list-style: none; block-size: 4.25rem; }
+.strip li { --c: var(--st-none); --w: var(--st-none-wash); flex: 30 1 0; min-inline-size: 0; }
+.strip li[data-state="setup"] { --c: var(--st-setup); --w: var(--st-setup-wash); }
+.strip li[data-state="watch"] { --c: var(--st-watch); --w: var(--st-watch-wash); }
+.strip li[data-state="wait"] { --c: var(--st-wait); --w: var(--st-wait-wash); }
+.strip li[data-state="ignore"] { --c: var(--st-ignore); --w: var(--st-ignore-wash); }
+.strip li[data-state="broken"] { --c: var(--st-broken); --w: var(--st-broken-wash); }
+.strip a { display: grid; align-content: space-between; block-size: 100%; padding: var(--s2); border-radius: var(--radius-sm); background: var(--w); border: 1px solid color-mix(in srgb, var(--c) 45%, transparent); color: var(--c); font-family: var(--display); font-weight: 800; font-size: var(--t-xs); text-decoration: none; overflow: hidden; }
+.strip a:hover { border-color: var(--c); }
+.strip a:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+.strip span { font-family: var(--sans); font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.note { margin: 0; color: var(--ink-3); font-size: var(--t-sm); }
+@media (max-width: 639px) { .strip { flex-wrap: wrap; block-size: auto; } .strip li { flex: 1 1 5.5rem; block-size: 3.5rem; } }

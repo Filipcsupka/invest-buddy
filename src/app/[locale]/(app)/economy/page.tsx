@@ -95,7 +95,7 @@ function Rates({ locale, m, yields, real, bills, long, policy }: {
         </DataTable>
       </RecordCard> : null}
     </div>
-    <p className={styles.note}>{fill(m.common.source, { source: "EODHD (US Treasury rates), US Treasury, FRED" })}</p>
+    <p className={styles.note}>{fill(m.common.source, { source: "Market data (US Treasury rates), US Treasury, FRED" })}</p>
   </>;
 }
 
@@ -167,7 +167,7 @@ async function Economy({ params, searchParams }: LocaleParams & { searchParams?:
       <RecordCard id="recent" title={e.recentTitle} lede={e.recentLede} meta={<span className="rp-pill">{formatNumber(locale, recent.length)}</span>} flush={recent.length > 0}>
         <EventTable locale={locale} m={m} label={e.recentTitle} events={recent} />
       </RecordCard>
-      <p className={styles.note}>{fill(m.common.source, { source: "EODHD economic events" })}</p>
+      <p className={styles.note}>{fill(m.common.source, { source: "Market data economic events" })}</p>
     </>;
   } else {
     const values = await latestIndicators();
@@ -188,7 +188,7 @@ async function Economy({ params, searchParams }: LocaleParams & { searchParams?:
           })}
         </tr>)}</tbody>
       </DataTable>}
-      <p className={styles.note}>{fill(m.common.source, { source: "EODHD macro indicators (World Bank)" })}</p>
+      <p className={styles.note}>{fill(m.common.source, { source: "Market data macro indicators (World Bank)" })}</p>
     </RecordCard>;
   }
 

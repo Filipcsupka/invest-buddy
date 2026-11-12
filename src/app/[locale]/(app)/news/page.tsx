@@ -84,7 +84,7 @@ async function News({ params, searchParams }: LocaleParams & { searchParams?: Pr
             <td className="num">{figure(locale, item.polarity, m.common.dash)}</td>
           </tr>)}</tbody>
         </DataTable>}
-        <p className={styles.note}>{n.polarityNote} {fill(m.common.source, { source: "EODHD financial news" })}</p>
+        <p className={styles.note}>{n.polarityNote} {fill(m.common.source, { source: "Market data financial news" })}</p>
       </RecordCard>
     </div>
   </div>;
