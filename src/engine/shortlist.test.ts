@@ -57,6 +57,8 @@ describe("bar metrics", () => {
     const ranks = percentileRanks(new Map<string, number | null>([["A", 1], ["B", 2], ["C", 3], ["D", null]]));
     expect(Object.fromEntries(ranks)).toEqual({ A: 0, B: 50, C: 100, D: null });
     expect(percentileRanks(new Map([["A", 1]])).get("A")).toBeNull();
+    const ties = percentileRanks(new Map<string, number | null>([["A", 1], ["B", 2], ["C", 2], ["D", 3]]));
+    expect(Object.fromEntries(ties)).toEqual({ A: 0, B: 67, C: 67, D: 100 });
   });
 });
 

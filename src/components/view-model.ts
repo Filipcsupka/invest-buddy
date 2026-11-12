@@ -2,6 +2,7 @@ import type { ScoreResult } from "@/engine";
 import type { Instrument } from "@/data/providers";
 import { flags } from "@/config/flags";
 import { statusView } from "@/engine/status";
+import { displayScore } from "@/engine/display-score";
 import { httpsUrl, type SourceItem, type SourceKind } from "@/data/sources";
 import { fill, formatDate, formatScorePercent, getMessages, type Locale } from "@/i18n";
 import { reasonsFor, sectorLabel, stateKey } from "@/i18n/score-text";
@@ -43,6 +44,12 @@ export type ScreenRow = {
   /** "Points not counted: 20" for criteria broken, else null. */
   pointsNote: string | null;
 };
+
+/**
+ * The state the pages show (the displayed core band), which can differ from the stored state: the stored band counts the catalyst
+ * bonus and uses the 20-point guard, the displayed band does not. Scanner filters, groups and counts all use this one.
+ */
+export const displayedState = (result: Pick<ScoreResult, "state" | "ruleHits">): StateKey => displayScore(stateKey(result.state), result.ruleHits ?? []).state;
 
 export function toRow(locale: Locale, { instrument, result }: { instrument: Instrument; result: ScoreResult }): ScreenRow {
   const m = getMessages(locale);

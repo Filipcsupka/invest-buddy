@@ -23,6 +23,9 @@ import { stateOrder, type StateKey } from "@/i18n/rules";
 import { MacroEvents } from "@/components/macro-events";
 import { storedMacroEvents } from "@/data/macro-calendar-store";
 import { DataStatus } from "@/components/data-status";
+import { getViewer } from "@/viewer/get-viewer";
+import { latestShortlist, shortlistAccess } from "@/data/shortlist";
+import { ShortlistLock, ShortlistView } from "@/components/shortlist-view";
 import { fill, formatDate, getMessages, plural } from "@/i18n";
 import { pageMetadata } from "@/i18n/metadata";
 import { resolveLocale, type LocaleParams } from "@/app/[locale]/locale";
@@ -39,7 +42,8 @@ export async function generateMetadata({ params }: LocaleParams): Promise<Metada
 async function Dashboard({ params }: LocaleParams) {
   const locale = await resolveLocale(params);
   const m = getMessages(locale);
-  const [data, portfolio, moved, horizons, macroSchedule] = await Promise.all([latestScoreSummaries(), latestPortfolio(), latestStateChanges(), publicHorizons(), storedMacroEvents(new Date().toISOString().slice(0, 10))]);
+  const access = shortlistAccess(await getViewer());
+  const [data, portfolio, moved, horizons, macroSchedule, shortlist] = await Promise.all([latestScoreSummaries(), latestPortfolio(), latestStateChanges(), publicHorizons(), storedMacroEvents(new Date().toISOString().slice(0, 10)), access === "full" ? latestShortlist() : null]);
   const k = getKitMessages(locale);
   const changes: StateChange[] = moved.map(({ ticker, from, to }) => {
     const [fromLabel, toLabel] = [m.status.labels[from], m.status.labels[to]];
@@ -62,6 +66,7 @@ async function Dashboard({ params }: LocaleParams) {
       </section>}
     </div>
     <ScoreStrip locale={locale} rows={rows} />
+    {access === "locked" ? <ShortlistLock locale={locale} /> : shortlist ? <ShortlistView locale={locale} data={shortlist} compact /> : null}
     <HeadDisclosure text={m.common.operatorDisclosure} />
     <StateFilterProvider>
     <ScannerTable locale={locale} rows={rows} profiles={Object.fromEntries(Object.entries(horizons).map(([ticker, h]) => [ticker, h.profile]))} aside={<MacroEvents locale={locale} schedule={macroSchedule} />} heldTickers={portfolio?.weights.filter((p) => p.weightPercent > 0).map((p) => p.symbol.toUpperCase()) ?? []} text={{

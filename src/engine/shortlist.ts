@@ -134,11 +134,11 @@ export function sessionsUntil(asOf: string, reportDate: string | null): number |
   } catch { return null; }
 }
 
-/** Percentile rank (0-100) of each finite value among all finite values: the share of other values strictly below it. */
+/** Percentile rank (0-100) of each finite value among all finite values: the share of the other values at or below it, so ties share the higher rank. */
 export function percentileRanks(values: ReadonlyMap<string, number | null>): Map<string, number | null> {
   const known = [...values.values()].filter(finite).sort((a, b) => a - b);
-  const below = (value: number) => { let lo = 0, hi = known.length; while (lo < hi) { const mid = (lo + hi) >> 1; if (known[mid] < value) lo = mid + 1; else hi = mid; } return lo; };
-  return new Map([...values].map(([ticker, value]) => [ticker, !finite(value) ? null : known.length < 2 ? null : Math.round(below(value) / (known.length - 1) * 100)]));
+  const atOrBelow = (value: number) => { let lo = 0, hi = known.length; while (lo < hi) { const mid = (lo + hi) >> 1; if (known[mid] <= value) lo = mid + 1; else hi = mid; } return lo; };
+  return new Map([...values].map(([ticker, value]) => [ticker, !finite(value) ? null : known.length < 2 ? null : Math.round((atOrBelow(value) - 1) / (known.length - 1) * 100)]));
 }
 
 function checksFor(input: ShortlistInput, metrics: ShortlistMetrics, config: ShortlistConfig): ShortlistCheck[] {
