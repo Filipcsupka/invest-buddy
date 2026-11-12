@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  atrPercent, buildShortlist, compareShortlist, decidingTieBreak, drawdownPercent, percentileRanks, sessionReturn, sessionsUntil, tradedValueUsd,
+  atrPercent, buildShortlist, compareShortlist, sectorConcentration, decidingTieBreak, drawdownPercent, percentileRanks, sessionReturn, sessionsUntil, tradedValueUsd,
   type ShortlistBar, type ShortlistInput,
 } from "./shortlist";
 import { SHORTLIST_CONFIG } from "./shortlist-config";
@@ -157,5 +157,27 @@ describe("ranking", () => {
     const two = buildShortlist(ASOF, [...names].reverse().concat(field)).kept.map((row) => row.ticker);
     expect(one).toEqual(two);
     expect(one).toEqual(["C", "B", "A"]);
+  });
+});
+
+describe("sector concentration", () => {
+  const row = (ticker: string, sector: ShortlistInput["sector"]) => ({ ticker, sector });
+  it("counts names per group, largest first, Unknown last", () => {
+    const lens = sectorConcentration([row("A", "Technology"), row("B", "Unknown"), row("C", "Unknown"), row("D", "Unknown"), row("E", "Healthcare"), row("F", "Technology")]);
+    expect(lens.groups.map((g) => [g.sector, g.count, g.sharePercent, g.flagged])).toEqual([
+      ["Technology", 2, 33.3, true], ["Healthcare", 1, 16.7, false], ["Unknown", 3, 50, false],
+    ]);
+    expect(lens.unknownCount).toBe(3);
+    expect(lens.groups[0].tickers).toEqual(["A", "F"]);
+  });
+  it("flags only a share above the threshold", () => {
+    const ten = Array.from({ length: 10 }, (_, i) => row(`T${i}`, i < 3 ? "Technology" : "Energy"));
+    const lens = sectorConcentration(ten);
+    expect(lens.groups.find((g) => g.sector === "Technology")).toMatchObject({ sharePercent: 30, flagged: false });
+    expect(lens.groups.find((g) => g.sector === "Energy")).toMatchObject({ sharePercent: 70, flagged: true });
+    expect(sectorConcentration(ten, { sectorShareFlagPercent: 25 }).groups.every((g) => g.flagged)).toBe(true);
+  });
+  it("handles an empty list", () => {
+    expect(sectorConcentration([])).toEqual({ total: 0, thresholdPercent: 30, groups: [], unknownCount: 0 });
   });
 });

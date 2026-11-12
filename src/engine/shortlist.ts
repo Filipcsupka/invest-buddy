@@ -223,3 +223,31 @@ export function buildShortlist(asOf: string, universe: readonly ShortlistInput[]
     },
   };
 }
+
+export interface SectorShare {
+  sector: SectorGroup;
+  count: number;
+  /** count / total in percent, one decimal. */
+  sharePercent: number;
+  /** A named group above sectorShareFlagPercent of the list. Unknown is never flagged; its count is reported instead. */
+  flagged: boolean;
+  /** Tickers in rank order. */
+  tickers: string[];
+}
+export interface SectorConcentration { total: number; thresholdPercent: number; groups: SectorShare[]; unknownCount: number }
+
+/**
+ * Concentration lens over a ranked list: count and share per sector group, largest first (Unknown last), and a flag for a named group
+ * above the threshold. Counts names only; no money and no weights.
+ */
+export function sectorConcentration(rows: readonly Pick<ShortlistRow, "ticker" | "sector">[], config: Pick<ShortlistConfig, "sectorShareFlagPercent"> = SHORTLIST_CONFIG): SectorConcentration {
+  const total = rows.length;
+  const bySector = new Map<SectorGroup, string[]>();
+  for (const row of rows) bySector.set(row.sector, [...(bySector.get(row.sector) ?? []), row.ticker]);
+  const groups = [...bySector].map(([sector, tickers]) => ({
+    sector, count: tickers.length, tickers,
+    sharePercent: total ? r1(tickers.length * 100 / total) : 0,
+    flagged: sector !== "Unknown" && tickers.length * 100 > config.sectorShareFlagPercent * total,
+  })).sort((a, b) => Number(a.sector === "Unknown") - Number(b.sector === "Unknown") || b.count - a.count || a.sector.localeCompare(b.sector));
+  return { total, thresholdPercent: config.sectorShareFlagPercent, groups, unknownCount: bySector.get("Unknown")?.length ?? 0 };
+}
