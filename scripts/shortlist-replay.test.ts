@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ruleGroups } from "../src/i18n/rules";
-import { formatReplay, parseArgs, runReplay } from "./shortlist-replay";
+import { sectorConcentration } from "../src/engine/shortlist";
+import { formatReplay, largestGroup, parseArgs, runReplay } from "./shortlist-replay";
 
 const hits = (...met: string[]) => ruleGroups.flatMap((group) => group.rules).map((rule) => ({ id: rule.id, label: rule.id, detail: "", points: rule.points, matched: met.includes(rule.id), unknown: rule.id === "catalyst" }));
 const bars = (end: number) => Array.from({ length: 64 }, (_, i) => { const close = 50 + (end - 50) * i / 63; return { date: "", open: close, close, high: close * 1.01, low: close * 0.99, volume: 1_000_000 }; });
@@ -49,5 +50,16 @@ describe("shortlist replay", () => {
 
   it("formats an empty replay", () => {
     expect(formatReplay([])).toContain("| Date | Scored |");
+  });
+});
+
+describe("largest sector group", () => {
+  const rows = (spec: [string, number][]) => spec.flatMap(([sector, n]) => Array.from({ length: n }, (_, i) => ({ ticker: `${sector}${i}`, sector: sector as never })));
+  it("reports Unknown when it is the biggest bucket, though the lens lists it last", () => {
+    expect(largestGroup(sectorConcentration(rows([["Technology", 2], ["Unknown", 5]])))).toMatchObject({ sector: "Unknown", count: 5 });
+  });
+  it("prefers a named group on a tie and handles an empty list", () => {
+    expect(largestGroup(sectorConcentration(rows([["Unknown", 3], ["Energy", 3]])))).toMatchObject({ sector: "Energy" });
+    expect(largestGroup(sectorConcentration([]))).toBeNull();
   });
 });

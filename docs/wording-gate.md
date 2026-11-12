@@ -127,7 +127,7 @@ Each row quotes one current dictionary string containing buy, add, start, reduce
 
 ## Shortlist (`shortlist.*`)
 
-The shortlist on the scanner and dashboard (docs/shortlist.md) is visible to the owner and paid viewers; free viewers get a lock card. Its strings describe checks, order and sector counts. None contains buy, add, start, reduce, sell or a Slovak equivalent, and none shows an amount. `shortlist.tradedValue` ("Traded value {n} USD a day") is market liquidity, not a position size. `shortlist.lede` says the rule state of each name stays the same. The ranked order is still a lawyer question (legal-pack.md).
+The shortlist on the scanner and dashboard (docs/shortlist.md) is visible to the owner and to Plus and trial customers; everyone else gets a lock card. Its strings describe checks, order and sector counts. None contains buy, add, start, reduce, sell or a Slovak equivalent, and none shows an amount. `shortlist.tradedValue` ("Traded value {n} USD a day") is market liquidity, not a position size. `shortlist.lede` says the rule state of each name stays the same and that a check without data does not remove a name. The ranked order is still a lawyer question (legal-pack.md).
 
 ## Status label (ST1)
 

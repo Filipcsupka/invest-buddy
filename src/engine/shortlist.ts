@@ -90,11 +90,13 @@ export interface Shortlist {
 const finite = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
 const r1 = (value: number) => Math.round(value * 10) / 10;
 
+// The metric helpers return unrounded values. Ranking, tie-breaks and thresholds use them as they are; pages round only for display.
+
 /** Price return over the last `sessions` sessions in percent, null with too few bars or a bad close. */
 export function sessionReturn(bars: readonly ShortlistBar[], sessions: number): number | null {
   if (bars.length < sessions + 1) return null;
   const first = bars[bars.length - 1 - sessions].close, last = bars[bars.length - 1].close;
-  return finite(first) && finite(last) && first > 0 ? r1((last / first - 1) * 100) : null;
+  return finite(first) && finite(last) && first > 0 ? (last / first - 1) * 100 : null;
 }
 
 /** Mean true range over `sessions` as a percent of the last close (same formula as src/engine/horizon.ts). */
@@ -104,7 +106,7 @@ export function atrPercent(bars: readonly ShortlistBar[], sessions: number): num
   if (!window.every((b) => finite(b.high) && finite(b.low) && finite(b.close))) return null;
   const ranges = window.slice(1).map((b, i) => Math.max(b.high - b.low, Math.abs(b.high - window[i].close), Math.abs(b.low - window[i].close)));
   const last = window[window.length - 1].close;
-  return last > 0 ? r1(ranges.reduce((s, v) => s + v, 0) / ranges.length / last * 100) : null;
+  return last > 0 ? ranges.reduce((s, v) => s + v, 0) / ranges.length / last * 100 : null;
 }
 
 /** Percent below the highest high of the last `sessions` bars. Fewer bars use what there is; none gives null. */
@@ -113,7 +115,7 @@ export function drawdownPercent(bars: readonly ShortlistBar[], sessions: number)
   if (!window.length || !window.every((b) => finite(b.high))) return null;
   const high = Math.max(...window.map((b) => b.high));
   const last = window[window.length - 1].close;
-  return finite(last) && high > 0 ? r1(Math.max(0, (1 - last / high) * 100)) : null;
+  return finite(last) && high > 0 ? Math.max(0, (1 - last / high) * 100) : null;
 }
 
 /** Average daily traded value in USD from the scanner floor math. Non-USD and unknown quotes give null, never a converted guess. */
@@ -121,14 +123,20 @@ export function tradedValueUsd(bars: readonly ShortlistBar[], currency: string |
   if ((currency ?? "").trim().toUpperCase() !== "USD") return null;
   // floorMetrics types its window as the scanner floor's literal; the shortlist config passes the same value.
   const value = floorMetrics(bars, null, sessions as typeof SCANNER_FLOOR.days).avgDollarVolume;
-  return finite(value) ? Math.round(value) : null;
+  return finite(value) ? value : null;
 }
 
-/** NYSE sessions after asOf up to and including the report date; 0 when the report is on asOf. Null outside the calendar. */
+/**
+ * NYSE sessions after asOf up to and including the report date; 0 when the report is on asOf. Null for a malformed date, a date before
+ * asOf, or a date outside the trading calendar, including a same-day report.
+ */
 export function sessionsUntil(asOf: string, reportDate: string | null): number | null {
-  if (!reportDate || reportDate < asOf) return null;
-  if (reportDate === asOf) return 0;
+  const iso = /^\d{4}-\d{2}-\d{2}$/;
+  if (!reportDate || !iso.test(reportDate) || !iso.test(asOf) || reportDate < asOf) return null;
   try {
+    // sessionsBetween throws for an invalid date or one outside the calendar, so a same-day report is checked the same way.
+    sessionsBetween(asOf, reportDate);
+    if (reportDate === asOf) return 0;
     const next = new Date(Date.parse(`${asOf}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
     return sessionsBetween(next, reportDate).length;
   } catch { return null; }

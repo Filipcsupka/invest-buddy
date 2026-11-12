@@ -32,7 +32,7 @@ describe("bar metrics", () => {
   });
   it("measures the drawdown from the window high", () => {
     const down = [...bars(10, 100, 100), { close: 70, high: 71, low: 69, volume: 1 }];
-    expect(drawdownPercent(down, 63)).toBe(30.7);
+    expect(drawdownPercent(down, 63)).toBeCloseTo(30.69, 2);
     expect(drawdownPercent([], 63)).toBeNull();
   });
   it("counts traded value only for USD quotes", () => {
@@ -52,6 +52,10 @@ describe("bar metrics", () => {
     expect(sessionsUntil("2026-11-10", "2026-11-09")).toBeNull();
     expect(sessionsUntil("2026-11-10", null)).toBeNull();
     expect(sessionsUntil("2027-12-30", "2028-01-05")).toBeNull();
+    // A same-day report is checked against the calendar too.
+    expect(sessionsUntil("2028-01-05", "2028-01-05")).toBeNull();
+    expect(sessionsUntil("2026-11-10", "2026-11-1")).toBeNull();
+    expect(sessionsUntil("2026-11-10", "2026-13-40")).toBeNull();
   });
   it("ranks percentiles among known values only", () => {
     const ranks = percentileRanks(new Map<string, number | null>([["A", 1], ["B", 2], ["C", 3], ["D", null]]));
@@ -181,5 +185,38 @@ describe("sector concentration", () => {
   });
   it("handles an empty list", () => {
     expect(sectorConcentration([])).toEqual({ total: 0, thresholdPercent: 30, groups: [], unknownCount: 0 });
+  });
+});
+
+describe("unrounded metrics", () => {
+  it("returns raw values so near ties are not merged", () => {
+    expect(sessionReturn([{ close: 3, high: 3, low: 3, volume: 1 }, { close: 3.001, high: 3, low: 3, volume: 1 }], 1)).toBeCloseTo(0.0333, 4);
+    const flat = Array.from({ length: 15 }, () => ({ close: 300, high: 301.01, low: 299, volume: 1 }));
+    expect(atrPercent(flat, 14)).toBeCloseTo(0.67, 2);
+  });
+
+  it("ranks relative strength on unrounded returns", () => {
+    // 100.04% and 100.01% both round to 100.0%; the leader must still rank above the other.
+    const close = (start: number, end: number) => Array.from({ length: 64 }, (_, i) => ({ close: i === 63 ? end : start, high: end, low: start, volume: 1_000_000 }));
+    const list = buildShortlist(ASOF, [input("HI", { bars: close(50, 100.02) }), input("LO", { bars: close(50, 100.005) }), ...Array.from({ length: 3 }, (_, i) => input(`F${i}`, { displayState: "wait", bars: close(50, 60) }))]);
+    const hi = list.kept.find((row) => row.ticker === "HI")!, lo = [...list.kept, ...list.dropped].find((row) => row.ticker === "LO")!;
+    expect(hi.rsPercentile!).toBeGreaterThan(lo.rsPercentile!);
+  });
+
+  it("breaks ties on unrounded ATR", () => {
+    const base = { ticker: "X", percent: 80, evidencedPoints: 23, rsPercentile: 90, tradedValueUsd: 5_000_000 };
+    const sorted = [{ ...base, ticker: "A", atrPercent: 2.04 }, { ...base, ticker: "B", atrPercent: 2.01 }].sort(compareShortlist);
+    expect(sorted.map((row) => row.ticker)).toEqual(["B", "A"]);
+    expect(decidingTieBreak(sorted[0], sorted[1])).toBe("atr");
+  });
+
+  it("flags a drawdown just over 25% even when it rounds to 25.0%", () => {
+    // Last close 74.98 under a high of 100: 25.02% down, shown as 25.0%.
+    const b = [...Array.from({ length: 63 }, () => ({ close: 100, high: 100, low: 99, volume: 1_000_000 })), { close: 74.98, high: 75, low: 74, volume: 1_000_000 }];
+    expect(drawdownPercent(b, 63)).toBeGreaterThan(25);
+    const row = buildShortlist(ASOF, [input("DD", { bars: b })]);
+    expect([...row.kept, ...row.dropped][0].flags).toContain("DRAWDOWN_DEEP");
+    const exact = [...b.slice(0, 63), { close: 75, high: 75, low: 74, volume: 1_000_000 }];
+    expect([...buildShortlist(ASOF, [input("EQ", { bars: exact })]).kept, ...buildShortlist(ASOF, [input("EQ", { bars: exact })]).dropped][0].flags).not.toContain("DRAWDOWN_DEEP");
   });
 });

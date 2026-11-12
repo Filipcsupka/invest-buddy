@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ShortlistData } from "@/data/shortlist";
-import type { ShortlistRow, TieBreak } from "@/engine/shortlist";
+import { decidingTieBreak, type ShortlistRow, type TieBreak } from "@/engine/shortlist";
 import { SHORTLIST_CONFIG } from "@/engine/shortlist-config";
 import { fill, formatNumber, formatScorePercent, getMessages, intlTag, type Locale } from "@/i18n";
 import { getTierMessages } from "@/i18n/tier-messages";
@@ -24,6 +24,16 @@ export function tieBreakValue(locale: Locale, row: ShortlistRow, key: TieBreak |
   if (key === "atr") return row.atrPercent === null ? null : fill(m.atrValue, { n: formatNumber(locale, row.atrPercent, 1) });
   if (key === "tradedValue") return row.tradedValueUsd === null ? null : fill(m.tradedValue, { n: new Intl.NumberFormat(intlTag[locale], { notation: "compact", maximumFractionDigits: 1 }).format(row.tradedValueUsd) });
   return null;
+}
+
+/**
+ * Order labels for rows shown inside one sector group: the tie-breaker against the row above in the same table. The first row of a
+ * group says it is first in the group, unless it is first overall.
+ */
+export function groupOrder(rows: readonly ShortlistRow[]): { row: ShortlistRow; key: TieBreak | null; first: "overall" | "group" | null }[] {
+  return rows.map((row, index) => index === 0
+    ? { row, key: null, first: row.rank === 1 ? "overall" : "group" }
+    : { row, key: decidingTieBreak(rows[index - 1], row), first: null });
 }
 
 /** Flags and not-assessed markers of one row, as plain text. */
@@ -63,15 +73,15 @@ function RowTable({ locale, rows, names, label }: { locale: Locale; rows: Shortl
   const m = getMessages(locale).shortlist;
   return <div className="table-scroll" role="region" tabIndex={0} aria-label={label}><table className="screen">
     <thead><tr><th scope="col">{m.rank}</th><th scope="col">{m.name}</th><th scope="col">{m.percent}</th><th scope="col">{m.checksColumn}</th><th scope="col">{m.orderColumn}</th></tr></thead>
-    <tbody>{rows.map((row) => {
+    <tbody>{groupOrder(rows).map(({ row, key, first }) => {
       const markers = rowMarkers(locale, row);
-      const value = tieBreakValue(locale, row, row.decidedBy);
+      const value = tieBreakValue(locale, row, key);
       return <tr key={row.ticker} data-ticker={row.ticker}>
         <td className="num">{row.rank}</td>
         <th scope="row"><Link className="ticker" href={`/${locale}/company/${row.ticker}`}>{row.ticker}</Link> <span className="company-name">{names[row.ticker] ?? ""}</span></th>
         <td className="num">{row.percent === null ? "–" : formatScorePercent(locale, row.percent)}{row.evidencedPoints === null ? null : <span className="muted small"> · {fill(m.coverage, { n: row.evidencedPoints })}</span>}</td>
         <td><span className={styles.markers}>{markers.length ? markers.map((text) => <span key={text} className="tag">{text}</span>) : "–"}</span></td>
-        <td>{row.decidedBy === null ? m.firstRow : m.tieBreaks[row.decidedBy]}{value ? <span className="muted small"> · {value}</span> : null}</td>
+        <td>{first === "overall" ? m.firstRow : first === "group" ? m.firstInGroup : key ? m.tieBreaks[key] : m.tieBreaks.ticker}{value ? <span className="muted small"> · {value}</span> : null}</td>
       </tr>;
     })}</tbody>
   </table></div>;
@@ -120,15 +130,16 @@ export function ShortlistView({ locale, data, compact = false, limit = 5 }: { lo
       <p className={styles.note}>{fill(m.droppedNote, { state })}</p>
       <ul>{shortlist.dropped.map((row) => <li key={row.ticker} data-ticker={row.ticker}>
         <Link className="ticker" href={`/${locale}/company/${row.ticker}`}>{row.ticker}</Link> {row.dropReasons.map((reason) => m.reasons[reason]).join(" ")}
+        {rowMarkers(locale, row).map((text) => <span key={text} className="tag">{text}</span>)}
       </li>)}</ul>
     </details>}
     <p className={styles.note}>{methodText(locale)}</p>
   </section>;
 }
 
-/** The lock card a free viewer sees in place of the shortlist. */
+/** The lock card shown in place of the shortlist to a viewer without vendor-backed data. */
 export function ShortlistLock({ locale }: { locale: Locale }) {
   const t = getTierMessages(locale);
   const m = getMessages(locale).shortlist;
-  return <TierLock segmentId="scanner-shortlist" label={t.lockTitle} body={`${fill(m.lede, { state: setupLabel(locale) })} ${t.lockSuffix}`} />;
+  return <TierLock segmentId="scanner-shortlist" label={t.lockTitle} body={`${fill(m.lock, { state: setupLabel(locale) })} ${t.lockSuffix}`} />;
 }

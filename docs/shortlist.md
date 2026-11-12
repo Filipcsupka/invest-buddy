@@ -25,13 +25,13 @@ All thresholds are drafts in `SHORTLIST_CONFIG` (version `2026-11-12.1`). The ow
 | F3 report | NYSE sessions from the score date to the next report | flag at 5 or fewer | never, flag only | no calendar row, stale row, date outside the trading calendar |
 | F3 drawdown | close under the highest high of the last 63 sessions | flag above 25% | never, flag only | no bars |
 
-A name stays on the list when no check failed. A check that could not run is shown as "Not assessed" on the row; it neither passes nor fails the name. Ties in the percentile share the higher rank.
+A name stays on the list when no check failed. A check that could not run is shown as "Not assessed" on the row; it neither passes nor fails the name. Dropped rows show the same markers and flags next to the fail reason. Ties in the percentile share the higher rank. Returns, ATR and drawdown are compared unrounded; pages round them only for display, so a 25.02% drawdown is flagged even though it shows as 25.0%. A report date counts only when it and the score date are inside the trading calendar, same-day reports included.
 
 The RS window is 63 sessions (about three months) because the listing read keeps 64 bars. IBD/O'Neil use a 6 to 12 month RS rank; a longer window needs a separate bar read.
 
 ## Order
 
-Kept names are ranked by, in order: displayed percent (higher first), points with data (higher), RS percentile (higher), ATR percent over 14 sessions (lower), traded value (higher), ticker. A missing value sorts after any known one. Each row shows the first key that placed it below the row above.
+Kept names are ranked by, in order: displayed percent (higher first), points with data (higher), RS percentile (higher), ATR percent over 14 sessions (lower), traded value (higher), ticker. A missing value sorts after any known one. The full view groups the ranked names by sector group, and each row shows the first key that placed it below the row above in the same group. The first row of a group says so.
 
 ## Sector groups
 
@@ -47,7 +47,7 @@ The kept list is grouped by sector group with a count and share, for example "9 
 
 ## Who sees it
 
-The scanner shows the full view and the dashboard a compact block. The owner and paid viewers (Plus, trial, and everyone while `PAYWALL` is off) see it. A free viewer gets a lock card. `SHORTLIST_VIEW=off` hides it for everyone; the default is on.
+The scanner shows the full view and the dashboard a compact block. The list is built from vendor-backed data, so it follows `canUseVendorData`: the owner and customers with an active Plus or trial plan see it. Everyone else gets a lock card and the page does not load the shortlist, including anonymous visitors while `PAYWALL` is off. `SHORTLIST_VIEW=off` hides it for everyone; the default is on.
 
 ## Owner limits
 

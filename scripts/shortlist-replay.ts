@@ -4,7 +4,7 @@ import { nextEarnings } from "../src/data/catalyst-calendar";
 import { readEarningsSnapshots } from "../src/db/catalyst-calendar";
 import { pageScoreRow, scoringMember } from "../src/db/universe";
 import type { ScoreResult } from "../src/engine";
-import { buildShortlist, sectorConcentration, type CheckId, type Shortlist } from "../src/engine/shortlist";
+import { buildShortlist, sectorConcentration, type CheckId, type SectorConcentration, type SectorShare, type Shortlist } from "../src/engine/shortlist";
 import { SHORTLIST_CONFIG } from "../src/engine/shortlist-config";
 import { readListingFacts } from "../src/data/shortlist-sectors";
 import { shortlistInputs, type EarningsFact } from "../src/data/shortlist";
@@ -69,6 +69,11 @@ export async function replayDay(db: Query, asOf: string): Promise<{ scored: numb
 
 const CHECKS: CheckId[] = ["evidence", "rs", "liquidity", "report", "drawdown"];
 
+/** The biggest group by count, Unknown included. The lens lists Unknown last, so on a tie the named group wins. */
+export function largestGroup(concentration: SectorConcentration): SectorShare | null {
+  return concentration.groups.reduce<SectorShare | null>((best, group) => (!best || group.count > best.count ? group : best), null);
+}
+
 /** One markdown table row per date, then optional name lists. */
 export function formatReplay(days: { asOf: string; scored: number; shortlist: Shortlist }[], names = false): string {
   const cells = (values: (string | number)[]) => `| ${values.join(" | ")} |`;
@@ -80,7 +85,7 @@ export function formatReplay(days: { asOf: string; scored: number; shortlist: Sh
   ];
   for (const { asOf, scored, shortlist } of days) {
     const all = [...shortlist.kept, ...shortlist.dropped];
-    const top = sectorConcentration(shortlist.kept).groups[0];
+    const top = largestGroup(sectorConcentration(shortlist.kept));
     lines.push(cells([asOf, scored, shortlist.candidates, shortlist.survivors.afterF1, shortlist.survivors.afterF2, shortlist.kept.length, shortlist.survivors.flaggedF3,
       ...CHECKS.map((id) => all.filter((row) => row.notAssessed.includes(id)).length),
       top ? `${top.sector} ${top.count}/${shortlist.kept.length}${top.flagged ? " (over limit)" : ""}` : "none"]));

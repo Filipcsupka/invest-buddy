@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { buildShortlist, sectorConcentration, type ShortlistInput } from "@/engine/shortlist";
 import type { ShortlistData } from "@/data/shortlist";
-import { methodText, rowMarkers, sectorGroupLabel, ShortlistLock, ShortlistView, tieBreakValue } from "./shortlist-view";
+import { groupOrder, methodText, rowMarkers, sectorGroupLabel, ShortlistLock, ShortlistView, tieBreakValue } from "./shortlist-view";
 
 const bars = (end: number) => Array.from({ length: 64 }, (_, i) => { const close = 50 + (end - 50) * i / 63; return { close, high: close * 1.01, low: close * 0.99, volume: 1_000_000 }; });
 const input = (ticker: string, over: Partial<ShortlistInput> = {}): ShortlistInput =>
@@ -58,9 +58,45 @@ describe("shortlist view", () => {
   });
 
   it("names the empty state and the lock card", () => {
-    expect(renderToStaticMarkup(<ShortlistView locale="en" data={data([])} />)).toContain("No Conditions met name passes the checks today.");
+    expect(renderToStaticMarkup(<ShortlistView locale="en" data={data([])} />)).toContain("No Conditions met name is left on the shortlist today.");
     expect(renderToStaticMarkup(<ShortlistLock locale="sk" />)).toContain('data-tier-lock="scanner-shortlist"');
     expect(sectorGroupLabel("sk", "Unknown")).toBe("Neznámy sektor");
     expect(sectorGroupLabel("en", "Growth")).toBe("Growth");
+  });
+});
+
+describe("shortlist view, review fixes", () => {
+  it("says kept names failed no check and that missing data does not remove a name", () => {
+    const html = renderToStaticMarkup(<ShortlistView locale="en" data={data([input("A")])} />);
+    expect(html).toContain("1 of 1 Conditions met names failed no check");
+    expect(html).toContain("A check without data is marked not assessed and does not remove a name.");
+    expect(html).not.toContain("pass the checks");
+    const sk = renderToStaticMarkup(<ShortlistView locale="sk" data={data([input("A")])} />);
+    expect(sk).toContain("nezlyhali v žiadnej kontrole");
+  });
+
+  it("shows not-assessed markers and F3 flags on dropped rows", () => {
+    const html = renderToStaticMarkup(<ShortlistView locale="en" data={data([input("LOW", { evidencedPoints: 20, currency: "GBX", reportDate: "2026-11-12" })])} />);
+    const dropped = html.slice(html.indexOf("Not on the shortlist"));
+    expect(dropped).toContain("Too few rules have data.");
+    expect(dropped).toContain("Traded value: Not assessed");
+    expect(dropped).toContain("Earnings report within 5 sessions.");
+  });
+
+  it("labels the order against the row above inside the same sector group", () => {
+    // Global order TOP (Tech), MID (Health, by percent), LOW (Tech, by percent). Inside Technology, LOW sits under TOP.
+    const view = data([input("TOP", { percent: 95 }), input("MID", { percent: 90, sector: "Healthcare" }), input("LOW", { percent: 85 })]);
+    const tech = view.shortlist.kept.filter((row) => row.sector === "Technology");
+    expect(groupOrder(tech).map(({ row, key, first }) => [row.ticker, key, first])).toEqual([["TOP", null, "overall"], ["LOW", "percent", null]]);
+    const health = view.shortlist.kept.filter((row) => row.sector === "Healthcare");
+    expect(groupOrder(health)[0]).toMatchObject({ key: null, first: "group" });
+    const html = renderToStaticMarkup(<ShortlistView locale="en" data={view} />);
+    expect(html).toContain("First in this sector group");
+  });
+
+  it("keeps the review sentence out of the lock card", () => {
+    const html = renderToStaticMarkup(<ShortlistLock locale="en" />);
+    expect(html).toContain("A ranked shortlist of Conditions met names, grouped by sector.");
+    expect(html).not.toContain("Order decided by");
   });
 });
