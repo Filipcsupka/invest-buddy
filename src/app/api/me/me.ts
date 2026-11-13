@@ -5,7 +5,7 @@ import { isOwner, viewerFromHeaders } from "@/viewer/get-viewer";
 export type Me =
   | { kind: "anon"; markets: false }
   | { kind: "owner"; markets: boolean }
-  | { kind: "customer"; email: string; plan: "free" | "plus" | "trial"; trialDaysLeft?: number; markets: false };
+  | { kind: "customer"; email: string; plan: "free" | "passive" | "plus" | "trial"; trialDaysLeft?: number; markets: false };
 
 type Session = { user?: { id?: string | number; email?: string | null } } | null;
 export type SessionReader = (requestHeaders: Headers) => Promise<Session>;

@@ -37,7 +37,7 @@ it("recognises every customer cookie name and nothing else", () => {
 it("does not grant owner or vendor access from a customer cookie", async () => {
   process.env.EODHD_PRIVATE_USE = "on";
   process.env.VENDOR_DISPLAY_LICENSE = "off";
-  const response = await proxy(new NextRequest("https://example.test/en/dashboard", { headers: { cookie: `${CUSTOMER_SESSION_COOKIE}=forged` } }));
+  const response = await proxy(new NextRequest("https://example.test/en/stocks", { headers: { cookie: `${CUSTOMER_SESSION_COOKIE}=forged` } }));
   expect(response.status).toBe(401);
   expect(canUseVendorData({ tier: "admin", preview: false, owner: false })).toBe(false);
   expect(canUseVendorData({ tier: "free", preview: false, owner: true })).toBe(true);

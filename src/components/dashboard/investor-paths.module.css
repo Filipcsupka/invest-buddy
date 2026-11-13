@@ -1,0 +1,22 @@
+/* Three path cards. Grid on wide screens, one column on phones. The viewer's own path takes the signal border; a locked plan uses the tier violet, always with the lock icon and the plan word. */
+.paths { display: grid; gap: var(--s4); margin: 0 0 var(--s6); }
+.head { display: grid; gap: var(--s1); }
+.title { margin: 0; font-family: var(--display); font-size: var(--t-h2); font-weight: 800; letter-spacing: -0.02em; }
+.lede { margin: 0; max-width: 62ch; color: var(--ink-2); font-size: var(--t-base); }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: var(--s4); margin: 0; padding: 0; list-style: none; }
+.item { display: grid; }
+.card { display: grid; grid-template-rows: auto auto auto auto 1fr auto; gap: var(--s3); padding: var(--s5); border: 1px solid var(--rule); }
+.card[data-state="current"] { border-color: var(--signal); box-shadow: var(--shadow-2); }
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); margin: 0; min-height: 1.5rem; }
+.plan { display: inline-flex; align-items: center; gap: 0.3em; padding: 0.15rem 0.6rem; border-radius: var(--radius-pill); background: var(--sheet-hover); color: var(--ink); font-size: var(--t-xs); font-weight: 700; line-height: 1.4; white-space: nowrap; }
+.plan[data-locked] { background: var(--tier); color: var(--tier-on); }
+.plan :global(.icon) { inline-size: 0.8rem; block-size: 0.8rem; }
+.yours { padding: 0.15rem 0.6rem; border-radius: var(--radius-pill); background: var(--signal-wash); color: var(--signal-strong); font-size: var(--t-xs); font-weight: 700; line-height: 1.4; }
+.note { color: var(--ink-3); font-size: var(--t-xs); font-weight: 600; }
+.name { margin: 0; font-family: var(--display); font-size: var(--t-h3); font-weight: 800; letter-spacing: -0.015em; }
+.price { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s1) var(--s3); margin: 0; font-family: var(--display); font-size: var(--t-h2); font-weight: 800; letter-spacing: -0.02em; }
+.year { font-family: var(--sans); font-size: var(--t-sm); font-weight: 500; letter-spacing: 0; color: var(--ink-3); }
+.body { margin: 0; color: var(--ink-2); font-size: var(--t-sm); }
+.items { display: grid; align-content: start; gap: var(--s1); margin: 0; padding-inline-start: 1.1rem; color: var(--ink-2); font-size: var(--t-sm); }
+.action { justify-self: start; min-block-size: 2.75rem; }
+.vat { margin: 0; color: var(--ink-3); font-size: var(--t-xs); }

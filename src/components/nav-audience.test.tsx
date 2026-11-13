@@ -51,6 +51,26 @@ it.each(["plus", "trial"] as const)("labels ETF and market links Plus for %s cus
   }
 });
 
+it.each(["en", "sk"] as const)("opens ETF, indices, economy and calendar for Passive, and keeps stock sections locked (%s)", (locale) => {
+  Object.assign(process.env, { MARKETS_VIEWS: "on", EODHD_PRIVATE_USE: "on", INSIDERS_PAGE: "on" });
+  as({ kind: "customer", email: "a@b.cz", plan: "passive", markets: false });
+  const html = renderToStaticMarkup(<Nav locale={locale} />);
+  const hrefs = links(html);
+  for (const route of ["dashboard", "etf", "etf/track-record", "indices", "economy", "calendar", "methodology", "pricing"]) expect(hrefs, route).toContain(`/${locale}/${route}`);
+  for (const route of ["stocks", "heatmap", "track-record", "portfolio", "news", "congress", "insiders", "screener"]) {
+    expect(hrefs, route).not.toContain(`/${locale}/${route}`);
+    expect(hrefs, route).toContain(`/${locale}/plus-preview?page=${encodeURIComponent(route)}`);
+  }
+  const etf = html.match(new RegExp(`<a[^>]*href="/${locale}/etf"[^>]*>[\\s\\S]*?<\\/a>`))?.[0];
+  expect(etf).toContain(locale === "en" ? ">Passive<" : ">Pasívny<");
+});
+
+it("parses the Passive plan from /api/me", async () => {
+  const { parseMe } = await import("./auth/identity-store");
+  expect(parseMe({ kind: "customer", email: "a@b.cz", plan: "passive" })).toEqual({ kind: "customer", email: "a@b.cz", plan: "passive", markets: false });
+  expect(parseMe({ kind: "customer", email: "a@b.cz", plan: "gold" })).toBeNull();
+});
+
 it("shows insiders in Stocks when markets are off", () => {
   Object.assign(process.env, { MARKETS_VIEWS: "off", EODHD_PRIVATE_USE: "on", INSIDERS_PAGE: "on" });
   as({ kind: "customer", email: "a@b.cz", plan: "plus", markets: false });

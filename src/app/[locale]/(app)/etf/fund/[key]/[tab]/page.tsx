@@ -31,7 +31,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 /** Owner-only vendor fund data, rendered from stored rows. Facts only: no calls, scores or states. */
 async function EtfFundTabPage({ params }: Props) {
-  await assertViewable("eodhd");
+  await assertViewable("eodhd", "etf");
   const locale = await resolveLocale(params);
   const { key: rawKey, tab } = await params;
   const key = decodedKey(rawKey);

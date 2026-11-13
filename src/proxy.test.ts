@@ -9,6 +9,8 @@ vi.mock("@/viewer/get-viewer", () => ({
     if (cookie.includes("ib_session=owner")) return { tier: "admin", preview: false, owner: true, userId: "1" };
     if (cookie.includes("ib_session=plus")) return { tier: "paid", preview: false, owner: false, userId: "3", plan: "plus" };
     if (cookie.includes("ib_session=trial")) return { tier: "paid", preview: false, owner: false, userId: "4", plan: "trial" };
+    if (cookie.includes("ib_session=passive")) return { tier: "free", preview: false, owner: false, userId: "5", plan: "passive" };
+    if (cookie.includes("ib_session=free")) return { tier: "free", preview: false, owner: false, userId: "6", plan: "free" };
     if (cookie.includes("ib_session=customer")) return { tier: "paid", preview: false, owner: false, userId: "2" };
     return { tier: "free", preview: false };
   },
@@ -32,7 +34,7 @@ it("keeps vendor-backed pages private while allowing public content and health p
   process.env.MARKETS_VIEWS = "on";
   process.env.AUTH = "on";
   universe.mockResolvedValue([{ ticker: "NVDA" }]);
-  for (const path of ["dashboard", "stocks", "company/NVDA", "etf", "heatmap", "insiders", "portfolio", "track-record"]) {
+  for (const path of ["stocks", "company/NVDA", "etf", "heatmap", "insiders", "portfolio", "track-record"]) {
     const url = `https://example.com/en/${path}`;
     const blocked = await proxy(new NextRequest(url));
     expect(blocked.status, path).toBe(401);
@@ -51,7 +53,7 @@ it("opens vendor-backed pages to Plus and trial customers, not to free customers
   process.env.MARKETS_VIEWS = "on";
   process.env.AUTH = "on";
   universe.mockResolvedValue([{ ticker: "NVDA" }]);
-  for (const path of ["dashboard", "stocks", "company/NVDA", "heatmap", "insiders", "portfolio", "track-record"]) {
+  for (const path of ["stocks", "company/NVDA", "heatmap", "insiders", "portfolio", "track-record"]) {
     const url = `https://example.com/en/${path}`;
     for (const who of ["plus", "trial"]) {
       const response = await proxy(new NextRequest(url, { headers: { cookie: `__Host-ib_session=${who}` } }));
@@ -64,6 +66,52 @@ it("opens vendor-backed pages to Plus and trial customers, not to free customers
   process.env.OWNER_VIEW = "on";
   const plusAllocation = await proxy(new NextRequest("https://example.com/en/owner-allocation", { headers: { cookie: "__Host-ib_session=plus" } }));
   expect(plusAllocation.status).toBe(401);
+});
+
+/** Per-route gate for each tier while EODHD_PRIVATE_USE and MARKETS_VIEWS are on. 200 opens, 401 refuses (plain client request). */
+const ROUTE_MATRIX: [string, Record<"anon" | "free" | "passive" | "plus" | "trial" | "owner", number>][] = [
+  ["dashboard", { anon: 200, free: 200, passive: 200, plus: 200, trial: 200, owner: 200 }],
+  ["stocks", { anon: 401, free: 401, passive: 401, plus: 200, trial: 200, owner: 200 }],
+  ["company/NVDA", { anon: 401, free: 401, passive: 401, plus: 200, trial: 200, owner: 200 }],
+  ["heatmap", { anon: 401, free: 401, passive: 401, plus: 200, trial: 200, owner: 200 }],
+  ["track-record", { anon: 401, free: 401, passive: 401, plus: 200, trial: 200, owner: 200 }],
+  ["portfolio", { anon: 401, free: 401, passive: 401, plus: 200, trial: 200, owner: 200 }],
+  ["insiders", { anon: 401, free: 401, passive: 401, plus: 200, trial: 200, owner: 200 }],
+  ["screener", { anon: 401, free: 401, passive: 401, plus: 200, trial: 200, owner: 200 }],
+  ["news", { anon: 401, free: 401, passive: 401, plus: 200, trial: 200, owner: 200 }],
+  ["congress", { anon: 401, free: 401, passive: 401, plus: 200, trial: 200, owner: 200 }],
+  ["etf", { anon: 401, free: 401, passive: 200, plus: 200, trial: 200, owner: 200 }],
+  ["etf/fund/NYSEARCA%3ASPY/holdings", { anon: 401, free: 401, passive: 200, plus: 200, trial: 200, owner: 200 }],
+  ["indices", { anon: 401, free: 401, passive: 200, plus: 200, trial: 200, owner: 200 }],
+  ["economy", { anon: 401, free: 401, passive: 200, plus: 200, trial: 200, owner: 200 }],
+  ["calendar", { anon: 401, free: 401, passive: 200, plus: 200, trial: 200, owner: 200 }],
+];
+
+it.each(ROUTE_MATRIX)("gates /%s per tier: free and Passive never reach stock routes", async (path, expected) => {
+  process.env.EODHD_PRIVATE_USE = "on";
+  process.env.MARKETS_VIEWS = "on";
+  process.env.AUTH = "on";
+  universe.mockResolvedValue([{ ticker: "NVDA" }]);
+  // Many requests from one client key: keep the page limiter out of the result and out of later tests.
+  const { resetRateLimits } = await import("@/security/rate-limit");
+  resetRateLimits();
+  for (const [who, status] of Object.entries(expected)) {
+    const headers = who === "anon" ? undefined : { cookie: `__Host-ib_session=${who}` };
+    const response = await proxy(new NextRequest(`https://example.com/en/${path}`, { headers }));
+    expect(response.status, `${who} /${path}`).toBe(status);
+    expect(response.headers.get("cache-control"), `${who} /${path}`).toBe("private, no-store");
+  }
+  resetRateLimits();
+});
+
+it("sends a signed-in Passive browser from a stock page to the Plus preview, and an anonymous one to sign-in", async () => {
+  process.env.EODHD_PRIVATE_USE = "on";
+  process.env.AUTH = "on";
+  const passive = await proxy(new NextRequest("https://example.com/en/stocks", { headers: { ...browserDoc, cookie: "__Host-ib_session=passive" } }));
+  expect(passive.status).toBe(307);
+  expect(passive.headers.get("location")).toBe("https://example.com/en/opens-soon?page=stocks");
+  const anon = await proxy(new NextRequest("https://example.com/en/stocks", { headers: browserDoc }));
+  expect(anon.headers.get("location")).toContain("/en/sign-in?mode=sign-in&next=");
 });
 
 it("leaves public data routes unchanged when private use is off", async () => {

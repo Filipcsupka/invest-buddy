@@ -51,7 +51,9 @@ it.each(["en", "sk"] as const)("server-renders no per-user state in the %s shell
     expect(html).toContain(locale === "en" ? "Checking sign-in" : "Overujeme prihlásenie");
     expect(html).not.toMatch(/Signed in as owner|Prihlásený ako vlastník|account\/sign-out|@/);
     // Vendor pages lead to the preview in shared HTML, without flashing a blur before identity resolves.
-    for (const route of ["dashboard", "stocks", "track-record", "insiders", "portfolio"]) expect(html).not.toContain(`href="/${locale}/${route}"`);
+    for (const route of ["stocks", "track-record", "insiders", "portfolio"]) expect(html).not.toContain(`href="/${locale}/${route}"`);
+    // The dashboard gates its own stock data, so the shared shell links it directly.
+    expect(html).toContain(`href="/${locale}/dashboard"`);
     expect(html).not.toContain('data-locked=""');
     expect(html).not.toContain("Soon");
     expect(html).toContain(`href="/${locale}/methodology"`);

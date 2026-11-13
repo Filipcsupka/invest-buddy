@@ -14,7 +14,8 @@ import { pageMetadata } from "@/i18n/metadata";
 import { getPricingMessages } from "@/i18n/pricing-messages";
 import { getWelcomeMessages } from "@/i18n/welcome-messages";
 import { resolveLocale, type LocaleParams } from "@/app/[locale]/locale";
-import { PLUS_PRICE, formatEur, yearlyPerMonth } from "@/app/[locale]/pricing/plans";
+import { PASSIVE_PRICE, PLUS_PRICE, formatEur, yearlyPerMonth } from "@/app/[locale]/pricing/plans";
+import { getPathMessages } from "@/i18n/path-messages";
 import styles from "./pricing.module.css";
 
 /* Same HTML for every visitor: no headers(), no cookies, no query read. Operate mode: plain and fast, no motion layer. */
@@ -50,6 +51,17 @@ export default async function Pricing({ params }: LocaleParams) {
   const lockAction = billing ? { href: "#plus", label: l.see } : { href: "#join", label: l.waitlist };
   const monthly = formatEur(locale, PLUS_PRICE.monthlyEur);
   const yearly = formatEur(locale, PLUS_PRICE.yearlyEur);
+  const paths = getPathMessages(locale).paths;
+  const a = pm.access;
+  // Free, Passive, Plus per area. "licence" marks the market views a free account gets once a vendor display licence exists.
+  const access: [keyof typeof a.rows, "yes" | "no" | "licence", "yes" | "no", "yes"][] = [
+    ["method", "yes", "yes", "yes"],
+    ["macro", "yes", "yes", "yes"],
+    ["markets", "licence", "yes", "yes"],
+    ["funds", "no", "yes", "yes"],
+    ["stocks", "no", "no", "yes"],
+  ];
+  const cell = (value: "yes" | "no" | "licence") => value === "yes" ? pm.included : value === "no" ? pm.notIncluded : a.withLicence;
   return (
     <article className={`frame page ${styles.page}`}>
       <TrackView events={["pricing_view"]} props={{ locale }} />
@@ -60,19 +72,50 @@ export default async function Pricing({ params }: LocaleParams) {
       </header>
 
       <section aria-label={p.title} className={styles.plans}>
-        <article className={`kit-card ${styles.plan}`} aria-labelledby="free">
+        <article className={`kit-card ${styles.plan}`} aria-labelledby="free" data-plan="free">
+          <p className={styles.path}>{paths.overview.name}</p>
           <header className={styles.planHead}>
             <h2 id="free">{p.freeName}</h2>
           </header>
           <p className={`${styles.price} num`}>{formatEur(locale, 0)}</p>
           <p className={styles.planLede}>{p.freeNote}</p>
           <ul className={styles.planList}>
-            {pm.alwaysFree.map((item) => <li key={item}><span className="kit-mark" data-result="pass"><ResultMark result="pass" /></span><span>{item}</span></li>)}
+            {paths.overview.items.map((item) => <li key={item}><span className="kit-mark" data-result="pass"><ResultMark result="pass" /></span><span>{item}</span></li>)}
           </ul>
           <AuthDialogLink locale={locale} next={`/${locale}/pricing`} className={`button secondary ${styles.planAction}`}>{p.freeAction}</AuthDialogLink>
         </article>
 
-        <article className={`kit-card ${styles.plan} ${styles.planPaid}`} aria-labelledby="plus-title" id="plus">
+        <article className={`kit-card ${styles.plan} ${styles.planPaid}`} aria-labelledby="passive-title" id="passive" data-plan="passive">
+          <p className={styles.path}>{paths.passive.name}</p>
+          <header className={styles.planHead}>
+            <h2 id="passive-title">{p.passiveName}</h2>
+            <span className={styles.soonTag}>{billing ? p.planned : p.soonTitle}</span>
+          </header>
+          <div className={styles.prices}>
+            <p className={styles.priceRow}>
+              <span className={`${styles.price} num`}>{formatEur(locale, PASSIVE_PRICE.monthlyEur)}</span>
+              <span className={styles.per}>{fill(p.monthly, { price: "" }).trim()}</span>
+            </p>
+            <p className={styles.priceRow}>
+              <span className={`${styles.price} num`}>{formatEur(locale, PASSIVE_PRICE.yearlyEur)}</span>
+              <span className={styles.per}>{fill(p.yearly, { price: "" }).trim()}</span>
+              <span className={styles.yearNote}>{fill(p.yearlyNote, { price: formatEur(locale, yearlyPerMonth(PASSIVE_PRICE)) })}</span>
+            </p>
+          </div>
+          <p className={styles.vat}>{p.vat} {billing ? null : <span>{p.planned}.</span>}</p>
+          <p className={styles.planLede}>{paths.passive.body}</p>
+          <ul className={styles.planList}>
+            {paths.passive.items.map((item) => <li key={item}><span className="kit-mark" data-result="pass"><ResultMark result="pass" /></span><span>{item}</span></li>)}
+          </ul>
+          <div className={styles.soon} role="note">
+            <p>{p.passiveSoonBody}</p>
+            <a className={`button secondary ${styles.planAction}`} href="#join">{p.notifyPassive}</a>
+          </div>
+          <p className={styles.refund}>{p.refund}</p>
+        </article>
+
+        <article className={`kit-card ${styles.plan} ${styles.planPaid}`} aria-labelledby="plus-title" id="plus" data-plan="plus">
+          <p className={styles.path}>{paths.active.name}</p>
           <header className={styles.planHead}>
             <h2 id="plus-title">{p.plusName}</h2>
             <span className={styles.soonTag}>{billing ? p.planned : p.soonTitle}</span>
@@ -89,7 +132,7 @@ export default async function Pricing({ params }: LocaleParams) {
             </p>
           </div>
           <p className={styles.vat}>{p.vat} {billing ? null : <span>{p.planned}.</span>}</p>
-          <p className={styles.planLede}>{pm.paidLede}</p>
+          <p className={styles.planLede}>{paths.active.body} {pm.paidLede}</p>
           <ul className={styles.planList}>
             {ids.slice(0, 6).map((id) => (
               <li key={id}>
@@ -111,6 +154,30 @@ export default async function Pricing({ params }: LocaleParams) {
           )}
           <p className={styles.refund}>{p.refund}</p>
         </article>
+      </section>
+
+      <section aria-labelledby="access" className={styles.compare}>
+        <SectionHead id="access" title={a.title} lede={a.lede} />
+        <DataTable label={a.caption} bounded={false} stickyFirst>
+          <thead>
+            <tr>
+              <th scope="col">{a.colArea}</th>
+              <th scope="col">{pm.colFree}</th>
+              <th scope="col">{pm.colPassive}</th>
+              <th scope="col">{pm.colPaid}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {access.map(([key, free, passive, plus]) => (
+              <tr key={key} data-area={key}>
+                <th scope="row"><span className={styles.label}>{a.rows[key]}</span></th>
+                <td className={styles.free_cell} data-access={free}>{cell(free)}</td>
+                <td className={styles.free_cell} data-access={passive}>{cell(passive)}</td>
+                <td className={styles.paid_cell} data-access={plus}>{cell(plus)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </DataTable>
       </section>
 
       <section aria-labelledby="locks" className={styles.locks}>

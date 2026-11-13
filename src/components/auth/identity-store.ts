@@ -37,7 +37,7 @@ export function parseMe(raw: unknown): Me | null {
   const value = raw as Record<string, unknown>;
   if (value.kind === "anon") return ANON;
   if (value.kind === "owner") return { kind: "owner", markets: value.markets === true };
-  if (value.kind === "customer" && typeof value.email === "string" && (value.plan === "free" || value.plan === "plus" || value.plan === "trial")) {
+  if (value.kind === "customer" && typeof value.email === "string" && (value.plan === "free" || value.plan === "passive" || value.plan === "plus" || value.plan === "trial")) {
     const days = typeof value.trialDaysLeft === "number" && Number.isFinite(value.trialDaysLeft) ? Math.max(0, Math.floor(value.trialDaysLeft)) : undefined;
     return value.plan === "trial" ? { kind: "customer", email: value.email, plan: "trial", trialDaysLeft: days ?? 0, markets: false } : { kind: "customer", email: value.email, plan: value.plan, markets: false };
   }

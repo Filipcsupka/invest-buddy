@@ -8,7 +8,7 @@ import { getPool } from "@/db/pool";
 import { customerPlan } from "@/entitlements/plan";
 import { PREVIEW_HEADER, resolveViewer, type Viewer } from "./viewer";
 
-export { baseViewer, canSee, isOwner, canUseVendorData, limitFor, requireFeature, resolveViewer, PREVIEW_HEADER, type Tier, type Viewer } from "./viewer";
+export { baseViewer, canSee, isOwner, canOpenFunds, canUseFundData, canUseVendorData, hasActivePlan, hasPassivePlan, investorPath, limitFor, requireFeature, resolveViewer, PREVIEW_HEADER, type InvestorPath, type Tier, type Viewer } from "./viewer";
 
 type SessionReader = (requestHeaders: Headers) => Promise<{ user?: { id?: string | number } } | null>;
 const readCustomerSession: SessionReader = (requestHeaders) => customerAuth().api.getSession({ headers: requestHeaders });
@@ -32,7 +32,8 @@ export async function viewerFromHeaders(requestHeaders: Headers, readSession: Se
   if (!user.rows[0]) return resolveViewer(currentFlags);
   if (isOwnerUser(session.user)) return { ...resolveViewer(currentFlags, requestHeaders.get(PREVIEW_HEADER), true), userId };
   return {
-    tier: !currentFlags.PAYWALL || state.plan !== "free" ? "paid" : "free",
+    // Paywall segments are stock depth, so the Passive plan reads as free there; its fund and market access comes from canUseFundData.
+    tier: !currentFlags.PAYWALL || state.plan === "plus" || state.plan === "trial" ? "paid" : "free",
     preview: false,
     owner: false,
     userId,

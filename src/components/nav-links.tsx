@@ -7,8 +7,9 @@ import { sideStorageKey as sideKey } from "./pre-paint";
 import { useIdentity } from "./auth/identity-store";
 import styles from "./nav-links.module.css";
 
-export type NavItem = { href: string; text: string; icon?: string; locked?: boolean; tier?: "open" | "free" | "plus" };
-export type LockLabels = { open: string; free: string; plus: string; locked: string; owner: string };
+/** `passive`: a locked item the Passive plan also opens (fund and market views). Stock items never set it. */
+export type NavItem = { href: string; text: string; icon?: string; locked?: boolean; passive?: boolean; tier?: "open" | "free" | "plus" };
+export type LockLabels = { open: string; free: string; plus: string; locked: string; owner: string; passive?: string };
 /** `everyone`: all viewers. `owner`: rendered only for a confirmed owner session, so shared HTML never holds these entries. */
 export type Audience = "everyone" | "owner";
 
@@ -34,6 +35,7 @@ export function NavLinks({ locale, label, items, sectionLabel, lock, audience = 
   const owner = identity.status === "ready" && identity.me.kind === "owner";
   const customer = identity.status === "ready" && identity.me.kind === "customer";
   const plus = identity.status === "ready" && identity.me.kind === "customer" && (identity.me.plan === "plus" || identity.me.plan === "trial");
+  const passive = identity.status === "ready" && identity.me.kind === "customer" && identity.me.plan === "passive";
   if (audience === "owner" && !owner) return null;
   return (
     <nav aria-label={label} className={separator ? `nav-links ${styles.separated}` : "nav-links"} data-audience={audience}>
@@ -44,7 +46,7 @@ export function NavLinks({ locale, label, items, sectionLabel, lock, audience = 
         </span>
       )}
       {items.map((item) => {
-        if (item.locked && !owner && !plus && lock) {
+        if (item.locked && !owner && !plus && !(passive && item.passive) && lock) {
           const page = item.href.slice(1);
           const showLock = customer;
           return (
@@ -62,7 +64,7 @@ export function NavLinks({ locale, label, items, sectionLabel, lock, audience = 
           <Link key={item.href} href={href} aria-current={current ? "page" : undefined} title={item.text}>
             <SideIcon name={item.icon ?? item.href.slice(1)} />
             <span className="nav-text">{item.text}</span>
-            {customer && lock && audience === "everyone" && <Chip tier={tier} label={lock[tier]} />}
+            {customer && lock && audience === "everyone" && <Chip tier={tier} label={passive && item.passive && tier === "plus" ? lock.passive ?? lock.plus : lock[tier]} />}
           </Link>
         );
       })}

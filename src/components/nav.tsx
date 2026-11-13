@@ -41,7 +41,7 @@ export function Nav({ locale }: { locale: Locale }) {
   const target = otherLocale(locale);
   const f = flags();
   const id = getIdentityMessages(locale);
-  const lock = { open: id.open, free: id.plan.free, plus: id.plus, locked: id.locked, owner: m.nav.ownerOnly };
+  const lock = { open: id.open, free: id.plan.free, plus: id.plus, locked: id.locked, owner: m.nav.ownerOnly, passive: id.plan.passive };
   const vendorLocked = process.env.EODHD_PRIVATE_USE === "on";
   const vendor = (items: NavItem[]): NavItem[] => items.map((item) => {
     const locked = Boolean(item.locked || (vendorLocked && privateSections.has(item.href.slice(1).split("/")[0])));
@@ -49,16 +49,16 @@ export function Nav({ locale }: { locale: Locale }) {
   });
   const sections = getNavSectionsMessages(locale);
   const marketItems: NavItem[] = [
-    { href: "/economy", text: m.nav.economy, icon: "economy", locked: true },
-    { href: "/calendar", text: sections.calendar, icon: "economy", locked: true },
+    { href: "/economy", text: m.nav.economy, icon: "economy", locked: true, passive: true },
+    { href: "/calendar", text: sections.calendar, icon: "economy", locked: true, passive: true },
     { href: "/news", text: m.nav.news, icon: "news", locked: true },
     { href: "/congress", text: m.nav.congress, icon: "congress", locked: true },
     ...(f.INSIDERS_PAGE ? [{ href: "/insiders", text: m.nav.insiders, icon: "insiders", locked: true }] : []),
     { href: "/screener", text: m.nav.screener, icon: "scanner", locked: true },
   ];
   const etfItems: NavItem[] = [
-    { href: "/etf", text: m.nav.etfResearch, icon: "scanner", locked: true },
-    { href: "/etf/track-record", text: m.nav.etfTrackRecord, icon: "track", locked: true },
+    { href: "/etf", text: m.nav.etfResearch, icon: "scanner", locked: true, passive: true },
+    { href: "/etf/track-record", text: m.nav.etfTrackRecord, icon: "track", locked: true, passive: true },
   ];
   return (
     <header className="site-header">
@@ -73,9 +73,10 @@ export function Nav({ locale }: { locale: Locale }) {
       </div>
       <div className="side-panel" id="side-panel">
         <div className="side-scroll">
-          <NavLinks locale={locale} label={m.nav.dashboard} lock={lock} items={vendor([
+          {/* The dashboard is open to every viewer: it shows the investor paths and gates its own stock data. */}
+          <NavLinks locale={locale} label={m.nav.dashboard} lock={lock} items={[
             { href: "/dashboard", text: m.nav.dashboard, icon: "dashboard" },
-          ])} />
+          ]} />
           <NavLinks locale={locale} label={m.nav.stocks} sectionLabel={m.nav.stocks} lock={lock} items={vendor([
             { href: "/stocks", text: m.nav.stocks, icon: "scanner" },
             { href: "/heatmap", text: getHeatmapMessages(locale).navLabel, icon: "heatmap" },
@@ -86,7 +87,7 @@ export function Nav({ locale }: { locale: Locale }) {
             ...(f.ADVICE_OUTPUT ? [{ href: "/sizing", text: m.nav.sizing, icon: "sizing" }] : []),
           ])} />
           <NavLinks locale={locale} label={m.nav.etfs} sectionLabel={m.nav.etfs} lock={lock} items={etfItems.map((item) => ({ ...item, tier: "plus" }))} />
-          {f.MARKETS_VIEWS && <NavLinks locale={locale} label={m.nav.indices} sectionLabel={m.nav.indices} lock={lock} items={[{ href: "/indices", text: m.nav.indices, icon: "indices", locked: true, tier: "plus" }]} />}
+          {f.MARKETS_VIEWS && <NavLinks locale={locale} label={m.nav.indices} sectionLabel={m.nav.indices} lock={lock} items={[{ href: "/indices", text: m.nav.indices, icon: "indices", locked: true, passive: true, tier: "plus" }]} />}
           {f.MARKETS_VIEWS && <NavLinks locale={locale} label={sections.marketsCalendar} sectionLabel={sections.marketsCalendar} lock={lock} separator items={marketItems.map((item) => ({ ...item, tier: "plus" }))} />}
           <NavLinks locale={locale} label={m.nav.learn} sectionLabel={m.nav.learn} lock={lock} items={[
             { href: "/methodology", text: m.nav.methodology, icon: "methodology", tier: "open" },

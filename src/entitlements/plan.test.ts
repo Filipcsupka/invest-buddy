@@ -12,6 +12,8 @@ it.each([
   ["manual Plus without end", { tier: "plus", source: "manual", startsAt: start, endsAt: null }, "plus"],
   ["manual Plus for 30 days", { tier: "plus", source: "manual", startsAt: start, endsAt: after(30) }, "plus"],
   ["Stripe Plus", { tier: "plus", source: "stripe", startsAt: start, endsAt: after(14) }, "plus"],
+  ["manual Passive without end", { tier: "passive", source: "manual", startsAt: start, endsAt: null }, "passive"],
+  ["14-day manual Passive is not a trial", { tier: "passive", source: "manual", startsAt: start, endsAt: after(14) }, "passive"],
 ] as const)("%s resolves to %s", (_name, entitlement, plan) => {
   expect(planFor(entitlement).plan).toBe(plan);
 });
@@ -19,4 +21,5 @@ it.each([
 it("keeps the end date only for a paid plan", () => {
   expect(planFor({ tier: "plus", source: "manual", startsAt: start, endsAt: after(14) }).endsAt).toEqual(after(14));
   expect(planFor({ tier: "free", source: "manual", startsAt: start, endsAt: after(14) }).endsAt).toBeNull();
+  expect(planFor({ tier: "passive", source: "manual", startsAt: start, endsAt: after(30) }).endsAt).toEqual(after(30));
 });

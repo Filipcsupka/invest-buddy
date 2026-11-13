@@ -21,6 +21,7 @@ describe("shortlist access", () => {
   const plus: Viewer = { tier: "paid", preview: false, owner: false, userId: "u1", plan: "plus" };
   const trial: Viewer = { tier: "paid", preview: false, owner: false, userId: "u2", plan: "trial" };
   const freeCustomer: Viewer = { tier: "free", preview: false, owner: false, userId: "u3", plan: "free" };
+  const passive: Viewer = { tier: "free", preview: false, owner: false, userId: "u5", plan: "passive" };
   // PAYWALL off: an anonymous visitor and a signed-in free customer both resolve to the "paid" soft tier.
   const anonymousSoft: Viewer = { tier: "paid", preview: false };
   const freeSoft: Viewer = { tier: "paid", preview: false, owner: false, userId: "u4", plan: "free" };
@@ -28,7 +29,7 @@ describe("shortlist access", () => {
     for (const viewer of [owner, plus, trial]) expect(shortlistAccess(viewer, {})).toBe("full");
   });
   it("locks it for free customers and for anonymous visitors while PAYWALL is off", () => {
-    for (const viewer of [freeCustomer, anonymousSoft, freeSoft, { tier: "free", preview: false } as Viewer]) expect(shortlistAccess(viewer, {})).toBe("locked");
+    for (const viewer of [freeCustomer, passive, anonymousSoft, freeSoft, { tier: "free", preview: false } as Viewer]) expect(shortlistAccess(viewer, {})).toBe("locked");
   });
   it("hides it for everyone with SHORTLIST_VIEW off", () => {
     for (const viewer of [owner, plus, anonymousSoft]) expect(shortlistAccess(viewer, { SHORTLIST_VIEW: "off" })).toBe("hidden");

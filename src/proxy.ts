@@ -3,20 +3,22 @@ import { instrumentForTicker } from "@/data/store";
 import { ideasEnabled } from "@/data/ideas-store";
 import { ownerViewEnabled } from "@/data/owner-allocation";
 import { designViewEnabled, flags } from "@/config/flags";
-import { PREVIEW_HEADER, canUseVendorData, resolveViewer } from "@/viewer/viewer";
+import { PREVIEW_HEADER, canUseFundData, canUseVendorData, resolveViewer } from "@/viewer/viewer";
 import { withContentSecurityPolicy } from "@/security/headers";
 import { rateLimit, rateLimitRetryAfter } from "@/security/rate-limit";
 import { writeHttpLog } from "@/app/api/ingest/request-log";
 import { resolveRequestId } from "@/app/request-id";
 import { statusPage } from "@/app/status-page";
 import { isEtfDataPath } from "@/components/etf/tabs";
-import { PRIVATE_DATA_SECTIONS } from "@/app/private-data-routes";
+import { FUND_DATA_SECTIONS, PAGE_GATED_SECTIONS, PRIVATE_DATA_SECTIONS } from "@/app/private-data-routes";
 import { hasCustomerCookie } from "@/auth/cookie";
 import type { Viewer } from "@/viewer/viewer";
-import { marketsViewable } from "@/markets/gate";
+import { marketSection, marketsViewable } from "@/markets/gate";
 
 const marketSections = new Set(["indices", "economy", "calendar", "congress", "news", "screener"]);
 const privateDataSections = new Set<string>(PRIVATE_DATA_SECTIONS);
+const fundDataSections = new Set<string>(FUND_DATA_SECTIONS);
+const pageGatedSections = new Set<string>(PAGE_GATED_SECTIONS);
 const privateHeaders = { "Cache-Control": "private, no-store", "X-Robots-Tag": "noindex" };
 
 /** Next.js client navigations and prefetches send these; a browser page load sends Accept text/html or Sec-Fetch-Dest document. */
@@ -109,15 +111,16 @@ async function handle(request: NextRequest) {
     response.headers.set("x-request-id", requestId);
     return response;
   }
-  // Vendor-derived pages: the owner and customers with an active Plus plan (paid or trial). owner-allocation stays owner-only.
-  if (process.env.EODHD_PRIVATE_USE === "on" && privateDataRoute) {
+  // Vendor-derived pages: stock sections need the owner or an Active plan (Plus or trial); fund sections also open to Passive.
+  // owner-allocation stays owner-only. The dashboard gates its own vendor content, so it is not refused here.
+  if (process.env.EODHD_PRIVATE_USE === "on" && privateDataRoute && !pageGatedSections.has(section)) {
     const who = await viewer();
-    const allowed = section === "owner-allocation" ? who?.owner === true : Boolean(who && canUseVendorData(who));
+    const allowed = section === "owner-allocation" ? who?.owner === true : Boolean(who && (fundDataSections.has(section) ? canUseFundData(who) : canUseVendorData(who)));
     if (!allowed) return denied(request, locale, section, Boolean(who));
   }
   // ETF data tabs and insiders (while markets are enabled) share the market gate.
   const market = marketSections.has(section) || (section === "insiders" && featureFlags.MARKETS_VIEWS) || isEtfDataPath(request.nextUrl.pathname);
-  if (market && featureFlags.MARKETS_VIEWS && !marketsViewable((await viewer()) ?? resolveViewer(featureFlags))) {
+  if (market && featureFlags.MARKETS_VIEWS && !marketsViewable((await viewer()) ?? resolveViewer(featureFlags), process.env, isEtfDataPath(request.nextUrl.pathname) ? "etf" : marketSection(section))) {
     return denied(request, locale, section, Boolean(await viewer()));
   }
   // Owner pages: anonymous browsers go to sign-in, a signed-in non-owner gets the 404 page, other clients a plain 401.

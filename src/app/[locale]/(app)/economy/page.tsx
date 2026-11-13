@@ -121,7 +121,7 @@ function EventTable({ locale, m, label, events }: { locale: Locale; m: FlowMessa
 
 async function Economy({ params, searchParams }: LocaleParams & { searchParams?: Promise<Search> }) {
   const locale = await resolveLocale(params);
-  await assertViewable("eodhd");
+  await assertViewable("eodhd", "economy");
   const m = getFlowMessages(locale);
   const e = m.economy;
   const query = await searchParams;

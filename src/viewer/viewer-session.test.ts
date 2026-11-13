@@ -12,7 +12,7 @@ vi.mock("@/db/pool", () => ({ getPool: () => ({ query }) }));
 vi.mock("next/headers", () => ({ headers: async () => new Headers() }));
 
 import { viewerFromHeaders } from "./get-viewer";
-import { canUseVendorData, isOwner } from "./viewer";
+import { canUseFundData, canUseVendorData, isOwner } from "./viewer";
 
 const env = { ...process.env };
 const day = 86_400_000;
@@ -47,11 +47,15 @@ it.each([
   ["active trial", { tier: "plus", status: "active", source: "manual", starts_at: new Date(now - day), ends_at: new Date(now + 13 * day), cancel_at_period_end: false }, "trial", "paid"],
   ["expired trial", { tier: "plus", status: "active", source: "manual", starts_at: new Date(now - 15 * day), ends_at: new Date(now - day), cancel_at_period_end: false }, "free", "free"],
   ["paid Plus", { tier: "plus", status: "active", source: "stripe", starts_at: new Date(now - day), ends_at: new Date(now + 29 * day), cancel_at_period_end: false }, "plus", "paid"],
+  ["manual Passive", { tier: "passive", status: "active", source: "manual", starts_at: new Date(now - day), ends_at: null, cancel_at_period_end: false }, "passive", "free"],
+  ["expired Passive", { tier: "passive", status: "active", source: "manual", starts_at: new Date(now - 31 * day), ends_at: new Date(now - day), cancel_at_period_end: false }, "free", "free"],
 ] as const)("customer with %s: plan, tier, never owner", async (_name, row, plan, tier) => {
   if (row) state.entitlements["7"] = { user_id: "7", provider_customer_id: null, provider_subscription_id: null, ...row };
   const viewer = await viewerFromHeaders(new Headers(customerCookie), session("7"));
   expect(viewer).toMatchObject({ tier, plan, owner: false, userId: "7", preview: false });
-  expect(canUseVendorData(viewer, { EODHD_PRIVATE_USE: "on" })).toBe(plan !== "free");
+  // Stock vendor data: Active only. Fund data: Active and Passive.
+  expect(canUseVendorData(viewer, { EODHD_PRIVATE_USE: "on" })).toBe(plan === "plus" || plan === "trial");
+  expect(canUseFundData(viewer, { EODHD_PRIVATE_USE: "on" })).toBe(plan !== "free");
 });
 
 it("gives a paid tier to every customer while PAYWALL is off", async () => {

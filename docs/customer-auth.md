@@ -47,7 +47,7 @@ Optional:
 - `RESEND_API_KEY`, `MAIL_FROM`: required for `MAIL_PROVIDER=resend`, for example `MAIL_FROM="InvestBuddy <hello@invest.filipcsupka.online>"`.
 - `RATE_LIMIT_TRUSTED_HOPS`: proxies in front of the app that append to `X-Forwarded-For`. Default 1 (Traefik only). Set it per environment: if a CDN is added in front of Traefik, use 2, or every visitor shares the CDN's bucket. The client IP is the entry this many places from the end; entries further left and `X-Real-IP` are ignored because the client can set them. A request with fewer entries than hops counts against one shared `unknown` bucket.
 - `RATE_LIMIT_SECRET`: key for hashing emails and IPs in rate-limit rows. Defaults to `AUTH_SECRET`.
-- `VENDOR_DISPLAY_LICENSE`: set `on` only after a vendor display licence exists. While `EODHD_PRIVATE_USE=on`, `canUseVendorData` is true for the owner session and for a signed-in customer with an active Plus or trial plan (owner decision 2026-11-12), and false for free accounts and visitors.
+- `VENDOR_DISPLAY_LICENSE`: set `on` only after a vendor display licence exists. While `EODHD_PRIVATE_USE=on`, `canUseVendorData` is true for the owner session and for a signed-in customer with an active Plus or trial plan (owner decision 2026-11-12), and false for Passive and free accounts and visitors. `canUseFundData` adds the Passive plan for ETF, index, economy and calendar data only (`docs/paywall-segments.md`).
 
 Never commit any of these values.
 
@@ -80,7 +80,7 @@ Only these Better Auth routes are reachable from outside: `POST` sign-up/email, 
 
 With `TRIAL=on`, a new user gets a `manual` Plus entitlement that ends 14 days later. With `EMAIL_VERIFY` on, an unverified password account gets it only when it confirms the address (email link or magic link); magic-link sign-ups, and Google sign-ups whose Google email is verified, count as verified at creation. An ended trial reads as Free.
 
-Each grant also writes a row to `trial_claims` (migration 136): an HMAC of the canonical mailbox, keyed from `AUTH_SECRET`, never the address. The row has no foreign key and stays after the account is deleted, so a `+tag`, a Gmail dot variant, or deleting and re-registering the same address gets no second trial. Rotating `AUTH_SECRET` makes old claims unmatchable. Apply migration 136 before turning `TRIAL` on. `src/entitlements/plan.ts` turns an entitlement into `free`, `trial` or `plus`; the viewer reads it once per request.
+Each grant also writes a row to `trial_claims` (migration 136): an HMAC of the canonical mailbox, keyed from `AUTH_SECRET`, never the address. The row has no foreign key and stays after the account is deleted, so a `+tag`, a Gmail dot variant, or deleting and re-registering the same address gets no second trial. Rotating `AUTH_SECRET` makes old claims unmatchable. Apply migration 136 before turning `TRIAL` on. `src/entitlements/plan.ts` turns an entitlement into `free`, `passive`, `trial` or `plus`; the viewer reads it once per request. A Passive entitlement is never a trial. Migration 139 adds `passive` to the `entitlements.tier` check; apply it before granting a Passive plan.
 
 A genuinely different address still gets a trial. Watch sign-up counts once the trial is on.
 
@@ -133,7 +133,7 @@ Pre-registration takeover: someone can sign up with a password at another person
 
 Both scripts are dry runs unless `--apply` is given. They need `DATABASE_URL` in the environment and print a user id, never the email or password.
 
-- `npx tsx scripts/grant-entitlement.ts --email name@example.com --tier plus --days 30` grants Plus for 30 days. Without `--days` the grant has no end. `--tier free` removes a manual grant. It refuses to change a Stripe-managed entitlement.
+- `npx tsx scripts/grant-entitlement.ts --email name@example.com --tier plus --days 30` grants Plus for 30 days. `--tier passive` grants the Passive plan (needs migration 139). Without `--days` the grant has no end. `--tier free` removes a manual grant. It refuses to change a Stripe-managed entitlement.
 - `CUSTOMER_NEW_PASSWORD=... npx tsx scripts/reset-customer-password.ts --email name@example.com` sets a new password and revokes that user's sessions.
 
 ## Caching

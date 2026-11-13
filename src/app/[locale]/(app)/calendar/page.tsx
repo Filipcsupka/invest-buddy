@@ -27,7 +27,7 @@ export async function generateMetadata({ params }: LocaleParams): Promise<Metada
 }
 async function CalendarPage({ params }: LocaleParams) {
   const locale = await resolveLocale(params);
-  await assertViewable();
+  await assertViewable("eodhd", "calendar");
   const m = getCalendarMessages(locale);
   const today = new Date().toISOString().slice(0, 10);
   const { earnings, macro } = await upcomingCalendar(today);

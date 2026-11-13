@@ -28,6 +28,7 @@ it("blocks public ETF rendering when EODHD enrichment is stored", async () => {
 it.each([
   ["anonymous", { tier: "free", preview: false }, false],
   ["free", { tier: "free", preview: false, userId: "free", plan: "free" }, false],
+  ["passive", { tier: "free", preview: false, userId: "passive", plan: "passive" }, false],
   ["trial", { tier: "paid", preview: false, userId: "trial", plan: "trial" }, true],
   ["plus", { tier: "paid", preview: false, userId: "plus", plan: "plus" }, true],
   ["owner", { tier: "admin", preview: false, owner: true, userId: "owner" }, true],

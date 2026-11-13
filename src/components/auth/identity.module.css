@@ -65,6 +65,7 @@
   border-color: rgb(155 212 250 / 0.45);
   color: #9bd4fa;
 }
+.plan[data-plan="passive"],
 .plan[data-plan="plus"],
 .plan[data-plan="trial"] {
   border-color: rgb(201 179 255 / 0.45);

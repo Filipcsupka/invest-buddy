@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, expect, it, vi } from "vitest";
 import { FEATURE_TIERS, TIERS, TIER_LIMITS } from "@/config/tiers";
 import { getPricingMessages } from "@/i18n/pricing-messages";
-import { PLUS_PRICE, formatEur, yearlyPerMonth } from "@/app/[locale]/pricing/plans";
+import { PASSIVE_PRICE, PLUS_PRICE, formatEur, yearlyPerMonth } from "@/app/[locale]/pricing/plans";
 
 vi.mock("next/navigation", () => ({ notFound: () => { throw new Error("NEXT_NOT_FOUND"); }, usePathname: () => "/en/pricing" }));
 vi.mock("next/headers", () => ({ headers: async () => { throw new Error("headers() must not be read on the pricing page"); } }));
@@ -94,4 +94,41 @@ it("shows all four lock forms with the printed word Plus and sample stamps, and 
 it("reads no request API, so the page is the same for every visitor", () => {
   const source = readFileSync("src/app/[locale]/(marketing)/pricing/page.tsx", "utf8");
   expect(source).not.toMatch(/next\/headers|searchParams|withPageLog/);
+});
+
+it("formats the Passive price per locale and keeps its yearly arithmetic true", () => {
+  expect(formatEur("en", PASSIVE_PRICE.monthlyEur)).toBe("€5");
+  expect(formatEur("sk", PASSIVE_PRICE.monthlyEur).replace(/\s/g, " ")).toBe("5 €");
+  expect(formatEur("en", PASSIVE_PRICE.yearlyEur)).toBe("€50");
+  expect(Math.round(PASSIVE_PRICE.monthlyEur * 10 * 100) / 100).toBe(PASSIVE_PRICE.yearlyEur);
+  expect(yearlyPerMonth(PASSIVE_PRICE)).toBe(4.17);
+});
+
+it.each([
+  ["en", ["Market overview", "Passive investor", "Active investor"], ["€0", "€5", "€50", "€9.90", "€99"], "about €4.17 a month", "VAT included"],
+  ["sk", ["Prehľad trhu", "Pasívny investor", "Aktívny investor"], ["0 €", "5 €", "50 €", "9,90 €", "99 €"], "približne 4,17 € mesačne", "Vrátane DPH"],
+] as const)("shows the three plans side by side, cheapest first, in %s", async (locale, names, prices, passiveNote, vat) => {
+  const html = await render(locale);
+  const page = text(html);
+  const plans = [...html.matchAll(/<article[^>]*data-plan="(\w+)"/g)].map((match) => match[1]);
+  expect(plans).toEqual(["free", "passive", "plus"]);
+  const cards = text(html.slice(html.indexOf('data-plan="free"'), html.indexOf('id="access"')));
+  let at = -1;
+  for (const name of names) { const next = cards.indexOf(name); expect(next, name).toBeGreaterThan(at); at = next; }
+  for (const price of prices) expect(page, price).toContain(price);
+  expect(page).toContain(passiveNote);
+  expect(page).toContain(vat);
+  for (const id of ["free", "passive", "plus"]) expect(html).toContain(`id="${id}"`);
+  expect(page).not.toMatch(/trader|obchodník/i);
+  expect(page).not.toMatch(banned);
+});
+
+it("tables which areas each plan opens: stocks only in Plus, funds from Passive up", async () => {
+  const html = await render("en");
+  const row = (area: string) => [...(html.match(new RegExp(`<tr data-area="${area}">[\\s\\S]*?</tr>`))?.[0] ?? "").matchAll(/data-access="(\w+)"/g)].map((m) => m[1]);
+  expect(row("method")).toEqual(["yes", "yes", "yes"]);
+  expect(row("macro")).toEqual(["yes", "yes", "yes"]);
+  expect(row("markets")).toEqual(["licence", "yes", "yes"]);
+  expect(row("funds")).toEqual(["no", "yes", "yes"]);
+  expect(row("stocks")).toEqual(["no", "no", "yes"]);
 });
