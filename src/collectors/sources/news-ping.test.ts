@@ -7,6 +7,7 @@ import { RateLimitLockout } from "../http";
 import { collectRss, collectRssFeeds, GLOBE_NEWSWIRE_FEED, PR_NEWSWIRE_FEED } from "../rss";
 import { runCollect } from "../../jobs/collect";
 import { collectGdelt, docUrl, parseArticles } from "./gdelt";
+import { NetworkError } from "./client";
 import { collectGnews, parseNews, searchUrl } from "./gnews";
 import { runPing } from "./common";
 import { formatPings, PING_NAMES, runExtraSources, runPings, SOURCES } from "./registry";
@@ -67,8 +68,8 @@ describe("GDELT DOC 2.0", () => {
   it("a rate-limit lockout from one source does not stop the other sources", async () => {
     const http = stubHttp((call: Call) => { if (call.url.includes("gdelt")) throw new RateLimitLockout("HTTP 429 at https://api.gdeltproject.org/api/v2/doc/doc"); return fx("treasury_rates.json"); });
     const result = await runExtraSources(new MemoryCollectorRepository(), ["gdelt", "treasury"], { since: "2026-09-05", now: new Date("2026-10-05T12:00:00Z"), http, companies: COMPANIES, symbols: ["NVDA"] });
-    expect(result.failures).toEqual([{ ticker: "gdelt", reason: "HTTP 429 at https://api.gdeltproject.org/api/v2/doc/doc" }]);
-    expect(result.succeeded).toBe(1);
+    expect(result.failures).toEqual([{ ticker: "NVDA", reason: "HTTP 429 at https://api.gdeltproject.org/api/v2/doc/doc" }]);
+    expect(result.succeeded).toBe(2);
     expect(result.exitCode).toBe(1);
     expect(result.documentsWritten).toBe(1);
   });
@@ -258,7 +259,7 @@ describe("D31 news hardening", () => {
     expect(output.failures?.[0].reason).toMatch(/time budget of 20 min used, \d+ tickers left/);
   });
 
-  it("GDELT keeps earlier headlines when a later ticker is rate limited, and fails only when nothing was stored", async () => {
+  it("GDELT keeps earlier headlines when a later ticker is rate limited", async () => {
     let n = 0;
     const partial = stubHttp(() => { if (++n === 2) throw new RateLimitLockout("HTTP 429 at https://api.gdeltproject.org/api/v2/doc/doc"); return fx("gdelt_nvidia.json"); });
     const output = await collectGdelt(context(partial, { symbols: ["NVDA", "PLTR", "SQ"], since: "2026-10-01" }));
@@ -266,6 +267,22 @@ describe("D31 news hardening", () => {
     expect(output.failures).toEqual([{ ticker: "PLTR", reason: "HTTP 429 at https://api.gdeltproject.org/api/v2/doc/doc" }]);
     expect(partial.calls).toHaveLength(2);
     const dead = stubHttp(() => { throw new RateLimitLockout("HTTP 429"); });
-    await expect(collectGdelt(context(dead, { symbols: ["NVDA"] }))).rejects.toBeInstanceOf(RateLimitLockout);
+    expect((await collectGdelt(context(dead, { symbols: ["NVDA"] }))).failures).toEqual([{ ticker: "NVDA", reason: "HTTP 429" }]);
+  });
+
+  it("stops after three network failures and records one soft failure", async () => {
+    const http = stubHttp(() => { throw new NetworkError("Network error at https://api.gdeltproject.org/api/v2/doc/doc: ECONNRESET"); });
+    const symbols = ["NVDA", "PLTR", "SQ", "GOOGL"];
+    const output = await collectGdelt(context(http, { symbols }));
+    expect(http.calls).toHaveLength(3);
+    expect(output.failures).toHaveLength(1);
+    expect(output.failures?.[0]).toMatchObject({ ticker: "gdelt", reason: expect.stringContaining("3 consecutive requests") });
+    const repo = new MemoryCollectorRepository();
+    const result = await runCollect(repo, symbols, { sources: ["gdelt"], http, companies: COMPANIES });
+    expect(result).toMatchObject({ exitCode: 0, documentsWritten: 0 });
+    expect(repo.runs[0].failures).toHaveLength(1);
+    const limited = stubHttp(() => { throw new RateLimitLockout("HTTP 429"); });
+    const rateResult = await runCollect(new MemoryCollectorRepository(), ["NVDA"], { sources: ["gdelt"], http: limited, companies: COMPANIES });
+    expect(rateResult).toMatchObject({ exitCode: 0, documentsWritten: 0, failures: [{ ticker: "NVDA", reason: "HTTP 429" }] });
   });
 });

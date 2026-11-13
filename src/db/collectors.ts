@@ -33,7 +33,7 @@ export interface SourceState {
   apiRequestsSince(source: string, since: string): Promise<number>;
 }
 export interface CollectorRepository extends SourceState {
-  cachedEdgarDocuments?(cik: number, accessions: string[]): Promise<CachedEdgarDocument[]>;
+  cachedEdgarDocuments?(cik: number, accessions: string[], since?: string, owner?: string): Promise<CachedEdgarDocument[]>;
   upsertDocument(doc: CollectedDocument): Promise<{ id: number; written: boolean }>;
   upsertInsiderTransactions?(accession: string, ticker: string, filedAt: string, rows: Form4Transaction[]): Promise<void>;
   markSecInsiderChecked?(ticker: string, checkedAt: string): Promise<void>;
@@ -58,9 +58,9 @@ export class MemoryCollectorRepository implements CollectorRepository {
   readonly holderEvents = new Map<string, HolderEvent>();
   readonly macroObservations: MacroObservation[] = [];
   readonly epsHistory: EpsHistoryRow[] = [];
-  async cachedEdgarDocuments(cik: number, accessions: string[]) {
+  async cachedEdgarDocuments(cik: number, accessions: string[], since = "1970-01-01", owner?: string) {
     const wanted = new Set(accessions);
-    return [...this.documents.values()].filter((doc) => doc.source === "edgar" && doc.url.startsWith(`https://www.sec.gov/Archives/edgar/data/${cik}/`) && wanted.has(String(doc.meta.accession))).map((doc) => ({ ...doc, storedId: doc.id, storedSymbol: doc.symbol }));
+    return [...this.documents.values()].filter((doc) => doc.source === "edgar" && doc.publishedAt >= since && doc.url.startsWith(`https://www.sec.gov/Archives/edgar/data/${cik}/`) && wanted.has(String(doc.meta.accession))).map((doc) => ({ ...doc, body: /^8-K(?:\/A)?(?: EX-99\.\d+)?$/i.test(doc.docType) || (owner && doc.symbol !== owner) ? doc.body : "", storedId: doc.id, storedSymbol: doc.symbol }));
   }
   async upsertEpsHistory(batch: EpsHistoryBatch) { return insertMemoryEpsHistory(this.epsHistory, batch); }
   async upsertMacroObservations(rows: MacroObservation[]) { return insertMemoryMacroObservations(this.macroObservations, rows); }
@@ -146,12 +146,15 @@ export async function loadInsider(pool: pg.Pool, symbol: string, asOf: string, m
 }
 export class PostgresCollectorRepository implements CollectorRepository {
   constructor(private readonly pool: pg.Pool) {}
-  async cachedEdgarDocuments(cik: number, accessions: string[]) {
+  async cachedEdgarDocuments(cik: number, accessions: string[], since = "1970-01-01", owner?: string) {
     if (!accessions.length) return [];
     const result = await this.pool.query<{ id: string; source: string; symbol: string | null; doc_type: string; url: string; published_at: Date; body: string; meta: Record<string, unknown>; content_hash: string; source_id: string }>(
-      `SELECT id,source,symbol,doc_type,url,published_at,body,meta,content_hash,source_id FROM source_documents
-       WHERE source='edgar' AND url LIKE $1 AND meta->>'accession'=ANY($2::text[])`,
-      [`https://www.sec.gov/Archives/edgar/data/${cik}/%`, accessions]);
+      `SELECT id,source,symbol,doc_type,url,published_at,
+         CASE WHEN doc_type ~* '^8-K(/A)?( EX-99[.][0-9]+)?$' OR ($4::text IS NOT NULL AND symbol IS DISTINCT FROM $4) THEN body ELSE '' END AS body,
+         meta,content_hash,source_id FROM source_documents
+       WHERE source='edgar' AND url LIKE $1 AND meta->>'accession'=ANY($2::text[])
+         AND published_at >= $3::timestamptz`,
+      [`https://www.sec.gov/Archives/edgar/data/${cik}/%`, accessions, since, owner ?? null]);
     return result.rows.map((row) => ({ source: row.source, symbol: row.symbol, docType: row.doc_type, url: row.url,
       publishedAt: new Date(row.published_at).toISOString(), body: row.body, meta: row.meta, contentHash: row.content_hash, sourceId: row.source_id, storedId: Number(row.id), storedSymbol: row.symbol }));
   }

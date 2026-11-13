@@ -15,14 +15,31 @@ describe("job lifecycle logging", () => {
     expect(end.durationMs).toBeGreaterThanOrEqual(0);
   });
 
-  it("records a failed end without an error message", async () => {
+  it("records a failed end with a redacted one-line message", async () => {
     const lines: string[] = [];
     vi.spyOn(process.stdout, "write").mockImplementation(() => true);
     vi.spyOn(process.stderr, "write").mockImplementation((line) => { lines.push(String(line)); return true; });
-    await runLoggedJob("collect", async () => { throw new Error("secret-token"); });
-    expect(JSON.parse(lines[0])).toMatchObject({ event: "job_end", job: "collect", status: "failed", failures: 1 });
+    await runLoggedJob("collect", async () => { throw new Error("Flex token=secret-token\nplease retry"); });
+    expect(JSON.parse(lines[0])).toMatchObject({ event: "job_end", job: "collect", status: "failed", failures: 1, message: "Flex token=[redacted] please retry" });
     expect(lines.join("")).not.toContain("secret-token");
     expect(process.exitCode).toBe(1);
+  });
+
+  it("records a partial end when a deadline signal arrives", async () => {
+    const controller = new AbortController();
+    const lines: string[] = [];
+    vi.spyOn(process.stdout, "write").mockImplementation((line) => { lines.push(String(line)); return true; });
+    const { promise, resolve } = Promise.withResolvers<{ failures: number }>();
+    const terminate = vi.fn();
+    const finishes: Record<string, unknown>[] = [];
+    const store = { start: async () => {}, finish: async (run: Record<string, unknown>) => { finishes.push(run); }, close: async () => {} };
+    const running = runLoggedJob("collect", () => promise, { store: store as unknown as import("./job-runs").JobRunStore, signal: controller.signal, onSignal: async () => ({ succeeded: 4, failures: 1 }), terminate });
+    controller.abort();
+    await vi.waitFor(() => expect(terminate).toHaveBeenCalledOnce());
+    resolve({ failures: 0 });
+    await running;
+    expect(lines.map((line) => JSON.parse(line)).filter((line) => line.event === "job_end")).toEqual([expect.objectContaining({ status: "partial", counts: { succeeded: 4, failures: 1 } })]);
+    expect(finishes).toEqual([expect.objectContaining({ status: "partial", counts: { succeeded: 4, failures: 1 } })]);
   });
 });
 

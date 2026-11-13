@@ -23,6 +23,17 @@ describe("Flex portfolio", () => {
     expect(urls[1]).toContain("GetStatement");
   });
 
+  it("keeps polling for roughly four minutes before giving up", async () => {
+    const waits: number[] = [];
+    let calls = 0;
+    const transport = async () => { calls++; return calls === 1
+      ? '<FlexStatementResponse><Status>Success</Status><ReferenceCode>REF</ReferenceCode></FlexStatementResponse>'
+      : '<FlexStatementResponse><ErrorCode>1019</ErrorCode></FlexStatementResponse>'; };
+    await expect(new FlexService("SECRET", "QUERY", transport, async (ms) => { waits.push(ms); }).statement()).rejects.toThrow("Flex statement was not ready");
+    expect(calls).toBe(16);
+    expect(waits).toEqual(Array(15).fill(15_000));
+  });
+
   it("publishes only weights, rebased NAV, TWR and benchmark", async () => {
     const xml = await readFile(fixture, "utf8");
     const provider = { bars: async () => [

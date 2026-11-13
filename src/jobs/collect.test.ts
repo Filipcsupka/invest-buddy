@@ -131,6 +131,15 @@ describe("collectors", () => {
     expect(documentRetentionDays("press release")).toBe(90);
   });
 
+  it("loads a cached 10-Q body only when the stored owner must change", async () => {
+    const repo = new MemoryCollectorRepository();
+    const accession = "0000001234-26-000001";
+    await repo.upsertDocument({ source: "edgar", symbol: "GOOG", docType: "10-Q", url: "https://www.sec.gov/Archives/edgar/data/1234/filing.htm", publishedAt: "2026-10-01T00:00:00Z", body: "full filing", meta: { accession }, contentHash: "hash" });
+    expect((await repo.cachedEdgarDocuments(1234, [accession], "2026-09-01", "GOOG"))[0].body).toBe("");
+    expect((await repo.cachedEdgarDocuments(1234, [accession], "2026-09-01", "GOOGL"))[0].body).toBe("full filing");
+    expect(await repo.cachedEdgarDocuments(1234, [accession], "2026-10-02", "GOOG")).toEqual([]);
+  });
+
   it("matches the RSS item and is idempotent on re-run", async () => {
     const parsed = parseRss(await fixture("globenewswire.xml"), [{ symbol: "NVDA", name: "NVIDIA" }], "2026-09-01");
     expect(parsed).toHaveLength(1);
@@ -205,6 +214,32 @@ describe("collectors", () => {
     expect(repo.documents.size).toBe(1);
     expect([...repo.documents.values()][0].symbol).toBe("GOOGL");
     for (const symbol of ["GOOG", "GOOGL"]) expect(repo.facts.get(`${symbol}:catalyst_8k:2026-10-05`)?.value).toMatchObject({ present: false, checked: 1 });
+  });
+
+  it("checks oldest CIK first and keeps only one CIK in the filing cache", async () => {
+    const repo = new MemoryCollectorRepository();
+    const cacheKeys: number[][] = [];
+    const fetched: string[] = [];
+    let snapshot: (() => Promise<Record<string, number>>) | undefined;
+    let captured = false;
+    const fetch = async (url: string) => {
+      fetched.push(url);
+      if (url.endsWith("company_tickers.json")) return JSON.stringify({ a: { ticker: "GOOG", cik_str: 1652044 }, b: { ticker: "GOOGL", cik_str: 1652044 }, c: { ticker: "NVDA", cik_str: 1045810 } });
+      if (url.includes("/1652044/")) return url.endsWith("index.json") ? JSON.stringify({ directory: { item: [{ name: "form8k.htm", type: "8-K" }] } }) : "Item 8.01 Other Events. Routine notice.";
+      if (url.includes("CIK0001652044.json")) {
+        if (!captured) { captured = true; expect(await snapshot?.()).toMatchObject({ succeeded: 1, requested: 3 }); }
+        return JSON.stringify({ filings: { recent: { form: ["8-K"], accessionNumber: ["0001652044-26-000001"], primaryDocument: ["form8k.htm"], filingDate: ["2026-10-01"], items: ["8.01"] } } });
+      }
+      return get(url);
+    };
+    const result = await runCollect(repo, ["GOOG", "NVDA", "GOOGL"], { sources: ["edgar"], since: "2026-09-01", get: fetch,
+      checkedAt: new Map([["GOOG", "2026-10-02"], ["GOOGL", "2026-10-02"], ["NVDA", "2026-09-01"]]),
+      onCacheChange: (keys) => cacheKeys.push(keys), onRunReady: (current) => { snapshot = current; }, now: () => new Date("2026-10-05T12:00:00Z") });
+    expect(result.succeeded).toBe(3);
+    expect(repo.runs[0]).toMatchObject({ succeeded: 1, stoppedReason: "SIGTERM: collection deadline reached" });
+    expect(cacheKeys).toEqual([[1045810], [1652044]]);
+    expect(fetched.filter((url) => url.endsWith("/form8k.htm") && url.includes("/1652044/"))).toHaveLength(1);
+    for (const symbol of ["GOOG", "GOOGL"]) expect(repo.facts.get(`${symbol}:catalyst_8k:2026-10-05`)).toBeDefined();
   });
 
   it("fetches an exhibit missing from a cached 8-K", async () => {

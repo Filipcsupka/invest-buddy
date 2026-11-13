@@ -12,6 +12,16 @@ async function inRollback(fn: (pool: pg.Pool) => Promise<void>) {
 afterEach(() => vi.unstubAllEnvs());
 
 describe("collector tables (Postgres)", () => {
+  it("selects cached filing bodies only for catalyst forms within the requested window", async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [] });
+    const repo = new PostgresCollectorRepository({ query } as unknown as pg.Pool);
+    await repo.cachedEdgarDocuments(123, ["0000123-26-000001"], "2026-09-01", "NVDA");
+    expect(query).toHaveBeenCalledOnce();
+    const [sql, params] = query.mock.calls[0];
+    expect(sql).toContain("CASE WHEN doc_type ~* '^8-K(/A)?( EX-99[.][0-9]+)?$' OR ($4::text IS NOT NULL AND symbol IS DISTINCT FROM $4) THEN body ELSE '' END");
+    expect(sql).toContain("published_at >= $3::timestamptz");
+    expect(params).toEqual(["https://www.sec.gov/Archives/edgar/data/123/%", ["0000123-26-000001"], "2026-09-01", "NVDA"]);
+  });
   it.skipIf(!process.env.TEST_DATABASE_URL)("uses AV history when an EODHD fact masks AV and is excluded by the switch or PIT", () => inRollback(async (pool) => {
     const repo = new PostgresCollectorRepository(pool);
     const fact = { symbol: "NVDA", key: EPS_FACT_KEY, asOf: "2026-09-01", value: { reportedDate: "2026-09-01", surprisePercent: -5, source: "eodhd" }, documentIds: [], sourceId: "eodhd" };

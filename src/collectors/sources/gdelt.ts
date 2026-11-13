@@ -1,6 +1,6 @@
 import type { CollectedDocument } from "../types";
 import { RateLimitLockout } from "../http";
-import { defaultHttp, type SourceHttp } from "./client";
+import { defaultHttp, NetworkError, type SourceHttp } from "./client";
 import { LICENSES, newsName, parseJson, PING_REQUEST, runPing, sourceDocument, type PingResult, type SourceContext, type SourceOutput } from "./common";
 
 export const MAX_RECORDS = 15;
@@ -35,6 +35,8 @@ export async function collectGdelt(ctx: SourceContext, clock: () => number = Dat
   const byUrl = new Map<string, CollectedDocument>();
   const failures: { ticker: string; reason: string }[] = [];
   let skippedInsecure = 0;
+  let consecutiveNetworkFailures = 0;
+  let lastNetworkError = "";
   const started = clock();
   const companies = ctx.companies.filter((item) => ctx.symbols.includes(item.symbol));
   for (const [index, company] of companies.entries()) {
@@ -42,11 +44,22 @@ export async function collectGdelt(ctx: SourceContext, clock: () => number = Dat
     let parsed: ReturnType<typeof parseArticles>;
     try { parsed = parseArticles(await ctx.http.get(docUrl(`"${newsName(company)}" sourcelang:english`), GDELT_REQUEST)); }
     catch (error) {
-      if (error instanceof RateLimitLockout && !byUrl.size && !failures.length) throw error;
+      if (error instanceof NetworkError) {
+        consecutiveNetworkFailures++;
+        lastNetworkError = error.message;
+        if (consecutiveNetworkFailures === 3) {
+          failures.push({ ticker: "gdelt", reason: `Network error after 3 consecutive requests: ${error.message}` });
+          consecutiveNetworkFailures = 0;
+          break;
+        }
+        continue;
+      }
+      consecutiveNetworkFailures = 0;
       failures.push({ ticker: company.symbol, reason: error instanceof Error ? error.message : String(error) });
       if (error instanceof RateLimitLockout) break;
       continue;
     }
+    consecutiveNetworkFailures = 0;
     skippedInsecure += parsed.skippedInsecure;
     for (const article of parsed.articles) {
       if (article.published.slice(0, 10) < ctx.since) continue;
@@ -56,6 +69,7 @@ export async function collectGdelt(ctx: SourceContext, clock: () => number = Dat
         meta: { headline: article.headline, outlet: article.domain, symbols: [...symbols] } }, LICENSES.gdelt));
     }
   }
+  if (consecutiveNetworkFailures) failures.push({ ticker: "gdelt", reason: `Network error after ${consecutiveNetworkFailures} consecutive requests: ${lastNetworkError}` });
   if (skippedInsecure) process.stderr.write(`GDELT: skipped ${skippedInsecure} non-HTTPS article links\n`);
   return { documents: [...byUrl.values()], facts: [], ...(failures.length ? { failures } : {}) };
 }

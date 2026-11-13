@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { RateLimitLockout } from "../http";
-import { createHttp, SOURCE_HOSTS, retryAfterMs, type HttpDeps } from "./client";
+import { createHttp, NetworkError, SOURCE_HOSTS, retryAfterMs, type HttpDeps } from "./client";
 
 function harness(responses: (url: string, init: RequestInit, n: number) => Response, deps: HttpDeps = {}) {
   let clock = 1_000_000;
@@ -45,6 +45,18 @@ describe("source http client", () => {
     expect(waits).toContain(15_000);
     const slow = createHttp({ fetcher: async () => { throw Object.assign(new Error("The operation was aborted due to timeout"), { name: "TimeoutError" }); }, wait: async () => {}, secSlot: async () => {}, env: {} });
     await expect(slow.get("https://api.fda.gov/x?k=1", { timeoutMs: 8000 })).rejects.toThrow("Timed out after 8000 ms at https://api.fda.gov/x");
+  });
+
+  it("retries a failed connection once and reports its cause without request parameters", async () => {
+    const failed = () => new TypeError("fetch failed", { cause: Object.assign(new Error("connect refused"), { code: "ECONNREFUSED" }) });
+    const recovered = harness((_url, _init, n) => { if (n === 1) throw failed(); return new Response("ok"); });
+    expect(await recovered.http.get("https://api.gdeltproject.org/x?token=SECRET")).toBe("ok");
+    expect(recovered.waits).toContain(15_000);
+    const dead = harness(() => { throw failed(); });
+    await expect(dead.http.get("https://api.gdeltproject.org/x?token=SECRET")).rejects.toMatchObject({ name: "NetworkError", message: "Network error at https://api.gdeltproject.org/x: ECONNREFUSED: connect refused" });
+    expect(dead.requests).toHaveLength(2);
+    expect(dead.waits).toContain(15_000);
+    expect(NetworkError.name).toBe("NetworkError");
   });
 
   it("fails fast with one attempt (used by pings)", async () => {
