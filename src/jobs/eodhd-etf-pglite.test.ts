@@ -61,7 +61,9 @@ describe("eodhd-etf against the migrated schema (PGlite)", () => {
       expect((await pool.query("SELECT count(*)::int AS n FROM etf_fund_stats WHERE display_allowed")).rows[0]).toEqual({ n: 0 });
 
       const spyView = await etfDetailView("NYSEARCA:SPY", {}, pool);
-      expect(spyView.stats).toMatchObject({ vendorSymbol: "SPY.US", yieldPct: 1, holdingsCount: 501, holdingsListed: 12, totalAssetsCurrency: null });
+      expect(spyView.stats).toMatchObject({ vendorSymbol: "SPY.US", yieldPct: 1, holdingsCount: 501, holdingsListed: 12, totalAssetsCurrency: "USD" });
+      const captured = await pool.query("SELECT category,open_figi,index_name,total_assets_currency,payload->'General'->>'Category' AS raw_category FROM etf_fund_stats WHERE listing_key='NYSEARCA:SPY'");
+      expect(captured.rows[0]).toMatchObject({ category: "US Equity", open_figi: "BBG000BDTBL9", index_name: "S&P 500 Index", total_assets_currency: "USD", raw_category: "US Equity" });
       expect(spyView.holdings[0]).toMatchObject({ position: 1, symbol: "NVDA", weightPct: 7.8879 });
       expect(spyView.dividends).toHaveLength(3);
       expect(spyView.bars).toHaveLength(3);

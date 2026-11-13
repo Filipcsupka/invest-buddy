@@ -14,9 +14,11 @@ test("maps recorded ETF fields and validates the ingest payload", () => {
   assert.equal(row.terPct, 0.03);
   assert.equal(row.aumUsdM, 1800000);
   assert.equal(row.assetClass, "equity");
-  assert.equal(row.region, null);
+  assert.equal(row.region, "North America");
   assert.equal(row.holdingsCount, 3600);
   assert.equal(row.ucits, null);
+  assert.equal(row.ucitsHint, null);
+  assert.equal(row.terGap, null);
   assert.deepEqual(validateBatch({ items: [row] }, [us]), []);
 });
 
@@ -72,10 +74,25 @@ test("one invalid vendor identity does not discard valid rows", async () => {
 test("ambiguous or conflicting TER units remain incomplete", () => {
   const ambiguous = mapFundamentals(us, "VTI.US", { ...fixture, ETF_Data: { ...fixture.ETF_Data, NetExpenseRatio: "0.025" } });
   assert.equal(ambiguous.terPct, null);
+  assert.equal(ambiguous.terGap, "ter_ambiguous");
   const conflicting = mapFundamentals(us, "VTI.US", { ...fixture, ETF_Data: { ...fixture.ETF_Data, Ongoing_Charge: "0.2" } });
   assert.equal(conflicting.terPct, null);
   const tinyOngoing = mapFundamentals(us, "VTI.US", { ...fixture, ETF_Data: { ...fixture.ETF_Data, NetExpenseRatio: null, Ongoing_Charge: "0.003" } });
   assert.equal(tinyOngoing.terPct, null);
+});
+
+test("category, region and payout labels map without treating UCITS hints as confirmation", () => {
+  const eu = { listingKey: "IE00TEST0001", isin: "IE00TEST0001", name: "Sample UCITS ETF", exchange: "XETR" };
+  for (const [category, expected] of [["Global Equity", "equity"], ["Government Bond", "bond"], ["Gold Commodity", "commodity"], ["Balanced Multi Asset", "multi_asset"], ["Money Market", "money_market"], ["Specialty", "other"]]) {
+    const mapped = mapFundamentals(eu, "TEST.XETRA", { General: { Category: category }, ETF_Data: { World_Regions: { Europe: { "Equity_%": 55 }, Asia: { "Equity_%": 45 } }, Dividend_Paying_Frequency: "Vierteljährlich" } });
+    assert.equal(mapped.assetClass, expected);
+    assert.equal(mapped.region, "global");
+    assert.equal(mapped.distribution, "dist");
+    assert.equal(mapped.ucits, null);
+    assert.equal(mapped.ucitsHint, true);
+  }
+  assert.equal(mapFundamentals(eu, "TEST.XETRA", { ETF_Data: { Dividend_Paying_Frequency: "Thesaurierend" } }).distribution, "acc");
+  assert.equal(mapFundamentals(eu, "TEST.XETRA", { ETF_Data: { Dividends: [{ amount: 1 }] } }).distribution, "dist");
 });
 
 test("a lone NetExpenseRatio above 0.1 is read as a percent (live 2026-11-06 samples)", () => {

@@ -31,12 +31,18 @@ export interface ParsedHolding { position: number; key: string; symbol: string |
 export interface ParsedExposure { kind: ExposureKind; label: string; weightPct: number }
 export interface ParsedEtfData {
   isin: string | null; tradingCurrency: string | null; type: string | null;
+  category: string | null; openFigi: string | null; indexName: string | null;
+  averageMktCapMil: number | null; annualHoldingsTurnover: number | null;
+  totalAssetsCurrency: string; terAmbiguous: boolean;
+  effectiveDuration: number | null; modifiedDuration: number | null; yieldToMaturity: number | null;
+  coupon: number | null; effectiveMaturity: number | null;
+  week52High: number | null; week52Low: number | null; beta: number | null;
   totalAssets: number | null; yieldPct: number | null; dividendFrequency: string | null; inceptionDate: string | null;
   ongoingChargePct: number | null; netExpenseRatioPct: number | null;
   retYtdPct: number | null; ret1yPct: number | null; ret3yPct: number | null; ret5yPct: number | null; ret10yPct: number | null;
   vol1yPct: number | null; vol3yPct: number | null; sharpe3y: number | null;
   holdingsCount: number | null; holdingsListed: number; holdings: ParsedHolding[]; exposure: ParsedExposure[];
-  /** ETF_Data without the holdings maps, which live in etf_holdings. */
+  /** Complete response, including General, Technicals and all holdings. */
   payload: Raw;
 }
 
@@ -77,6 +83,11 @@ function expenseRatioPct(value: unknown): number | null {
   const ratio = num(value);
   return ratio !== null && ratio >= 0 && ratio < 0.01 ? ratio * 100 : null;
 }
+const fundPercent = (value: unknown): number | null => num(obj(value)?.["Fund_%"]);
+const validCurrency = (value: unknown): string | null => {
+  const currency = text(value)?.toUpperCase();
+  return currency && /^[A-Z]{3}$/.test(currency) ? currency : null;
+};
 
 /** Maps a `General,ETF_Data` fundamentals response. Missing vendor fields stay null and never become zero. */
 export function parseEtfData(response: unknown): ParsedEtfData | null {
@@ -84,15 +95,30 @@ export function parseEtfData(response: unknown): ParsedEtfData | null {
   const etf = obj(root?.ETF_Data);
   if (!root || !etf) return null;
   const general = obj(root.General) ?? {};
+  const technicals = obj(root.Technicals) ?? {};
   const performance = obj(etf.Performance) ?? {};
+  const fixedIncome = obj(etf.Fixed_Income) ?? {};
   const { rows, listed } = holdings(etf);
   const count = num(etf.Holdings_Count);
   const ongoing = num(etf.Ongoing_Charge);
-  const payload = Object.fromEntries(Object.entries(etf).filter(([key]) => key !== "Holdings" && key !== "Top_10_Holdings"));
+  const payload = root;
   const isin = [etf.ISIN, general.ISIN].map(text).find((value) => value && /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(value)) ?? null;
-  const currency = text(general.CurrencyCode);
+  const currency = validCurrency(general.CurrencyCode);
+  // TotalAssets is USD only for a USD listing on the US venue. Other listings
+  // remain unknown unless the response explicitly names the asset currency.
+  const explicitAssetsCurrency = validCurrency(etf.TotalAssetsCurrency) ?? validCurrency(etf.Total_Assets_Currency);
+  const assetsCurrency = explicitAssetsCurrency ?? (currency === "USD" && text(general.Exchange)?.toUpperCase() === "US" ? "USD" : "unknown");
+  const rawRatio = num(etf.NetExpenseRatio);
   return {
-    isin, tradingCurrency: currency && /^[A-Z]{3}$/.test(currency) ? currency : null, type: text(general.Type),
+    isin, tradingCurrency: currency, type: text(general.Type),
+    category: text(general.Category), openFigi: text(general.OpenFigi), indexName: text(etf.Index_Name),
+    averageMktCapMil: num(etf.Average_Mkt_Cap_Mil), annualHoldingsTurnover: num(etf.AnnualHoldingsTurnover),
+    totalAssetsCurrency: assetsCurrency, terAmbiguous: rawRatio !== null && rawRatio >= 0.01 && rawRatio <= 0.025,
+    effectiveDuration: fundPercent(fixedIncome.EffectiveDuration), modifiedDuration: fundPercent(fixedIncome.ModifiedDuration),
+    yieldToMaturity: fundPercent(fixedIncome.YieldToMaturity), coupon: fundPercent(fixedIncome.Coupon),
+    effectiveMaturity: fundPercent(fixedIncome.EffectiveMaturity),
+    week52High: num(technicals["52WeekHigh"]), week52Low: num(technicals["52WeekLow"]),
+    beta: (() => { const value = num(technicals.Beta); return value === 0 ? null : value; })(),
     totalAssets: (() => { const value = num(etf.TotalAssets); return value !== null && value > 0 ? value : null; })(),
     // Yield is a percent in the SPY.US response (1 for about 1%). IWDA.AS returned null.
     yieldPct: (() => { const value = num(etf.Yield); return value !== null && value >= 0 && value <= 100 ? value : null; })(),
@@ -112,28 +138,37 @@ export function parseEtfData(response: unknown): ParsedEtfData | null {
   };
 }
 
-export interface StoreEtfDetailInput { listingKey: string; vendorSymbol: string; asOf: string; origin: "job" | "enrich"; data: ParsedEtfData }
+export interface StoreEtfDetailInput { listingKey: string; vendorSymbol: string; asOf: string; origin: "job" | "enrich"; data: ParsedEtfData; ucitsHint?: boolean | null }
 
 /** Writes one listing's stats row and replaces its holdings and exposure snapshot in one transaction. */
 export async function storeEtfDetail(db: Pick<pg.Pool, "connect">, input: StoreEtfDetailInput): Promise<{ holdings: number; exposure: number }> {
-  const { listingKey, vendorSymbol, asOf, origin, data } = input;
+  const { listingKey, vendorSymbol, asOf, origin, data, ucitsHint = null } = input;
+  const assetsCurrency = data.totalAssetsCurrency !== "unknown" ? data.totalAssetsCurrency : vendorSymbol.endsWith(".US") && data.tradingCurrency === "USD" ? "USD" : "unknown";
   const display = canDisplay("eodhd");
   const client = await db.connect();
   try {
     await client.query("BEGIN");
-    await client.query(`INSERT INTO etf_fund_stats (listing_key,as_of,vendor_symbol,origin,isin,trading_currency,total_assets,yield_pct,dividend_frequency,
+    await client.query(`INSERT INTO etf_fund_stats (listing_key,as_of,vendor_symbol,origin,isin,trading_currency,total_assets,total_assets_currency,yield_pct,dividend_frequency,
       inception_date,ongoing_charge_pct,net_expense_ratio_pct,ret_ytd_pct,ret_1y_pct,ret_3y_pct,ret_5y_pct,ret_10y_pct,vol_1y_pct,vol_3y_pct,sharpe_3y,
-      holdings_count,holdings_listed,payload,fetched_at,source_id,display_allowed)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,now(),'eodhd',$24)
+      holdings_count,holdings_listed,payload,category,open_figi,average_mkt_cap_mil,annual_holdings_turnover,index_name,
+      effective_duration,modified_duration,yield_to_maturity,coupon,effective_maturity,week_52_high,week_52_low,beta,ter_ambiguous,ucits_hint,fetched_at,source_id,display_allowed)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,now(),'eodhd',$40)
       ON CONFLICT (listing_key,as_of) DO UPDATE SET vendor_symbol=EXCLUDED.vendor_symbol,origin=EXCLUDED.origin,isin=EXCLUDED.isin,
-      trading_currency=EXCLUDED.trading_currency,total_assets=EXCLUDED.total_assets,yield_pct=EXCLUDED.yield_pct,dividend_frequency=EXCLUDED.dividend_frequency,
+      trading_currency=EXCLUDED.trading_currency,total_assets=EXCLUDED.total_assets,total_assets_currency=EXCLUDED.total_assets_currency,yield_pct=EXCLUDED.yield_pct,dividend_frequency=EXCLUDED.dividend_frequency,
       inception_date=EXCLUDED.inception_date,ongoing_charge_pct=EXCLUDED.ongoing_charge_pct,net_expense_ratio_pct=EXCLUDED.net_expense_ratio_pct,
       ret_ytd_pct=EXCLUDED.ret_ytd_pct,ret_1y_pct=EXCLUDED.ret_1y_pct,ret_3y_pct=EXCLUDED.ret_3y_pct,ret_5y_pct=EXCLUDED.ret_5y_pct,ret_10y_pct=EXCLUDED.ret_10y_pct,
       vol_1y_pct=EXCLUDED.vol_1y_pct,vol_3y_pct=EXCLUDED.vol_3y_pct,sharpe_3y=EXCLUDED.sharpe_3y,holdings_count=EXCLUDED.holdings_count,
-      holdings_listed=EXCLUDED.holdings_listed,payload=EXCLUDED.payload,fetched_at=now(),display_allowed=EXCLUDED.display_allowed`,
-    [listingKey, asOf, vendorSymbol, origin, data.isin, data.tradingCurrency, data.totalAssets, data.yieldPct, data.dividendFrequency, data.inceptionDate,
+      holdings_listed=EXCLUDED.holdings_listed,payload=EXCLUDED.payload,category=EXCLUDED.category,open_figi=EXCLUDED.open_figi,
+      average_mkt_cap_mil=EXCLUDED.average_mkt_cap_mil,annual_holdings_turnover=EXCLUDED.annual_holdings_turnover,index_name=EXCLUDED.index_name,
+      effective_duration=EXCLUDED.effective_duration,modified_duration=EXCLUDED.modified_duration,yield_to_maturity=EXCLUDED.yield_to_maturity,
+      coupon=EXCLUDED.coupon,effective_maturity=EXCLUDED.effective_maturity,week_52_high=EXCLUDED.week_52_high,week_52_low=EXCLUDED.week_52_low,
+      beta=EXCLUDED.beta,ter_ambiguous=EXCLUDED.ter_ambiguous,ucits_hint=EXCLUDED.ucits_hint,fetched_at=now(),display_allowed=EXCLUDED.display_allowed`,
+    [listingKey, asOf, vendorSymbol, origin, data.isin, data.tradingCurrency, data.totalAssets, assetsCurrency, data.yieldPct, data.dividendFrequency, data.inceptionDate,
       data.ongoingChargePct, data.netExpenseRatioPct, data.retYtdPct, data.ret1yPct, data.ret3yPct, data.ret5yPct, data.ret10yPct,
-      data.vol1yPct, data.vol3yPct, data.sharpe3y, data.holdingsCount, data.holdingsListed, JSON.stringify(data.payload), display]);
+      data.vol1yPct, data.vol3yPct, data.sharpe3y, data.holdingsCount, data.holdingsListed, JSON.stringify(data.payload),
+      data.category, data.openFigi, data.averageMktCapMil, data.annualHoldingsTurnover, data.indexName,
+      data.effectiveDuration, data.modifiedDuration, data.yieldToMaturity, data.coupon, data.effectiveMaturity,
+      data.week52High, data.week52Low, data.beta, data.terAmbiguous, ucitsHint, display]);
     await client.query("DELETE FROM etf_holdings WHERE listing_key=$1", [listingKey]);
     for (const row of data.holdings) await client.query(`INSERT INTO etf_holdings (listing_key,as_of,position,holding_key,holding_symbol,holding_exchange,name,weight_pct,sector,industry,country,region,source_id,display_allowed)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'eodhd',$13)`,

@@ -28,25 +28,20 @@ export function validateBatch(output, input) {
   for (const key of expected) if (!seen.has(key)) errors.push(`missing listing ${key}`);
   return errors;
 }
-/** Holdings sent per fund; matches MAX_STORED_HOLDINGS in src/db/etf-detail.ts. */
+/** Indexed holdings cap in src/db/etf-detail.ts; the raw payload retains all rows. */
 export const DETAIL_HOLDINGS = 2000;
-/** The General and ETF_Data blocks the enrich request already paid for, with holdings trimmed to the largest weights. */
+/** Preserve the paid response. The detail store separately caps its indexed holdings rows. */
 export function detailPayload(data) {
   const etf = data?.ETF_Data;
   if (!etf || typeof etf !== "object") return null;
-  const holdings = etf.Holdings && typeof etf.Holdings === "object" ? Object.entries(etf.Holdings) : [];
-  const weight = ([, value]) => { const n = Number(value?.["Assets_%"]); return Number.isFinite(n) ? n : -1; };
-  const trimmed = holdings.length > DETAIL_HOLDINGS ? Object.fromEntries(holdings.sort((a, b) => weight(b) - weight(a)).slice(0, DETAIL_HOLDINGS)) : etf.Holdings;
-  const general = data.General ?? {};
-  return { General: { Type: general.Type ?? null, ISIN: general.ISIN ?? null, CurrencyCode: general.CurrencyCode ?? null }, ETF_Data: { ...etf, ...(trimmed ? { Holdings: trimmed } : {}) } };
+  return data;
 }
 /** Stores each fetched fund's ETF_Data through the detail ingest route. A failure is logged and never fails the catalog batch. */
 export async function postDetails(batch, cache, { base, token, request = fetch, log = console.log }) {
-  let posted = 0; const sent = new Set();
+  let posted = 0;
   for (const row of batch) {
     const symbol = vendorSymbol(row); const data = detailPayload(symbol ? cache.get(symbol) : null);
-    if (!symbol || !data || sent.has(symbol)) continue;
-    sent.add(symbol);
+    if (!symbol || !data) continue;
     try {
       const response = await request(`${base}/api/ingest/etf-detail`, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ listingKey: row.listingKey, vendorSymbol: symbol, data }), signal: AbortSignal.timeout(60_000) });
       if (response.ok) posted++; else log(`etf-enrich ${row.listingKey}: detail ingest HTTP ${response.status}`);

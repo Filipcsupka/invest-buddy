@@ -15,8 +15,9 @@ describe("parseEtfData (live responses captured 2026-11-06, trimmed)", () => {
     expect(data.holdings[0]).toMatchObject({ position: 1, key: "NVDA.US", symbol: "NVDA", exchange: "US", weightPct: 7.8879, sector: "Technology" });
     expect(data.exposure.filter((row) => row.kind === "sector")).toHaveLength(11);
     expect(data.exposure.find((row) => row.kind === "asset" && row.label === "Stock US")?.weightPct).toBe(103.7016);
-    expect(data.payload).not.toHaveProperty("Holdings");
-    expect(data.payload).not.toHaveProperty("Top_10_Holdings");
+    expect(data).toMatchObject({ category: "US Equity", openFigi: "BBG000BDTBL9", indexName: "S&P 500 Index", totalAssetsCurrency: "unknown" });
+    expect(data.payload).toHaveProperty("ETF_Data.Holdings");
+    expect(data.payload).toHaveProperty("General.Category", "US Equity");
   });
 
   it("keeps IWDA.AS gaps as null instead of zero", () => {
@@ -44,6 +45,18 @@ describe("parseEtfData (live responses captured 2026-11-06, trimmed)", () => {
     expect(data.exposure).toEqual([]);
     expect(data.yieldPct).toBeNull();
     expect(data.totalAssets).toBeNull();
+    expect(Object.keys((data.payload.ETF_Data as Record<string, unknown>).Holdings as object)).toHaveLength(MAX_STORED_HOLDINGS + 5);
+  });
+
+  it("captures bond facts and technicals while flagging ambiguous TER", () => {
+    const data = parseEtfData({ General: { Type: "ETF", Category: "Bond", CurrencyCode: "EUR" }, Technicals: { Beta: 0, "52WeekHigh": 104, "52WeekLow": 92 }, ETF_Data: {
+      NetExpenseRatio: 0.02, TotalAssetsCurrency: "GBP", Average_Mkt_Cap_Mil: "1200", AnnualHoldingsTurnover: "15",
+      Fixed_Income: { EffectiveDuration: { "Fund_%": 4.2 }, ModifiedDuration: { "Fund_%": 4.4 }, YieldToMaturity: { "Fund_%": 3.1 }, Coupon: { "Fund_%": 2.5 }, EffectiveMaturity: { "Fund_%": 5.8 } },
+    } })!;
+    expect(data).toMatchObject({ totalAssetsCurrency: "GBP", terAmbiguous: true, netExpenseRatioPct: null,
+      averageMktCapMil: 1200, annualHoldingsTurnover: 15, effectiveDuration: 4.2, modifiedDuration: 4.4,
+      yieldToMaturity: 3.1, coupon: 2.5, effectiveMaturity: 5.8, week52High: 104, week52Low: 92, beta: null });
+    expect(data.payload).toHaveProperty("Technicals.52WeekHigh", 104);
   });
 });
 
@@ -61,8 +74,19 @@ describe("writers", () => {
     expect(sql[0].text).toBe("BEGIN");
     expect(sql[1].text).toContain("INSERT INTO etf_fund_stats");
     expect(sql[1].values.at(-1)).toBe(false);
+    expect(sql[1].text).toContain("total_assets_currency");
+    expect(sql[1].values[7]).toBe("USD");
+    expect(Math.max(...[...sql[1].text.matchAll(/\$(\d+)/g)].map((match) => Number(match[1])))).toBe(sql[1].values.length);
+    expect(sql[1].values[38]).toBeNull();
     expect(sql.find((row) => row.text.startsWith("DELETE FROM etf_holdings"))?.values).toEqual(["NYSEARCA:SPY"]);
     expect(sql.at(-1)?.text).toBe("COMMIT");
+  });
+
+  it("keeps a catalog UCITS hint separate from confirmed status", async () => {
+    const { sql, db } = recordingClient();
+    await storeEtfDetail(db, { listingKey: "IE00B4L5Y983", vendorSymbol: "IWDA.AS", asOf: "2026-11-06", origin: "enrich", data: parseEtfData(iwda)!, ucitsHint: true });
+    expect(sql[1].values[7]).toBe("unknown");
+    expect(sql[1].values[38]).toBe(true);
   });
 
   it("upserts dividends by ex-date and skips invalid dates", async () => {

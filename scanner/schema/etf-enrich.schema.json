@@ -14,7 +14,7 @@
           "listingKey": { "type": "string", "minLength": 3, "maxLength": 80 },
           "isin": { "type": ["string", "null"], "pattern": "^[A-Z]{2}[A-Z0-9]{9}[0-9]$" },
           "issuer": { "type": ["string", "null"], "maxLength": 120 },
-          "assetClass": { "type": ["string", "null"], "enum": ["equity", "bond", "commodity", "multi_asset", "other", null] },
+          "assetClass": { "type": ["string", "null"], "enum": ["equity", "bond", "commodity", "multi_asset", "money_market", "other", null] },
           "region": { "type": ["string", "null"], "maxLength": 80 },
           "theme": { "type": ["string", "null"], "maxLength": 120 },
           "trackedIndex": { "type": ["string", "null"], "maxLength": 160 },
@@ -24,6 +24,8 @@
           "replication": { "type": ["string", "null"], "maxLength": 80 },
           "distribution": { "type": ["string", "null"], "enum": ["acc", "dist", null] },
           "ucits": { "type": ["boolean", "null"] },
+          "ucitsHint": { "type": ["boolean", "null"] },
+          "terGap": { "type": ["string", "null"], "enum": ["ter_ambiguous", null] },
           "sourceUrl": { "type": ["string", "null"], "pattern": "^https://[^\\s]+$", "maxLength": 500 },
           "source": { "type": "string", "enum": ["eodhd", "codex"] },
           "holdingsCount": { "type": ["integer", "null"], "minimum": 0 }

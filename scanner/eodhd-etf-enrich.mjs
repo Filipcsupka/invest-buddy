@@ -2,6 +2,30 @@
 const US_EXCHANGES = new Set(["NYSEARCA", "NASDAQ", "NYSE", "BATS", "AMEX", "IEX"]);
 const text = (value) => typeof value === "string" && value.trim() ? value.trim() : null;
 const number = (value) => value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value)) ? Number(value) : null;
+const regionFrom = (regions) => {
+  const ranked = Object.entries(regions ?? {}).map(([name, value]) => [name, number(value?.["Equity_%"]) ?? number(value?.["Fund_%"]) ?? number(value)]).filter(([, weight]) => weight !== null && weight > 0);
+  if (!ranked.length) return null;
+  ranked.sort((a, b) => b[1] - a[1]);
+  return ranked[0][1] > 60 ? ranked[0][0] : "global";
+};
+const distributionFrom = (frequency, history) => {
+  const label = text(frequency)?.toLowerCase() ?? "";
+  if (/\b(no|none|non.distribut|not paying|keine|nicht)\b/.test(label)) return null;
+  if (/accumulat|thesaurier|reinvest/.test(label)) return "acc";
+  if (/annual|year|quarter|month|semi|half|week|daily|jähr|viertel|monat|halb|wöch|ausschütt|distribut/.test(label)) return "dist";
+  const events = Array.isArray(history) ? history : history && typeof history === "object" ? Object.values(history) : [];
+  return events.some((event) => (number(event?.value ?? event?.amount ?? event) ?? 0) > 0) ? "dist" : null;
+};
+const categoryClass = (category) => {
+  const label = text(category)?.toLowerCase() ?? "";
+  if (!label || label === "na" || label === "n/a") return null;
+  if (/money.market|monetary|geldmarkt|cash/.test(label)) return "money_market";
+  if (/multi.asset|mixed.asset|balanced|allocation|multi-asset|mischfonds/.test(label)) return "multi_asset";
+  if (/commodity|commodities|rohstoff|gold|silver|precious.metal/.test(label)) return "commodity";
+  if (/bond|fixed.income|debt|anleihe|obligation/.test(label)) return "bond";
+  if (/equity|stock|aktien/.test(label)) return "equity";
+  return "other";
+};
 
 function expensePercent(etf) {
   const ratio = number(etf.NetExpenseRatio), ongoing = number(etf.Ongoing_Charge);
@@ -31,15 +55,18 @@ export function mapFundamentals(row, symbol, data) {
     number(value?.["Net_Assets_%"]),
   ]).filter(([kind, value]) => kind && value !== null);
   const totals = Object.groupBy(classes, ([kind]) => kind);
-  const assetClass = Object.entries(totals).find(([, values]) => values.reduce((sum, [, value]) => sum + value, 0) > 50)?.[0] ?? null;
-  const region = null;
+  const assetClass = categoryClass(general.Category) ?? Object.entries(totals).find(([, values]) => values.reduce((sum, [, value]) => sum + value, 0) > 50)?.[0] ?? null;
+  const region = regionFrom(etf.World_Regions);
+  const rawRatio = number(etf.NetExpenseRatio);
   const count = number(etf.Holdings_Count);
   return {
     listingKey: row.listingKey, isin: [etf.ISIN, general.ISIN, row.isin].map(text).find((value) => value && /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(value)) ?? null,
     issuer: text(etf.Company_Name), assetClass, region, theme: null,
     trackedIndex: text(etf.Index_Name), terPct,
     aumUsdM: US_EXCHANGES.has(row.exchange) && general.CurrencyCode === "USD" && assets !== null && assets >= 0 ? assets / 1_000_000 : null,
-    domicile: text(etf.Domicile), replication: null, distribution: null, ucits: null,
+    domicile: text(etf.Domicile), replication: null, distribution: distributionFrom(etf.Dividend_Paying_Frequency, etf.Dividends ?? data?.Dividends ?? row.dividendHistory), ucits: null,
+    ucitsHint: /\bUCITS\b/i.test(row.name ?? "") || /^(IE|LU)/.test(row.isin ?? "") ? true : null,
+    terGap: rawRatio !== null && rawRatio >= 0.01 && rawRatio <= 0.025 ? "ter_ambiguous" : null,
     sourceUrl: symbol ? `https://eodhd.com/api/v1.1/fundamentals/${encodeURIComponent(symbol)}` : null,
     source: "eodhd", holdingsCount: count !== null && Number.isInteger(count) && count >= 0 ? count : null,
   };
