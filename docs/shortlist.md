@@ -63,7 +63,31 @@ The scanner state filter used the stored state while the groups and counts used 
 DATABASE_URL=<local or disposable database> npx tsx scripts/shortlist-replay.ts --days 5 --names
 ```
 
-It runs in one read-only transaction that is rolled back, and prints per date: scored names, displayed Setup met, survivors after F1 and after F1+F2, F3 flags, not-assessed counts per check, and the largest sector group. It has not been run against production data yet, so there are no measured survivor counts here.
+It runs in one read-only transaction that is rolled back, and prints per date: scored names, displayed Setup met, survivors after F1 and after F1+F2, F3 flags, not-assessed counts per check, and the largest sector group. It was first run against production on 2026-11-13 (read-only connection, `EODHD_PRIVATE_USE=on SCORE_EXTENDED=on` to match the web filters).
+
+| Score date | Scored | Setup met | After F1 | After F1+F2 | F3 flagged | Largest kept group |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| 2026-11-06 | 511 | 4 | 3 | 2 | 0 | Healthcare 2/2 |
+| 2026-11-09 | 515 | 16 | 10 | 7 | 2 | Healthcare 4/7 |
+| 2026-11-10 | 516 | 44 | 31 | 23 | 4 | Healthcare 11/23 |
+| 2026-11-11 | 519 | 59 | 40 | 22 | 1 | Healthcare 9/22 |
+| 2026-11-12 | 519 | 56 | 37 | 20 | 3 | Healthcare 7/20 |
+
+Setup met here is the displayed state, so it differs slightly from stored-state counts. On 2026-11-12, 35 of the 56 had `instruments.sector` Unclassified; the vendor sector or industry placed all 35, so no name was Unknown. Healthcare is above the 30% flag on every date.
+
+Other checks measured on the 56 names of 2026-11-12 (each on its own, not stacked):
+
+| Check | Left of 56 |
+| --- | ---: |
+| Stored total at least 19 | 23 |
+| F2 leadership alone (RS percentile at least 80) | 28 |
+| F2 liquidity alone (13 not assessed stay) | 56 |
+| Latest active judge idea with a signal action | 6 |
+| Revenue acceleration confirmed from SEC 10-Q/10-K facts only | 30 |
+| Catalyst rule matched | 17 |
+| Accumulation rule matched | 29 |
+
+These numbers predate the macro fix below, which removes the 3 macro points from US names while PPI reads higher.
 
 ## Sources
 
