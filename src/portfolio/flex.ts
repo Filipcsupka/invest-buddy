@@ -25,7 +25,7 @@ export class FlexService {
     if (!token || !queryId) throw new Error("Flex credentials are required");
   }
 
-  async statement(maxAttempts = 8): Promise<string> {
+  async statement(maxAttempts = 16): Promise<string> {
     let reference = "";
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       const url = reference
@@ -44,7 +44,7 @@ export class FlexService {
       } else {
         throw new Error("Unexpected Flex response");
       }
-      await this.pause(Math.min(30_000, 1000 * 2 ** attempt));
+      if (attempt < maxAttempts - 1) await this.pause(15_000);
     }
     throw new Error("Flex statement was not ready");
   }

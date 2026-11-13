@@ -1,3 +1,4 @@
+import { safeMessage } from "../security/safe-message";
 import { randomUUID } from "node:crypto";
 import { jobRunStoreFromEnv, type JobRunStore } from "./job-runs";
 
@@ -8,6 +9,9 @@ export interface JobLogOptions {
   store?: JobRunStore | null;
   /** Peak resident memory in MB. Defaults to process.resourceUsage().maxRSS. */
   maxRssMb?: () => number;
+  signal?: AbortSignal;
+  onSignal?: () => Promise<JobCounts>;
+  terminate?: () => void;
 }
 
 const defaultMaxRssMb = () => Math.round(process.resourceUsage().maxRSS / 1024);
@@ -19,13 +23,15 @@ async function store(step: "start" | "finish", job: string, runId: string, actio
   }
 }
 
-/** Logs a CLI job's lifecycle without including arguments, environment, request data or error messages. Also stores the run in job_runs. */
+/** Logs a CLI job's lifecycle and stores the run in job_runs. */
 export async function runLoggedJob(name: string, run: () => Promise<JobCounts | void>, options: JobLogOptions = {}): Promise<void> {
   const runId = randomUUID();
   const startedAt = new Date();
   const start = performance.now();
   const runs = options.store === undefined ? jobRunStoreFromEnv() : options.store;
   const maxRssMb = options.maxRssMb ?? defaultMaxRssMb;
+  let ended = false;
+  let signalCompletion: Promise<void> | undefined;
   process.stdout.write(`${JSON.stringify({ event: "job_start", job: name, runId, timestamp: startedAt.toISOString() })}\n`);
   if (runs) await store("start", name, runId, () => runs.start({ runId, job: name, startedAt }));
   const end = async (status: "ok" | "partial" | "failed", counts: NonNullable<JobCounts>, durationMs: number) => {
@@ -33,19 +39,47 @@ export async function runLoggedJob(name: string, run: () => Promise<JobCounts | 
     const stored = process.exitCode ? { ...counts, exitCode: Number(process.exitCode) } : counts;
     if (runs) await store("finish", name, runId, () => runs.finish({ runId, job: name, startedAt, status, durationMs, counts: stored, maxRssMb: maxRssMb() }));
   };
+  const onSignal = () => {
+    if (ended) return;
+    ended = true;
+    signalCompletion = (async () => {
+      const counts = options.onSignal ? await options.onSignal().catch((error) => {
+        process.stderr.write(`${JSON.stringify({ event: "job_signal_snapshot_failed", job: name, runId, reason: error instanceof Error ? error.name : "error" })}\n`);
+        return {};
+      }) : {};
+      const durationMs = Math.round(performance.now() - start);
+      process.stdout.write(`${JSON.stringify({ event: "job_end", job: name, runId, status: "partial", durationMs, counts })}\n`);
+      await end("partial", counts, durationMs);
+      await runs?.close?.();
+      (options.terminate ?? (() => process.exit(0)))();
+    })().catch((error) => {
+      process.stderr.write(`${JSON.stringify({ event: "job_signal_failed", job: name, runId, reason: error instanceof Error ? error.name : "error" })}\n`);
+      process.exitCode = 1;
+    });
+  };
+  options.signal?.addEventListener("abort", onSignal, { once: true });
+  if (options.signal?.aborted) onSignal();
   try {
+    if (ended) return;
     const counts = await run();
-    const status = process.exitCode ? "failed" : counts?.failures ? "partial" : "ok";
+    if (ended) return;
+    ended = true;
+    const status = process.exitCode ? "failed" : counts?.failures || counts?.partial ? "partial" : "ok";
     const durationMs = Math.round(performance.now() - start);
     process.stdout.write(`${JSON.stringify({ event: "job_end", job: name, runId, status, durationMs, counts: counts ?? {} })}\n`);
     await end(status, counts ?? {}, durationMs);
   } catch (error) {
+    if (ended) return;
+    ended = true;
     const stack = error instanceof Error ? error.stack?.split("\n").slice(1).filter((line) => /^\s*at\s/.test(line)).join("\n") : undefined;
+    const message = error instanceof Error ? safeMessage(error.message) : safeMessage(String(error));
     const durationMs = Math.round(performance.now() - start);
-    process.stderr.write(`${JSON.stringify({ event: "job_end", job: name, runId, status: "failed", durationMs, counts: {}, failures: 1, stack })}\n`);
+    process.stderr.write(`${JSON.stringify({ event: "job_end", job: name, runId, status: "failed", durationMs, counts: {}, failures: 1, message, stack })}\n`);
     process.exitCode = 1;
     await end("failed", {}, durationMs);
   } finally {
-    await runs?.close?.();
+    options.signal?.removeEventListener("abort", onSignal);
+    if (signalCompletion) await signalCompletion;
+    else await runs?.close?.();
   }
 }

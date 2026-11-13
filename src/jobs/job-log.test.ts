@@ -15,14 +15,31 @@ describe("job lifecycle logging", () => {
     expect(end.durationMs).toBeGreaterThanOrEqual(0);
   });
 
-  it("records a failed end without an error message", async () => {
+  it("records a failed end with a redacted one-line message", async () => {
     const lines: string[] = [];
     vi.spyOn(process.stdout, "write").mockImplementation(() => true);
     vi.spyOn(process.stderr, "write").mockImplementation((line) => { lines.push(String(line)); return true; });
-    await runLoggedJob("collect", async () => { throw new Error("secret-token"); });
-    expect(JSON.parse(lines[0])).toMatchObject({ event: "job_end", job: "collect", status: "failed", failures: 1 });
+    await runLoggedJob("collect", async () => { throw new Error("Flex token=secret-token\nplease retry"); });
+    expect(JSON.parse(lines[0])).toMatchObject({ event: "job_end", job: "collect", status: "failed", failures: 1, message: "Flex token=[redacted] please retry" });
     expect(lines.join("")).not.toContain("secret-token");
     expect(process.exitCode).toBe(1);
+  });
+
+  it("records a partial end when a deadline signal arrives", async () => {
+    const controller = new AbortController();
+    const lines: string[] = [];
+    vi.spyOn(process.stdout, "write").mockImplementation((line) => { lines.push(String(line)); return true; });
+    const { promise, resolve } = Promise.withResolvers<{ failures: number }>();
+    const terminate = vi.fn();
+    const finishes: Record<string, unknown>[] = [];
+    const store = { start: async () => {}, finish: async (run: Record<string, unknown>) => { finishes.push(run); }, close: async () => {} };
+    const running = runLoggedJob("collect", () => promise, { store: store as unknown as import("./job-runs").JobRunStore, signal: controller.signal, onSignal: async () => ({ succeeded: 4, failures: 1 }), terminate });
+    controller.abort();
+    await vi.waitFor(() => expect(terminate).toHaveBeenCalledOnce());
+    resolve({ failures: 0 });
+    await running;
+    expect(lines.map((line) => JSON.parse(line)).filter((line) => line.event === "job_end")).toEqual([expect.objectContaining({ status: "partial", counts: { succeeded: 4, failures: 1 } })]);
+    expect(finishes).toEqual([expect.objectContaining({ status: "partial", counts: { succeeded: 4, failures: 1 } })]);
   });
 });
 
@@ -111,4 +128,29 @@ describe("job_runs storage", () => {
     await runLoggedJob("daily", async () => ({}), { store: null });
     expect(lines).toHaveLength(2);
   });
+});
+
+it("closes the run store when SIGTERM arrives during finish", async () => {
+  vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+  const controller = new AbortController();
+  const close = vi.fn(async () => {});
+  const terminate = vi.fn();
+  const onSignal = vi.fn(async () => ({}));
+  const finish = vi.fn(async () => { controller.abort(); });
+  await runLoggedJob("collect", async () => ({ failures: 0 }), {
+    signal: controller.signal, terminate, onSignal,
+    store: { start: async () => {}, finish, close },
+  });
+  expect(finish).toHaveBeenCalledOnce();
+  expect(close).toHaveBeenCalledOnce();
+  expect(onSignal).not.toHaveBeenCalled();
+  expect(terminate).not.toHaveBeenCalled();
+});
+
+it("records a budget stop as partial with exit zero", async () => {
+  vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+  const finish = vi.fn(async () => {});
+  await runLoggedJob("collect", async () => ({ failures: 0, partial: true }), { store: { start: async () => {}, finish } });
+  expect(finish).toHaveBeenCalledWith(expect.objectContaining({ status: "partial" }));
+  expect(process.exitCode ?? 0).toBe(0);
 });

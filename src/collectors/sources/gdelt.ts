@@ -1,6 +1,6 @@
 import type { CollectedDocument } from "../types";
 import { RateLimitLockout } from "../http";
-import { defaultHttp, type SourceHttp } from "./client";
+import { defaultHttp, NetworkError, type SourceHttp } from "./client";
 import { LICENSES, newsName, parseJson, PING_REQUEST, runPing, sourceDocument, type PingResult, type SourceContext, type SourceOutput } from "./common";
 
 export const MAX_RECORDS = 15;
@@ -28,25 +28,36 @@ export const GDELT_BUDGET_MS = 20 * 60_000;
 
 /**
  * One request per ticker. Keeps what it has when a later ticker fails: a 429 lockout stops the loop (the next call would be refused too),
- * a timeout or bad answer skips that ticker. Only when nothing was stored does a lockout propagate as the source failing.
+ * a bad answer skips that ticker, and three consecutive transport failures stop the source.
  * `clock` is injectable so a test can stand in for the 11 to 19 s answers.
  */
 export async function collectGdelt(ctx: SourceContext, clock: () => number = Date.now, budgetMs = GDELT_BUDGET_MS): Promise<SourceOutput> {
   const byUrl = new Map<string, CollectedDocument>();
   const failures: { ticker: string; reason: string }[] = [];
   let skippedInsecure = 0;
+  let consecutiveNetworkFailures = 0;
+  let stoppedReason: string | undefined;
   const started = clock();
   const companies = ctx.companies.filter((item) => ctx.symbols.includes(item.symbol));
   for (const [index, company] of companies.entries()) {
-    if (clock() - started > budgetMs) { failures.push({ ticker: company.symbol, reason: `not fetched: GDELT time budget of ${Math.round(budgetMs / 60000)} min used, ${companies.length - index} tickers left` }); break; }
+    const reason = ctx.stopReason?.();
+    if (reason) { stoppedReason = reason; break; }
+    if (clock() - started >= budgetMs) { stoppedReason = "collection time budget reached"; failures.push({ ticker: company.symbol, reason: `not fetched: GDELT time budget of ${Math.round(budgetMs / 60000)} min used, ${companies.length - index} tickers left` }); break; }
     let parsed: ReturnType<typeof parseArticles>;
     try { parsed = parseArticles(await ctx.http.get(docUrl(`"${newsName(company)}" sourcelang:english`), GDELT_REQUEST)); }
     catch (error) {
-      if (error instanceof RateLimitLockout && !byUrl.size && !failures.length) throw error;
+      if (error instanceof NetworkError || error instanceof Error && (error.name === "AbortError" || error.name === "TimeoutError" || /^(?:Timed out after |HTTP 5\d\d\b)/.test(error.message))) {
+        consecutiveNetworkFailures++;
+        failures.push({ ticker: company.symbol, reason: `Network error: ${error.message}` });
+        if (consecutiveNetworkFailures === 3) break;
+        continue;
+      }
+      consecutiveNetworkFailures = 0;
       failures.push({ ticker: company.symbol, reason: error instanceof Error ? error.message : String(error) });
       if (error instanceof RateLimitLockout) break;
       continue;
     }
+    consecutiveNetworkFailures = 0;
     skippedInsecure += parsed.skippedInsecure;
     for (const article of parsed.articles) {
       if (article.published.slice(0, 10) < ctx.since) continue;
@@ -57,7 +68,7 @@ export async function collectGdelt(ctx: SourceContext, clock: () => number = Dat
     }
   }
   if (skippedInsecure) process.stderr.write(`GDELT: skipped ${skippedInsecure} non-HTTPS article links\n`);
-  return { documents: [...byUrl.values()], facts: [], ...(failures.length ? { failures } : {}) };
+  return { documents: [...byUrl.values()], facts: [], ...(stoppedReason ? { stoppedReason } : {}), ...(failures.length ? { failures } : {}) };
 }
 
 export const ping = (http: SourceHttp = defaultHttp()): Promise<PingResult> => runPing("gdelt", async () => {

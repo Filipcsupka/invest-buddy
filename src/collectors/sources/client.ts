@@ -1,3 +1,4 @@
+import { safeMessage } from "../../security/safe-message";
 import { createWriteStream } from "node:fs";
 import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -24,6 +25,7 @@ export interface SourceHttp {
   /** Streams the response to a file. Returns the byte count. Never buffers the body. */
   download(url: string, file: string, options?: RequestOptions): Promise<number>;
 }
+export class NetworkError extends Error { constructor(message: string) { super(message); this.name = "NetworkError"; } }
 export interface HttpDeps {
   fetcher?: Fetcher;
   wait?: (ms: number) => Promise<void>;
@@ -113,10 +115,12 @@ export function createHttp(deps: HttpDeps = {}): SourceHttp {
       if (secHost) requireSecUserAgent(env.SEC_USER_AGENT);
       const attempts = options.maxAttempts ?? 4;
       let redirected = false;
+      let networkRetried = false;
       for (let attempt = 0; attempt < attempts; attempt++) {
         await slot(target.hostname);
         const timeoutMs = options.timeoutMs ?? 10_000;
-        const response = await fetcher(current, {
+        let response: Response;
+        try { response = await fetcher(current, {
           method, redirect: "manual", signal: AbortSignal.timeout(timeoutMs),
           headers: {
             "User-Agent": secHost ? env.SEC_USER_AGENT! : "InvestBuddy-collector/0.1",
@@ -125,10 +129,20 @@ export function createHttp(deps: HttpDeps = {}): SourceHttp {
             ...options.headers,
           },
           body: method === "POST" ? JSON.stringify(body) : undefined,
-        }).catch((error: unknown) => {
+        }); } catch (error) {
           if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) throw new Error(`Timed out after ${timeoutMs} ms at ${safe(current)}`);
+          if (error instanceof TypeError && error.message === "fetch failed") {
+            const cause = (error as Error & { cause?: { code?: string; message?: string } }).cause;
+            const detail = safeMessage([cause?.code, cause?.message].filter(Boolean).join(": ").replace(/(https:\/\/[^\s?]+)\?[^\s]+/g, "$1")).slice(0, 160);
+            if (!networkRetried && attempt < attempts - 1) {
+              networkRetried = true;
+              await wait(Math.min(Math.max(intervals[target.hostname] ?? DEFAULT_INTERVAL_MS, RETRY_FLOOR_MS[target.hostname] ?? 0, 500 * 2 ** attempt), MAX_RETRY_WAIT_MS));
+              continue;
+            }
+            throw new NetworkError(`Network error at ${safe(current)}${detail ? `: ${detail}` : ""}`);
+          }
           throw error;
-        });
+        }
         if (response.status >= 300 && response.status < 400) {
           if (method === "POST") throw new Error(`Unexpected redirect on POST ${safe(current)}`);
           const location = response.headers.get("location");
