@@ -522,7 +522,10 @@ test("invalid wording is retried once, then a failed run is recorded and the exi
 });
 
 test("a symbol that still fails after the retry is skipped, the others are stored, exit 0", async () => {
-  const s = stub(); s.respond(envelope(JSON.stringify({ ideas: [words("NVDA", { verdict: "Cash left EUR 510." }), words("AMD", { evidence: [] })] })));
+  const s = stub(); s.queue([
+    envelope(JSON.stringify({ ideas: [words("NVDA", { verdict: "Cash left EUR 510." }), words("AMD", { evidence: [] })] })),
+    envelope(JSON.stringify({ ideas: [words("NVDA", { verdict: "Cash left EUR 510." })] })),
+  ]);
   const web = await mockWeb();
   try {
     const r = await runJudge(["--as-of", "2026-10-05", "--base-url", web.base], { s });
@@ -561,9 +564,11 @@ test("the retry prompt includes the failed symbol's validation error", async () 
   try {
     const r = await runJudge(["--as-of", "2026-10-05", "--base-url", web.base], { s });
     assert.equal(r.code, 0, r.err);
-    assert.doesNotMatch(s.calls()[0].stdin, /Previous validation errors for these symbols/);
-    assert.match(s.calls()[1].stdin, /Previous validation errors for these symbols/);
+    assert.equal(JSON.parse(s.calls()[0].stdin.split("Input:\n")[1]).previousValidationErrors, undefined);
+    assert.match(s.calls()[1].stdin, /previousValidationErrors/);
     assert.match(s.calls()[1].stdin, /"NVDA":"figures not in the input: 510/);
+    const retryInput = JSON.parse(s.calls()[1].stdin.split("Input:\n")[1]);
+    assert.match(retryInput.previousValidationErrors.NVDA, /figures not in the input: 510/);
     assert.doesNotMatch(s.calls()[1].stdin, /"symbol":"AMD"/);
   } finally { await web.close(); }
 });
@@ -711,14 +716,21 @@ test("run-judge goes on to the next pending gate only while one is open", async 
   assert.equal(calls, 1);
 });
 
-test("a partial gate page exits 0, records the skip, and drains the next page", async () => {
+for (const mode of ["partial", "all-fail", "omitted", "partial-omitted", "hard-error", "extra-valid", "extra-invalid"]) test(`the ${mode} gate page consumes only completed attempts and drains when safe`, async () => {
   const remaining = ["NVDA", "AMD", "TST"];
   const completed = [], posts = [];
   const invalid = words("NVDA"); invalid.sk.whyItMatters = ["x".repeat(301)];
   const s = stub();
+  const invalidAmd = words("AMD", { verdict: "x".repeat(241) });
+  const omission = mode.includes("omitted");
+  const extra = mode.startsWith("extra-");
+  let firstIdeas = [invalid, words("AMD")], retryIdeas = [invalid];
+  if (mode === "all-fail") firstIdeas = retryIdeas = [invalid, invalidAmd];
+  if (omission) { firstIdeas = mode === "omitted" ? [] : [words("AMD")]; retryIdeas = []; }
+  if (extra) retryIdeas = [mode === "extra-valid" ? words("AMD") : invalidAmd];
   s.queue([
-    envelope(JSON.stringify({ ideas: [invalid, words("AMD")] })),
-    envelope(JSON.stringify({ ideas: [invalid] })),
+    envelope(JSON.stringify({ ideas: firstIdeas })),
+    envelope(mode === "hard-error" ? "invalid JSON" : JSON.stringify({ ideas: retryIdeas })),
     envelope(JSON.stringify({ ideas: [words("TST")] })),
   ]);
   const server = http.createServer((req, res) => {
@@ -747,19 +759,25 @@ test("a partial gate page exits 0, records the skip, and drains the next page", 
   try {
     const base = `http://127.0.0.1:${server.address().port}`;
     const r = await runJudge(["--gate-from-db", "--max-symbols", "2", "--base-url", base], { s });
-    assert.equal(r.code, 0, r.err);
-    assert.equal(s.calls().length, 3);
-    assert.deepEqual(completed, [["NVDA", "AMD"], ["TST"]]);
-    assert.deepEqual(remaining, []);
-    assert.deepEqual(posts.map((p) => p.ideas.map((i) => i.symbol)), [["AMD"], ["TST"]]);
-    assert.match(posts[0].run.error, /NVDA: schema: .*longer than 300/);
-    assert.match(s.calls()[1].stdin, /longer than 300/);
+    const hard = mode === "hard-error" || extra;
+    const empty = mode === "all-fail" || mode === "omitted";
+    assert.equal(r.code, hard ? 1 : 0, r.err);
+    assert.equal(s.calls().length, hard ? 2 : 3);
+    assert.deepEqual(completed, hard ? [["AMD"]] : [["NVDA", "AMD"], ["TST"]]);
+    assert.deepEqual(remaining, hard ? ["NVDA", "TST"] : []);
+    assert.deepEqual(posts.map((p) => p.ideas.map((i) => i.symbol)), hard ? [["AMD"]] : [empty ? [] : ["AMD"], ["TST"]]);
+    assert.equal(posts[0].run.status, empty ? "failed" : "ok");
+    assert.match(posts[0].run.error, omission ? /NVDA: no idea in the output/ : extra ? /which is not an item/ : hard ? /JSON/ : /NVDA: schema: .*longer than 300/);
+    assert.match(r.err, /SKIPPED NVDA:/);
     assert.match(r.err, /WARN skipped NVDA/);
+    if (empty) assert.match(r.err, /SKIPPED AMD:/);
+    if (omission) assert.match(r.err, /WARN NVDA omitted from final model output; no idea produced after 2 validation attempts/);
+    else assert.match(s.calls()[1].stdin, /longer than 300/);
   } finally { await new Promise((resolve) => server.close(resolve)); }
 });
 
-test("a failed ideas POST exits nonzero and leaves the gate pending", async () => {
-  const s = stub(); s.respond(envelope(JSON.stringify({ ideas: [words("NVDA")] })));
+for (const invalid of [false, true]) test(`a failed ideas POST (${invalid ? "all-fail" : "valid"} page) exits nonzero and leaves the gate pending`, async () => {
+  const s = stub(); s.respond(envelope(JSON.stringify({ ideas: [words("NVDA", invalid ? { verdict: "x".repeat(241) } : {})] })));
   let consumed = false;
   const server = http.createServer((req, res) => {
     const url = new URL(req.url, "http://local");
@@ -829,4 +847,36 @@ test("a 69-symbol gate advances one page at a time and stops at the monthly cap"
     assert.deepEqual(remaining, []);
     assert.equal(s.calls().length, 1);
   } finally { await new Promise((resolve) => server.close(resolve)); }
+});
+
+for (const duplicate of [false, true]) test(`unexpected ${duplicate ? "duplicate" : "extra"} symbols are rejected before schema splitting and retried with feedback`, async () => {
+  const s = stub();
+  const unexpected = words(duplicate ? "NVDA" : "EXTRA", { verdict: "x".repeat(241) });
+  s.queue([
+    envelope(JSON.stringify({ ideas: [...both, unexpected] })),
+    envelope(JSON.stringify({ ideas: both })),
+  ]);
+  const web = await mockWeb();
+  try {
+    const r = await runJudge(["--as-of", "2026-10-05", "--base-url", web.base], { s });
+    assert.equal(r.code, 0, r.err);
+    assert.equal(s.calls().length, 2);
+    const retryInput = JSON.parse(s.calls()[1].stdin.split("Input:\n")[1]);
+    assert.match(retryInput.previousValidationErrors.NVDA, duplicate ? /second idea for NVDA/ : /idea for EXTRA, which is not an item/);
+    assert.deepEqual(web.seen.posts[0].run.output.ideas.map((i) => i.symbol), ["NVDA", "AMD"]);
+  } finally { await web.close(); }
+});
+
+test("symbols-file keeps exit 0 for partial success followed by a call error", async () => {
+  const s = stub();
+  s.queue([
+    envelope(JSON.stringify({ ideas: [words("AMD", { evidence: [] }), words("NVDA", { verdict: "x".repeat(241) })] })),
+    envelope("invalid JSON"),
+  ]);
+  const web = await mockWeb();
+  try {
+    const r = await runJudge(["--as-of", "2026-10-05", "--base-url", web.base], { s });
+    assert.equal(r.code, 0, r.err);
+    assert.deepEqual(web.seen.posts[0].ideas.map((i) => i.symbol), ["AMD"]);
+  } finally { await web.close(); }
 });

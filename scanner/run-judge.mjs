@@ -403,8 +403,8 @@ async function main() {
   }
   const textFor = (items, retryErrors = new Map()) => {
     const pi = o.agentMode ? { ...promptInput, signals: items.map((i) => i.signal) } : { ...promptInput, items };
-    const feedback = retryErrors.size ? `Previous validation errors for these symbols. Correct them in this attempt:\n${JSON.stringify(Object.fromEntries(retryErrors))}\n` : "";
-    return fill(prompt, { AS_OF: asOf, INPUT: JSON.stringify(pi), RETRY_ERRORS: feedback });
+    if (retryErrors.size) pi.previousValidationErrors = Object.fromEntries(retryErrors);
+    return fill(prompt, { AS_OF: asOf, INPUT: JSON.stringify(pi) });
   };
   let text = textFor(modelInput.items);
   if (o.dryRun) { log(`${offline ? "offline " : ""}dry run: ${news.length} signals; expected ${expectedTokens(text.length)} tokens; 0 model calls`); if (!process.env.SCAN_KEEP_WORK) rmSync(work, { recursive: true, force: true }); return; }
@@ -441,14 +441,21 @@ async function main() {
       const out = normalizeOutput(extractJson(r.text));
       const topErrors = validateJudgeOutput(out && typeof out === "object" && !Array.isArray(out) ? { ...out, ideas: [] } : out);
       if (topErrors.length || !Array.isArray(out?.ideas)) throw new Error(`schema: ${[...topErrors, ...(!Array.isArray(out?.ideas) ? ["output.ideas: expected array"] : [])].slice(0, 5).join("; ")}`);
+      // Check membership and uniqueness before splitting schema failures from valid ideas.
+      const seen = new Set();
+      for (const idea of out.ideas) {
+        if (typeof idea?.symbol !== "string") throw new Error("schema: idea.symbol: expected string");
+        if (!pending.some((s) => s.symbol === idea.symbol)) throw new Error(`idea for ${idea.symbol}, which is not an item`);
+        if (seen.has(idea.symbol)) throw new Error(`second idea for ${idea.symbol}`);
+        seen.add(idea.symbol);
+      }
       const valid = [], schemaFailed = new Map();
       for (const idea of out.ideas) {
         const errs = validateJudgeOutput({ ideas: [idea] });
-        if (errs.length && typeof idea?.symbol === "string" && pending.some((s) => s.symbol === idea.symbol)) schemaFailed.set(idea.symbol, `schema: ${errs.slice(0, 5).join("; ")}`);
-        else if (errs.length) throw new Error(`schema: ${errs.slice(0, 5).join("; ")}`);
+        if (errs.length) schemaFailed.set(idea.symbol, `schema: ${errs.slice(0, 5).join("; ")}`);
         else valid.push(idea);
       }
-      const merged = mergeIdeas({ ideas: valid.filter((i) => !good.has(i.symbol)) }, pending, sub, { collect: true });
+      const merged = mergeIdeas({ ideas: valid }, pending, sub, { collect: true });
       for (const [sym, why] of schemaFailed) merged.failed.set(sym, why);
       rawOutput = { ...out, ideas: [...(rawOutput?.ideas ?? []), ...out.ideas.filter((i) => !merged.failed.has(i?.symbol) && !good.has(i?.symbol))] };
       for (const i of merged.ideas) good.set(i.symbol, i);
@@ -461,6 +468,7 @@ async function main() {
     } catch (e) {
       if (e.exitCode === CUTOFF_EXIT_CODE) { cutoff = e.cutoff; break; }
       error = e.message;
+      for (const s of pending) { validationErrors.set(s.symbol, e.message); skipped.set(s.symbol, e.message); }
       log(`attempt ${attempt} failed: ${e.message}`);
     }
   }
@@ -469,32 +477,39 @@ async function main() {
   for (const s of news) if (good.has(s.symbol)) skipped.delete(s.symbol);
   const result = good.size ? { ideas: news.filter((s) => good.has(s.symbol)).map((s) => good.get(s.symbol)), notes } : null;
   const hardSkipped = [...skipped.keys()].filter((sym) => validationAttempts.get(sym) !== 2);
-  if (result) for (const [sym, why] of skipped) log(`SKIPPED ${sym}: ${why}`);
+  for (const [sym, why] of skipped) {
+    log(`SKIPPED ${sym}: ${String(why).replace(/[\r\n]+/g, " ")}`);
+    if (why === "no idea in the output") log(`WARN ${sym} omitted from final model output; no idea produced after ${validationAttempts.get(sym) ?? 0} validation attempts`);
+  }
   if (!process.env.SCAN_KEEP_WORK) rmSync(work, { recursive: true, force: true });
   if (cutoff) { log(cutoffLine(cutoff, 0)); process.exit(CUTOFF_EXIT_CODE); }
   if (softStop) { log(earlyStopLine(softStop)); process.exit(CUTOFF_EXIT_CODE); }
   const secs = Math.round((Date.now() - t0) / 1000);
   const totals = `${calls} model call(s), ${text.length} input chars, tokens in ${spent.inputTokens ?? "?"} out ${spent.outputTokens ?? "?"} cache read ${spent.cacheReadTokens ?? "?"} cache created ${spent.cacheCreationTokens ?? "?"}, turns ${spent.turns ?? "?"}${cost ? `, cost $${cost.toFixed(4)}` : ""}, ${secs}s${skipped.size ? `; skipped ${[...skipped.keys()].join(", ")}` : ""}`;
   const runBase = { asOf, runId, agent: o.agent, model, inputHash: hash, usage: spent, costUsd: cost || null, ruleConfigVersion: input.ruleConfigVersion };
-  if (!result) {
+  const skipReasons = [...skipped].map(([sym, why]) => `${sym}: ${why}`).join("; ").slice(0, 2000);
+  if (!result && !o.gateFromDb) {
     log(`FAILED ${error}; ${totals}`);
     if (record) await postRun(o, token, { run: { ...runBase, status: "failed", error: String(error).slice(0, 2000), ideaCount: 0 }, ideas: [] }).catch((e) => log(`could not record run: ${e.message}`));
     process.exit(1);
   }
-  for (const n of result.notes) log(n);
-  const downgraded = result.ideas.filter((i) => i.downgradedFrom).length, conflicts = result.ideas.filter((i) => i.conflictNote).length;
-  log(`ideas: ${result.ideas.length} from ${news.length} changed signals, ${downgraded} downgraded, ${conflicts} conflict flags${skipped.size ? `; skipped ${[...skipped.keys()].join(", ")}` : ""}`);
+  // Gate pages with no valid ideas still record their outcome before advancing.
+  const status = result ? "ok" : "failed";
+  const finalResult = result ?? { ideas: [], notes: [] };
+  for (const n of finalResult.notes) log(n);
+  const downgraded = finalResult.ideas.filter((i) => i.downgradedFrom).length, conflicts = finalResult.ideas.filter((i) => i.conflictNote).length;
+  log(`ideas: ${finalResult.ideas.length} from ${news.length} changed signals, ${downgraded} downgraded, ${conflicts} conflict flags${skipped.size ? `; skipped ${[...skipped.keys()].join(", ")}` : ""}`);
   const file = join(OUT, `judge-payload-${asOf}-${runId.slice(0, 8)}.json`);
-  const skipReasons = [...skipped].map(([sym, why]) => `${sym}: ${why}`).join("; ").slice(0, 2000);
-  writeFileSync(file, JSON.stringify({ run: { ...runBase, status: "ok", ideaCount: result.ideas.length, ...(skipReasons ? { error: skipReasons } : {}) }, ideas: result.ideas, notes: rawOutput.notes ?? null }, null, 2) + "\n");
+  writeFileSync(file, JSON.stringify({ run: { ...runBase, status, ideaCount: finalResult.ideas.length, ...(skipReasons ? { error: skipReasons } : {}) }, ideas: finalResult.ideas, notes: rawOutput?.notes ?? null }, null, 2) + "\n");
   log(`payload written ${file}`);
   if (o.dryRun) { log(`dry run: nothing posted, nothing recorded; ${totals}`); return; }
   try {
-    const res = await postRun(o, token, { run: { ...runBase, status: "ok", ideaCount: result.ideas.length, output: rawOutput, ...(skipReasons ? { error: skipReasons } : {}) }, ideas: result.ideas });
+    const res = await postRun(o, token, { run: { ...runBase, status, ideaCount: finalResult.ideas.length, output: rawOutput, ...(skipReasons ? { error: skipReasons } : {}) }, ideas: finalResult.ideas });
     log(`POST ok: ${JSON.stringify(res)}; ${totals}`);
-    if (o.gateFromDb) await consumeGate(o.baseUrl, token, "judge", gate.asOf, gate.revision, page.symbols.filter((symbol) => !hardSkipped.includes(symbol)));
-    if (skipped.size) log(`WARN skipped ${[...skipped.keys()].join(", ")}; reasons recorded in the judge run${o.gateFromDb ? hardSkipped.length ? `; ${hardSkipped.join(", ")} remain pending after a hard error` : "; gate symbols consumed after two validation attempts" : ""}`);
-    if (hardSkipped.length) { process.exitCode = 1; return { hadHardError: true }; }
+    const completedSymbols = page?.symbols.filter((symbol) => !hardSkipped.includes(symbol));
+    if (o.gateFromDb && completedSymbols.length) await consumeGate(o.baseUrl, token, "judge", gate.asOf, gate.revision, completedSymbols);
+    if (skipped.size) log(`WARN skipped ${[...skipped.keys()].join(", ")}; full reasons logged above; summary recorded in the judge run${o.gateFromDb ? hardSkipped.length ? `; ${hardSkipped.join(", ")} remain pending after a hard error` : "; gate symbols consumed after two validation attempts" : ""}`);
+    if (o.gateFromDb && hardSkipped.length) { process.exitCode = 1; return { hadHardError: true }; }
   } catch (e) { log(`POST failed: ${e.message}; ${totals}`); process.exit(3); }
 }
 /** With --gate-from-db one run advances pending gates in pages, oldest first, until the queue or budget stops it. */
