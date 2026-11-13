@@ -111,6 +111,7 @@ describe("constituent analytics", () => {
     expect(partial.sectorCoverage).toMatchObject({ n: 3, of: 4 });
     const full = sectors(list.slice(0, 3), "2026-11-08");
     expect(full.rows).toEqual([{ sector: "Tech", count: 2, weightPct: 80 }, { sector: "Energy", count: 1, weightPct: 20 }]);
+    expect(sectors([component({ sector: "Tech", weight: 0.2 })], asOf).rows[0].weightPct).toBeNull();
   });
 
   it("counts fresh published rule states with the scored denominator", () => {
@@ -157,20 +158,24 @@ describe("growth from stored filings", () => {
     ];
     const e = earningsSummary(list, growth);
     expect(e.weighted).toBe(true);
-    expect(e.positiveGrowth).toEqual({ value: 60, n: 3, of: 5, asOf: "2026-09-30" });
+    expect(e.positiveGrowth).toEqual({ value: 66.67, n: 2, of: 5, asOf: "2026-09-30" });
     expect(e.revenueUp.value).toBe(90);
     expect(e.earningsUp).toMatchObject({ value: expect.closeTo(66.67), n: 2 });
     expect(e.accelerating).toMatchObject({ value: 100, n: 1, of: 5 });
     expect(e.medianRevenueYoy).toBeCloseTo(0.1);
+    expect(e.weightedRevenueYoyPct).toMatchObject({ value: 13.75, n: 3, of: 5 });
+    expect(e.weightedEarningsYoyPct).toMatchObject({ value: 20, n: 1, of: 5 });
     const unweighted = earningsSummary([component({ ticker: "A", weight: 0.6 }), component({ ticker: "B" })], growth);
     expect(unweighted.weighted).toBe(false);
     expect(unweighted.positiveGrowth.value).toBe(50);
+    expect(unweighted.weightedRevenueYoyPct.value).toBeNull();
+    expect(earningsSummary(list, growth, "2028-11-12").positiveGrowth.n).toBe(0);
   });
 });
 
 describe("index analytics and rating inputs", () => {
   const closes = Array.from({ length: 300 }, (_, i) => 100 + i / 10);
-  const bars = series(closes);
+  const bars = sessions(closes.length, "2025-09-01").map((date, i) => ({ date, close: closes[i] }));
   const asOf = bars.at(-1)!.date;
 
   it("builds the agreed rating input shape with coverage", () => {
@@ -184,9 +189,11 @@ describe("index analytics and rating inputs", () => {
       { ticker, source: "sec", concept: "Revenues", period: "quarter" as const, periodEnd: "2025-09-30", value: 100 },
       { ticker, source: "sec", concept: "Revenues", period: "quarter" as const, periodEnd: "2026-06-30", value: 105 },
       { ticker, source: "sec", concept: "Revenues", period: "quarter" as const, periodEnd: "2026-09-30", value: ticker === "A" ? 120 : 90 },
+      { ticker, source: "sec", concept: "NetIncomeLoss", period: "quarter" as const, periodEnd: "2025-09-30", value: 10 },
+      { ticker, source: "sec", concept: "NetIncomeLoss", period: "quarter" as const, periodEnd: "2026-09-30", value: ticker === "A" ? 12 : 8 },
     ]);
-    const analytics = indexAnalytics({ symbol: "GSPC.INDX", bars, componentsAsOf: "2026-11-06", components, growthFacts, peers: [{ symbol: "GSPC.INDX", currency: "USD", bars }] });
-    expect(analytics.matched).toEqual({ value: 50, n: 2, of: 4, asOf: "2026-11-06" });
+    const analytics = indexAnalytics({ symbol: "GSPC.INDX", bars, componentsAsOf: asOf, components, growthFacts, peers: [{ symbol: "GSPC.INDX", currency: "USD", bars }] });
+    expect(analytics.matched).toEqual({ value: 50, n: 2, of: 4, asOf });
     expect(analytics.relativeStrength?.m3).toMatchObject({ rank: 1, of: 1, peerMedian: null });
     const inputs = toRatingInputs(analytics, bars);
     expect(inputs).toEqual({

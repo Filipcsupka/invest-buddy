@@ -184,7 +184,8 @@ export interface Sectors {
 export function sectors(components: readonly ComponentFacts[], asOf: string | null): Sectors {
   const weighted = components.filter((c) => finite(c.weight));
   const total = weighted.reduce((s, c) => s + (c.weight as number), 0);
-  const useWeights = components.length > 0 && weighted.length === components.length && total > 0;
+  // Published sector weights need a complete constituent list and a plausible index weight total.
+  const useWeights = components.length > 0 && weighted.length === components.length && total >= 0.95 && total <= 1.05;
   const groups = new Map<string, { count: number; weight: number }>();
   for (const c of components) {
     if (!c.sector) continue;
@@ -275,6 +276,8 @@ export interface EarningsSummary {
   /** Share of constituents whose revenue growth beat the prior period's; `n` counts those with both periods stored. */
   accelerating: Covered<number | null>;
   revenueUp: Covered<number | null>; earningsUp: Covered<number | null>;
+  /** Weighted average year-on-year growth in percent, when every eligible constituent has an index weight. */
+  weightedRevenueYoyPct: Covered<number | null>; weightedEarningsYoyPct: Covered<number | null>;
   /** Median revenue growth (ratio) among constituents with a positive year-ago value. */
   medianRevenueYoy: number | null;
   /** True when shares are weighted by index weight (every assessed constituent had one); otherwise each counts once. */
@@ -282,8 +285,11 @@ export interface EarningsSummary {
 }
 
 /** Weighted (when weights exist) share of constituents with growing revenue and earnings, each with its denominator. */
-export function earningsSummary(components: readonly ComponentFacts[], growth: ReadonlyMap<string, ComponentGrowth>): EarningsSummary {
-  const assessed = components.flatMap((c) => c.ticker && growth.has(c.ticker) ? [{ c, g: growth.get(c.ticker)! }] : []);
+export function earningsSummary(components: readonly ComponentFacts[], growth: ReadonlyMap<string, ComponentGrowth>, asOf: string | null = null): EarningsSummary {
+  const assessed = components.flatMap((c) => {
+    const g = c.ticker ? growth.get(c.ticker) : undefined;
+    return g && (!asOf || (daysBetween(g.periodEnd, asOf) >= 0 && daysBetween(g.periodEnd, asOf) <= 550)) ? [{ c, g }] : [];
+  });
   const weighted = assessed.length > 0 && assessed.every(({ c }) => finite(c.weight) && (c.weight as number) > 0);
   const w = (c: ComponentFacts) => weighted ? c.weight as number : 1;
   const latest = assessed.map(({ g }) => g.periodEnd).sort().at(-1) ?? null;
@@ -293,11 +299,19 @@ export function earningsSummary(components: readonly ComponentFacts[], growth: R
   };
   const ratios = assessed.map(({ g }) => g.revenueYoy).filter(finite).sort((a, b) => a - b);
   const median = ratios.length ? (ratios.length % 2 ? ratios[(ratios.length - 1) / 2] : (ratios[ratios.length / 2 - 1] + ratios[ratios.length / 2]) / 2) : null;
+  const weightedMean = (key: "revenueYoy" | "earningsYoy"): Covered<number | null> => {
+    const rows = assessed.filter(({ g }) => finite(g[key]));
+    const complete = rows.length > 0 && rows.every(({ c }) => finite(c.weight) && (c.weight as number) > 0);
+    const total = complete ? rows.reduce((sum, { c }) => sum + (c.weight as number), 0) : 0;
+    return { value: complete && total > 0 ? round(100 * rows.reduce((sum, { c, g }) => sum + (c.weight as number) * (g[key] as number), 0) / total) : null,
+      n: rows.length, of: components.length, asOf: rows.map(({ g }) => g.periodEnd).sort().at(-1) ?? null };
+  };
   return {
-    positiveGrowth: share(assessed, (g) => g.revenueUp && g.earningsUp !== false),
+    positiveGrowth: share(assessed.filter(({ g }) => g.earningsUp !== null), (g) => g.revenueUp && g.earningsUp === true),
     accelerating: share(assessed.filter(({ g }) => g.revenueAccelerating !== null), (g) => g.revenueAccelerating === true),
     revenueUp: share(assessed, (g) => g.revenueUp),
     earningsUp: share(assessed.filter(({ g }) => g.earningsUp !== null), (g) => g.earningsUp === true),
+    weightedRevenueYoyPct: weightedMean("revenueYoy"), weightedEarningsYoyPct: weightedMean("earningsYoy"),
     medianRevenueYoy: median, weighted,
   };
 }
@@ -376,7 +390,7 @@ export function indexAnalytics(source: IndexAnalyticsSource): IndexAnalytics {
     matched: hasList ? { value: round(pct(matchedCount, components.length)), n: matchedCount, of: components.length, asOf: source.componentsAsOf } : null,
     breadth: hasList ? breadth(components, price.asOf) : null,
     sectors: hasList ? sectors(components, source.componentsAsOf) : null,
-    earnings: hasList ? earningsSummary(components, componentGrowth(source.growthFacts)) : null,
+    earnings: hasList ? earningsSummary(components, componentGrowth(source.growthFacts), price.asOf) : null,
     scores: hasList ? scoreDistribution(components, price.asOf) : null,
     volatility: vol ? volatilityContext(source.symbol, source.bars) : null,
   };

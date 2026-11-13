@@ -4,7 +4,7 @@ import { PGlite } from "@electric-sql/pglite";
 import type pg from "pg";
 import { describe, expect, it } from "vitest";
 import { EodhdHttpError } from "../data-providers/eodhd/client";
-import { indexComponents, latestIndexSnapshot, parseIndexFundamentals, parseIndexGeneral } from "../db/markets";
+import { indexComponentFacts, indexComponents, indexRatingReadModel, latestIndexSnapshot, parseIndexFundamentals, parseIndexGeneral } from "../db/markets";
 import { DEFAULT_MAX_CALLS, parseIndexFundamentalsArgs, runIndexFundamentals, SNAPSHOT_FILTER } from "./eodhd-index-fundamentals";
 
 async function withDb(fn: (pool: pg.Pool) => Promise<void>) {
@@ -34,9 +34,9 @@ describe("index fundamentals options", () => {
 
   it("parses the General block and both response blocks", () => {
     expect(parseIndexGeneral(GSPC.General)).toEqual({ name: "S&P 500 Index", currency: "USD", country: "USA",
-      raw: { Code: "GSPC", Type: "INDEX", Name: "S&P 500 Index", Exchange: "INDX", CurrencyCode: "USD", CountryName: "USA" } });
+      raw: { Code: "GSPC", Type: "INDEX", Name: "S&P 500 Index", Exchange: "INDX", CurrencyCode: "USD", CountryName: "USA", Nested: { x: 1 } } });
     expect(parseIndexGeneral([])).toBeNull();
-    expect(parseIndexGeneral({ Nested: {} })).toBeNull();
+    expect(parseIndexGeneral({ Nested: {} })?.raw).toEqual({ Nested: {} });
     expect(parseIndexFundamentals(GSPC)?.components).toHaveLength(2);
     expect(parseIndexFundamentals(VIX)).toEqual({ general: expect.objectContaining({ name: "CBOE Volatility Index" }), components: [] });
     expect(parseIndexFundamentals([])).toBeNull();
@@ -45,6 +45,17 @@ describe("index fundamentals options", () => {
 });
 
 describe("index fundamentals job (PGlite)", () => {
+  it("maps constituents through current vendor symbols without a bare ticker collision", () => withDb(async (pool) => {
+    await pool.query(`INSERT INTO index_components(index_symbol,as_of,code,exchange) VALUES
+      ('GSPC.INDX','2026-11-12','SQ','US'),('GSPC.INDX','2026-11-12','XYZ','US')`);
+    const list = await indexComponentFacts("GSPC.INDX", "2026-11-12", pool);
+    expect(list.rows.map((row) => [row.vendorSymbol, row.ticker])).toEqual([["SQ.US", null], ["XYZ.US", "SQ"]]);
+    await pool.query("INSERT INTO asset_bars(vendor_symbol,bar_date,close) VALUES ('GSPC.INDX','2026-11-12',6000)");
+    const model = await indexRatingReadModel("GSPC.INDX", pool);
+    expect(model?.inputs).toMatchObject({ symbol: "GSPC.INDX", asOf: "2026-11-12", components: { matched: 1, total: 2 } });
+    expect(model?.analytics.matched).toMatchObject({ n: 1, of: 2, asOf: "2026-11-12" });
+  }), 60_000);
+
   it("stores General and constituents with provenance, records empty lists, respects the budget and logs calls", () => withDb(async (pool) => {
     let calls = 0;
     const requests: string[] = [];

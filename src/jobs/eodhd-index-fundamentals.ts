@@ -69,7 +69,8 @@ if (process.argv[1]?.endsWith("eodhd-index-fundamentals.ts") || process.argv[1]?
   const options = parseIndexFundamentalsArgs(process.argv.slice(2));
   const db = new pg.Pool({ connectionString: process.env.DATABASE_URL });
   void runLoggedJob("eodhd-index-fundamentals", async () => {
-    try { const result = await runIndexFundamentals(db, options.dryRun ? null : new EodhdClient(), options); if (result.failures) process.exitCode = 1; return result; }
+    // A retry is another billed request; disable automatic retries so the configured call cap is strict.
+    try { const result = await runIndexFundamentals(db, options.dryRun ? null : new EodhdClient({ maxRetries: 0 }), options); if (result.failures) process.exitCode = 1; return result; }
     finally { await db.end(); }
   }, options.dryRun ? { store: null } : {});
 }

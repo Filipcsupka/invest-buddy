@@ -171,19 +171,14 @@ export function crossMatrix(pairs: { code: string; last: number | null }[], curr
 
 // ---- Index snapshots (General + Components) and the index rating read model ----
 
-/** Scalar fields of the vendor `General` block for an index (Code, Name, CurrencyCode, CountryName, ...). Nested values are dropped. */
-export interface IndexGeneral { name: string | null; currency: string | null; country: string | null; raw: Record<string, string | number | boolean> }
+/** Complete vendor `General` block plus the fields used for lookup. */
+export interface IndexGeneral { name: string | null; currency: string | null; country: string | null; raw: Record<string, unknown> }
 
 export function parseIndexGeneral(payload: unknown): IndexGeneral | null {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
-  const raw: Record<string, string | number | boolean> = {};
-  for (const [key, value] of Object.entries(payload as Record<string, unknown>)) {
-    if (Object.keys(raw).length >= 60) break;
-    if (typeof value === "string" && value.trim()) raw[key] = value.trim().slice(0, 500);
-    else if ((typeof value === "number" && Number.isFinite(value)) || typeof value === "boolean") raw[key] = value;
-  }
+  const raw = payload as Record<string, unknown>;
   if (!Object.keys(raw).length) return null;
-  const text = (key: string) => typeof raw[key] === "string" ? raw[key] as string : null;
+  const text = (key: string) => typeof raw[key] === "string" && raw[key].trim() ? raw[key].trim() : null;
   return { name: text("Name"), currency: text("CurrencyCode"), country: text("CountryName") ?? text("CountryISO"), raw };
 }
 
