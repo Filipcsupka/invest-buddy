@@ -46,7 +46,7 @@ export function macroConfig(env: Record<string, string | undefined> = process.en
   };
 }
 
-export interface MacroResult { value: boolean | null; reason: string; evidenceDates: string[] }
+export interface MacroResult { value: boolean | null; reason: string; evidenceDates: string[]; /** dataTailwind only: date of each inflation series that took part. */ inflationDates?: { cpi?: string; ppi?: string } }
 const day = (iso: string) => Date.parse(`${iso}T00:00:00Z`);
 const ageDays = (from: string, to: string) => Math.floor((day(to) - day(from)) / 86_400_000);
 const r2 = (value: number) => Math.round(value * 100) / 100;
@@ -100,7 +100,7 @@ export function evaluateDataTailwind(yields: YieldPoint[] | null, vix: VixPoint[
   const inflationParts = [cpi?.text ?? unavailableInflation("CPIAUCSL", inflation.cpi, asOf), ppi?.text ?? unavailableInflation("PPIACO", inflation.ppi, asOf)].join("; ");
   const inflationText = available.length === 2 ? inflationParts : available.length === 1 ? `inflation from one series: ${inflationParts}` : `inflation fallback to rates and VIX: ${inflationParts}`;
   const reason = `${value ? "Tailwind" : "No tailwind"}: 10-year yield ${earlier.date} ${earlier.value} to ${latestYield.date} ${latestYield.value} (change ${r2(change)} pp, ${yieldOk ? "at or below" : "above"} ${config.yieldMaxChange}); VIX ${latestVix.date} ${latestVix.close} (${vixOk ? "below" : "not below"} ${config.vixMax}); ${inflationText}. Placeholder rule ${MACRO_RULES_VERSION}`;
-  return { value, reason, evidenceDates: [latestYield.date, latestVix.date, ...available.map((d) => d.date)] };
+  return { value, reason, evidenceDates: [latestYield.date, latestVix.date, ...available.map((d) => d.date)], ...(available.length ? { inflationDates: { ...(cpi ? { cpi: cpi.date } : {}), ...(ppi ? { ppi: ppi.date } : {}) } } : {}) };
 }
 
 export interface Bar { date: string; close: number }

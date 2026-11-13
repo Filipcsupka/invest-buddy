@@ -50,12 +50,13 @@ export function evaluateRegion(inputs: RegionalInputs, benchmark: string, asOf: 
 export function evaluateMacro(inputs: MacroInputs, asOf: string, config: MacroConfig): MacroOutcome {
   const dataTailwind = evaluateDataTailwind(inputs.yields, inputs.vix, asOf, config, { cpi: inputs.cpi, ppi: inputs.ppi });
   const sectorRotationIntoGrowth = evaluateSectorRotation(inputs.universe, inputs.spy, asOf, config);
-  const [yieldDate, vixDate, cpiDate, ppiDate] = dataTailwind.evidenceDates;
+  const [yieldDate, vixDate] = dataTailwind.evidenceDates;
+  const { cpi: cpiDate, ppi: ppiDate } = dataTailwind.inflationDates ?? {};
   const items = dataTailwind.value === null || !inputs.yieldUrl || !inputs.vixUrl ? [] : [
     { claim: "macro.dataTailwind", url: inputs.yieldUrl, publishedAt: yieldDate }, { claim: "macro.dataTailwind", url: inputs.vixUrl, publishedAt: vixDate }];
-  if (cpiDate && ppiDate && inputs.cpiUrl && inputs.ppiUrl) items.push(
-    { claim: "macro.dataTailwind", url: inputs.cpiUrl, publishedAt: cpiDate },
-    { claim: "macro.dataTailwind", url: inputs.ppiUrl, publishedAt: ppiDate });
+  // Each inflation series that took part is cited on its own; one can be missing (FRED has no CPI for 2025-10).
+  if (cpiDate && inputs.cpiUrl) items.push({ claim: "macro.dataTailwind", url: inputs.cpiUrl, publishedAt: cpiDate });
+  if (ppiDate && inputs.ppiUrl) items.push({ claim: "macro.dataTailwind", url: inputs.ppiUrl, publishedAt: ppiDate });
   // Rotation uses our own stored price bars, which have no public url, so it cites no document.
   const outcome: MacroOutcome = { dataTailwind, sectorRotationIntoGrowth, evidence: { dataTailwind: items, sectorRotationIntoGrowth: [] } };
   if (inputs.europe) outcome.regions = { Europe: evaluateRegion(inputs.europe, REGION_BENCHMARKS.Europe, asOf, config) };

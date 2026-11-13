@@ -139,7 +139,11 @@
      "2026-10-02",
      "2026-10-01",
      "2026-10-01"
-    ]
+    ],
+    "inflationDates": {
+     "cpi": "2026-10-01",
+     "ppi": "2026-10-01"
+    }
    },
    "sectorRotationIntoGrowth": {
     "value": true,
