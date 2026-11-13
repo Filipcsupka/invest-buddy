@@ -1,3 +1,4 @@
+import { safeMessage } from "../security/safe-message";
 import { runLoggedJob } from "./job-log";
 import pg from "pg";
 import universe from "../../scanner/universe.json";
@@ -21,18 +22,23 @@ import { CATALYST_FACT_KEY, CATALYST_WINDOW_DAYS, catalystFromDocuments, type Ca
 
 const companies = universe.instruments as Company[];
 const daysAgo = (date: Date, days: number) => new Date(date.getTime() - days * 86400000).toISOString().slice(0, 10);
-export interface CollectOptions { since?: string; sources?: string[]; dryRun?: boolean; refetch?: boolean; now?: () => Date; get?: (url: string) => Promise<string>; http?: SourceHttp; cusips?: CusipStore; companies?: Company[]; secSymbols?: Record<string, string>; storedCiks?: Map<string, number>; checkedAt?: Map<string, string>; usage?: UsageLedger; onRunReady?: (snapshot: () => Promise<Record<string, number>>) => void; onCacheChange?: (ciks: number[]) => void }
+export interface CollectOptions { since?: string; sources?: string[]; dryRun?: boolean; refetch?: boolean; now?: () => Date; get?: (url: string) => Promise<string>; http?: SourceHttp; cusips?: CusipStore; companies?: Company[]; secSymbols?: Record<string, string>; storedCiks?: Map<string, number>; checkedAt?: Map<string, string>; usage?: UsageLedger; onRunReady?: (snapshot: () => Promise<Record<string, number>>) => void; onCacheChange?: (ciks: number[]) => void; signal?: AbortSignal; timeBudgetSeconds?: number; clock?: () => number; stopReason?: () => string | null }
 /** Phase A collectors (edgar, rss, fred) run as before. Phase A2 sources (`EXTRA_SOURCES`) run through the source registry. */
 export async function runCollect(repository: CollectorRepository, symbols: string[], options: CollectOptions = {}) {
+  const clock = options.clock ?? Date.now;
+  const started = clock();
+  const budget = options.timeBudgetSeconds ?? collectTimeBudget(process.env.COLLECT_TIME_BUDGET_SECONDS);
+  const stopReason = options.stopReason ?? (() => options.signal?.aborted ? "SIGTERM received" : clock() - started >= budget * 1000 ? "collection time budget reached" : null);
+  options = { ...options, stopReason };
   const companies = options.companies ?? universe.instruments as Company[];
   const requested = options.sources ?? ["edgar", "rss"];
   const extra = requested.filter(isExtra), basic = requested.filter((name) => !isExtra(name));
   const first = basic.length ? await runLegacyCollect(repository, symbols, { ...options, sources: basic }) : undefined;
   if (!extra.length) return first!;
   const now = options.now?.() ?? new Date();
-  const second = await runExtraSources(repository, extra, { since: options.since ?? daysAgo(now, extra.length === 1 && extra[0] === "getcurrent" ? 3 : 30), now, dryRun: options.dryRun, http: options.http, cusips: options.cusips, companies, symbols, usage: options.usage });
+  const second = await runExtraSources(repository, extra, { since: options.since ?? daysAgo(now, extra.length === 1 && extra[0] === "getcurrent" ? 3 : 30), now, dryRun: options.dryRun, http: options.http, cusips: options.cusips, companies, symbols, usage: options.usage, stopReason });
   if (!first) return { ...second, missingCiks: 0,
-    exitCode: extra.length === 1 && extra[0] === "gdelt" && second.failures.length && second.failures.every((failure) => /^Network error|^HTTP 429/.test(failure.reason)) ? 0 : second.exitCode };
+    exitCode: second.stoppedReason === "collection time budget reached" || second.stoppedReason === "SIGTERM received" ? 0 : extra.length === 1 && extra[0] === "gdelt" && second.failures.length && second.failures.every((failure) => /^Network error|^HTTP 429/.test(failure.reason)) ? 0 : second.exitCode };
   return { ...first, sources: requested, requested: first.requested + second.requested, succeeded: first.succeeded + second.succeeded, failures: [...first.failures, ...second.failures],
     documentsWritten: first.documentsWritten + second.documentsWritten, factsWritten: first.factsWritten + second.factsWritten, stoppedReason: first.stoppedReason ?? second.stoppedReason,
     documentsParsed: first.documentsParsed + second.documentsParsed, factsComputed: first.factsComputed + second.factsComputed, exitCode: first.exitCode || second.exitCode };
@@ -47,8 +53,6 @@ async function runLegacyCollect(repository: CollectorRepository, symbols: string
   const run: CollectorRun = { startedAt: now.toISOString(), sources, requested: symbols.length, succeeded: 0, failures: [], documentsWritten: 0, factsWritten: 0, stoppedReason: null };
   let documentsParsed = 0, factsComputed = 0, attempted = 0;
   options.onRunReady?.(async () => {
-    run.stoppedReason = "SIGTERM: collection deadline reached";
-    if (!options.dryRun) await repository.recordRun(run);
     return { requested: run.requested, succeeded: run.succeeded, failures: run.failures.length, documentsWritten: run.documentsWritten, factsWritten: run.factsWritten };
   });
   const get = options.get;
@@ -131,6 +135,8 @@ async function runLegacyCollect(repository: CollectorRepository, symbols: string
   });
   const missingCikSymbols: string[] = [];
   for (const [index, symbol] of orderedSymbols.entries()) {
+    const reason = options.stopReason?.();
+    if (reason) { run.stoppedReason = reason; break; }
     try {
       const cik = secCiks.get(symbol);
       if (cik !== cachedCik) {
@@ -164,10 +170,10 @@ async function runLegacyCollect(repository: CollectorRepository, symbols: string
         ids.set(doc.url, stored.id);
         if (stored.written) run.documentsWritten++;
       }
-      if (!options.dryRun && sources.includes("edgar") && cik) await repository.markSecInsiderChecked?.(symbol, now.toISOString());
       const facts = await deriveFacts(symbol, docs, ids, repository, asOf);
       factsComputed += facts.length;
       if (!options.dryRun) for (const fact of facts) if (await repository.upsertFact(fact)) run.factsWritten++;
+      if (!options.dryRun && sources.includes("edgar") && cik) await repository.markSecInsiderChecked?.(symbol, now.toISOString());
       run.succeeded++;
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
@@ -181,7 +187,7 @@ async function runLegacyCollect(repository: CollectorRepository, symbols: string
   }
   if (!options.dryRun) await repository.recordRun(run);
   return { ...run, documentsParsed, factsComputed, missingCiks: sources.includes("edgar") ? symbols.length - secCiks.size : 0, missingCikSymbols,
-    exitCode: collectExitCode(run.stoppedReason, run.failures.filter((failure) => failure.ticker !== "rss").length, attempted) };
+    exitCode: run.stoppedReason === "collection time budget reached" || run.stoppedReason === "SIGTERM received" ? 0 : collectExitCode(run.stoppedReason, run.failures.filter((failure) => failure.ticker !== "rss").length, attempted) };
 }
 
 /** A lockout or any other stop is always a failed run, whatever share of tickers had already finished. */
@@ -236,14 +242,20 @@ export async function deriveFacts(symbol: string, docs: CollectedDocument[], ids
 }
 
 /** One line, no credentials: upstream error text can echo a request URL with a key. */
-export const safeReason = (reason: unknown) => String(reason).replace(/[\r\n]+/g, " ").replace(/([?&;](?:api_?key|key|token|access_token|secret)=)[^&\s]+/gi, "$1[redacted]").replace(/(bearer\s+)\S+/gi, "$1[redacted]").slice(0, 200);
+export const safeReason = safeMessage;
 const SEC_SOURCES = ["edgar", "frames", "getcurrent", "13f"];
 /** A run that reaches SEC (no --source, or an SEC source in it) must have a real contact in SEC_USER_AGENT before anything else starts. */
 export function guardCollectUserAgent(names: string[] | undefined, env: Record<string, string | undefined>): void {
   if (!names || names.some((name) => SEC_SOURCES.includes(name))) requireSecUserAgent(env.SEC_USER_AGENT);
 }
 
-async function main(onRunReady?: CollectOptions["onRunReady"]) {
+export function collectTimeBudget(value: string | undefined): number {
+  const seconds = value === undefined ? 1500 : Number(value);
+  if (!Number.isFinite(seconds) || seconds <= 0) throw new Error("COLLECT_TIME_BUDGET_SECONDS must be a positive number");
+  return seconds;
+}
+
+export async function runCollectJob(signal: AbortSignal) {
   const args = process.argv.slice(2);
   const option = (name: string) => { const i = args.indexOf(name); return i < 0 ? undefined : args[i + 1]; };
   const only = option("--only"), since = option("--since"), source = option("--source");
@@ -271,19 +283,19 @@ async function main(onRunReady?: CollectOptions["onRunReady"]) {
     if (unknown.length) throw new Error(`Unknown ticker(s): ${unknown.join(", ")}`);
     const repository = pool ? new PostgresCollectorRepository(pool) : new MemoryCollectorRepository();
     const checkedAt = pool && (!names || names.includes("edgar")) ? new Map((await pool.query<{ ticker: string; checked_at: Date }>("SELECT ticker,checked_at FROM sec_insider_refresh")).rows.map((row) => [row.ticker, row.checked_at.toISOString()])) : undefined;
-    const result = await runCollect(repository, symbols, { since, sources: names as SourceName[] | undefined, dryRun, refetch, cusips: pool ? new PostgresCusipStore(pool) : new MemoryCusipStore(), companies: activeCompanies, secSymbols: pool ? await loadVendorSymbols(pool, "sec") : undefined, storedCiks: pool ? await loadStoredCiks(pool) : undefined, checkedAt, usage: pool ? new PostgresUsageLedger(pool) : undefined, onRunReady });
+    const result = await runCollect(repository, symbols, { since, sources: names as SourceName[] | undefined, dryRun, refetch, cusips: pool ? new PostgresCusipStore(pool) : new MemoryCusipStore(), companies: activeCompanies, secSymbols: pool ? await loadVendorSymbols(pool, "sec") : undefined, storedCiks: pool ? await loadStoredCiks(pool) : undefined, checkedAt, usage: pool ? new PostgresUsageLedger(pool) : undefined, signal });
     process.stdout.write(`Collect: ${result.succeeded}/${result.requested} tickers, ${result.missingCiks ?? 0} missing CIKs skipped, ${result.documentsParsed} documents parsed, ${result.factsComputed} facts computed, ${result.documentsWritten} documents written, ${result.factsWritten} facts written${dryRun ? " (dry run, nothing stored)" : ""}\n`);
     for (const failure of result.failures) process.stderr.write(`Failed ${failure.ticker}: ${safeReason(failure.reason)}\n`);
     const missing = "missingCikSymbols" in result ? result.missingCikSymbols as string[] : [];
     if (missing.length) process.stderr.write(`Missing CIK: ${missing.join(", ")}\n`);
-    if (result.stoppedReason) process.stderr.write("Stopped: source limit reached\n");
+    if (result.stoppedReason) process.stderr.write(`Stopped: ${safeReason(result.stoppedReason)}\n`);
     process.exitCode = result.exitCode;
-    return { requested: result.requested, succeeded: result.succeeded, missingCiks: result.missingCiks ?? 0, failures: result.failures.length, documentsWritten: result.documentsWritten, factsWritten: result.factsWritten };
+    return { partial: Boolean(result.stoppedReason), requested: result.requested, succeeded: result.succeeded, missingCiks: result.missingCiks ?? 0, failures: result.failures.length, documentsWritten: result.documentsWritten, factsWritten: result.factsWritten };
   } finally { await pool?.end(); }
 }
 if (/(?:^|[/\\])collect\.(?:ts|js)$/.test(process.argv[1] ?? "")) {
   const controller = new AbortController();
-  let snapshot: () => Promise<Record<string, number>> = async () => ({});
+  let running: ReturnType<typeof runCollectJob> | undefined;
   process.once("SIGTERM", () => controller.abort());
-  void runLoggedJob("collect", () => main((current) => { snapshot = current; }), { signal: controller.signal, onSignal: () => snapshot() });
+  void runLoggedJob("collect", () => (running = runCollectJob(controller.signal)), { signal: controller.signal, onSignal: async () => await running ?? {} });
 }

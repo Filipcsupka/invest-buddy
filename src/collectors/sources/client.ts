@@ -1,3 +1,4 @@
+import { safeMessage } from "../../security/safe-message";
 import { createWriteStream } from "node:fs";
 import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -132,8 +133,7 @@ export function createHttp(deps: HttpDeps = {}): SourceHttp {
           if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) throw new Error(`Timed out after ${timeoutMs} ms at ${safe(current)}`);
           if (error instanceof TypeError && error.message === "fetch failed") {
             const cause = (error as Error & { cause?: { code?: string; message?: string } }).cause;
-            const detail = [cause?.code, cause?.message].filter(Boolean).join(": ").replace(/[\r\n]+/g, " ")
-              .replace(/(https:\/\/[^\s?]+)\?[^\s]+/g, "$1").replace(/((?:^|[?&;\s])(?:api_?key|key|token|access_token|secret)=)[^&\s]+/gi, "$1[redacted]").slice(0, 160);
+            const detail = safeMessage([cause?.code, cause?.message].filter(Boolean).join(": ").replace(/(https:\/\/[^\s?]+)\?[^\s]+/g, "$1")).slice(0, 160);
             if (!networkRetried && attempt < attempts - 1) {
               networkRetried = true;
               await wait(Math.min(Math.max(intervals[target.hostname] ?? DEFAULT_INTERVAL_MS, RETRY_FLOOR_MS[target.hostname] ?? 0, 500 * 2 ** attempt), MAX_RETRY_WAIT_MS));

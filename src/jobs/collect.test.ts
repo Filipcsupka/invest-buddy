@@ -220,23 +220,22 @@ describe("collectors", () => {
     const repo = new MemoryCollectorRepository();
     const cacheKeys: number[][] = [];
     const fetched: string[] = [];
-    let snapshot: (() => Promise<Record<string, number>>) | undefined;
-    let captured = false;
     const fetch = async (url: string) => {
       fetched.push(url);
       if (url.endsWith("company_tickers.json")) return JSON.stringify({ a: { ticker: "GOOG", cik_str: 1652044 }, b: { ticker: "GOOGL", cik_str: 1652044 }, c: { ticker: "NVDA", cik_str: 1045810 } });
       if (url.includes("/1652044/")) return url.endsWith("index.json") ? JSON.stringify({ directory: { item: [{ name: "form8k.htm", type: "8-K" }] } }) : "Item 8.01 Other Events. Routine notice.";
       if (url.includes("CIK0001652044.json")) {
-        if (!captured) { captured = true; expect(await snapshot?.()).toMatchObject({ succeeded: 1, requested: 3 }); }
         return JSON.stringify({ filings: { recent: { form: ["8-K"], accessionNumber: ["0001652044-26-000001"], primaryDocument: ["form8k.htm"], filingDate: ["2026-10-01"], items: ["8.01"] } } });
       }
       return get(url);
     };
     const result = await runCollect(repo, ["GOOG", "NVDA", "GOOGL"], { sources: ["edgar"], since: "2026-09-01", get: fetch,
       checkedAt: new Map([["GOOG", "2026-10-02"], ["GOOGL", "2026-10-02"], ["NVDA", "2026-09-01"]]),
-      onCacheChange: (keys) => cacheKeys.push(keys), onRunReady: (current) => { snapshot = current; }, now: () => new Date("2026-10-05T12:00:00Z") });
+      onCacheChange: (keys) => cacheKeys.push(keys), now: () => new Date("2026-10-05T12:00:00Z") });
     expect(result.succeeded).toBe(3);
-    expect(repo.runs[0]).toMatchObject({ succeeded: 1, stoppedReason: "SIGTERM: collection deadline reached" });
+    expect(repo.runs).toHaveLength(1);
+    expect(result.exitCode).toBe(0);
+    expect(repo.runs[0]).toMatchObject({ succeeded: 3, stoppedReason: null });
     expect(cacheKeys).toEqual([[1045810], [1652044]]);
     expect(fetched.filter((url) => url.endsWith("/form8k.htm") && url.includes("/1652044/"))).toHaveLength(1);
     for (const symbol of ["GOOG", "GOOGL"]) expect(repo.facts.get(`${symbol}:catalyst_8k:2026-10-05`)).toBeDefined();
@@ -357,5 +356,55 @@ describe("collect SEC_USER_AGENT guard", () => {
   it("accepts a real contact, and does not ask for one on sources that never call SEC", () => {
     expect(() => guardCollectUserAgent(undefined, real)).not.toThrow();
     expect(() => guardCollectUserAgent(["rss", "fred", "gnews"], {})).not.toThrow();
+  });
+});
+
+describe("collection shutdown", () => {
+  const now = () => new Date("2026-10-05T12:00:00Z");
+  it("finishes the active ticker and records one run after repeated snapshots", async () => {
+    const repo = new MemoryCollectorRepository();
+    let snapshot: (() => Promise<Record<string, number>>) | undefined;
+    let captured: Record<string, number> | undefined;
+    const controller = new AbortController();
+    const result = await runCollect(repo, ["NVDA", "AMD"], { sources: ["edgar"], now, signal: controller.signal,
+      onRunReady: (current) => { snapshot = current; },
+      get: async (url) => {
+        if (url.includes("submissions/")) { captured = await snapshot!(); await snapshot!(); controller.abort(); }
+        return get(url);
+      },
+    });
+    expect(captured).toMatchObject({ succeeded: 0 });
+    expect(repo.runs).toHaveLength(1);
+    expect(repo.runs[0]).toMatchObject({ succeeded: 1, stoppedReason: "SIGTERM received" });
+    expect(result).toMatchObject({ exitCode: 0, succeeded: 1 });
+    await snapshot!();
+    expect(repo.runs).toHaveLength(1);
+    expect(repo.runs[0].succeeded).toBe(1);
+  });
+
+  it("stops at the budget and resumes with the next oldest ticker", async () => {
+    const repo = new MemoryCollectorRepository();
+    let elapsed = 0;
+    const checkedAt = new Map([["NVDA", "2026-09-01"], ["AMD", "2026-10-01"]]);
+    const mark = vi.fn(async (ticker: string, date: string) => { checkedAt.set(ticker, date); });
+    Object.assign(repo, { markSecInsiderChecked: mark });
+    const first = await runCollect(repo, ["AMD", "NVDA"], { sources: ["edgar"], now, checkedAt, timeBudgetSeconds: 1, clock: () => elapsed,
+      get: async (url) => { if (url.includes("submissions/")) elapsed = 1000; return get(url); },
+    });
+    expect(first).toMatchObject({ succeeded: 1, stoppedReason: "collection time budget reached", exitCode: 0 });
+    expect(mark.mock.calls.map(([ticker]) => ticker)).toEqual(["NVDA"]);
+    mark.mockClear();
+    await runCollect(repo, ["AMD", "NVDA"], { sources: ["edgar"], now, checkedAt, get });
+    expect(mark.mock.calls.map(([ticker]) => ticker)).toEqual(["AMD", "NVDA"]);
+    expect(repo.runs).toHaveLength(2);
+  });
+
+  it("does not move a ticker to the back of the queue when fact storage fails", async () => {
+    const repo = new MemoryCollectorRepository();
+    vi.spyOn(repo, "upsertFact").mockRejectedValue(new Error("write failed"));
+    const mark = vi.fn();
+    Object.assign(repo, { markSecInsiderChecked: mark });
+    await runCollect(repo, ["NVDA"], { sources: ["edgar"], now, get });
+    expect(mark).not.toHaveBeenCalled();
   });
 });

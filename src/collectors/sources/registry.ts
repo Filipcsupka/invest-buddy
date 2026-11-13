@@ -43,7 +43,7 @@ export const SOURCES: (Omit<SourceModule, "name"> & { name: SourceName | "openfi
 ];
 export const PING_NAMES = SOURCES.map((source) => source.name);
 
-export interface ExtraOptions { since: string; now: Date; dryRun?: boolean; http?: SourceHttp; cusips?: CusipStore; companies: Company[]; symbols: string[]; env?: Env; usage?: UsageLedger }
+export interface ExtraOptions { since: string; now: Date; dryRun?: boolean; http?: SourceHttp; cusips?: CusipStore; companies: Company[]; symbols: string[]; env?: Env; usage?: UsageLedger; stopReason?: () => string | null }
 
 /**
  * Runs the sources that are not phase A collectors. One failing source does not stop the others, except that a 429 lockout
@@ -52,15 +52,18 @@ export interface ExtraOptions { since: string; now: Date; dryRun?: boolean; http
  */
 export async function runExtraSources(repository: CollectorRepository, names: SourceName[], options: ExtraOptions) {
   const run: CollectorRun = { startedAt: options.now.toISOString(), sources: names, requested: names.length, succeeded: 0, failures: [], documentsWritten: 0, factsWritten: 0, stoppedReason: null, apiRequests: {} };
-  const ctx: SourceContext = { http: options.http ?? defaultHttp(), companies: options.companies, symbols: options.symbols, since: options.since, now: options.now, env: options.env ?? process.env, cusips: options.cusips, state: repository, usage: options.usage };
+  const ctx: SourceContext = { http: options.http ?? defaultHttp(), companies: options.companies, symbols: options.symbols, since: options.since, now: options.now, env: options.env ?? process.env, cusips: options.cusips, state: repository, usage: options.usage, stopReason: options.stopReason };
   const universe = new Set(options.companies.map((company) => company.symbol));
   let documentsParsed = 0, factsComputed = 0, secLocked = false;
   for (const name of names) {
+    const reason = options.stopReason?.();
+    if (reason) { run.stoppedReason = reason; break; }
     const source = SOURCES.find((item) => item.name === name);
     if (!source?.collect) { run.failures.push({ ticker: name, reason: "unknown source" }); continue; }
     if (secLocked && source.sec) { run.failures.push({ ticker: name, reason: "not fetched: SEC rate-limit lockout" }); continue; }
     try {
       const output = await source.collect(ctx);
+      if (output.stoppedReason) run.stoppedReason = output.stoppedReason;
       if (output.apiRequests) run.apiRequests![name] = (run.apiRequests![name] ?? 0) + output.apiRequests;
       if (output.failures) run.failures.push(...output.failures);
       if (output.skipped) process.stderr.write(`${name}: skipped, ${output.skipped}\n`);
@@ -94,7 +97,7 @@ export async function runExtraSources(repository: CollectorRepository, names: So
     }
   }
   if (!options.dryRun || Object.keys(run.apiRequests!).length) await repository.recordRun(run);
-  return { ...run, documentsParsed, factsComputed, exitCode: run.failures.length ? 1 : 0 };
+  return { ...run, documentsParsed, factsComputed, exitCode: run.stoppedReason === "collection time budget reached" || run.stoppedReason === "SIGTERM received" ? 0 : run.failures.length ? 1 : 0 };
 }
 
 /** Pings sources one at a time so a host's spacing is respected. Writes nothing. */

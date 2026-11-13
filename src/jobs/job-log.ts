@@ -1,3 +1,4 @@
+import { safeMessage } from "../security/safe-message";
 import { randomUUID } from "node:crypto";
 import { jobRunStoreFromEnv, type JobRunStore } from "./job-runs";
 
@@ -14,7 +15,6 @@ export interface JobLogOptions {
 }
 
 const defaultMaxRssMb = () => Math.round(process.resourceUsage().maxRSS / 1024);
-const safeMessage = (message: string) => message.replace(/[\r\n]+/g, " ").replace(/((?:^|[?&;\s])(?:api_?key|key|token|access_token|secret|t|q)=)[^&\s]+/gi, "$1[redacted]").replace(/(bearer\s+)\S+/gi, "$1[redacted]").slice(0, 200);
 
 /** A database failure is logged without the error message and never changes the job's outcome. */
 async function store(step: "start" | "finish", job: string, runId: string, action: () => Promise<void>) {
@@ -39,19 +39,24 @@ export async function runLoggedJob(name: string, run: () => Promise<JobCounts | 
     const stored = process.exitCode ? { ...counts, exitCode: Number(process.exitCode) } : counts;
     if (runs) await store("finish", name, runId, () => runs.finish({ runId, job: name, startedAt, status, durationMs, counts: stored, maxRssMb: maxRssMb() }));
   };
-  const onSignal = () => { signalCompletion = (async () => {
+  const onSignal = () => {
     if (ended) return;
     ended = true;
-    const counts = options.onSignal ? await options.onSignal().catch((error) => {
-      process.stderr.write(`${JSON.stringify({ event: "job_signal_snapshot_failed", job: name, runId, reason: error instanceof Error ? error.name : "error" })}\n`);
-      return {};
-    }) : {};
-    const durationMs = Math.round(performance.now() - start);
-    process.stdout.write(`${JSON.stringify({ event: "job_end", job: name, runId, status: "partial", durationMs, counts })}\n`);
-    await end("partial", counts, durationMs);
-    await runs?.close?.();
-    (options.terminate ?? (() => process.exit(0)))();
-  })().catch((error) => { process.stderr.write(`${JSON.stringify({ event: "job_signal_failed", job: name, runId, reason: error instanceof Error ? error.name : "error" })}\n`); process.exitCode = 1; }); };
+    signalCompletion = (async () => {
+      const counts = options.onSignal ? await options.onSignal().catch((error) => {
+        process.stderr.write(`${JSON.stringify({ event: "job_signal_snapshot_failed", job: name, runId, reason: error instanceof Error ? error.name : "error" })}\n`);
+        return {};
+      }) : {};
+      const durationMs = Math.round(performance.now() - start);
+      process.stdout.write(`${JSON.stringify({ event: "job_end", job: name, runId, status: "partial", durationMs, counts })}\n`);
+      await end("partial", counts, durationMs);
+      await runs?.close?.();
+      (options.terminate ?? (() => process.exit(0)))();
+    })().catch((error) => {
+      process.stderr.write(`${JSON.stringify({ event: "job_signal_failed", job: name, runId, reason: error instanceof Error ? error.name : "error" })}\n`);
+      process.exitCode = 1;
+    });
+  };
   options.signal?.addEventListener("abort", onSignal, { once: true });
   if (options.signal?.aborted) onSignal();
   try {
@@ -59,7 +64,7 @@ export async function runLoggedJob(name: string, run: () => Promise<JobCounts | 
     const counts = await run();
     if (ended) return;
     ended = true;
-    const status = process.exitCode ? "failed" : counts?.failures ? "partial" : "ok";
+    const status = process.exitCode ? "failed" : counts?.failures || counts?.partial ? "partial" : "ok";
     const durationMs = Math.round(performance.now() - start);
     process.stdout.write(`${JSON.stringify({ event: "job_end", job: name, runId, status, durationMs, counts: counts ?? {} })}\n`);
     await end(status, counts ?? {}, durationMs);

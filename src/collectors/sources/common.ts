@@ -11,6 +11,7 @@ import { validSecUserAgent } from "../sec-user-agent";
 export type Env = Record<string, string | undefined>;
 export interface Company { symbol: string; name: string; sector?: string }
 export interface SourceContext {
+  stopReason?: () => string | null;
   http: SourceHttp;
   /** Whole universe. Sources that map by name or CIK use all of it. */
   companies: Company[];
@@ -36,7 +37,7 @@ export interface HolderEvent { accession: string; ticker: string; filerName: str
 export interface EpsQuarter { fiscalDateEnding: string; reportedDate: string | null; reportedEps: number | null; estimatedEps: number | null; surprisePct: number | null }
 /** All quarters of one symbol's answer plus the raw body, for eps_history and the raw store. */
 export interface EpsHistoryBatch { symbol: string; ticker: string; quarters: EpsQuarter[]; rawBody: string; fetchedAt: string }
-export interface SourceOutput { documents: CollectedDocument[]; facts: PendingFact[]; holderEvents?: HolderEvent[]; epsHistory?: EpsHistoryBatch[]; apiRequests?: number; failures?: { ticker: string; reason: string }[]; skipped?: string }
+export interface SourceOutput { documents: CollectedDocument[]; facts: PendingFact[]; holderEvents?: HolderEvent[]; epsHistory?: EpsHistoryBatch[]; apiRequests?: number; failures?: { ticker: string; reason: string }[]; skipped?: string; stoppedReason?: string }
 export interface PingResult { source: string; ok: boolean; ms: number; detail: string; skipped?: boolean }
 export interface SourceModule {
   name: string;

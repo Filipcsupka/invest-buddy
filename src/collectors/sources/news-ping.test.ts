@@ -270,19 +270,73 @@ describe("D31 news hardening", () => {
     expect((await collectGdelt(context(dead, { symbols: ["NVDA"] }))).failures).toEqual([{ ticker: "NVDA", reason: "HTTP 429" }]);
   });
 
-  it("stops after three network failures and records one soft failure", async () => {
+  it("stops after three network failures and records each soft failure", async () => {
     const http = stubHttp(() => { throw new NetworkError("Network error at https://api.gdeltproject.org/api/v2/doc/doc: ECONNRESET"); });
     const symbols = ["NVDA", "PLTR", "SQ", "GOOGL"];
     const output = await collectGdelt(context(http, { symbols }));
     expect(http.calls).toHaveLength(3);
-    expect(output.failures).toHaveLength(1);
-    expect(output.failures?.[0]).toMatchObject({ ticker: "gdelt", reason: expect.stringContaining("3 consecutive requests") });
+    expect(output.failures).toHaveLength(3);
+    expect(output.failures?.[0]).toMatchObject({ ticker: "NVDA", reason: expect.stringContaining("Network error") });
     const repo = new MemoryCollectorRepository();
     const result = await runCollect(repo, symbols, { sources: ["gdelt"], http, companies: COMPANIES });
     expect(result).toMatchObject({ exitCode: 0, documentsWritten: 0 });
-    expect(repo.runs[0].failures).toHaveLength(1);
+    expect(repo.runs[0].failures).toHaveLength(3);
     const limited = stubHttp(() => { throw new RateLimitLockout("HTTP 429"); });
     const rateResult = await runCollect(new MemoryCollectorRepository(), ["NVDA"], { sources: ["gdelt"], http: limited, companies: COMPANIES });
     expect(rateResult).toMatchObject({ exitCode: 0, documentsWritten: 0, failures: [{ ticker: "NVDA", reason: "HTTP 429" }] });
   });
+});
+
+it.each(["Timed out after 30000 ms at https://api.gdeltproject.org", "HTTP 503 at https://api.gdeltproject.org"])("stops GDELT after three failures: %s", async (message) => {
+  const http = stubHttp(() => { throw new Error(message); });
+  const result = await runCollect(new MemoryCollectorRepository(), ["NVDA", "PLTR", "SQ", "GOOGL"], { sources: ["gdelt"], http, companies: COMPANIES });
+  expect(http.calls).toHaveLength(3);
+  expect(result).toMatchObject({ exitCode: 0 });
+  expect(result.failures).toHaveLength(3);
+  expect(result.failures.every((failure) => failure.reason.startsWith("Network error:"))).toBe(true);
+});
+
+it("keeps intermittent GDELT failures in the run", async () => {
+  let calls = 0;
+  const http = stubHttp(() => { if (++calls % 2) throw new NetworkError("Network error: reset"); return "{}"; });
+  const output = await collectGdelt(context(http, { symbols: ["NVDA", "PLTR", "SQ", "GOOGL"] }));
+  expect(http.calls).toHaveLength(4);
+  expect(output.failures?.map((failure) => failure.ticker)).toEqual(["NVDA", "SQ"]);
+});
+
+it("records an extra-source budget stop and exits zero", async () => {
+  let elapsed = 0;
+  const http = stubHttp(() => { elapsed = 1000; return fx("gdelt_nvidia.json"); });
+  const repo = new MemoryCollectorRepository();
+  const result = await runCollect(repo, ["NVDA", "PLTR", "SQ"], { sources: ["gdelt"], companies: COMPANIES, http, clock: () => elapsed, timeBudgetSeconds: 1 });
+  expect(http.calls).toHaveLength(1);
+  expect(result).toMatchObject({ stoppedReason: "collection time budget reached", exitCode: 0 });
+  expect(repo.runs).toHaveLength(1);
+  expect(repo.runs[0].stoppedReason).toBe("collection time budget reached");
+});
+
+it("records one GDELT run with counts when signalled during a request", async () => {
+  const controller = new AbortController();
+  const http = stubHttp(() => { controller.abort(); return fx("gdelt_nvidia.json"); });
+  const repo = new MemoryCollectorRepository();
+  const result = await runCollect(repo, ["NVDA", "PLTR"], { sources: ["gdelt"], companies: COMPANIES, http, signal: controller.signal, now: () => new Date("2026-10-05T12:00:00Z") });
+  expect(http.calls).toHaveLength(1);
+  expect(result).toMatchObject({ stoppedReason: "SIGTERM received", documentsWritten: 2, exitCode: 0 });
+  expect(repo.runs).toHaveLength(1);
+  expect(repo.runs[0]).toMatchObject({ stoppedReason: "SIGTERM received", documentsWritten: 2 });
+});
+
+it("fails GDELT on invalid data instead of treating it as a transport outage", async () => {
+  const http = stubHttp(() => "broken JSON");
+  const result = await runCollect(new MemoryCollectorRepository(), ["NVDA"], { sources: ["gdelt"], companies: COMPANIES, http });
+  expect(result.exitCode).toBe(1);
+  expect(result.failures[0].reason).toContain("response is not JSON");
+});
+
+it.each(["AbortError", "TimeoutError"])("counts a GDELT body read %s as a network failure", async (name) => {
+  const http = stubHttp(() => { throw new DOMException("response body timed out", name); });
+  const result = await runCollect(new MemoryCollectorRepository(), ["NVDA", "PLTR", "SQ", "GOOGL"], { sources: ["gdelt"], companies: COMPANIES, http });
+  expect(http.calls).toHaveLength(3);
+  expect(result.exitCode).toBe(0);
+  expect(result.failures).toHaveLength(3);
 });

@@ -129,3 +129,28 @@ describe("job_runs storage", () => {
     expect(lines).toHaveLength(2);
   });
 });
+
+it("closes the run store when SIGTERM arrives during finish", async () => {
+  vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+  const controller = new AbortController();
+  const close = vi.fn(async () => {});
+  const terminate = vi.fn();
+  const onSignal = vi.fn(async () => ({}));
+  const finish = vi.fn(async () => { controller.abort(); });
+  await runLoggedJob("collect", async () => ({ failures: 0 }), {
+    signal: controller.signal, terminate, onSignal,
+    store: { start: async () => {}, finish, close },
+  });
+  expect(finish).toHaveBeenCalledOnce();
+  expect(close).toHaveBeenCalledOnce();
+  expect(onSignal).not.toHaveBeenCalled();
+  expect(terminate).not.toHaveBeenCalled();
+});
+
+it("records a budget stop as partial with exit zero", async () => {
+  vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+  const finish = vi.fn(async () => {});
+  await runLoggedJob("collect", async () => ({ failures: 0, partial: true }), { store: { start: async () => {}, finish } });
+  expect(finish).toHaveBeenCalledWith(expect.objectContaining({ status: "partial" }));
+  expect(process.exitCode ?? 0).toBe(0);
+});
