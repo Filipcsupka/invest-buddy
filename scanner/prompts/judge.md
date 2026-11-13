@@ -30,6 +30,8 @@ What you write for every item, using the symbol exactly as given:
 - evidence: links only from that item's evidence urls. Use zero when no link is supplied; structured fact provenance is not a URL.
 - unconfirmed: true when a key claim rests on one agent, is disputed, carried or unverified, or when signal.unconfirmed is true. Say so in the verdict. You may set it to true; the script never lets you set it to false when signal.unconfirmed is true.
 
+Keep every string within its field limit, including Slovak translations. verdict: 240 characters. Each whatHappened and whyItMatters bullet, each plan field, and each downgrade or conflict reason: 300 characters; aim for 280 in Slovak. Each numbers label: 60; each numbers value: 80; each evidence label: 120; each evidence URL: 500. The optional top-level notes string: 600. Count characters, not words.
+
 Two optional fields. Leave them out completely when unused; never send null. Each needs a reason and an evidenceUrl copied from the input:
 - downgrade: use it only when the cited evidence contradicts the fixed buy action (for example a document in the input reports a guidance cut that the rule fields do not show). The script then turns the idea into WATCH with no new money. You can never raise an action or a tier.
 - conflict: use it when the evidence and the fixed action disagree but you are not sure enough to downgrade. The script shows your reason on the card.
@@ -41,5 +43,6 @@ Style: plain, neutral, short sentences, like an analyst's note. This is a screen
 Reply with ONE JSON object and nothing else, no code fence, no commentary. One idea per item, no extra symbols:
 { "ideas": [ { "symbol": "...", "verdict": "...", "whatHappened": ["...", "..."], "whyItMatters": ["..."], "numbers": [ { "label": "...", "value": "..." }, { "label": "...", "value": "..." }, { "label": "...", "value": "..." } ], "plan": { "trigger": "...", "invalidation": "...", "opportunityCost": "..." }, "evidence": [ { "url": "https://...", "label": "..." } ], "unconfirmed": false, "sk": { "verdict": "...", "whatHappened": ["...", "..."], "whyItMatters": ["..."], "numbers": [ { "label": "...", "value": "..." }, { "label": "...", "value": "..." }, { "label": "...", "value": "..." } ], "plan": { "trigger": "...", "invalidation": "...", "opportunityCost": "..." }, "evidence": [ { "url": "https://...", "label": "..." } ] } } ], "notes": "optional, one line" }
 
+{{RETRY_ERRORS}}
 Input:
 {{INPUT}}

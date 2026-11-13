@@ -356,7 +356,7 @@ function stub() {
 const fs = require("fs"); const d = ${JSON.stringify(dir)};
 let stdin = ""; process.stdin.on("data", (c) => { stdin += c; });
 process.stdin.on("end", () => {
-  fs.appendFileSync(d + "/calls.jsonl", JSON.stringify({ args: process.argv.slice(2), stdinLength: stdin.length, hasInput: stdin.includes("Input:"), cwdFiles: fs.readdirSync(process.cwd()) }) + "\\n");
+  fs.appendFileSync(d + "/calls.jsonl", JSON.stringify({ args: process.argv.slice(2), stdin, stdinLength: stdin.length, hasInput: stdin.includes("Input:"), cwdFiles: fs.readdirSync(process.cwd()) }) + "\\n");
   const queue = d + "/queue.json";
   let out = fs.readFileSync(d + "/response.txt", "utf8");
   if (fs.existsSync(queue)) { const q = JSON.parse(fs.readFileSync(queue, "utf8")); if (q.length) { out = q.shift(); fs.writeFileSync(queue, JSON.stringify(q)); } }
@@ -551,6 +551,23 @@ test("a symbol fixed by the retry is stored and nothing is skipped", async () =>
   } finally { await web.close(); }
 });
 
+test("the retry prompt includes the failed symbol's validation error", async () => {
+  const s = stub();
+  s.queue([
+    envelope(JSON.stringify({ ideas: [words("NVDA", { verdict: "Cash left EUR 510." }), words("AMD", { evidence: [] })] })),
+    envelope(JSON.stringify({ ideas: [words("NVDA")] })),
+  ]);
+  const web = await mockWeb();
+  try {
+    const r = await runJudge(["--as-of", "2026-10-05", "--base-url", web.base], { s });
+    assert.equal(r.code, 0, r.err);
+    assert.doesNotMatch(s.calls()[0].stdin, /Previous validation errors for these symbols/);
+    assert.match(s.calls()[1].stdin, /Previous validation errors for these symbols/);
+    assert.match(s.calls()[1].stdin, /"NVDA":"figures not in the input: 510/);
+    assert.doesNotMatch(s.calls()[1].stdin, /"symbol":"AMD"/);
+  } finally { await web.close(); }
+});
+
 test("a second call is allowed regardless of reported cost", async () => {
   const bad = (cost) => envelope(JSON.stringify({ ideas: [words("NVDA", { verdict: "Cash left EUR 510." })] }), { total_cost_usd: cost });
   const s = stub(); s.queue([bad(0.6), bad(0.01)]);
@@ -692,6 +709,75 @@ test("run-judge goes on to the next pending gate only while one is open", async 
   // run() consumes nothing here, so the loop stops after one run.
   await runPendingGates(run, ["--gate-from-db"], async () => ({ asOf: gates[1], consumed: false }));
   assert.equal(calls, 1);
+});
+
+test("a partial gate page exits 0, records the skip, and drains the next page", async () => {
+  const remaining = ["NVDA", "AMD", "TST"];
+  const completed = [], posts = [];
+  const invalid = words("NVDA"); invalid.sk.whyItMatters = ["x".repeat(301)];
+  const s = stub();
+  s.queue([
+    envelope(JSON.stringify({ ideas: [invalid, words("AMD")] })),
+    envelope(JSON.stringify({ ideas: [invalid] })),
+    envelope(JSON.stringify({ ideas: [words("TST")] })),
+  ]);
+  const server = http.createServer((req, res) => {
+    let body = ""; req.on("data", (chunk) => { body += chunk; });
+    req.on("end", () => {
+      const send = (value) => { res.setHeader("content-type", "application/json"); res.end(JSON.stringify(value)); };
+      const url = new URL(req.url, "http://local");
+      if (url.pathname === "/api/ingest/gate" && req.method === "GET") return send({ asOf: "2026-10-05", symbols: remaining, reasons: {}, accessions: {}, revision: 1, consumed: remaining.length === 0 });
+      if (url.pathname === "/api/ingest/gate" && req.method === "POST") {
+        const page = JSON.parse(body).completedSymbols;
+        completed.push(page);
+        for (const symbol of page) remaining.splice(remaining.indexOf(symbol), 1);
+        return send({ recorded: true });
+      }
+      if (url.pathname === "/api/ingest/judge-input") {
+        const page = url.searchParams.get("symbols").split(",");
+        return send(input({ symbols: page.map((symbol) => ctx(symbol, [U1, U2])), signals: page.map((symbol) => sig(symbol)) }));
+      }
+      if (url.pathname === "/api/ingest/ai-budget" && req.method === "GET") return send({ tokensPerDayUtc: {} });
+      if (url.pathname === "/api/ingest/ai-budget") return send({ recorded: true });
+      if (url.pathname === "/api/ingest/ideas") { posts.push(JSON.parse(body)); return send({ recorded: true, stored: posts.at(-1).ideas.length }); }
+      send({ error: "not found" });
+    });
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const r = await runJudge(["--gate-from-db", "--max-symbols", "2", "--base-url", base], { s });
+    assert.equal(r.code, 0, r.err);
+    assert.equal(s.calls().length, 3);
+    assert.deepEqual(completed, [["NVDA", "AMD"], ["TST"]]);
+    assert.deepEqual(remaining, []);
+    assert.deepEqual(posts.map((p) => p.ideas.map((i) => i.symbol)), [["AMD"], ["TST"]]);
+    assert.match(posts[0].run.error, /NVDA: schema: .*longer than 300/);
+    assert.match(s.calls()[1].stdin, /longer than 300/);
+    assert.match(r.err, /WARN skipped NVDA/);
+  } finally { await new Promise((resolve) => server.close(resolve)); }
+});
+
+test("a failed ideas POST exits nonzero and leaves the gate pending", async () => {
+  const s = stub(); s.respond(envelope(JSON.stringify({ ideas: [words("NVDA")] })));
+  let consumed = false;
+  const server = http.createServer((req, res) => {
+    const url = new URL(req.url, "http://local");
+    res.setHeader("content-type", "application/json");
+    if (url.pathname === "/api/ingest/gate" && req.method === "GET") return res.end(JSON.stringify({ asOf: "2026-10-05", symbols: ["NVDA"], reasons: {}, accessions: {}, revision: 1, consumed: false }));
+    if (url.pathname === "/api/ingest/gate" && req.method === "POST") consumed = true;
+    if (url.pathname === "/api/ingest/judge-input") return res.end(JSON.stringify(input({ symbols: [ctx("NVDA", [U1, U2])], signals: [sig("NVDA")] })));
+    if (url.pathname === "/api/ingest/ai-budget" && req.method === "GET") return res.end(JSON.stringify({ tokensPerDayUtc: {} }));
+    if (url.pathname === "/api/ingest/ideas") { res.statusCode = 500; return res.end(JSON.stringify({ error: "unavailable" })); }
+    res.end(JSON.stringify({ recorded: true }));
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const r = await runJudge(["--gate-from-db", "--base-url", `http://127.0.0.1:${server.address().port}`], { s });
+    assert.equal(r.code, 3, r.err);
+    assert.equal(consumed, false);
+    assert.match(r.err, /POST failed: ideas HTTP 500/);
+  } finally { await new Promise((resolve) => server.close(resolve)); }
 });
 
 test("a 69-symbol gate advances one page at a time and stops at the monthly cap", async () => {

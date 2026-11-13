@@ -384,7 +384,7 @@ async function main() {
   if (o.gateFromDb && gatedSignals.length !== page.symbols.length) {
     log(`gate remains pending: judge input omitted ${page.symbols.filter((symbol) => !gatedSignals.some((s) => s.symbol === symbol)).join(", ")}`);
     process.exitCode = 1;
-    return;
+    return { hadHardError: true };
   }
   const news = o.force ? gatedSignals : changedSignals(gatedSignals, input.previousIdeas);
   log(`signals ${input.signals?.length ?? 0} (rules ${input.ruleConfigVersion}), changed ${news.length}${news.length ? `: ${news.map((s) => `${s.symbol} ${s.action} ${s.sizeTier}`).join(", ")}` : ""}`);
@@ -401,16 +401,17 @@ async function main() {
     const files = writeAgentFiles(work, input, modelInput);
     promptInput = { asOf: modelInput.asOf, ruleConfigVersion: modelInput.ruleConfigVersion, benchmark: modelInput.benchmark, files, signals: modelInput.items.map((i) => i.signal), note: "Read the files in the current directory for the facts, technicals and history." };
   }
-  const textFor = (items) => {
+  const textFor = (items, retryErrors = new Map()) => {
     const pi = o.agentMode ? { ...promptInput, signals: items.map((i) => i.signal) } : { ...promptInput, items };
-    return fill(prompt, { AS_OF: asOf, INPUT: JSON.stringify(pi) });
+    const feedback = retryErrors.size ? `Previous validation errors for these symbols. Correct them in this attempt:\n${JSON.stringify(Object.fromEntries(retryErrors))}\n` : "";
+    return fill(prompt, { AS_OF: asOf, INPUT: JSON.stringify(pi), RETRY_ERRORS: feedback });
   };
   let text = textFor(modelInput.items);
   if (o.dryRun) { log(`${offline ? "offline " : ""}dry run: ${news.length} signals; expected ${expectedTokens(text.length)} tokens; 0 model calls`); if (!process.env.SCAN_KEEP_WORK) rmSync(work, { recursive: true, force: true }); return; }
   let spent = addUsage({}, {}), cost = 0, calls = 0, model = o.model, rawOutput = null, error = null, cutoff = null, softStop = null;
   const monitor = !offline && !process.env.ANTHROPIC_API_KEY ? createUsageMonitor({ baseUrl: o.baseUrl, ingestToken: token, job: "judge", runId, log }) : null;
   if (monitor) softStop = await monitor.start();
-  const good = new Map(), skipped = new Map(), notes = [];
+  const good = new Map(), skipped = new Map(), notes = [], validationErrors = new Map(), validationAttempts = new Map();
   let pending = news;
   const t0 = Date.now();
   // At most two calls. A symbol whose wording still fails after the second call is skipped; the retry only asks for the symbols that failed.
@@ -420,7 +421,7 @@ async function main() {
     if (softStop) break;
     try {
       const sub = { ...modelInput, items: modelInput.items.filter((i) => pending.some((s) => s.symbol === i.signal.symbol)) };
-      text = textFor(sub.items);
+      text = textFor(sub.items, attempt === 2 ? validationErrors : new Map());
       const expected = expectedTokens(text.length);
       const monthly = await checkMonthlyBudget(o.baseUrl, token, expected);
       log(`monthly tokens ${monthly.used}/${monthly.cap}; expected ${expected} for attempt ${attempt}`);
@@ -438,13 +439,22 @@ async function main() {
       calls++; spent = addUsage(spent, r.usage); cost += r.costUsd ?? 0; if (r.model) model = r.model;
       log(`call ${calls} tokens in ${r.usage?.inputTokens ?? "?"} out ${r.usage?.outputTokens ?? "?"} cache read ${r.usage?.cacheReadTokens ?? "?"} cache created ${r.usage?.cacheCreationTokens ?? "?"}`);
       const out = normalizeOutput(extractJson(r.text));
-      const errs = validateJudgeOutput(out);
-      if (errs.length) throw new Error(`schema: ${errs.slice(0, 5).join("; ")}`);
-      const merged = mergeIdeas(out, pending, sub, { collect: true });
-      rawOutput = { ...out, ideas: [...(rawOutput?.ideas ?? []), ...out.ideas.filter((i) => !merged.failed.has(i.symbol))] };
+      const topErrors = validateJudgeOutput(out && typeof out === "object" && !Array.isArray(out) ? { ...out, ideas: [] } : out);
+      if (topErrors.length || !Array.isArray(out?.ideas)) throw new Error(`schema: ${[...topErrors, ...(!Array.isArray(out?.ideas) ? ["output.ideas: expected array"] : [])].slice(0, 5).join("; ")}`);
+      const valid = [], schemaFailed = new Map();
+      for (const idea of out.ideas) {
+        const errs = validateJudgeOutput({ ideas: [idea] });
+        if (errs.length && typeof idea?.symbol === "string" && pending.some((s) => s.symbol === idea.symbol)) schemaFailed.set(idea.symbol, `schema: ${errs.slice(0, 5).join("; ")}`);
+        else if (errs.length) throw new Error(`schema: ${errs.slice(0, 5).join("; ")}`);
+        else valid.push(idea);
+      }
+      const merged = mergeIdeas({ ideas: valid.filter((i) => !good.has(i.symbol)) }, pending, sub, { collect: true });
+      for (const [sym, why] of schemaFailed) merged.failed.set(sym, why);
+      rawOutput = { ...out, ideas: [...(rawOutput?.ideas ?? []), ...out.ideas.filter((i) => !merged.failed.has(i?.symbol) && !good.has(i?.symbol))] };
       for (const i of merged.ideas) good.set(i.symbol, i);
       notes.push(...merged.notes);
-      for (const [sym, why] of merged.failed) log(`attempt ${attempt}: ${sym} failed: ${why}`);
+      for (const s of pending) validationAttempts.set(s.symbol, (validationAttempts.get(s.symbol) ?? 0) + 1);
+      for (const [sym, why] of merged.failed) { validationErrors.set(sym, why); log(`attempt ${attempt}: ${sym} failed: ${why}`); }
       pending = pending.filter((s) => merged.failed.has(s.symbol));
       if (pending.length) error = pending.map((s) => `${s.symbol}: ${merged.failed.get(s.symbol)}`).join("; ");
       for (const s of pending) skipped.set(s.symbol, merged.failed.get(s.symbol));
@@ -458,6 +468,7 @@ async function main() {
   for (const s of pending) if (!skipped.has(s.symbol)) skipped.set(s.symbol, error ?? "no result");
   for (const s of news) if (good.has(s.symbol)) skipped.delete(s.symbol);
   const result = good.size ? { ideas: news.filter((s) => good.has(s.symbol)).map((s) => good.get(s.symbol)), notes } : null;
+  const hardSkipped = [...skipped.keys()].filter((sym) => validationAttempts.get(sym) !== 2);
   if (result) for (const [sym, why] of skipped) log(`SKIPPED ${sym}: ${why}`);
   if (!process.env.SCAN_KEEP_WORK) rmSync(work, { recursive: true, force: true });
   if (cutoff) { log(cutoffLine(cutoff, 0)); process.exit(CUTOFF_EXIT_CODE); }
@@ -474,14 +485,16 @@ async function main() {
   const downgraded = result.ideas.filter((i) => i.downgradedFrom).length, conflicts = result.ideas.filter((i) => i.conflictNote).length;
   log(`ideas: ${result.ideas.length} from ${news.length} changed signals, ${downgraded} downgraded, ${conflicts} conflict flags${skipped.size ? `; skipped ${[...skipped.keys()].join(", ")}` : ""}`);
   const file = join(OUT, `judge-payload-${asOf}-${runId.slice(0, 8)}.json`);
-  writeFileSync(file, JSON.stringify({ run: { ...runBase, status: "ok", ideaCount: result.ideas.length }, ideas: result.ideas, notes: rawOutput.notes ?? null }, null, 2) + "\n");
+  const skipReasons = [...skipped].map(([sym, why]) => `${sym}: ${why}`).join("; ").slice(0, 2000);
+  writeFileSync(file, JSON.stringify({ run: { ...runBase, status: "ok", ideaCount: result.ideas.length, ...(skipReasons ? { error: skipReasons } : {}) }, ideas: result.ideas, notes: rawOutput.notes ?? null }, null, 2) + "\n");
   log(`payload written ${file}`);
   if (o.dryRun) { log(`dry run: nothing posted, nothing recorded; ${totals}`); return; }
   try {
-    const res = await postRun(o, token, { run: { ...runBase, status: "ok", ideaCount: result.ideas.length, output: rawOutput }, ideas: result.ideas });
+    const res = await postRun(o, token, { run: { ...runBase, status: "ok", ideaCount: result.ideas.length, output: rawOutput, ...(skipReasons ? { error: skipReasons } : {}) }, ideas: result.ideas });
     log(`POST ok: ${JSON.stringify(res)}; ${totals}`);
-    if (o.gateFromDb) await consumeGate(o.baseUrl, token, "judge", gate.asOf, gate.revision, page.symbols.filter((symbol) => !skipped.has(symbol)));
-    if (o.gateFromDb && skipped.size) { log("gate remains pending after partial judgement; the next run retries it once"); process.exitCode = 1; }
+    if (o.gateFromDb) await consumeGate(o.baseUrl, token, "judge", gate.asOf, gate.revision, page.symbols.filter((symbol) => !hardSkipped.includes(symbol)));
+    if (skipped.size) log(`WARN skipped ${[...skipped.keys()].join(", ")}; reasons recorded in the judge run${o.gateFromDb ? hardSkipped.length ? `; ${hardSkipped.join(", ")} remain pending after a hard error` : "; gate symbols consumed after two validation attempts" : ""}`);
+    if (hardSkipped.length) { process.exitCode = 1; return { hadHardError: true }; }
   } catch (e) { log(`POST failed: ${e.message}; ${totals}`); process.exit(3); }
 }
 /** With --gate-from-db one run advances pending gates in pages, oldest first, until the queue or budget stops it. */
@@ -490,8 +503,8 @@ export async function runPendingGates(run = main, argv = process.argv.slice(2), 
   const next = peek ?? (async () => readGate(parseArgs(argv).baseUrl, getToken(), "judge"));
   for (let i = 0; i < MAX_GATES_PER_RUN; i++) {
     consumedGateDate = null;
-    await run();
-    if (!drain || process.exitCode || !consumedGateDate) return;
+    const outcome = await run();
+    if (!drain || outcome?.hadHardError || process.exitCode || !consumedGateDate) return;
     // Only another gate that is still open is worth a run; a 404 or a consumed gate means the queue is empty.
     const open = await next().catch(() => null);
     if (!open || open.consumed || (open.asOf === consumedGateDate && open.symbols.length === 0)) return;
