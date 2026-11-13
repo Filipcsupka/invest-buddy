@@ -3,7 +3,8 @@
  * Pure functions, no database and no network. The job in src/jobs/macro.ts feeds them stored data.
  *
  * dataTailwind: stable/falling yields, CPI and PPI not re-accelerating, and VIX below the cap.
- * Missing monthly inflation history falls back to yields and VIX; missing yields or VIX is unknown.
+ * CPI and PPI count on their own: a series that is missing, stale or lacks YoY history is left out and the other one still decides.
+ * Only when both are unavailable does the rule fall back to yields and VIX; missing yields or VIX is unknown.
  * sectorRotationIntoGrowth: true when the universe's average 20-session return beats SPY's by more than the margin.
  */
 export interface MacroConfig {
@@ -23,7 +24,7 @@ export interface MacroConfig {
   minCoverage: number;
 }
 export const DEFAULT_MACRO_CONFIG: MacroConfig = { windowSessions: 20, yieldMaxChange: 0.25, vixMax: 25, rotationMargin: 2, maxAgeDays: 5, inflationMaxAgeDays: 75, minCoverage: 0.8 };
-export const MACRO_RULES_VERSION = "macro-rules-v2";
+export const MACRO_RULES_VERSION = "macro-rules-v3";
 
 const number = (value: string | undefined, fallback: number, ok: (n: number) => boolean) => {
   if (value === undefined || value.trim() === "") return fallback;
@@ -45,7 +46,7 @@ export function macroConfig(env: Record<string, string | undefined> = process.en
   };
 }
 
-export interface MacroResult { value: boolean | null; reason: string; evidenceDates: string[] }
+export interface MacroResult { value: boolean | null; reason: string; evidenceDates: string[]; /** dataTailwind only: date of each inflation series that took part. */ inflationDates?: { cpi?: string; ppi?: string } }
 const day = (iso: string) => Date.parse(`${iso}T00:00:00Z`);
 const ageDays = (from: string, to: string) => Math.floor((day(to) - day(from)) / 86_400_000);
 const r2 = (value: number) => Math.round(value * 100) / 100;
@@ -93,11 +94,13 @@ export function evaluateDataTailwind(yields: YieldPoint[] | null, vix: VixPoint[
   const yieldOk = change <= config.yieldMaxChange + 1e-9, vixOk = latestVix.close < config.vixMax;
   const cpi = inflationDirection("CPIAUCSL", inflation.cpi, asOf, config.inflationMaxAgeDays);
   const ppi = inflationDirection("PPIACO", inflation.ppi, asOf, config.inflationMaxAgeDays);
-  const inflationAvailable = !!cpi && !!ppi;
-  const value = yieldOk && vixOk && (!inflationAvailable || (cpi.ok && ppi.ok));
-  const inflationText = inflationAvailable ? `${cpi.text}; ${ppi.text}` : `inflation fallback to rates and VIX: ${cpi?.text ?? unavailableInflation("CPIAUCSL", inflation.cpi, asOf)}; ${ppi?.text ?? unavailableInflation("PPIACO", inflation.ppi, asOf)}`;
+  // A gap in one series (FRED has no CPI for 2025-10) must not drop the other one's verdict.
+  const available = [cpi, ppi].filter((d): d is NonNullable<typeof d> => !!d);
+  const value = yieldOk && vixOk && available.every((d) => d.ok);
+  const inflationParts = [cpi?.text ?? unavailableInflation("CPIAUCSL", inflation.cpi, asOf), ppi?.text ?? unavailableInflation("PPIACO", inflation.ppi, asOf)].join("; ");
+  const inflationText = available.length === 2 ? inflationParts : available.length === 1 ? `inflation from one series: ${inflationParts}` : `inflation fallback to rates and VIX: ${inflationParts}`;
   const reason = `${value ? "Tailwind" : "No tailwind"}: 10-year yield ${earlier.date} ${earlier.value} to ${latestYield.date} ${latestYield.value} (change ${r2(change)} pp, ${yieldOk ? "at or below" : "above"} ${config.yieldMaxChange}); VIX ${latestVix.date} ${latestVix.close} (${vixOk ? "below" : "not below"} ${config.vixMax}); ${inflationText}. Placeholder rule ${MACRO_RULES_VERSION}`;
-  return { value, reason, evidenceDates: [latestYield.date, latestVix.date, ...(inflationAvailable ? [cpi.date, ppi.date] : [])] };
+  return { value, reason, evidenceDates: [latestYield.date, latestVix.date, ...available.map((d) => d.date)], ...(available.length ? { inflationDates: { ...(cpi ? { cpi: cpi.date } : {}), ...(ppi ? { ppi: ppi.date } : {}) } } : {}) };
 }
 
 export interface Bar { date: string; close: number }

@@ -49,6 +49,13 @@ describe("macro outcome", () => {
     expect(outcome.evidence.dataTailwind.map((item) => item.url)).toEqual(["https://fred.stlouisfed.org/series/DGS10", VIX_DOC_URL, "https://fred.stlouisfed.org/series/CPIAUCSL", "https://fred.stlouisfed.org/series/PPIACO"]);
     expect(outcome.dataTailwind.reason).toMatch(/CPIAUCSL YoY .* PPIACO YoY/);
   });
+  it("cites only the inflation series that took part", () => {
+    const monthly = Array.from({ length: 24 }, (_, i) => ({ date: new Date(Date.UTC(2024, 10 + i, 1)).toISOString().slice(0, 10), value: 100 + i }));
+    const cpi = monthly.filter((p) => p.date !== "2025-10-01");
+    const outcome = evaluateMacro(inputs({ cpi, ppi: monthly, cpiUrl: "https://fred.stlouisfed.org/series/CPIAUCSL", ppiUrl: "https://fred.stlouisfed.org/series/PPIACO" }), ASOF, DEFAULT_MACRO_CONFIG);
+    expect(outcome.dataTailwind.reason).toMatch(/inflation from one series/);
+    expect(outcome.evidence.dataTailwind.map((item) => [item.url, item.publishedAt])).toEqual([["https://fred.stlouisfed.org/series/DGS10", ASOF], [VIX_DOC_URL, ASOF], ["https://fred.stlouisfed.org/series/PPIACO", "2026-10-01"]]);
+  });
   it("is unknown with no evidence when inputs are missing", () => {
     const outcome = evaluateMacro(inputs({ yields: null, yieldUrl: null, vix: null, vixUrl: null, spy: null }), ASOF, DEFAULT_MACRO_CONFIG);
     expect(outcome.dataTailwind.value).toBeNull();

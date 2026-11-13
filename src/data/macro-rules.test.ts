@@ -91,6 +91,18 @@ describe("dataTailwind", () => {
     expect(result.reason).toMatch(/CPIAUCSL newest none/);
     expect(evaluateDataTailwind(yields(21, 4, 4.2), vix(18), ASOF, DEFAULT_MACRO_CONFIG, { cpi: monthly().slice(0, -3), ppi: monthly() }).value).toBe(true);
   });
+  it("keeps the other series when one lacks its year-ago base", () => {
+    // CPI 2026-10 with no 2025-10 point (as in FRED), PPI re-accelerating: no tailwind.
+    const gap = (points: YieldPoint[]) => points.filter((p) => p.date !== "2025-10-01");
+    const ppi = monthly(2); ppi[ppi.length - 1].value = 200;
+    const blocked = evaluateDataTailwind(yields(21, 4, 4.2), vix(18), ASOF, DEFAULT_MACRO_CONFIG, { cpi: gap(monthly()), ppi });
+    expect(blocked.value).toBe(false);
+    expect(blocked.reason).toMatch(/inflation from one series: CPIAUCSL newest 2026-10-01 \(missing, stale or lacks YoY history\); PPIACO YoY .*higher/);
+    expect(blocked.evidenceDates).toEqual([ASOF, ASOF, "2026-10-01"]);
+    const fine = evaluateDataTailwind(yields(21, 4, 4.2), vix(18), ASOF, DEFAULT_MACRO_CONFIG, { cpi: gap(monthly()), ppi: monthly(2) });
+    expect(fine.value).toBe(true);
+    expect(fine.reason).not.toMatch(/fallback/);
+  });
   it("uses monthly inflation dated to the start of a month published weeks later, and falls back once it is older than the limit", () => {
     const upTo = (last: string) => ({ cpi: monthly().filter((p) => p.date <= last), ppi: monthly(2).filter((p) => p.date <= last) });
     const august = evaluateDataTailwind(yields(21, 4, 4.2), vix(18), ASOF, DEFAULT_MACRO_CONFIG, upTo("2026-08-01"));
