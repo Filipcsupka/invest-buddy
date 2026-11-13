@@ -61,6 +61,21 @@
   --tier-on: light-dark(#ffffff, #1f0f45);
   --tier-wash: light-dark(#ede6fa, #2a1c4d);
   --tier-line: light-dark(#8a6fd0, #7b62c2);
+  /* Area colours: one hue per investor path, so a reader always knows the area. Stocks teal (Active), ETF indigo (Passive),
+     Indices magenta (Market overview). Hues no status band, the signal or the tier mark uses. `-nav` is the value on the navy sidebar,
+     which is navy in both themes. Always paired with a label or an icon, never colour alone. */
+  --area-stocks: light-dark(#0a6f68, #4fd1c5);
+  --area-stocks-on: light-dark(#ffffff, #04201d);
+  --area-stocks-wash: light-dark(#dcf4f1, #0d302d);
+  --area-stocks-nav: light-dark(#5fdccf, #5fdccf);
+  --area-etf: light-dark(#4352c9, #a3adff);
+  --area-etf-on: light-dark(#ffffff, #0d1236);
+  --area-etf-wash: light-dark(#e6e9fc, #1e2452);
+  --area-etf-nav: light-dark(#aab3ff, #aab3ff);
+  --area-indices: light-dark(#a52f7c, #f590cb);
+  --area-indices-on: light-dark(#ffffff, #2a0a1d);
+  --area-indices-wash: light-dark(#f9e4f0, #3e1631);
+  --area-indices-nav: light-dark(#f7a1d2, #f7a1d2);
   /* Depth: offset plus blur, soft and cool. Dark mode adds a hairline top light. */
   --shadow-1: 0 1px 2px light-dark(rgb(20 27 46 / 0.06), rgb(0 0 0 / 0.5)), 0 4px 12px -4px light-dark(rgb(20 27 46 / 0.08), rgb(0 0 0 / 0.45));
   --shadow-2: 0 2px 6px -1px light-dark(rgb(20 27 46 / 0.08), rgb(0 0 0 / 0.55)), 0 18px 36px -14px light-dark(rgb(20 27 46 / 0.2), rgb(0 0 0 / 0.75));
@@ -409,6 +424,28 @@ td,
 }
 .nav-links a[aria-current="page"] .side-icon {
   color: var(--accent);
+}
+/* Investor-path areas: the group label gets a dot and the area colour, icons and the current-page mark take the same colour. */
+.nav-links[data-area="stocks"] { --nav-area: var(--area-stocks-nav); }
+.nav-links[data-area="etf"] { --nav-area: var(--area-etf-nav); }
+.nav-links[data-area="indices"] { --nav-area: var(--area-indices-nav); }
+.nav-links[data-area] .nav-group {
+  color: var(--nav-area);
+}
+.nav-links[data-area] .nav-group::before {
+  content: "";
+  flex: none;
+  inline-size: 0.5rem;
+  block-size: 0.5rem;
+  border-radius: var(--radius-pill);
+  background: var(--nav-area);
+}
+.nav-links[data-area] .side-icon,
+.nav-links[data-area] a[aria-current="page"] .side-icon {
+  color: var(--nav-area);
+}
+.nav-links[data-area] a[aria-current="page"]::before {
+  background: var(--nav-area);
 }
 .side-foot {
   display: grid;

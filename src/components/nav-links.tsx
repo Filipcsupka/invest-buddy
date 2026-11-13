@@ -12,6 +12,8 @@ export type NavItem = { href: string; text: string; icon?: string; locked?: bool
 export type LockLabels = { open: string; free: string; plus: string; locked: string; owner: string; passive?: string };
 /** `everyone`: all viewers. `owner`: rendered only for a confirmed owner session, so shared HTML never holds these entries. */
 export type Audience = "everyone" | "owner";
+/** Investor-path area of a sidebar group: its label, icons and current-page mark take that area colour (tokens `--area-*-nav`). */
+export type NavArea = "stocks" | "etf" | "indices";
 
 /** Tier chip: a lock glyph plus the tier name for an item the viewer's tier cannot open, the plain tier name otherwise. */
 function Chip({ tier, label, locked }: { tier: string; label: string; locked?: boolean }) {
@@ -29,7 +31,7 @@ function Chip({ tier, label, locked }: { tier: string; label: string; locked?: b
  * the preview, so the shared HTML never prefetches owner-only pages. A group with `audience="owner"` renders nothing until the owner is
  * confirmed: customers and visitors never receive those entries.
  */
-export function NavLinks({ locale, label, items, sectionLabel, lock, audience = "everyone", separator = false }: { locale: string; label: string; sectionLabel?: string; items: NavItem[]; lock?: LockLabels; audience?: Audience; separator?: boolean }) {
+export function NavLinks({ locale, label, items, sectionLabel, lock, audience = "everyone", separator = false, area }: { locale: string; label: string; sectionLabel?: string; items: NavItem[]; lock?: LockLabels; audience?: Audience; separator?: boolean; area?: NavArea }) {
   const pathname = usePathname();
   const identity = useIdentity();
   const owner = identity.status === "ready" && identity.me.kind === "owner";
@@ -38,7 +40,7 @@ export function NavLinks({ locale, label, items, sectionLabel, lock, audience = 
   const passive = identity.status === "ready" && identity.me.kind === "customer" && identity.me.plan === "passive";
   if (audience === "owner" && !owner) return null;
   return (
-    <nav aria-label={label} className={separator ? `nav-links ${styles.separated}` : "nav-links"} data-audience={audience}>
+    <nav aria-label={label} className={separator ? `nav-links ${styles.separated}` : "nav-links"} data-audience={audience} data-area={area}>
       {sectionLabel && (
         <span className="nav-group nav-text">
           {sectionLabel}

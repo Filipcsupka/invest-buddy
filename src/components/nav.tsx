@@ -77,7 +77,7 @@ export function Nav({ locale }: { locale: Locale }) {
           <NavLinks locale={locale} label={m.nav.dashboard} lock={lock} items={[
             { href: "/dashboard", text: m.nav.dashboard, icon: "dashboard" },
           ]} />
-          <NavLinks locale={locale} label={m.nav.stocks} sectionLabel={m.nav.stocks} lock={lock} items={vendor([
+          <NavLinks locale={locale} label={m.nav.stocks} sectionLabel={m.nav.stocks} lock={lock} area="stocks" items={vendor([
             { href: "/stocks", text: m.nav.stocks, icon: "scanner" },
             { href: "/heatmap", text: getHeatmapMessages(locale).navLabel, icon: "heatmap" },
             { href: "/track-record", text: m.nav.trackRecord, icon: "track" },
@@ -86,8 +86,8 @@ export function Nav({ locale }: { locale: Locale }) {
             ...(ideasEnabled() && f.ADVICE_OUTPUT ? [{ href: "/ideas", text: m.nav.ideas, icon: "ideas", locked: true as const }] : []),
             ...(f.ADVICE_OUTPUT ? [{ href: "/sizing", text: m.nav.sizing, icon: "sizing" }] : []),
           ])} />
-          <NavLinks locale={locale} label={m.nav.etfs} sectionLabel={m.nav.etfs} lock={lock} items={etfItems.map((item) => ({ ...item, tier: "plus" }))} />
-          {f.MARKETS_VIEWS && <NavLinks locale={locale} label={m.nav.indices} sectionLabel={m.nav.indices} lock={lock} items={[{ href: "/indices", text: m.nav.indices, icon: "indices", locked: true, passive: true, tier: "plus" }]} />}
+          <NavLinks locale={locale} label={m.nav.etfs} sectionLabel={m.nav.etfs} lock={lock} area="etf" items={etfItems.map((item) => ({ ...item, tier: "plus" }))} />
+          {f.MARKETS_VIEWS && <NavLinks locale={locale} label={m.nav.indices} sectionLabel={m.nav.indices} lock={lock} area="indices" items={[{ href: "/indices", text: m.nav.indices, icon: "indices", locked: true, passive: true, tier: "plus" }]} />}
           {f.MARKETS_VIEWS && <NavLinks locale={locale} label={sections.marketsCalendar} sectionLabel={sections.marketsCalendar} lock={lock} separator items={marketItems.map((item) => ({ ...item, tier: "plus" }))} />}
           <NavLinks locale={locale} label={m.nav.learn} sectionLabel={m.nav.learn} lock={lock} items={[
             { href: "/methodology", text: m.nav.methodology, icon: "methodology", tier: "open" },

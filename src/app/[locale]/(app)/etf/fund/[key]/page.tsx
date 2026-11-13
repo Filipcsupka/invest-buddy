@@ -7,6 +7,7 @@ import { etfDetail } from "@/db/etf";
 import { getEtfMessages } from "@/i18n/etf-messages";
 import { pageMetadata } from "@/i18n/metadata";
 import { RecordCard, RecordHead } from "@/components/record-parts";
+import { AreaChip } from "@/components/kit";
 import { CallBadge, displayedDate, percent, amount, signedPercent } from "@/components/etf/format";
 import { etfOwnerView, etfScoreView, requireEtfScreeningAccess } from "@/components/etf/owner";
 import { latestEtfScores } from "@/db/etf-score";
@@ -47,7 +48,7 @@ async function EtfFundPage({ params }: Props) {
   const d = getEtfDetailMessages(locale);
   const field = (value: string | null) => value || m.noValue;
   return <div className="frame page">
-    <RecordHead title={fund.name} lede={m.fundLede} stamp={sample ? <span className="stamp">{m.sample}</span> : undefined} actions={<Link className="button secondary" href={`/${locale}/etf#etf-catalog`}>{m.back}</Link>} />
+    <RecordHead area={<AreaChip locale={locale} area="etf" />} title={fund.name} lede={m.fundLede} stamp={sample ? <span className="stamp">{m.sample}</span> : undefined} actions={<Link className="button secondary" href={`/${locale}/etf#etf-catalog`}>{m.back}</Link>} />
     <div className={s.stack}>
       {canScore ? <RecordCard id="fund-score" title={m.scoreTitle} lede={m.scoreNote}><EtfStoredScore score={score} m={m} /><p>{m.scoreMethod}</p><AdrLine text={getMessages(locale).common.disclaimer} /></RecordCard> : null}
       <RecordCard id="fund-details" title={m.fundDetails}><dl className={s.facts}>

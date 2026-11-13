@@ -154,3 +154,12 @@ it("does not call an open-to-everyone path part of a Passive plan when private u
   expect(card(html, "active")).not.toContain("Included in your plan");
   expect(card(html, "passive")).toContain('data-state="current"');
 });
+
+it.each([["en", "Stocks", "ETFs", "Indices"], ["sk", "Akcie", "ETF", "Indexy"]] as const)("gives each card its area colour and name: Active=Stocks, Passive=ETF, Market overview=Indices (%s)", async (locale, stocks, etf, indices) => {
+  viewer.mockResolvedValue({ tier: "free", preview: false });
+  const html = renderToStaticMarkup(await Dashboard(props(locale)));
+  expect(card(html, "active")).toMatch(/data-area="stocks"/);
+  expect(card(html, "active")).toContain(`<span class="kit-area" data-area="stocks"><span class="kit-area-dot" aria-hidden="true"></span><span>${stocks}</span>`);
+  expect(card(html, "passive")).toContain(`data-area="etf"><span class="kit-area-dot" aria-hidden="true"></span><span>${etf}</span>`);
+  expect(card(html, "overview")).toContain(`data-area="indices"><span class="kit-area-dot" aria-hidden="true"></span><span>${indices}</span>`);
+});

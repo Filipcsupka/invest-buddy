@@ -9,6 +9,7 @@ import t from "@/components/etf/etf.module.css";
 import { AssetTable } from "./asset-table";
 import { day, level, signedRatio } from "./format";
 import s from "./markets.module.css";
+import { AreaChip } from "@/components/kit";
 
 export const OwnerStamp = ({ locale }: { locale: Locale }) => <span className={s.owner}>{getMarketsMessages(locale).owner}</span>;
 
@@ -16,7 +17,7 @@ export const OwnerStamp = ({ locale }: { locale: Locale }) => <span className={s
 export function AssetListPage({ locale, title, lede, caption, basePath, rows, children }: { locale: Locale; title: string; lede: string; caption: string; basePath: string; rows: AssetSummary[]; children?: ReactNode }) {
   const m = getMarketsMessages(locale);
   return <div className="frame page">
-    <RecordHead title={title} lede={lede} stamp={<OwnerStamp locale={locale} />} />
+    <RecordHead title={title} lede={lede} stamp={<OwnerStamp locale={locale} />} area={basePath === "indices" ? <AreaChip locale={locale} area="indices" /> : undefined} />
     <div className={t.stack}>
       <RecordCard id="assets" title={caption} flush>{rows.some((row) => row.last !== null) ? <AssetTable locale={locale} rows={rows} caption={caption} basePath={basePath} /> : <p className={t.note}>{m.noBars}</p>}</RecordCard>
       {children}
@@ -31,7 +32,7 @@ export function AssetDetailPage({ locale, detail, lede, basePath, children }: { 
   const { summary, bars } = detail;
   const first = bars[0]?.date, last = bars.at(-1)?.date;
   return <div className="frame page">
-    <RecordHead title={summary.name} lede={lede} stamp={<OwnerStamp locale={locale} />} meta={<span className="num">{summary.code}{summary.currency && summary.currency !== "NA" ? ` · ${summary.currency}` : ""}</span>}
+    <RecordHead title={summary.name} lede={lede} stamp={<OwnerStamp locale={locale} />} area={basePath === "indices" ? <AreaChip locale={locale} area="indices" /> : undefined} meta={<span className="num">{summary.code}{summary.currency && summary.currency !== "NA" ? ` · ${summary.currency}` : ""}</span>}
       actions={<Link className="button secondary" href={`/${locale}/${basePath}`}>{m.back}</Link>} />
     <div className={t.stack}>
       {summary.last === null ? <p className={t.note}>{m.noBars}</p> : <>

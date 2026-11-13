@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { withPageLog } from "@/app/page-log";
 import { flags } from "@/config/flags";
 import { AppPageHead, HeadDisclosure, appPageClass } from "@/components/app-page-head";
+import { AreaChip } from "@/components/kit";
 import { getHeatmapMessages } from "@/i18n/heatmap-messages";
 import { getScreenMessages } from "@/i18n/screen-messages";
 import { PaywallSegment } from "@/components/paywall-segment";
@@ -151,7 +152,7 @@ async function Scanner({ params, searchParams }: Props) {
   const shownStates = filters.state ? [filters.state] : nonEmptyStates.length ? nonEmptyStates : [stateOrder[0]];
   const firstNonEmpty = shownStates.find((state) => visible.some((row) => row.state === state));
   return <div className={appPageClass}>
-    <AppPageHead title={getNavSectionsMessages(locale).stocksTitle} sample={data.sample} sampleText={m.common.sample} lede={m.meta.scannerDescription}
+    <AppPageHead area={<AreaChip locale={locale} area="stocks" />} title={getNavSectionsMessages(locale).stocksTitle} sample={data.sample} sampleText={m.common.sample} lede={m.meta.scannerDescription}
       meta={<DataStatus locale={locale} lastUpdated={data.lastUpdated} stale={data.stale} />}
       actions={<><Link className="button secondary" href={`/${locale}/heatmap`}>{h.navLabel}</Link><Link className="button secondary" href={`/${locale}/methodology`}>{m.nav.methodology}</Link></>} />
     <HeadDisclosure text={m.common.operatorDisclosure} />

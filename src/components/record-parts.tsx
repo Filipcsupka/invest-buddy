@@ -2,10 +2,11 @@ import type { HTMLAttributes, ReactNode } from "react";
 import "./record-pages.css";
 
 /** App-style page head for the record and reading pages: title and lede left, meta pills and actions right. */
-export function RecordHead({ title, lede, stamp, meta, actions, children }: { title: string; lede?: string; stamp?: ReactNode; meta?: ReactNode; actions?: ReactNode; children?: ReactNode }) {
+export function RecordHead({ title, lede, stamp, meta, actions, children, area }: { title: string; lede?: string; stamp?: ReactNode; meta?: ReactNode; actions?: ReactNode; children?: ReactNode; area?: ReactNode }) {
   return (
     <header className="rp-head">
       <div className="rp-head-main">
+        {area ? <div className="rp-head-area">{area}</div> : null}
         <div className="rp-head-title">
           <h1 className="title">{title}</h1>
           {stamp}

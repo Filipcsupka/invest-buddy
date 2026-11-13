@@ -14,6 +14,7 @@ import { pct } from "@/components/etf/detail";
 import { pageMetadata } from "@/i18n/metadata";
 import { formatNumber } from "@/i18n";
 import { RecordHead } from "@/components/record-parts";
+import { AreaChip } from "@/components/kit";
 import { CallBadge, VerificationBadge, amount, displayedDate, percent } from "@/components/etf/format";
 import s from "@/components/etf/etf.module.css";
 import { resolveLocale } from "@/app/[locale]/locale";
@@ -50,7 +51,7 @@ async function EtfPage({ params, searchParams }: Props) {
     return `/${locale}/etf?${params}`;
   };
   return <div className="frame page">
-    <RecordHead title={m.title} lede={m.lede} stamp={catalog.sample || picksSample ? <span className="stamp">{m.sample}</span> : undefined} actions={<Link className="button secondary" href={`/${locale}/etf/track-record`}>{m.trackRecord}</Link>} />
+    <RecordHead area={<AreaChip locale={locale} area="etf" />} title={m.title} lede={m.lede} stamp={catalog.sample || picksSample ? <span className="stamp">{m.sample}</span> : undefined} actions={<Link className="button secondary" href={`/${locale}/etf/track-record`}>{m.trackRecord}</Link>} />
     <dl className={s.stats}>
       <div className={s.stat}><dt>{m.catalogSize}</dt><dd>{formatNumber(locale, catalog.stats.size)}</dd></div>
       <div className={s.stat}><dt>{m.enrichedShare}</dt><dd>{catalog.stats.size ? `${formatNumber(locale, catalog.stats.enriched / catalog.stats.size * 100, 0)} %` : m.noValue}</dd></div>

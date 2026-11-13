@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { IconArrowRight } from "@/components/icons";
-import { IconLock } from "@/components/kit";
-import { PATH_HREF, type PathCard } from "@/config/investor-paths";
+import { AreaChip, IconLock } from "@/components/kit";
+import { PATH_AREA, PATH_HREF, type PathCard } from "@/config/investor-paths";
 import { fill, type Locale } from "@/i18n";
 import { getPathMessages } from "@/i18n/path-messages";
 import { PLAN_PRICES, formatEur } from "@/app/[locale]/pricing/plans";
@@ -31,8 +31,9 @@ export function InvestorPaths({ locale, cards, signedIn, licensed }: { locale: L
           const titleId = `path-${card.id}-title`;
           return (
             <li key={card.id} className={styles.item}>
-              <article className={`kit-card ${styles.card}`} data-path={card.id} data-state={card.state} aria-labelledby={titleId}>
+              <article className={`kit-card ${styles.card}`} data-path={card.id} data-area={PATH_AREA[card.id]} data-state={card.state} aria-labelledby={titleId}>
                 <p className={styles.top}>
+                  <AreaChip locale={locale} area={PATH_AREA[card.id]} />
                   <span className={styles.plan} data-locked={card.state === "locked" ? "" : undefined}>
                     {card.state === "locked" && <IconLock />}
                     <span>{copy.plan}</span>

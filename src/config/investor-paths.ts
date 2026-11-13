@@ -20,6 +20,9 @@ export const PATH_INCLUDES: Record<InvestorPath, readonly InvestorPath[]> = {
 /** Area each path opens. The market overview leads to the indices when the viewer may open them, otherwise to the method. */
 export const PATH_HREF = { active: "/stocks", passive: "/etf", overview: "/indices", overviewFallback: "/methodology" } as const;
 
+/** Area colour and chip of each path: Active is the Stocks area, Passive the ETF area, Market overview the Indices area. */
+export const PATH_AREA = { active: "stocks", passive: "etf", overview: "indices" } as const satisfies Record<InvestorPath, "stocks" | "etf" | "indices">;
+
 /** Each path's plan card on /pricing (element ids on that page). */
 export const PRICING_ANCHOR: Record<InvestorPath, string> = { active: "plus", passive: "passive", overview: "free" };
 

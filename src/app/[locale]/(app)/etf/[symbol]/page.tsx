@@ -12,6 +12,7 @@ import { getMessages } from "@/i18n";
 import { getEtfMessages } from "@/i18n/etf-messages";
 import { pageMetadata } from "@/i18n/metadata";
 import { RecordCard, RecordHead } from "@/components/record-parts";
+import { AreaChip } from "@/components/kit";
 import { CallBadge, VerificationBadge, amount, displayedDate, percent, signedPercent } from "@/components/etf/format";
 import s from "@/components/etf/etf.module.css";
 import { resolveLocale } from "@/app/[locale]/locale";
@@ -41,7 +42,7 @@ async function EtfDetailPage({ params }: Props) {
   const score = listingKey ? (await latestEtfScores([listingKey])).get(listingKey) : null;
   const field = (value: string | null) => value || m.noValue;
   return <div className="frame page">
-    <RecordHead title={`${pick.symbol} · ${pick.name}`} lede={m.detailLede} stamp={sample ? <span className="stamp">{m.sample}</span> : undefined} meta={<><CallBadge call={pick.call} locale={locale} /> <VerificationBadge status={pick.verificationStatus} locale={locale} /></>} actions={<Link className="button secondary" href={`/${locale}/etf`}>{m.back}</Link>} />
+    <RecordHead area={<AreaChip locale={locale} area="etf" />} title={`${pick.symbol} · ${pick.name}`} lede={m.detailLede} stamp={sample ? <span className="stamp">{m.sample}</span> : undefined} meta={<><CallBadge call={pick.call} locale={locale} /> <VerificationBadge status={pick.verificationStatus} locale={locale} /></>} actions={<Link className="button secondary" href={`/${locale}/etf`}>{m.back}</Link>} />
     <div className={s.stack}>
       {canScore ? <RecordCard id="etf-score" title={m.scoreTitle} lede={m.scoreNote}><EtfStoredScore score={score} m={m} /><p>{m.scoreMethod}</p><AdrLine text={getMessages(locale).common.disclaimer} /></RecordCard> : null}
       <RecordCard id="etf-thesis" title={m.thesis}><p className={s.lead}>{pick.thesis || m.noValue}</p></RecordCard>

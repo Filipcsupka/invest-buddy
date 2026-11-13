@@ -92,3 +92,14 @@ it.each([["en", "My portfolio (connect your broker)"], ["sk", "Moje portfólio (
   expect(group).toContain(label);
   expect(group).not.toContain("<a ");
 });
+
+it.each(["en", "sk"] as const)("marks the Stocks, ETFs and Indices groups with their area (%s)", (locale) => {
+  Object.assign(process.env, { MARKETS_VIEWS: "on", EODHD_PRIVATE_USE: "on", INSIDERS_PAGE: "on" });
+  as({ kind: "customer", email: "a@b.cz", plan: "passive", markets: false });
+  const html = renderToStaticMarkup(<Nav locale={locale} />);
+  const group = (area: string) => html.match(new RegExp(`<nav[^>]*data-area="${area}"[^>]*>[\\s\\S]*?</nav>`))?.[0] ?? "";
+  expect(group("stocks")).toContain(`/${locale}/plus-preview?page=stocks`);
+  expect(group("etf")).toContain(`href="/${locale}/etf"`);
+  expect(group("indices")).toContain(`href="/${locale}/indices"`);
+  expect(html.match(/data-area="/g)).toHaveLength(3);
+});

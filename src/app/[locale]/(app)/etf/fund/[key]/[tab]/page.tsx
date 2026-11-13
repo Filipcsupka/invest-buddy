@@ -8,6 +8,7 @@ import { etfDetailView } from "@/db/etf-detail";
 import { getEtfDetailMessages, getEtfMessages } from "@/i18n/etf-messages";
 import { pageMetadata } from "@/i18n/metadata";
 import { RecordHead } from "@/components/record-parts";
+import { AreaChip } from "@/components/kit";
 import { DividendsPanel, EtfTabNav, ExposurePanel, HoldingsPanel, OverviewPanel, PerformancePanel } from "@/components/etf/detail";
 import { isEtfTab } from "@/components/etf/tabs";
 import s from "@/components/etf/etf.module.css";
@@ -42,7 +43,7 @@ async function EtfFundTabPage({ params }: Props) {
   const view = await etfDetailView(fund.listingKey, { holdingsLimit: tab === "holdings" ? 500 : 10, barDays: tab === "overview" ? 400 : 1 });
   const m = getEtfDetailMessages(locale), e = getEtfMessages(locale);
   return <div className="frame page">
-    <RecordHead title={fund.name} lede={m.vendorLede} stamp={<span className="stamp">{m.ownerOnly}</span>}
+    <RecordHead area={<AreaChip locale={locale} area="etf" />} title={fund.name} lede={m.vendorLede} stamp={<span className="stamp">{m.ownerOnly}</span>}
       actions={<Link className="button secondary" href={`/${locale}/etf/fund/${encodeURIComponent(fund.listingKey)}`}>{e.fundDetails}</Link>} />
     <EtfTabNav locale={locale} listingKey={fund.listingKey} active={tab} />
     <div className={s.stack}>
