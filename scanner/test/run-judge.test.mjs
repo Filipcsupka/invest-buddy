@@ -356,7 +356,7 @@ function stub() {
 const fs = require("fs"); const d = ${JSON.stringify(dir)};
 let stdin = ""; process.stdin.on("data", (c) => { stdin += c; });
 process.stdin.on("end", () => {
-  fs.appendFileSync(d + "/calls.jsonl", JSON.stringify({ args: process.argv.slice(2), stdinLength: stdin.length, hasInput: stdin.includes("Input:"), cwdFiles: fs.readdirSync(process.cwd()) }) + "\\n");
+  fs.appendFileSync(d + "/calls.jsonl", JSON.stringify({ args: process.argv.slice(2), stdin, stdinLength: stdin.length, hasInput: stdin.includes("Input:"), cwdFiles: fs.readdirSync(process.cwd()) }) + "\\n");
   const queue = d + "/queue.json";
   let out = fs.readFileSync(d + "/response.txt", "utf8");
   if (fs.existsSync(queue)) { const q = JSON.parse(fs.readFileSync(queue, "utf8")); if (q.length) { out = q.shift(); fs.writeFileSync(queue, JSON.stringify(q)); } }
@@ -522,7 +522,10 @@ test("invalid wording is retried once, then a failed run is recorded and the exi
 });
 
 test("a symbol that still fails after the retry is skipped, the others are stored, exit 0", async () => {
-  const s = stub(); s.respond(envelope(JSON.stringify({ ideas: [words("NVDA", { verdict: "Cash left EUR 510." }), words("AMD", { evidence: [] })] })));
+  const s = stub(); s.queue([
+    envelope(JSON.stringify({ ideas: [words("NVDA", { verdict: "Cash left EUR 510." }), words("AMD", { evidence: [] })] })),
+    envelope(JSON.stringify({ ideas: [words("NVDA", { verdict: "Cash left EUR 510." })] })),
+  ]);
   const web = await mockWeb();
   try {
     const r = await runJudge(["--as-of", "2026-10-05", "--base-url", web.base], { s });
@@ -548,6 +551,25 @@ test("a symbol fixed by the retry is stored and nothing is skipped", async () =>
     assert.equal(s.calls().length, 2);
     assert.doesNotMatch(r.err, /SKIPPED/);
     assert.deepEqual(web.seen.posts[0].ideas.map((i) => i.symbol).sort(), ["AMD", "NVDA"]);
+  } finally { await web.close(); }
+});
+
+test("the retry prompt includes the failed symbol's validation error", async () => {
+  const s = stub();
+  s.queue([
+    envelope(JSON.stringify({ ideas: [words("NVDA", { verdict: "Cash left EUR 510." }), words("AMD", { evidence: [] })] })),
+    envelope(JSON.stringify({ ideas: [words("NVDA")] })),
+  ]);
+  const web = await mockWeb();
+  try {
+    const r = await runJudge(["--as-of", "2026-10-05", "--base-url", web.base], { s });
+    assert.equal(r.code, 0, r.err);
+    assert.equal(JSON.parse(s.calls()[0].stdin.split("Input:\n")[1]).previousValidationErrors, undefined);
+    assert.match(s.calls()[1].stdin, /previousValidationErrors/);
+    assert.match(s.calls()[1].stdin, /"NVDA":"figures not in the input: 510/);
+    const retryInput = JSON.parse(s.calls()[1].stdin.split("Input:\n")[1]);
+    assert.match(retryInput.previousValidationErrors.NVDA, /figures not in the input: 510/);
+    assert.doesNotMatch(s.calls()[1].stdin, /"symbol":"AMD"/);
   } finally { await web.close(); }
 });
 
@@ -694,6 +716,88 @@ test("run-judge goes on to the next pending gate only while one is open", async 
   assert.equal(calls, 1);
 });
 
+for (const mode of ["partial", "all-fail", "omitted", "partial-omitted", "hard-error", "extra-valid", "extra-invalid"]) test(`the ${mode} gate page consumes only completed attempts and drains when safe`, async () => {
+  const remaining = ["NVDA", "AMD", "TST"];
+  const completed = [], posts = [];
+  const invalid = words("NVDA"); invalid.sk.whyItMatters = ["x".repeat(301)];
+  const s = stub();
+  const invalidAmd = words("AMD", { verdict: "x".repeat(241) });
+  const omission = mode.includes("omitted");
+  const extra = mode.startsWith("extra-");
+  let firstIdeas = [invalid, words("AMD")], retryIdeas = [invalid];
+  if (mode === "all-fail") firstIdeas = retryIdeas = [invalid, invalidAmd];
+  if (omission) { firstIdeas = mode === "omitted" ? [] : [words("AMD")]; retryIdeas = []; }
+  if (extra) retryIdeas = [mode === "extra-valid" ? words("AMD") : invalidAmd];
+  s.queue([
+    envelope(JSON.stringify({ ideas: firstIdeas })),
+    envelope(mode === "hard-error" ? "invalid JSON" : JSON.stringify({ ideas: retryIdeas })),
+    envelope(JSON.stringify({ ideas: [words("TST")] })),
+  ]);
+  const server = http.createServer((req, res) => {
+    let body = ""; req.on("data", (chunk) => { body += chunk; });
+    req.on("end", () => {
+      const send = (value) => { res.setHeader("content-type", "application/json"); res.end(JSON.stringify(value)); };
+      const url = new URL(req.url, "http://local");
+      if (url.pathname === "/api/ingest/gate" && req.method === "GET") return send({ asOf: "2026-10-05", symbols: remaining, reasons: {}, accessions: {}, revision: 1, consumed: remaining.length === 0 });
+      if (url.pathname === "/api/ingest/gate" && req.method === "POST") {
+        const page = JSON.parse(body).completedSymbols;
+        completed.push(page);
+        for (const symbol of page) remaining.splice(remaining.indexOf(symbol), 1);
+        return send({ recorded: true });
+      }
+      if (url.pathname === "/api/ingest/judge-input") {
+        const page = url.searchParams.get("symbols").split(",");
+        return send(input({ symbols: page.map((symbol) => ctx(symbol, [U1, U2])), signals: page.map((symbol) => sig(symbol)) }));
+      }
+      if (url.pathname === "/api/ingest/ai-budget" && req.method === "GET") return send({ tokensPerDayUtc: {} });
+      if (url.pathname === "/api/ingest/ai-budget") return send({ recorded: true });
+      if (url.pathname === "/api/ingest/ideas") { posts.push(JSON.parse(body)); return send({ recorded: true, stored: posts.at(-1).ideas.length }); }
+      send({ error: "not found" });
+    });
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const r = await runJudge(["--gate-from-db", "--max-symbols", "2", "--base-url", base], { s });
+    const hard = mode === "hard-error" || extra;
+    const empty = mode === "all-fail" || mode === "omitted";
+    assert.equal(r.code, hard ? 1 : 0, r.err);
+    assert.equal(s.calls().length, hard ? 2 : 3);
+    assert.deepEqual(completed, hard ? [["AMD"]] : [["NVDA", "AMD"], ["TST"]]);
+    assert.deepEqual(remaining, hard ? ["NVDA", "TST"] : []);
+    assert.deepEqual(posts.map((p) => p.ideas.map((i) => i.symbol)), hard ? [["AMD"]] : [empty ? [] : ["AMD"], ["TST"]]);
+    assert.equal(posts[0].run.status, empty ? "failed" : "ok");
+    assert.match(posts[0].run.error, omission ? /NVDA: no idea in the output/ : extra ? /which is not an item/ : hard ? /JSON/ : /NVDA: schema: .*longer than 300/);
+    assert.match(r.err, /SKIPPED NVDA:/);
+    assert.match(r.err, /WARN skipped NVDA/);
+    if (empty) assert.match(r.err, /SKIPPED AMD:/);
+    if (omission) assert.match(r.err, /WARN NVDA omitted from final model output; no idea produced after 2 validation attempts/);
+    else assert.match(s.calls()[1].stdin, /longer than 300/);
+  } finally { await new Promise((resolve) => server.close(resolve)); }
+});
+
+for (const invalid of [false, true]) test(`a failed ideas POST (${invalid ? "all-fail" : "valid"} page) exits nonzero and leaves the gate pending`, async () => {
+  const s = stub(); s.respond(envelope(JSON.stringify({ ideas: [words("NVDA", invalid ? { verdict: "x".repeat(241) } : {})] })));
+  let consumed = false;
+  const server = http.createServer((req, res) => {
+    const url = new URL(req.url, "http://local");
+    res.setHeader("content-type", "application/json");
+    if (url.pathname === "/api/ingest/gate" && req.method === "GET") return res.end(JSON.stringify({ asOf: "2026-10-05", symbols: ["NVDA"], reasons: {}, accessions: {}, revision: 1, consumed: false }));
+    if (url.pathname === "/api/ingest/gate" && req.method === "POST") consumed = true;
+    if (url.pathname === "/api/ingest/judge-input") return res.end(JSON.stringify(input({ symbols: [ctx("NVDA", [U1, U2])], signals: [sig("NVDA")] })));
+    if (url.pathname === "/api/ingest/ai-budget" && req.method === "GET") return res.end(JSON.stringify({ tokensPerDayUtc: {} }));
+    if (url.pathname === "/api/ingest/ideas") { res.statusCode = 500; return res.end(JSON.stringify({ error: "unavailable" })); }
+    res.end(JSON.stringify({ recorded: true }));
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const r = await runJudge(["--gate-from-db", "--base-url", `http://127.0.0.1:${server.address().port}`], { s });
+    assert.equal(r.code, 3, r.err);
+    assert.equal(consumed, false);
+    assert.match(r.err, /POST failed: ideas HTTP 500/);
+  } finally { await new Promise((resolve) => server.close(resolve)); }
+});
+
 test("a 69-symbol gate advances one page at a time and stops at the monthly cap", async () => {
   const symbols = Array.from({ length: 69 }, (_, i) => `S${String(i).padStart(2, "0")}`);
   const remaining = [...symbols];
@@ -743,4 +847,36 @@ test("a 69-symbol gate advances one page at a time and stops at the monthly cap"
     assert.deepEqual(remaining, []);
     assert.equal(s.calls().length, 1);
   } finally { await new Promise((resolve) => server.close(resolve)); }
+});
+
+for (const duplicate of [false, true]) test(`unexpected ${duplicate ? "duplicate" : "extra"} symbols are rejected before schema splitting and retried with feedback`, async () => {
+  const s = stub();
+  const unexpected = words(duplicate ? "NVDA" : "EXTRA", { verdict: "x".repeat(241) });
+  s.queue([
+    envelope(JSON.stringify({ ideas: [...both, unexpected] })),
+    envelope(JSON.stringify({ ideas: both })),
+  ]);
+  const web = await mockWeb();
+  try {
+    const r = await runJudge(["--as-of", "2026-10-05", "--base-url", web.base], { s });
+    assert.equal(r.code, 0, r.err);
+    assert.equal(s.calls().length, 2);
+    const retryInput = JSON.parse(s.calls()[1].stdin.split("Input:\n")[1]);
+    assert.match(retryInput.previousValidationErrors.NVDA, duplicate ? /second idea for NVDA/ : /idea for EXTRA, which is not an item/);
+    assert.deepEqual(web.seen.posts[0].run.output.ideas.map((i) => i.symbol), ["NVDA", "AMD"]);
+  } finally { await web.close(); }
+});
+
+test("symbols-file keeps exit 0 for partial success followed by a call error", async () => {
+  const s = stub();
+  s.queue([
+    envelope(JSON.stringify({ ideas: [words("AMD", { evidence: [] }), words("NVDA", { verdict: "x".repeat(241) })] })),
+    envelope("invalid JSON"),
+  ]);
+  const web = await mockWeb();
+  try {
+    const r = await runJudge(["--as-of", "2026-10-05", "--base-url", web.base], { s });
+    assert.equal(r.code, 0, r.err);
+    assert.deepEqual(web.seen.posts[0].ideas.map((i) => i.symbol), ["AMD"]);
+  } finally { await web.close(); }
 });
