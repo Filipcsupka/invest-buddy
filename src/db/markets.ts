@@ -3,6 +3,10 @@ import type { OHLCV } from "@/engine";
 import { canDisplay } from "@/data/sources-registry";
 import type { AssetClass } from "./asset-bars";
 import { getPool } from "./pool";
+import { pageScoreRow, scoringMember } from "./universe";
+import { REVENUE_CONCEPTS } from "../engine/revenue-concepts";
+import { indexAnalytics, isVolatilityIndex, toRatingInputs, type ComponentFacts, type GrowthFact, type IndexAnalytics, type IndexBar, type PeerSeries } from "../markets/index-analytics";
+import type { IndexRatingInputs } from "../markets/index-types";
 
 type Query = Pick<pg.Pool, "query">;
 const num = (value: string | number | null | undefined): number | null => value == null ? null : Number.isFinite(Number(value)) ? Number(value) : null;
@@ -163,4 +167,205 @@ export function crossMatrix(pairs: { code: string; last: number | null }[], curr
     return a !== undefined && b !== undefined ? { value: a * b, derived: true } : { value: null, derived: false };
   };
   return currencies.map((from) => currencies.map((to) => rate(from, to)));
+}
+
+// ---- Index snapshots (General + Components) and the index rating read model ----
+
+/** Scalar fields of the vendor `General` block for an index (Code, Name, CurrencyCode, CountryName, ...). Nested values are dropped. */
+export interface IndexGeneral { name: string | null; currency: string | null; country: string | null; raw: Record<string, string | number | boolean> }
+
+export function parseIndexGeneral(payload: unknown): IndexGeneral | null {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  const raw: Record<string, string | number | boolean> = {};
+  for (const [key, value] of Object.entries(payload as Record<string, unknown>)) {
+    if (Object.keys(raw).length >= 60) break;
+    if (typeof value === "string" && value.trim()) raw[key] = value.trim().slice(0, 500);
+    else if ((typeof value === "number" && Number.isFinite(value)) || typeof value === "boolean") raw[key] = value;
+  }
+  if (!Object.keys(raw).length) return null;
+  const text = (key: string) => typeof raw[key] === "string" ? raw[key] as string : null;
+  return { name: text("Name"), currency: text("CurrencyCode"), country: text("CountryName") ?? text("CountryISO"), raw };
+}
+
+/** A fundamentals response for `filter=General,Components`: both blocks when present. A response without either is null. */
+export function parseIndexFundamentals(payload: unknown): { general: IndexGeneral | null; components: IndexComponent[] } | null {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  const body = payload as Record<string, unknown>;
+  if (!("General" in body) && !("Components" in body)) return null;
+  return { general: parseIndexGeneral(body.General), components: parseComponents(body.Components) };
+}
+
+/** Index assets whose snapshot was never attempted or was last attempted before `staleBefore` (ISO date). */
+export async function indexSnapshotsDue(db: Query, staleBefore: string, only?: string[]): Promise<string[]> {
+  const result = await db.query<{ vendor_symbol: string }>(`SELECT a.vendor_symbol FROM tracked_assets a
+    LEFT JOIN index_snapshot_refresh r ON r.index_symbol=a.vendor_symbol
+    WHERE a.enabled AND a.asset_class='index' AND (r.attempted_at IS NULL OR r.attempted_at < $1::date)
+      AND ($2::text[] IS NULL OR a.vendor_symbol=ANY($2::text[]))
+    ORDER BY r.attempted_at NULLS FIRST,a.sort,a.vendor_symbol`, [staleBefore, only ?? null]);
+  return result.rows.map((row) => row.vendor_symbol);
+}
+
+/**
+ * Stores one day's snapshot: the constituent list (index_components, through saveComponents) and the `General` block with
+ * the list's weight coverage. `null` records a failed attempt only. Idempotent for the same day.
+ */
+export async function saveIndexSnapshot(db: Query, indexSymbol: string, asOf: string,
+  snapshot: { general: IndexGeneral | null; components: IndexComponent[] } | null, requestFilter = "General,Components"): Promise<"ok" | "empty" | "failed"> {
+  if (!snapshot) {
+    await saveComponents(db, indexSymbol, asOf, null);
+    await db.query(`INSERT INTO index_snapshot_refresh (index_symbol,attempted_at,component_count,status) VALUES ($1,now(),0,'failed')
+      ON CONFLICT (index_symbol) DO UPDATE SET attempted_at=EXCLUDED.attempted_at,component_count=0,status='failed'`, [indexSymbol]);
+    return "failed";
+  }
+  const rows = snapshot.components;
+  await saveComponents(db, indexSymbol, asOf, rows);
+  const weighted = rows.filter((row) => row.weight !== null);
+  const status = rows.length ? "ok" : "empty";
+  if (snapshot.general || rows.length) {
+    await db.query(`INSERT INTO index_snapshots (index_symbol,as_of,general,name,currency,country,component_count,weighted_count,weight_sum,request_filter,fetched_at,source_id,display_allowed)
+      VALUES ($1,$2::date,$3::jsonb,$4,$5,$6,$7,$8,$9,$10,now(),'eodhd',$11)
+      ON CONFLICT (index_symbol,as_of) DO UPDATE SET general=EXCLUDED.general,name=EXCLUDED.name,currency=EXCLUDED.currency,country=EXCLUDED.country,
+        component_count=EXCLUDED.component_count,weighted_count=EXCLUDED.weighted_count,weight_sum=EXCLUDED.weight_sum,
+        request_filter=EXCLUDED.request_filter,fetched_at=EXCLUDED.fetched_at,display_allowed=EXCLUDED.display_allowed`,
+    [indexSymbol, asOf, JSON.stringify(snapshot.general?.raw ?? {}), snapshot.general?.name ?? null, snapshot.general?.currency ?? null, snapshot.general?.country ?? null,
+      rows.length, weighted.length, weighted.length ? weighted.reduce((sum, row) => sum + (row.weight as number), 0) : null, requestFilter, canDisplay("eodhd")]);
+  }
+  await db.query(`INSERT INTO index_snapshot_refresh (index_symbol,attempted_at,component_count,status) VALUES ($1,now(),$2,$3)
+    ON CONFLICT (index_symbol) DO UPDATE SET attempted_at=EXCLUDED.attempted_at,component_count=EXCLUDED.component_count,status=EXCLUDED.status`,
+  [indexSymbol, rows.length, status]);
+  return status;
+}
+
+export interface IndexSnapshot {
+  asOf: string; name: string | null; currency: string | null; country: string | null; general: Record<string, unknown>;
+  componentCount: number; weightedCount: number; weightSum: number | null; fetchedAt: string; sourceId: string; displayAllowed: boolean;
+}
+
+/** The latest stored `General` snapshot of an index with its provenance, or null. */
+export async function latestIndexSnapshot(vendorSymbol: string, db: Query | null = getPool()): Promise<IndexSnapshot | null> {
+  if (!db) return null;
+  const row = (await db.query<{ as_of: string; name: string | null; currency: string | null; country: string | null; general: Record<string, unknown>; component_count: number; weighted_count: number; weight_sum: string | null; fetched_at: string; source_id: string; display_allowed: boolean }>(
+    `SELECT as_of::text AS as_of,name,currency,country,general,component_count,weighted_count,weight_sum,fetched_at::text AS fetched_at,source_id,display_allowed
+     FROM index_snapshots WHERE index_symbol=$1 ORDER BY as_of DESC LIMIT 1`, [vendorSymbol])).rows[0];
+  return row ? { asOf: row.as_of, name: row.name, currency: row.currency, country: row.country, general: row.general, componentCount: Number(row.component_count),
+    weightedCount: Number(row.weighted_count), weightSum: num(row.weight_sum), fetchedAt: row.fetched_at, sourceId: row.source_id, displayAllowed: row.display_allowed } : null;
+}
+
+/** Years of index bars the rating read model loads: MA200, three years of volatility history and the five-year high. */
+export const INDEX_RATING_YEARS = 5;
+
+type IndexBarRow = { bar_date: string; close: string; high: string | null; low: string | null };
+const mapIndexBar = (row: IndexBarRow): IndexBar => ({ date: row.bar_date, close: Number(row.close), high: num(row.high), low: num(row.low) });
+
+/** Ascending daily bars of one index for the last `years` years before its latest stored bar. */
+export async function indexBars(vendorSymbol: string, db: Query | null = getPool(), years = INDEX_RATING_YEARS): Promise<IndexBar[]> {
+  if (!db) return [];
+  return (await db.query<IndexBarRow>(`SELECT bar_date::text AS bar_date,close,high,low FROM asset_bars
+    WHERE vendor_symbol=$1 AND bar_date > (SELECT max(bar_date) FROM asset_bars WHERE vendor_symbol=$1) - make_interval(years => $2::int)
+    ORDER BY bar_date`, [vendorSymbol, years])).rows.map(mapIndexBar);
+}
+
+/** Last `sessions` closes of every enabled index, for relative strength in local currency. */
+export async function indexPeerSeries(db: Query | null = getPool(), sessions = 260): Promise<PeerSeries[]> {
+  if (!db) return [];
+  const rows = (await db.query<{ vendor_symbol: string; currency: string | null; dates: string[] | null; closes: (string | number)[] | null }>(
+    `SELECT a.vendor_symbol,a.currency,r.dates,r.closes FROM tracked_assets a
+     LEFT JOIN LATERAL (SELECT array_agg(t.bar_date::text ORDER BY t.bar_date) AS dates,array_agg(t.close ORDER BY t.bar_date) AS closes
+       FROM (SELECT bar_date,close FROM asset_bars WHERE vendor_symbol=a.vendor_symbol ORDER BY bar_date DESC LIMIT $1) t) r ON true
+     WHERE a.enabled AND a.asset_class='index' ORDER BY a.sort,a.vendor_symbol`, [sessions])).rows;
+  return rows.map((row) => ({ symbol: row.vendor_symbol, currency: row.currency,
+    bars: (row.dates ?? []).map((date, i) => ({ date, close: Number(row.closes?.[i]) })) }));
+}
+
+/**
+ * Constituent to instrument join, through the security master and never by bare ticker alone: the constituent's vendor
+ * symbol (code.exchange) matches instrument_ids.vendor_symbols.eodhd; without a stored vendor symbol, it matches a ticker
+ * that is the vendor symbol itself (ASML.AS) or, on the US exchange only, the bare code. An instrument whose stored vendor
+ * symbol differs (SQ trades as XYZ.US) never matches by its ticker.
+ */
+const COMPONENT_TICKER = `(SELECT i.ticker FROM instruments i LEFT JOIN instrument_ids ids ON ids.ticker=i.ticker AND ids.valid_to IS NULL
+  WHERE c.exchange IS NOT NULL AND (ids.vendor_symbols->>'eodhd'=c.code||'.'||c.exchange
+    OR ((ids.vendor_symbols->>'eodhd') IS NULL AND (i.ticker=c.code||'.'||c.exchange OR (c.exchange='US' AND i.ticker=c.code))))
+  ORDER BY CASE WHEN ids.vendor_symbols->>'eodhd'=c.code||'.'||c.exchange THEN 0 WHEN i.ticker=c.code||'.'||c.exchange THEN 1 ELSE 2 END,i.ticker LIMIT 1)`;
+
+type ComponentRow = { code: string; exchange: string | null; name: string | null; sector: string | null; industry: string | null; weight: string | null; ticker: string | null;
+  bar_date: string | null; close: string | null; ma50: string | null; ma200: string | null; state: string | null; state_as_of: string | null };
+
+/**
+ * The latest constituent list of an index joined to our instruments, with each matched instrument's latest bar on or
+ * before `asOf`, its MA50 / MA200 over the stored closes, and its latest published rule state (the same rows the score
+ * pages read: pageScoreRow, current scored membership).
+ */
+export async function indexComponentFacts(vendorSymbol: string, asOf: string, db: Query | null = getPool()): Promise<{ asOf: string | null; rows: ComponentFacts[] }> {
+  if (!db) return { asOf: null, rows: [] };
+  const result = await db.query<ComponentRow & { list_as_of: string }>(`WITH c AS (
+      SELECT c.as_of,c.code,c.exchange,c.name,c.sector,c.industry,c.weight FROM index_components c
+      WHERE c.index_symbol=$1 AND c.as_of=(SELECT max(as_of) FROM index_components WHERE index_symbol=$1 AND as_of<=$2::date)
+    ), m AS (SELECT c.*,${COMPONENT_TICKER} AS ticker FROM c)
+    SELECT m.as_of::text AS list_as_of,m.code,m.exchange,m.name,m.sector,m.industry,m.weight,m.ticker,
+      b.bar_date,b.close,b.ma50,b.ma200,s.state,s.as_of AS state_as_of
+    FROM m
+    LEFT JOIN LATERAL (SELECT max(t.bar_date)::text AS bar_date,(array_agg(t.close ORDER BY t.bar_date DESC))[1] AS close,
+        CASE WHEN count(*) FILTER (WHERE t.rn<=50)=50 THEN avg(t.close) FILTER (WHERE t.rn<=50) END AS ma50,
+        CASE WHEN count(*)=200 THEN avg(t.close) END AS ma200
+      FROM (SELECT d.bar_date,d.close,row_number() OVER (ORDER BY d.bar_date DESC) AS rn FROM daily_bars d
+        WHERE d.ticker=m.ticker AND d.bar_date<=$2::date ORDER BY d.bar_date DESC LIMIT 200) t HAVING count(*)>0) b ON m.ticker IS NOT NULL
+    LEFT JOIN LATERAL (SELECT r.state,r.as_of::text AS as_of FROM score_results r
+      WHERE r.ticker=m.ticker AND r.as_of<=$2::date AND ${pageScoreRow("r")}
+        AND EXISTS (SELECT 1 FROM universe_membership um WHERE um.ticker=r.ticker AND ${scoringMember("um")}
+          AND um.valid_from<=r.as_of AND (um.valid_to IS NULL OR um.valid_to>r.as_of))
+      ORDER BY r.as_of DESC LIMIT 1) s ON m.ticker IS NOT NULL
+    ORDER BY m.weight DESC NULLS LAST,m.code`, [vendorSymbol, asOf]);
+  return {
+    asOf: result.rows[0]?.list_as_of ?? null,
+    rows: result.rows.map((row) => ({
+      code: row.code, exchange: row.exchange, vendorSymbol: row.exchange ? `${row.code}.${row.exchange}` : null, ticker: row.ticker,
+      name: row.name, sector: row.sector, industry: row.industry, weight: num(row.weight),
+      barDate: row.bar_date, close: num(row.close), ma50: num(row.ma50), ma200: num(row.ma200), state: row.state, stateAsOf: row.state_as_of,
+    })),
+  };
+}
+
+/**
+ * Point-in-time revenue and net income facts (quarters, and half-years from the vendor) for the given tickers, filed on or
+ * before `asOf`, newest filing per period, the last ~2.5 years of period ends.
+ */
+export async function componentGrowthFacts(tickers: string[], asOf: string, db: Query | null = getPool()): Promise<GrowthFact[]> {
+  if (!db || !tickers.length) return [];
+  const rows = (await db.query<{ ticker: string; source_id: string; concept: string; period: "quarter" | "half"; period_end: string; value: string }>(
+    `SELECT ticker,source_id,concept,period,period_end::text AS period_end,value::text AS value FROM (
+       SELECT DISTINCT ON (ticker,source_id,concept,period,period_end) ticker,source_id,concept,period,period_end,value FROM (
+         SELECT f.*,CASE WHEN f.period_end-f.period_start BETWEEN 80 AND 100 THEN 'quarter' ELSE 'half' END AS period FROM fundamentals_pit f
+         WHERE f.ticker=ANY($1::text[]) AND f.filed<=$2::date AND f.period_start IS NOT NULL AND f.period_end<=$2::date
+           AND f.period_end>$2::date-900
+           AND (f.period_end-f.period_start BETWEEN 80 AND 100 OR (f.source_id='eodhd' AND f.period_end-f.period_start BETWEEN 170 AND 195))
+           AND ((f.source_id='eodhd' AND f.taxonomy='eodhd' AND f.concept='Revenues')
+             OR (f.source_id='sec' AND f.taxonomy='us-gaap' AND f.unit='USD' AND f.concept=ANY($3::text[])))
+       ) f ORDER BY ticker,source_id,concept,period,period_end,filed DESC
+     ) d ORDER BY ticker,source_id,concept,period,period_end`, [tickers, asOf, [...REVENUE_CONCEPTS, "NetIncomeLoss"]])).rows;
+  return rows.map((row) => ({ ticker: row.ticker, source: row.source_id, concept: row.concept, period: row.period, periodEnd: row.period_end, value: Number(row.value) }));
+}
+
+export interface IndexRatingReadModel { snapshot: IndexSnapshot | null; analytics: IndexAnalytics; inputs: IndexRatingInputs; bars: IndexBar[] }
+
+/**
+ * Everything the index rating and the index pages need for one tracked index, or null when it is not a tracked index.
+ * Constituent figures use the list stored on or before the index's latest bar. Display stays behind the vendor gate.
+ */
+export async function indexRatingReadModel(vendorSymbol: string, db: Query | null = getPool()): Promise<IndexRatingReadModel | null> {
+  if (!db) return null;
+  const tracked = (await db.query("SELECT 1 FROM tracked_assets WHERE vendor_symbol=$1 AND asset_class='index'", [vendorSymbol])).rows.length > 0;
+  if (!tracked) return null;
+  const bars = await indexBars(vendorSymbol, db);
+  const asOf = bars.at(-1)?.date ?? null;
+  const volatility = isVolatilityIndex(vendorSymbol);
+  const list = asOf && !volatility ? await indexComponentFacts(vendorSymbol, asOf, db) : { asOf: null, rows: [] };
+  const tickers = [...new Set(list.rows.flatMap((row) => row.ticker ? [row.ticker] : []))];
+  const [growthFacts, peers, snapshot] = await Promise.all([
+    asOf ? componentGrowthFacts(tickers, asOf, db) : Promise.resolve([]),
+    volatility ? Promise.resolve([]) : indexPeerSeries(db),
+    latestIndexSnapshot(vendorSymbol, db),
+  ]);
+  const analytics = indexAnalytics({ symbol: vendorSymbol, bars, componentsAsOf: list.asOf, components: list.rows, growthFacts, peers });
+  return { snapshot, analytics, inputs: toRatingInputs(analytics, bars), bars };
 }
