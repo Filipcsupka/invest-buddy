@@ -17,9 +17,18 @@ Six factors share 100 points. Each factor is either assessed or not assessed; a 
 | Volatility and drawdown | 15 | 10 × (1 − percentile) of today's 20-session annualized realized volatility among the prior rolling values, up to three years. Drawdown from the 252-session closing high: under 5% earns 5, 5–10% earns 3, over 10% earns 0. Needs 273 bars. |
 | Stock-score distribution | 10 | 5, plus up to 5 for the Setup met share (full at 20%), minus up to 5 for the Criteria broken share (full at 50%). Kept between 0 and 10. |
 
-The score is points earned divided by the points of assessed factors, times 100, rounded to a whole number. Coverage is the assessed points as a percent of 100.
+The score is points earned divided by the points of the factors it uses, times 100, rounded to a whole number. Coverage is the points of those factors as a percent of 100.
 
-A score is shown only when Trend is assessed, at least two other factors are assessed, and coverage is at least 60%. Otherwise the result is "not enough data", with the reasons listed and every factor still reported. With bars alone, Trend and Volatility give 40% coverage, so an index needs member data before it gets a score.
+Every score carries a basis flag:
+
+| Basis | When | Factors used | Label (EN / SK) |
+| --- | --- | --- | --- |
+| Full | Trend, at least two other factors, and at least 60 of the 100 points assessed | All assessed factors | Price and member data / Cena a údaje o členoch |
+| Price-based only | The full condition is not met, but Trend and Volatility and drawdown are assessed | Trend and Volatility and drawdown, 40 points | Price-based only / Iba podľa ceny |
+
+Most indices have no member data with enough coverage yet, so they get a price-based score with 40% coverage. A member factor that is assessed but does not reach the full condition is still reported; it carries the note `not-in-composite` and does not change the price-based score. The result also holds a one-sentence description of the basis in both languages for pages to show next to the band.
+
+There is no score when Trend is not assessed, or when Volatility and drawdown is not assessed and the full condition is not met. The result is then "not enough data", with the reasons listed and every factor still reported.
 
 ## Bands
 
@@ -43,7 +52,7 @@ The band names describe current measured conditions.
 
 ## Output
 
-Each result has the score, band, coverage, assessed weight, points earned, the reasons a score was suppressed and the matched-member share. Each factor reports points, maximum, a headline value, the rule text, the evidence date, note codes and the measured inputs behind the points.
+Each result has the score, band, basis and its EN/SK text, coverage, assessed weight, points earned, the reasons a score was suppressed and the matched-member share. Each factor reports points, maximum, a headline value, the rule text, the evidence date, note codes and the measured inputs behind the points.
 
 | Factor | Headline value |
 | --- | --- |
@@ -54,7 +63,7 @@ Each result has the score, band, coverage, assessed weight, points earned, the r
 | Volatility and drawdown | Annualized realized volatility, percent |
 | Stock-score distribution | Setup met share minus Criteria broken share |
 
-Note codes: `no-bars`, `stale-bars`, `insufficient-bars`, `no-data`, `invalid-data`, `coverage-below-minimum`, `no-valuation-history`, `volatility-index`. Suppression codes: `trend-not-assessed`, `too-few-factors`, `assessed-weight-below-minimum`, `volatility-index`.
+Note codes: `no-bars`, `stale-bars`, `insufficient-bars`, `no-data`, `invalid-data`, `coverage-below-minimum`, `no-valuation-history`, `volatility-index`, `not-in-composite`. Suppression codes: `trend-not-assessed`, `volatility-not-assessed`, `volatility-index`.
 
 ## Volatility indices
 
@@ -62,4 +71,4 @@ A volatility index such as VIX gets no score and no band. It gets a regime label
 
 ## Display
 
-Pages show the rating only through the existing vendor-data gate (`marketsViewable` / `canUseVendorData`). Rendered text names no data vendor. Each display carries the as-of date, coverage and the informational disclaimer.
+Pages show the rating only through the existing vendor-data gate (`marketsViewable` / `canUseVendorData`). Rendered text names no data vendor. Each display carries the as-of date, coverage, the basis label and the informational disclaimer.

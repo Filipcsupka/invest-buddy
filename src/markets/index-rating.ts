@@ -53,7 +53,7 @@ export const INDEX_RATING_BANDS: readonly { band: IndexRatingBand; min: number }
   { band: "broad-weakness", min: 0 },
 ];
 
-/** A composite needs Trend, two more factors and this share of the 100 points. */
+/** The full basis needs Trend, two more factors and this share of the 100 points. */
 export const MIN_ASSESSED_WEIGHT_PCT = 60;
 /** Member-based factors need data for at least this share of members. */
 export const MIN_MEMBER_COVERAGE_PCT = 70;
@@ -79,9 +79,32 @@ export type IndexRatingNote =
   | "invalid-data"
   | "coverage-below-minimum"
   | "no-valuation-history"
-  | "volatility-index";
+  | "volatility-index"
+  /** Assessed, but left out because the composite fell back to the price-based basis. */
+  | "not-in-composite";
 
-export type IndexRatingSuppression = "trend-not-assessed" | "too-few-factors" | "assessed-weight-below-minimum" | "volatility-index";
+export type IndexRatingSuppression = "trend-not-assessed" | "volatility-not-assessed" | "volatility-index";
+
+/**
+ * What the composite is built from.
+ * - `full`: Trend, at least two other factors and at least 60% of the weight.
+ * - `price-only`: the full guard is not met, so only Trend and Volatility and drawdown (40 points) count.
+ */
+export type IndexRatingBasis = "full" | "price-only";
+
+/** Text for the basis flag, for pages and exports. Neutral wording under ADR-001. */
+export const INDEX_RATING_BASIS_TEXT: Readonly<Record<IndexRatingBasis, { en: { label: string; description: string }; sk: { label: string; description: string } }>> = {
+  full: {
+    en: { label: "Price and member data", description: "The score uses the index price and data on its members." },
+    sk: { label: "Cena a údaje o členoch", description: "Skóre vychádza z ceny indexu aj z údajov o jeho členoch." },
+  },
+  "price-only": {
+    en: { label: "Price-based only", description: "The score uses only the trend, volatility and drawdown of the index price. Member breadth, earnings and score data are not included." },
+    sk: { label: "Iba podľa ceny", description: "Skóre vychádza iba z trendu, volatility a poklesu ceny indexu. Údaje o členoch indexu (šírka trhu, zisky, skóre) nie sú zahrnuté." },
+  },
+};
+
+const PRICE_FACTORS: readonly IndexRatingFactorId[] = ["trend", "volatility"];
 
 export interface IndexRatingFactor {
   id: IndexRatingFactorId;
@@ -119,13 +142,16 @@ export interface IndexRatingResult {
   asOf: string;
   kind: "equity" | "volatility";
   status: "rated" | "not-enough-data" | "volatility-context";
+  /** Composite basis; null when no composite is given. */
+  basis: IndexRatingBasis | null;
+  basisText: (typeof INDEX_RATING_BASIS_TEXT)[IndexRatingBasis] | null;
   /** 0-100, null when suppressed. */
   score: number | null;
   band: IndexRatingBand | null;
-  /** Assessed factor weight as a percent of all 100 points. */
+  /** Weight of the factors in the composite (or all assessed factors when suppressed), as a percent of 100. */
   coveragePct: number;
   assessedWeight: number;
-  /** Points earned over assessed weight, before rounding to the score. */
+  /** Points earned by the factors in the composite (or all assessed factors when suppressed). */
   earned: number;
   suppressedBy: IndexRatingSuppression[];
   /** Matched members as a percent of all members, when known. */
@@ -363,6 +389,8 @@ export function rateIndex(inputs: IndexRatingInputs): IndexRatingResult {
       ...header,
       kind: "volatility",
       status: "volatility-context",
+      basis: null,
+      basisText: null,
       score: null,
       band: null,
       coveragePct: 0,
@@ -393,23 +421,29 @@ export function rateIndex(inputs: IndexRatingInputs): IndexRatingResult {
   };
   const factors = FACTOR_ORDER.map((id) => byId[id]);
   const assessed = factors.filter((f) => f.assessed);
-  const assessedWeight = assessed.reduce((sum, f) => sum + f.max, 0);
-  const earnedRaw = assessed.reduce((sum, f) => sum + (f.points ?? 0), 0);
-  const coveragePct = round2((assessedWeight / 100) * 100);
+  const weightOf = (list: IndexRatingFactor[]) => list.reduce((sum, f) => sum + f.max, 0);
+  const fullGuard = byId.trend.assessed && assessed.filter((f) => f.id !== "trend").length >= 2 && weightOf(assessed) >= MIN_ASSESSED_WEIGHT_PCT;
+  const priceGuard = byId.trend.assessed && byId.volatility.assessed;
+  const basis: IndexRatingBasis | null = fullGuard ? "full" : priceGuard ? "price-only" : null;
 
   const suppressedBy: IndexRatingSuppression[] = [];
   if (!byId.trend.assessed) suppressedBy.push("trend-not-assessed");
-  if (assessed.filter((f) => f.id !== "trend").length < 2) suppressedBy.push("too-few-factors");
-  if (coveragePct < MIN_ASSESSED_WEIGHT_PCT) suppressedBy.push("assessed-weight-below-minimum");
+  if (basis === null && !byId.volatility.assessed) suppressedBy.push("volatility-not-assessed");
 
-  const score = suppressedBy.length === 0 && assessedWeight > 0 ? Math.round((earnedRaw / assessedWeight) * 100) : null;
+  const used = basis === "price-only" ? assessed.filter((f) => PRICE_FACTORS.includes(f.id)) : assessed;
+  if (basis === "price-only") for (const f of assessed) if (!PRICE_FACTORS.includes(f.id)) f.notes.push("not-in-composite");
+  const assessedWeight = weightOf(used);
+  const earnedRaw = used.reduce((sum, f) => sum + (f.points ?? 0), 0);
+  const score = basis !== null && assessedWeight > 0 ? Math.round((earnedRaw / assessedWeight) * 100) : null;
   return {
     ...header,
     kind: "equity",
     status: score === null ? "not-enough-data" : "rated",
+    basis,
+    basisText: basis === null ? null : INDEX_RATING_BASIS_TEXT[basis],
     score,
     band: score === null ? null : bandFor(score),
-    coveragePct,
+    coveragePct: round2((assessedWeight / 100) * 100),
     assessedWeight,
     earned: round2(earnedRaw),
     suppressedBy,

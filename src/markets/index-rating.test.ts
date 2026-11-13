@@ -6,6 +6,7 @@ import {
   distributionPoints,
   drawdownFromHigh,
   earningsPoints,
+  INDEX_RATING_BASIS_TEXT,
   INDEX_RATING_VERSION,
   INDEX_RATING_WEIGHTS,
   percentileBelow,
@@ -182,7 +183,7 @@ describe("composite bands", () => {
   // Assessed weight 85 (all but valuation). Calm uptrend gives 40 of 85 from bars.
   it("rates broad strength", () => {
     const r = rateIndex(inputs(strongMembers));
-    expect(r).toMatchObject({ status: "rated", score: 100, band: "broad-strength", coveragePct: 85, assessedWeight: 85, suppressedBy: [] });
+    expect(r).toMatchObject({ status: "rated", basis: "full", score: 100, band: "broad-strength", coveragePct: 85, assessedWeight: 85, suppressedBy: [] });
   });
   it("rates constructive", () => {
     // 40 + breadth 20 + earnings 0 + distribution 0 = 60 / 85 -> 71
@@ -249,8 +250,8 @@ describe("not assessed paths", () => {
     const r = rateIndex(inputs({ ...strongMembers, bars: [] }));
     expect(factor(r, "trend").notes).toEqual(["no-bars"]);
     expect(factor(r, "volatility").notes).toEqual(["no-bars"]);
-    expect(r).toMatchObject({ status: "not-enough-data", score: null, band: null });
-    expect(r.suppressedBy).toContain("trend-not-assessed");
+    expect(r).toMatchObject({ status: "not-enough-data", score: null, band: null, basis: null });
+    expect(r.suppressedBy).toEqual(["trend-not-assessed", "volatility-not-assessed"]);
   });
   it("leaves bar factors not assessed when the last bar is stale", () => {
     const r = rateIndex(inputs({ asOf: day(N - 1 + 8) }));
@@ -275,35 +276,57 @@ describe("not assessed paths", () => {
   });
 });
 
-describe("composite suppression", () => {
-  it("suppresses without trend even when other factors are strong", () => {
+describe("composite basis and suppression", () => {
+  it("suppresses without trend even when member factors are strong", () => {
     const r = rateIndex(inputs({ ...strongMembers, bars: calmUptrend.slice(0, 150), asOf: day(149) }));
-    expect(r.score).toBeNull();
-    // breadth 20 + earnings 15 + distribution 10 = 45 < 60
-    expect(r.suppressedBy).toEqual(["trend-not-assessed", "assessed-weight-below-minimum"]);
+    expect(r).toMatchObject({ status: "not-enough-data", score: null, band: null, basis: null, basisText: null });
+    expect(r.suppressedBy).toEqual(["trend-not-assessed", "volatility-not-assessed"]);
+    // breadth 20 + earnings 15 + distribution 10 assessed, none in a composite
     expect(r.coveragePct).toBe(45);
   });
-  it("suppresses bars-only input: trend plus one factor", () => {
+  it("rates price factors alone on the price-only basis", () => {
     const r = rateIndex(inputs());
-    expect(r).toMatchObject({ status: "not-enough-data", score: null, coveragePct: 40, suppressedBy: ["too-few-factors", "assessed-weight-below-minimum"] });
-    expect(r.earned).toBe(40);
+    expect(r).toMatchObject({ status: "rated", basis: "price-only", score: 100, band: "broad-strength", coveragePct: 40, assessedWeight: 40, earned: 40, suppressedBy: [] });
+    expect(r.basisText!.en.label).toBe("Price-based only");
+    expect(r.basisText!.sk.label).toBe("Iba podľa ceny");
   });
-  it("suppresses trend plus two factors below 60% weight", () => {
+  it("renormalizes a weak price-only index over 40 points", () => {
+    const r = rateIndex(inputs({ bars: stormyDowntrend }));
+    expect(r).toMatchObject({ basis: "price-only", score: 0, band: "broad-weakness", coveragePct: 40 });
+  });
+  it("falls back to price-only when member factors do not reach the full guard", () => {
+    // trend 25 + volatility 15 + distribution 10 = 50 < 60
+    const r = rateIndex(inputs({ scoreDistribution: weakMembers.scoreDistribution }));
+    expect(r).toMatchObject({ basis: "price-only", score: 100, coveragePct: 40, earned: 40 });
+    expect(factor(r, "distribution")).toMatchObject({ assessed: true, points: 0, notes: ["not-in-composite"] });
+    expect(factor(r, "trend").notes).toEqual([]);
+  });
+  it("suppresses when volatility is missing and the full guard is not met", () => {
     // trend 25 + earnings 15 + distribution 10 = 50, volatility needs 273 bars
     const r = rateIndex(inputs({ earnings: strongMembers.earnings, scoreDistribution: strongMembers.scoreDistribution, bars: calmUptrend.slice(0, 250), asOf: day(249) }));
-    expect(r.suppressedBy).toEqual(["assessed-weight-below-minimum"]);
-    expect(r.coveragePct).toBe(50);
-    expect(r.score).toBeNull();
+    expect(r.suppressedBy).toEqual(["volatility-not-assessed"]);
+    expect(r).toMatchObject({ basis: null, score: null, coveragePct: 50 });
   });
-  it("rates at exactly 60% weight: trend, volatility, breadth", () => {
+  it("uses the full basis without volatility when member factors meet the guard", () => {
+    // trend 25 + breadth 20 + earnings 15 = 60
+    const r = rateIndex(inputs({ breadth: strongMembers.breadth, earnings: strongMembers.earnings, bars: calmUptrend.slice(0, 250), asOf: day(249) }));
+    expect(r).toMatchObject({ basis: "full", coveragePct: 60, score: 100, suppressedBy: [] });
+  });
+  it("uses the full basis at exactly 60% weight: trend, volatility, breadth", () => {
     const r = rateIndex(inputs({ breadth: strongMembers.breadth }));
-    expect(r).toMatchObject({ status: "rated", coveragePct: 60, score: 100, band: "broad-strength" });
+    expect(r).toMatchObject({ status: "rated", basis: "full", coveragePct: 60, score: 100, band: "broad-strength" });
+    expect(r.basisText!.en.label).toBe("Price and member data");
+    expect(factor(r, "breadth").notes).toEqual([]);
   });
-  it("renormalizes over assessed factors only", () => {
+  it("renormalizes over assessed factors on the full basis", () => {
     const r = rateIndex(inputs({ breadth: weakMembers.breadth }));
     // 40 / 60 -> 67
     expect(r.score).toBe(67);
     expect(r.band).toBe("constructive");
+  });
+  it("has neutral basis wording", () => {
+    const text = JSON.stringify(INDEX_RATING_BASIS_TEXT).toLowerCase();
+    for (const word of ["buy", "sell", "target", "kúp", "predaj", "cieľ"]) expect(text).not.toContain(word);
   });
 });
 
@@ -311,7 +334,7 @@ describe("volatility index", () => {
   const vix = (bars = series(N, 0, 0.01, 0.01), change: Partial<IndexRatingInputs> = {}) => rateIndex(inputs({ symbol: "VIX.INDX", bars, isVolatilityIndex: true, ...strongMembers, ...change }));
   it("never gets a composite", () => {
     const r = vix();
-    expect(r).toMatchObject({ kind: "volatility", status: "volatility-context", score: null, band: null, coveragePct: 0, suppressedBy: ["volatility-index"] });
+    expect(r).toMatchObject({ kind: "volatility", status: "volatility-context", basis: null, basisText: null, score: null, band: null, coveragePct: 0, suppressedBy: ["volatility-index"] });
     expect(r.factors.every((f) => !f.assessed && f.notes[0] === "volatility-index")).toBe(true);
   });
   it.each([
