@@ -59,3 +59,20 @@ it.each([[false, false, false], [true, false, false], [false, true, false]])("ga
   if (allowed) await expect(requireEtfScreeningAccess()).resolves.toBeUndefined();
   else await expect(requireEtfScreeningAccess()).rejects.toThrow(/404|NOT_FOUND/);
 });
+
+it("a licensed free account opens no ETF page or fund tab; Passive does", async () => {
+  vi.stubEnv("DATA_MODE", "db");
+  vi.stubEnv("EODHD_PRIVATE_USE", "off");
+  vi.stubEnv("VENDOR_DISPLAY_LICENSE", "on");
+  vi.stubEnv("MARKETS_VIEWS", "on");
+  state.vendor = true;
+  const props = { params: Promise.resolve({ locale: "en", key: "TEST" }) };
+  state.viewer = { tier: "free", preview: false, userId: "free", plan: "free" };
+  for (const page of [ListPage, FundPage]) await expect(page(props)).rejects.toThrow(/404|NOT_FOUND/);
+  for (const tab of ETF_TABS) await expect(TabPage({ params: Promise.resolve({ locale: "en", key: "TEST", tab }) })).rejects.toThrow(/404|NOT_FOUND/);
+  // The free licensed market rule still opens indices, economy and calendar.
+  await expect(assertViewable("eodhd", "indices")).resolves.toBeUndefined();
+  await expect(assertViewable("eodhd", "etf")).rejects.toThrow(/404|NOT_FOUND/);
+  state.viewer = { tier: "free", preview: false, userId: "passive", plan: "passive" };
+  for (const tab of ETF_TABS) expect(renderToStaticMarkup(await TabPage({ params: Promise.resolve({ locale: "en", key: "TEST", tab }) }))).toContain("frame page");
+});

@@ -29,7 +29,13 @@ Checked in `src/proxy.ts` and again on each page. Tests: `src/proxy.test.ts` (ro
 | `/indices`, `/economy`, `/calendar` | Sign-in | Plus preview | Open | Open | Open |
 | `/methodology`, `/pricing`, legal pages | Open | Open | Open | Open | Open |
 
-The gates in code: `canUseVendorData` (stock data: owner, Active, or a vendor licence), `canUseFundData` and `canOpenFunds` (adds Passive), and `marketsViewable(viewer, env, section)` in `src/markets/gate.ts`, where `indices`, `economy`, `calendar` and `etf` are the fund sections. A free account gets the fund market sections only with `VENDOR_DISPLAY_LICENSE=on` and `EODHD_PRIVATE_USE` off. The dashboard is no longer refused by the proxy; the page reads no score, portfolio or market data for a viewer without stock access (`dashboardStockAccess`).
+The gates in code: `canUseVendorData` (stock data: owner, Active, or a vendor licence), `canUseFundData` and `canOpenFunds` (adds Passive), and `marketsViewable(viewer, env, section)` in `src/markets/gate.ts`, where `indices`, `economy`, `calendar` and `etf` are the fund sections. The dashboard is no longer refused by the proxy; the page reads no score, portfolio or market data for a viewer without stock access (`dashboardStockAccess`).
+
+The stock gate does not depend on `EODHD_PRIVATE_USE`. Outside fixture mode, the stock routes and the dashboard board always need `canUseVendorData` (`stockRoutesGated`, `canSeeStockData` in `src/viewer/viewer.ts`). With private use off, that means the owner, Active, or `VENDOR_DISPLAY_LICENSE=on`. Only the fixture sample universe with private use off is open to everyone.
+
+With `VENDOR_DISPLAY_LICENSE=on` and private use off, a signed-in free account also opens indices, economy and calendar, and the sidebar unlocks them for it. The ETF catalog, fund pages and fund data tabs stay Passive and Active, licence or not.
+
+On the ETF detail page (`/etf/[symbol]`), the call badge (buy zone, watch, avoid), the call column and the plan card (entry zone, add when, stop adding when) are the owner's research notes and render only for the owner. Customers, Passive and Active included, see the rule observations: thesis, events, risks, costs, evidence, history dates and measured outcomes (ADR-001).
 
 For the paywall segments below, Passive counts as `free`: they are stock depth.
 
@@ -64,7 +70,7 @@ Everything else needs no marker and is free: landing, methodology, legal pages, 
 ## Pages and routes
 
 - `/scanner` is a public page. It is listed in the sitemap without query strings. The old statement that `/scanner` redirects to the dashboard was wrong: it returned 404 while `PAYWALL` was off, and `PAYWALL` no longer hides it. Filtered URLs and `?view=` previews are not in the sitemap.
-- `/pricing` shows the three plans side by side (Free market overview, Passive, Plus as the Active plan) with prices and the VAT note, a table of what each plan opens, and the Free and Plus comparison built from `src/config/tiers.ts`. Paid plans show "Opens soon" and a waitlist form; nothing can be bought.
+- `/pricing` shows the three plans side by side (Free market overview, Passive, Plus as the Active plan) with prices and the VAT note, a table of what each plan opens, and the stock features by plan built from `src/config/tiers.ts` (Free and Passive: not included; Plus: included or its limit). Paid plans show "Opens soon" and a waitlist form; nothing can be bought.
 - Locked text is not in the HTML for a free viewer, so crawlers see the free version.
 
 ## Adding a segment

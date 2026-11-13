@@ -7,8 +7,11 @@ import { sideStorageKey as sideKey } from "./pre-paint";
 import { useIdentity } from "./auth/identity-store";
 import styles from "./nav-links.module.css";
 
-/** `passive`: a locked item the Passive plan also opens (fund and market views). Stock items never set it. */
-export type NavItem = { href: string; text: string; icon?: string; locked?: boolean; passive?: boolean; tier?: "open" | "free" | "plus" };
+/**
+ * `passive`: a locked item the Passive plan also opens (fund and market views). Stock items never set it.
+ * `freeOpen`: a locked item every signed-in account opens, set only while a vendor display licence allows the free market views.
+ */
+export type NavItem = { href: string; text: string; icon?: string; locked?: boolean; passive?: boolean; freeOpen?: boolean; tier?: "open" | "free" | "plus" };
 export type LockLabels = { open: string; free: string; plus: string; locked: string; owner: string; passive?: string };
 /** `everyone`: all viewers. `owner`: rendered only for a confirmed owner session, so shared HTML never holds these entries. */
 export type Audience = "everyone" | "owner";
@@ -48,7 +51,7 @@ export function NavLinks({ locale, label, items, sectionLabel, lock, audience = 
         </span>
       )}
       {items.map((item) => {
-        if (item.locked && !owner && !plus && !(passive && item.passive) && lock) {
+        if (item.locked && !owner && !plus && !(passive && item.passive) && !(customer && item.freeOpen) && lock) {
           const page = item.href.slice(1);
           const showLock = customer;
           return (
@@ -66,7 +69,7 @@ export function NavLinks({ locale, label, items, sectionLabel, lock, audience = 
           <Link key={item.href} href={href} aria-current={current ? "page" : undefined} title={item.text}>
             <SideIcon name={item.icon ?? item.href.slice(1)} />
             <span className="nav-text">{item.text}</span>
-            {customer && lock && audience === "everyone" && <Chip tier={tier} label={passive && item.passive && tier === "plus" ? lock.passive ?? lock.plus : lock[tier]} />}
+            {customer && lock && audience === "everyone" && <Chip tier={!plus && !owner && !(passive && item.passive) && item.freeOpen ? "free" : tier} label={passive && item.passive && tier === "plus" ? lock.passive ?? lock.plus : !plus && !owner && item.freeOpen ? lock.free : lock[tier]} />}
           </Link>
         );
       })}

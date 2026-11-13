@@ -25,7 +25,7 @@ import { storedMacroEvents } from "@/data/macro-calendar-store";
 import { DataStatus } from "@/components/data-status";
 import { getViewer } from "@/viewer/get-viewer";
 import { latestShortlist, shortlistAccess, shortlistViewEnabled } from "@/data/shortlist";
-import { canOpenFunds, canUseVendorData, investorPath, vendorLicensed, type Viewer } from "@/viewer/viewer";
+import { canOpenFunds, canSeeStockData, canUseVendorData, investorPath, vendorLicensed, type Viewer } from "@/viewer/viewer";
 import { marketsViewable } from "@/markets/gate";
 import { InvestorPaths } from "@/components/dashboard/investor-paths";
 import { PATH_HREF, pathCards } from "@/config/investor-paths";
@@ -48,13 +48,12 @@ export async function generateMetadata({ params }: LocaleParams): Promise<Metada
 }
 
 /**
- * Stock data on the dashboard. While EODHD_PRIVATE_USE is on, the proxy no longer refuses the page; this check withholds every
- * vendor-derived block (scores, state changes, shortlist, portfolio, market sleeves) from viewers without stock access, and the page
- * then reads none of that data.
+ * Stock data on the dashboard. The proxy does not refuse the page; this check withholds every stored stock block (scores, state
+ * changes, shortlist, portfolio, market sleeves) from viewers without stock access, whatever EODHD_PRIVATE_USE says, and the page
+ * then reads none of that data. Only the fixture sample universe with private use off is open to everyone (canSeeStockData).
  */
 export function dashboardStockAccess(viewer: Viewer, env: Record<string, string | undefined> = process.env): boolean {
-  if (env.EODHD_PRIVATE_USE !== "on") return true;
-  return !viewer.preview && canUseVendorData(viewer, env);
+  return canSeeStockData(viewer, env);
 }
 
 /** The path cards for this viewer, or null for the owner (who sees every path). */

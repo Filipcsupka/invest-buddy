@@ -27,15 +27,15 @@ export async function generateMetadata({ params }: LocaleParams): Promise<Metada
   return pageMetadata(locale, "/pricing", p.title, p.lede);
 }
 
-/** Free and Plus cell text for one paid id, from the copy and TIER_LIMITS. A lock has no free text; a limit shows its numbers. */
+/** Plus cell text for one paid stock id, from the copy and TIER_LIMITS. A lock reads "Included"; a limit shows the Plus number. */
 function cells(locale: Locale, id: TierId, pm: ReturnType<typeof getPricingMessages>) {
   const entry = id in TIERS ? TIERS[id as keyof typeof TIERS] : FEATURE_TIERS[id as keyof typeof FEATURE_TIERS];
   const row = pm.rows[id];
-  if (entry.tier !== "paid" || entry.mode !== "limit" || !row?.free || !row.paid) return { free: pm.notIncluded, paid: pm.included };
+  if (entry.tier !== "paid" || entry.mode !== "limit" || !row?.paid) return { paid: pm.included };
   const key: LimitKey = entry.limit;
   // A null limit means no cap: a template with a number gives way to "No limit", plain text such as "Full history" stays.
   const show = (template: string, n: number | null) => (n !== null ? fill(template, { n, days: plural(locale, pm.days, n) }) : template.includes("{") ? pm.unlimited : template);
-  return { free: show(row.free, TIER_LIMITS.free[key]), paid: show(row.paid, TIER_LIMITS.paid[key]) };
+  return { paid: show(row.paid, TIER_LIMITS.paid[key]) };
 }
 
 export default async function Pricing({ params }: LocaleParams) {
@@ -221,10 +221,12 @@ export default async function Pricing({ params }: LocaleParams) {
             <tr>
               <th scope="col">{pm.colFeature}</th>
               <th scope="col">{pm.colFree}</th>
+              <th scope="col">{pm.colPassive}</th>
               <th scope="col">{pm.colPaid}</th>
             </tr>
           </thead>
           <tbody>
+            {/* Every row is a stock feature: Free and Passive do not include the stock area (the access table above). */}
             {ids.map((id) => {
               const row = pm.rows[id]!;
               const c = cells(locale, id, pm);
@@ -236,8 +238,9 @@ export default async function Pricing({ params }: LocaleParams) {
                     <span className={styles.detail}>{row.detail}</span>
                     <span className={styles.status} data-live={live ? "" : undefined}>{live ? pm.statusLive : pm.statusPlanned}</span>
                   </th>
-                  <td className={styles.free_cell}>{c.free}</td>
-                  <td className={styles.paid_cell}>{c.paid}</td>
+                  <td className={styles.free_cell} data-access="no">{pm.notIncluded}</td>
+                  <td className={styles.free_cell} data-access="no">{pm.notIncluded}</td>
+                  <td className={styles.paid_cell} data-access="yes">{c.paid}</td>
                 </tr>
               );
             })}

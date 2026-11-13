@@ -17,6 +17,8 @@ it.each(["en", "sk"] as const)("hides sizing navigation while advice is off (%s)
 });
 
 it.each(["en", "sk"] as const)("links Stocks and keeps the heat map link (%s)", (locale) => {
+  // The fixture sample universe with private use off is open to every visitor, so the shared shell links the stock pages.
+  process.env.DATA_MODE = "fixture";
   const html = renderToStaticMarkup(<Nav locale={locale} />);
   expect(html).toContain(`href="/${locale}/dashboard"`);
   expect(html).toContain(locale === "en" ? "Dashboard" : "Prehľad");

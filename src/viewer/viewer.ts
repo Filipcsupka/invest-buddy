@@ -93,6 +93,23 @@ export function canUseVendorData(viewer: Viewer, env: Record<string, string | un
 }
 
 /**
+ * Stock routes need a stock permission whenever they can show stored data: always outside fixture mode, and in fixture mode while
+ * EODHD_PRIVATE_USE is on. Fixture mode with private use off shows only the sample universe, which is open to every visitor.
+ */
+export function stockRoutesGated(env: Record<string, string | undefined> = process.env): boolean {
+  return env.EODHD_PRIVATE_USE === "on" || env.DATA_MODE !== "fixture";
+}
+
+/**
+ * May this viewer see stock data on the dashboard and the stock routes? Whatever EODHD_PRIVATE_USE says, stored stock data needs
+ * canUseVendorData: the owner, an Active plan, or a vendor display licence. The owner's free preview counts as a visitor.
+ */
+export function canSeeStockData(viewer: Viewer, env: Record<string, string | undefined> = process.env): boolean {
+  if (!stockRoutesGated(env)) return true;
+  return !viewer.preview && canUseVendorData(viewer, env);
+}
+
+/**
  * ETF ratings, the ETF catalog and fund pages: the owner, Active customers and Passive customers, never a preview. A free account and
  * a visitor do not get them even with a vendor licence; the ETF screen is a paid path.
  */

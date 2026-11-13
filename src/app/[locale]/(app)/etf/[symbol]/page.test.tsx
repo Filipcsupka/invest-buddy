@@ -16,7 +16,8 @@ it.each(["en", "sk"])("shows the ETF card sections and measurement in %s", async
   const html = renderToStaticMarkup(await Page({ params: Promise.resolve({ locale, symbol: "VWRA" }) }));
   expect(html).toContain(locale === "en" ? "SAMPLE DATA" : "UKÁŽKOVÉ ÚDAJE");
   expect(html).toContain(locale === "en" ? "Thesis" : "Téza");
-  expect(html).toContain(locale === "en" ? "Entry zone" : "Vstupná zóna");
+  // The plan is the owner's note (ADR-001); outside a request the viewer is a visitor. See detail-wording.test.tsx for the owner.
+  expect(html).not.toContain(locale === "en" ? "Entry zone" : "Vstupná zóna");
   expect(html).toContain(locale === "en" ? "Evidence" : "Zdroje");
   expect(html).toContain("SPY");
 });

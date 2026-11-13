@@ -45,8 +45,16 @@ describe("dashboard stock access", () => {
   ] as const)("private use on: %s gets the stock board: %s", (name, expected) => {
     expect(dashboardStockAccess(viewers[name]!, { EODHD_PRIVATE_USE: "on" })).toBe(expected);
   });
-  it("private use off leaves the board open, as before", () => {
-    expect(dashboardStockAccess(viewers.anonymous!, { EODHD_PRIVATE_USE: "off" })).toBe(true);
+  it.each(["anonymous", "free", "passive"] as const)("private use off: %s needs a display licence for stored data; the fixture sample stays open", (name) => {
+    const viewer = viewers[name]!;
+    expect(dashboardStockAccess(viewer, { EODHD_PRIVATE_USE: "off", DATA_MODE: "db" })).toBe(false);
+    expect(dashboardStockAccess(viewer, { EODHD_PRIVATE_USE: "off" })).toBe(false);
+    expect(dashboardStockAccess(viewer, { EODHD_PRIVATE_USE: "off", DATA_MODE: "db", VENDOR_DISPLAY_LICENSE: "on" })).toBe(true);
+    expect(dashboardStockAccess(viewer, { EODHD_PRIVATE_USE: "off", DATA_MODE: "fixture" })).toBe(true);
+    expect(dashboardStockAccess(viewer, { EODHD_PRIVATE_USE: "on", DATA_MODE: "fixture" })).toBe(false);
+  });
+  it.each(["plus", "trial", "owner"] as const)("private use off: %s keeps the board", (name) => {
+    expect(dashboardStockAccess(viewers[name]!, { EODHD_PRIVATE_USE: "off", DATA_MODE: "db" })).toBe(true);
   });
 });
 
@@ -142,8 +150,9 @@ describe("choose your path", () => {
   });
 });
 
-it("does not call an open-to-everyone path part of a Passive plan when private use is off", async () => {
+it("does not call an open-to-everyone path part of a Passive plan in the fixture sample universe", async () => {
   process.env.EODHD_PRIVATE_USE = "off";
+  process.env.DATA_MODE = "fixture";
   process.env.MARKETS_VIEWS = "on";
   viewer.mockResolvedValue({ tier: "free", preview: false, userId: "5", plan: "passive" });
   scores.mockResolvedValue({ rows: [], sample: false, lastUpdated: null, stale: false });
@@ -162,4 +171,30 @@ it.each([["en", "Stocks", "ETFs", "Indices"], ["sk", "Akcie", "ETF", "Indexy"]] 
   expect(card(html, "active")).toContain(`<span class="kit-area" data-area="stocks"><span class="kit-area-dot" aria-hidden="true"></span><span>${stocks}</span>`);
   expect(card(html, "passive")).toContain(`data-area="etf"><span class="kit-area-dot" aria-hidden="true"></span><span>${etf}</span>`);
   expect(card(html, "overview")).toContain(`data-area="indices"><span class="kit-area-dot" aria-hidden="true"></span><span>${indices}</span>`);
+});
+
+it.each([
+  ["anonymous", { tier: "free", preview: false }],
+  ["free", { tier: "free", preview: false, userId: "6", plan: "free" }],
+  ["passive", { tier: "free", preview: false, userId: "5", plan: "passive" }],
+] as const)("private use off, no licence: %s gets no stored stock data in the HTML", async (_name, who) => {
+  process.env.EODHD_PRIVATE_USE = "off";
+  process.env.DATA_MODE = "db";
+  delete process.env.VENDOR_DISPLAY_LICENSE;
+  viewer.mockResolvedValue(who);
+  const html = renderToStaticMarkup(await Dashboard(props("en")));
+  expect(html).toContain("data-investor-paths");
+  expect(scores).not.toHaveBeenCalled();
+  expect(portfolio).not.toHaveBeenCalled();
+  expect(changes).not.toHaveBeenCalled();
+  expect(marketData).not.toHaveBeenCalled();
+});
+
+it("private use off with a display licence: a visitor gets the board", async () => {
+  process.env.EODHD_PRIVATE_USE = "off";
+  process.env.DATA_MODE = "db";
+  process.env.VENDOR_DISPLAY_LICENSE = "on";
+  viewer.mockResolvedValue({ tier: "free", preview: false });
+  renderToStaticMarkup(await Dashboard(props("en")));
+  expect(scores).toHaveBeenCalled();
 });

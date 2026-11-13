@@ -8,6 +8,11 @@ vi.mock("@/markets/gate", async () => {
   return { assertViewable: async () => { if (!viewable()) notFound(); }, marketsViewable: () => viewable() };
 });
 vi.mock("@/db/etf-detail", () => ({ etfDetailView: (...args: unknown[]) => detail(...args) }));
+// The paid fund permission (canOpenFunds) follows the same switch here; detail-wording and access tests cover it with real viewers.
+vi.mock("@/components/etf/owner", async () => {
+  const { notFound } = await import("next/navigation");
+  return { requireEtfScreeningAccess: async () => { if (!viewable()) notFound(); } };
+});
 import Page, * as route from "./page";
 
 const originalMode = process.env.DATA_MODE;

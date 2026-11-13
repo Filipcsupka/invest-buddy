@@ -21,10 +21,10 @@ const ownerCookie = { cookie: "__Host-ib_session=owner" };
 const customerCookie = { cookie: "__Host-ib_session=customer" };
 const browserDoc = { "sec-fetch-dest": "document", accept: "text/html" };
 
-const original = { mode: process.env.DATA_MODE, ideas: process.env.IDEAS_PAGE, owner: process.env.OWNER_VIEW, paywall: process.env.PAYWALL, auth: process.env.AUTH, advice: process.env.ADVICE_OUTPUT, markets: process.env.MARKETS_VIEWS, privateUse: process.env.EODHD_PRIVATE_USE, insiders: process.env.INSIDERS_PAGE };
+const original = { mode: process.env.DATA_MODE, ideas: process.env.IDEAS_PAGE, owner: process.env.OWNER_VIEW, paywall: process.env.PAYWALL, auth: process.env.AUTH, advice: process.env.ADVICE_OUTPUT, markets: process.env.MARKETS_VIEWS, privateUse: process.env.EODHD_PRIVATE_USE, insiders: process.env.INSIDERS_PAGE, licence: process.env.VENDOR_DISPLAY_LICENSE };
 afterEach(() => {
   universe.mockReset();
-  for (const [key, value] of [["DATA_MODE", original.mode], ["IDEAS_PAGE", original.ideas], ["OWNER_VIEW", original.owner], ["PAYWALL", original.paywall], ["AUTH", original.auth], ["ADVICE_OUTPUT", original.advice], ["MARKETS_VIEWS", original.markets], ["EODHD_PRIVATE_USE", original.privateUse], ["INSIDERS_PAGE", original.insiders]] as const) {
+  for (const [key, value] of [["DATA_MODE", original.mode], ["IDEAS_PAGE", original.ideas], ["OWNER_VIEW", original.owner], ["PAYWALL", original.paywall], ["AUTH", original.auth], ["ADVICE_OUTPUT", original.advice], ["MARKETS_VIEWS", original.markets], ["EODHD_PRIVATE_USE", original.privateUse], ["INSIDERS_PAGE", original.insiders], ["VENDOR_DISPLAY_LICENSE", original.licence]] as const) {
     if (value === undefined) delete process.env[key]; else process.env[key] = value;
   }
 });
@@ -114,11 +114,25 @@ it("sends a signed-in Passive browser from a stock page to the Plus preview, and
   expect(anon.headers.get("location")).toContain("/en/sign-in?mode=sign-in&next=");
 });
 
-it("leaves public data routes unchanged when private use is off", async () => {
+it("with private use off, stock routes need a display licence outside fixture mode; the dashboard stays open", async () => {
   process.env.EODHD_PRIVATE_USE = "off";
-  for (const path of ["dashboard", "stocks", "etf", "heatmap", "portfolio", "track-record"]) {
-    expect((await proxy(new NextRequest(`https://example.com/en/${path}`))).status, path).toBe(200);
+  process.env.AUTH = "on";
+  const routes = ["stocks", "heatmap", "portfolio", "track-record"];
+  process.env.VENDOR_DISPLAY_LICENSE = "on";
+  for (const path of [...routes, "dashboard"]) expect((await proxy(new NextRequest(`https://example.com/en/${path}`))).status, `licensed ${path}`).toBe(200);
+  delete process.env.VENDOR_DISPLAY_LICENSE;
+  for (const path of routes) {
+    for (const who of [undefined, "free", "passive"]) {
+      const headers = who ? { cookie: `__Host-ib_session=${who}` } : undefined;
+      expect((await proxy(new NextRequest(`https://example.com/en/${path}`, { headers }))).status, `${who ?? "anon"} ${path}`).toBe(401);
+      // A client-side navigation (RSC) is refused the same way.
+      expect((await proxy(new NextRequest(`https://example.com/en/${path}`, { headers: { ...headers, rsc: "1" } }))).status, `rsc ${who ?? "anon"} ${path}`).toBe(401);
+    }
+    expect((await proxy(new NextRequest(`https://example.com/en/${path}`, { headers: { cookie: "__Host-ib_session=plus" } }))).status, `plus ${path}`).toBe(200);
   }
+  expect((await proxy(new NextRequest("https://example.com/en/dashboard"))).status).toBe(200);
+  process.env.DATA_MODE = "fixture";
+  for (const path of routes) expect((await proxy(new NextRequest(`https://example.com/en/${path}`))).status, `fixture ${path}`).toBe(200);
 });
 
 it("keeps market routes private even when the flag is on", async () => {
@@ -146,7 +160,10 @@ it("keeps insiders available when its flag is on and markets are off", async () 
   process.env.INSIDERS_PAGE = "on";
   process.env.MARKETS_VIEWS = "off";
   process.env.EODHD_PRIVATE_USE = "off";
+  expect((await proxy(new NextRequest("https://example.com/en/insiders"))).status).toBe(401);
+  process.env.VENDOR_DISPLAY_LICENSE = "on";
   expect((await proxy(new NextRequest("https://example.com/en/insiders"))).status).toBe(200);
+  delete process.env.VENDOR_DISPLAY_LICENSE;
   process.env.EODHD_PRIVATE_USE = "on";
   expect((await proxy(new NextRequest("https://example.com/en/insiders"))).status).toBe(401);
   expect((await proxy(new NextRequest("https://example.com/en/insiders", { headers: { cookie: "__Host-ib_session=plus" } }))).status).toBe(200);
@@ -158,7 +175,22 @@ it("gates the owner ETF data tabs like market routes and leaves the public fund 
   const tab = "https://example.com/en/etf/fund/NYSEARCA%3ASPY/holdings";
   process.env.MARKETS_VIEWS = "off";
   expect((await proxy(new NextRequest(tab))).status).toBe(404);
-  expect((await proxy(new NextRequest("https://example.com/en/etf/fund/NYSEARCA%3ASPY"))).status).toBe(200);
+  // The fund page is a paid ETF page: Passive and Active, never a visitor or a free account, licence or not.
+  process.env.AUTH = "on";
+  process.env.VENDOR_DISPLAY_LICENSE = "on";
+  expect((await proxy(new NextRequest("https://example.com/en/etf/fund/NYSEARCA%3ASPY"))).status).toBe(401);
+  expect((await proxy(new NextRequest("https://example.com/en/etf/fund/NYSEARCA%3ASPY", { headers: { cookie: "__Host-ib_session=free" } }))).status).toBe(401);
+  expect((await proxy(new NextRequest("https://example.com/en/etf/fund/NYSEARCA%3ASPY", { headers: { cookie: "__Host-ib_session=passive" } }))).status).toBe(200);
+  delete process.env.VENDOR_DISPLAY_LICENSE;
+  // Private use off with a display licence: a free account still cannot open a fund data tab.
+  process.env.MARKETS_VIEWS = "on";
+  process.env.EODHD_PRIVATE_USE = "off";
+  process.env.VENDOR_DISPLAY_LICENSE = "on";
+  expect((await proxy(new NextRequest(tab, { headers: { cookie: "__Host-ib_session=free" } }))).status).toBe(401);
+  expect((await proxy(new NextRequest(tab, { headers: { cookie: "__Host-ib_session=passive" } }))).status).toBe(200);
+  expect((await proxy(new NextRequest("https://example.com/en/indices", { headers: { cookie: "__Host-ib_session=free" } }))).status).toBe(200);
+  delete process.env.VENDOR_DISPLAY_LICENSE;
+  process.env.MARKETS_VIEWS = "off";
   process.env.MARKETS_VIEWS = "on";
   process.env.AUTH = "on";
   expect((await proxy(new NextRequest(tab))).status).toBe(401);
@@ -193,6 +225,8 @@ it("owner session never works while AUTH is off", async () => {
 
 it.each(["en", "sk"])("returns a real 404 for unavailable %s routes", async (locale) => {
   delete process.env.DATA_MODE; delete process.env.IDEAS_PAGE; delete process.env.OWNER_VIEW; delete process.env.PAYWALL; delete process.env.ADVICE_OUTPUT;
+  // A display licence opens the stock routes to visitors, so the company lookup decides.
+  process.env.VENDOR_DISPLAY_LICENSE = "on";
   universe.mockResolvedValue([{ ticker: "NVDA" }]);
   for (const path of ["ideas", "owner-allocation", "sizing", "company/ZZZZ"]) {
     const response = await proxy(new NextRequest(`https://example.com/${locale}/${path}`));
@@ -215,6 +249,7 @@ it.each(["en", "sk"])("opens the %s sizing guide only with ADVICE_OUTPUT on", as
 it.each(["en", "sk"])("keeps %s ideas unavailable while advice is off", async (locale) => {
   process.env.IDEAS_PAGE = "on";
   process.env.ADVICE_OUTPUT = "off";
+  process.env.VENDOR_DISPLAY_LICENSE = "on";
   expect((await proxy(new NextRequest(`https://example.com/${locale}/ideas`))).status).toBe(404);
   process.env.ADVICE_OUTPUT = "on";
   expect((await proxy(new NextRequest(`https://example.com/${locale}/ideas`))).status).toBe(200);
@@ -232,6 +267,7 @@ it.each(["en", "sk"])("redirects the %s scanner whatever PAYWALL says", async (l
 
 it("marks ?view= previews noindex and drops a client-sent preview header", async () => {
   process.env.AUTH = "on";
+  process.env.VENDOR_DISPLAY_LICENSE = "on";
   const plain = await proxy(new NextRequest("https://example.com/en/stocks"));
   expect(plain.headers.get("x-robots-tag")).toBeNull();
   // AUTH off no longer makes every visitor admin: only the owner gets the free preview.
@@ -304,6 +340,7 @@ it.each(["en", "sk"])("hides the %s design kit page in a production build unless
 
 it("replaces a malformed incoming id", async () => {
   process.env.PAYWALL = "on";
+  process.env.VENDOR_DISPLAY_LICENSE = "on";
   const response = await proxy(new NextRequest("https://example.com/en/stocks", { headers: { "x-request-id": "bad id<script>" } }));
   expect(response.headers.get("x-request-id")).toMatch(/^[0-9a-f-]{36}$/);
 });

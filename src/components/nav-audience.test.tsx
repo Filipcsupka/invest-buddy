@@ -103,3 +103,23 @@ it.each(["en", "sk"] as const)("marks the Stocks, ETFs and Indices groups with t
   expect(group("indices")).toContain(`href="/${locale}/indices"`);
   expect(html.match(/data-area="/g)).toHaveLength(3);
 });
+
+it.each(["en", "sk"] as const)("opens indices, economy and calendar for a licensed free account, and keeps ETF and stock-only markets locked (%s)", (locale) => {
+  Object.assign(process.env, { MARKETS_VIEWS: "on", EODHD_PRIVATE_USE: "off", VENDOR_DISPLAY_LICENSE: "on", INSIDERS_PAGE: "on" });
+  try {
+    as({ kind: "customer", email: "a@b.cz", plan: "free", markets: false });
+    const html = renderToStaticMarkup(<Nav locale={locale} />);
+    const hrefs = links(html);
+    for (const route of ["indices", "economy", "calendar"]) expect(hrefs, route).toContain(`/${locale}/${route}`);
+    for (const route of ["etf", "etf/track-record", "news", "congress", "insiders", "screener"]) expect(hrefs, route).toContain(`/${locale}/plus-preview?page=${encodeURIComponent(route)}`);
+    const indices = html.match(new RegExp(`<a[^>]*href="/${locale}/indices"[^>]*>[\\s\\S]*?</a>`))?.[0];
+    expect(indices).toContain('data-tier="free"');
+    // A visitor still goes to the preview: the licensed rule needs a signed-in account.
+    as({ kind: "anon", markets: false });
+    expect(links(renderToStaticMarkup(<Nav locale={locale} />))).toContain(`/${locale}/plus-preview?page=indices`);
+    // Without the licence the free account is locked out again.
+    delete process.env.VENDOR_DISPLAY_LICENSE;
+    as({ kind: "customer", email: "a@b.cz", plan: "free", markets: false });
+    expect(links(renderToStaticMarkup(<Nav locale={locale} />))).toContain(`/${locale}/plus-preview?page=indices`);
+  } finally { delete process.env.VENDOR_DISPLAY_LICENSE; }
+});

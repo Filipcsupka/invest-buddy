@@ -71,14 +71,39 @@ it.each(["en", "sk"] as const)("compares Free and Plus from the tier config, eve
   expect(text(html)).not.toContain("—");
 });
 
-it("shows the depth numbers from TIER_LIMITS in the matching cells", async () => {
+it("shows the Plus depth numbers from TIER_LIMITS and no free depth in the stock table", async () => {
   process.env.WAITLIST = "on";
   const en = text(await render("en"));
-  expect(en).toContain(`Last ${TIER_LIMITS.free.scoreHistoryDays} days`);
-  expect(en).toContain(`Last ${TIER_LIMITS.free.insiderDays} days`);
   expect(en).toContain(`Saved screens: ${TIER_LIMITS.paid.savedScreens}`);
   expect(en).toContain(`Up to ${TIER_LIMITS.paid.watchlistTickers} tickers`);
-  expect(text(await render("sk"))).toContain(`Posledných ${TIER_LIMITS.free.scoreHistoryDays} dní`);
+  expect(en).toContain("Full history");
+  // Free and Passive do not open the stock area, so no free depth is promised.
+  expect(en).not.toContain(`Last ${TIER_LIMITS.free.scoreHistoryDays} days`);
+  expect(en).not.toContain(`Last ${TIER_LIMITS.free.insiderDays} days`);
+  expect(text(await render("sk"))).not.toContain(`Posledných ${TIER_LIMITS.free.scoreHistoryDays} dní`);
+});
+
+/** Route matrix (docs/paywall-segments.md): which plan opens each area. */
+const MATRIX = { method: ["yes", "yes", "yes"], macro: ["yes", "yes", "yes"], markets: ["licence", "yes", "yes"], funds: ["no", "yes", "yes"], stocks: ["no", "no", "yes"] };
+
+it.each(["en", "sk"] as const)("matches the route matrix everywhere on the page in %s: stock features only in Plus", async (locale) => {
+  const html = await render(locale);
+  const page = text(html);
+  const access = (area: string) => [...(html.match(new RegExp(`<tr data-area="${area}">[\\s\\S]*?</tr>`))?.[0] ?? "").matchAll(/data-access="(\w+)"/g)].map((m) => m[1]);
+  for (const [area, expected] of Object.entries(MATRIX)) expect(access(area), area).toEqual(expected);
+  // Every stock feature row: not in Free, not in Passive, in Plus.
+  for (const id of paid) {
+    const row = html.match(new RegExp(`<tr data-tier-id="${id}">[\\s\\S]*?</tr>`))?.[0] ?? "";
+    expect([...row.matchAll(/data-access="(\w+)"/g)].map((m) => m[1]), id).toEqual(["no", "no", "yes"]);
+  }
+  // No copy promises scores, the scanner, company pages or stock depth to Free or to everyone.
+  const promises = locale === "en"
+    ? /stay open to everyone|filters stay free|Always free|Free shows|free window|Dashboard, heat map and scanner|Company page: status|Score history and insider events for the recent window|Every plan shows the same rules and the same scores/i
+    : /zostávajú otvorené pre všetkých|ostávajú zadarmo|Vždy zadarmo|Zadarmo vidíte|bezplatné okno|Dashboard, heat mapa a skener|Stránka spoločnosti: stav|Všetky plány ukazujú rovnaké pravidlá a rovnaké skóre/i;
+  expect(page).not.toMatch(promises);
+  // The Free plan card lists only the market overview items.
+  const freeCard = text(html.slice(html.indexOf('data-plan="free"'), html.indexOf('data-plan="passive"')));
+  expect(freeCard).not.toMatch(locale === "en" ? /score|scanner|company|track record|portfolio/i : /skóre|skener|spoločnost|portfóli/i);
 });
 
 it("shows all four lock forms with the printed word Plus and sample stamps, and keeps the ADR-001 note", async () => {

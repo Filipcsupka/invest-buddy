@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { withPageLog } from "@/app/page-log";
 import { assertViewable } from "@/markets/gate";
+import { requireEtfScreeningAccess } from "@/components/etf/owner";
 import { etfCatalogDetail } from "@/db/etf-catalog";
 import { etfDetailView } from "@/db/etf-detail";
 import { getEtfDetailMessages, getEtfMessages } from "@/i18n/etf-messages";
@@ -32,7 +33,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 /** Owner-only vendor fund data, rendered from stored rows. Facts only: no calls, scores or states. */
 async function EtfFundTabPage({ params }: Props) {
+  // The market gate for the ETF section, then the paid fund permission: a licensed free account never opens fund tabs.
   await assertViewable("eodhd", "etf");
+  await requireEtfScreeningAccess();
   const locale = await resolveLocale(params);
   const { key: rawKey, tab } = await params;
   const key = decodedKey(rawKey);
