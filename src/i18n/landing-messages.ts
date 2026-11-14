@@ -103,7 +103,7 @@ const sk: LandingMessages = {
     boardSample: "Najvyššie skóre v ukážke",
     colScore: "Skóre",
     all: "Zobraziť všetky tickery: {n}",
-    noteFree: "Počas bety čítanie zadarmo",
+    noteFree: "Počas bety čítajte zadarmo",
     noteRules: "Každé pravidlo viditeľné",
     noteMisses: "Neúspechy zostávajú v zázname",
   },

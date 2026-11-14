@@ -39,7 +39,7 @@ const sk: typeof en = {
   coverage: "{known} z {total} základných pravidiel má údaje",
   coveragePoints: "{points} z {max} základných bodov má údaje. Hranica: {guard}.",
   level: { full: "Úplné", partial: "Čiastočné", limited: "Obmedzené", none: "Žiadne" },
-  limitedNote: "Pokrytie je pod hranicou {percent} %, preto je skóre označené ako založené na neúplných údajoch.",
+  limitedNote: "Pokrytie je pod hranicou {percent} %, preto má skóre označenie Neúplné údaje.",
   noScore: "Skóre zatiaľ nie je, preto nie je čo ukázať o pokrytí pravidiel.",
 };
 

@@ -140,9 +140,9 @@ const sk: WelcomeMessages = {
     pills: { open: "Otvorené pre všetkých", account: "Bezplatný účet", plus: "Plus, otvoríme neskôr", prep: "Pripravujeme" },
     items: {
       stocks: { title: "Akcie", body: "Skener celého zoznamu akcií a pre každú spoločnosť kontrolný zoznam, v ktorom je vypísaný každý prah." },
-      etfs: { title: "ETF", body: "Prehľady fondov s pozíciami a nákladmi v rovnako pokojnom rozložení." },
+      etfs: { title: "ETF", body: "Prehľady fondov s pozíciami a nákladmi v rovnako striedmom rozložení." },
       markets: { title: "Trhy", body: "Indexy a makro kalendáre. Zobrazíme ich tu, keď to dovolia licenčné podmienky údajov." },
-      record: { title: "Záznam výsledkov", body: "Každá zmena stavu s dátumom, aj tie, ktoré sa neskôr pokazili. Otvorí sa so živými údajmi." },
+      record: { title: "Záznam výsledkov", body: "Každá zmena stavu s dátumom vrátane prípadov, keď akcia neskôr prestala spĺňať pravidlá. Otvorí sa so živými údajmi." },
       method: { title: "Metodika", body: "Všetky pravidlá, váhy a prahy, vypísané po slovensky aj po anglicky." },
     },
     preview: "Ukážkový náhľad",

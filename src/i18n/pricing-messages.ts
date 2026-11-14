@@ -182,7 +182,7 @@ const sk: PricingMessages = {
     historyTitle: "História skóre",
     historyNote: "Celá história každého skóre je súčasťou Plus.",
     teaserTitle: "Séria splnených pravidiel",
-    teaserNote: "Stĺpec predvádza jeden ukážkový riadok. Séria je súčasťou Plus.",
+    teaserNote: "Na jednom ukážkovom riadku vidíte, čo stĺpec zobrazuje. Séria je súčasťou Plus.",
     teaserCol: "Dni so splnenými pravidlami",
     cardTitle: "Export do CSV",
     cardBody: "Stiahnutie tabuľky skenera ako súboru.",

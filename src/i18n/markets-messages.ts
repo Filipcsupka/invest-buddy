@@ -86,7 +86,7 @@ const sk: MarketsMessages = {
   owner: "Trhové údaje",
   noValue: "—",
   source: "Zdroj: trhové údaje ku koncu dňa, ktoré ukladajú nočné úlohy. Dostupné pre predplatiteľov.",
-  factsOnly: "Iba fakty. Stránka neobsahuje skóre, stavy ani signály.",
+  factsOnly: "Iba fakty. Stránka neobsahuje skóre, stavy ani obchodné odporúčania.",
   back: "Späť na zoznam",
   lastClose: "Posledná uzávierka",
   date: "Dátum",

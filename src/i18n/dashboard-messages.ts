@@ -32,7 +32,7 @@ const copy = {
     ma200: "voči MA200", above: "Nad", below: "Pod", oneYear: "Výnos za 1 rok", volatility: "Ročná volatilita",
     concentration: (count: number, total: number, sector: string, threshold: number) => `${count} z ${total} firiem je v skupine ${sector}, nad referenčnou hranicou ${threshold} %.`,
     unknownSector: (count: number) => `${count} firiem nemá overenú sektorovú skupinu.`,
-    referenceTitle: "Zverejnené príklady štruktúry", referenceLede: "Opisujú bežné rozloženie portfólia. Nesúvisia s firmami a skóre uvedenými vyššie.",
+    referenceTitle: "Zverejnené príklady štruktúry", referenceLede: "Opisujú bežné rozloženie portfólia. Sú uvedené oddelene od firiem a skóre vyššie.",
     coreSatellite: "Jadro a satelity", coreSatelliteBody: "Široký indexový základ doplnený vybranými aktívnymi pozíciami.",
     threeFund: "Tri fondy", threeFundBody: "Fond celého amerického akciového trhu, fond medzinárodných akcií a dlhopisový fond.",
     sixtyForty: "60/40", sixtyFortyBody: "Zverejnený referenčný pomer akcií a dlhopisov, nie cieľ tohto prehľadu.",

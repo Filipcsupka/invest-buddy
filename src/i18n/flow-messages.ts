@@ -165,7 +165,7 @@ const sk: FlowMessages = {
     upcomingTitle: "Nadchádzajúce správy",
     upcomingLede: "Najbližších 14 dní. Časy sú v UTC, ako ich posiela dodávateľ.",
     recentTitle: "Nedávne správy",
-    recentLede: "Posledných 7 dní, od najnovších.",
+    recentLede: "Udalosti za posledných 7 dní, od najnovších.",
     officialNote: "Oficiálne termíny amerických správ a rozhodnutí Fedu pochádzajú z harmonogramov BLS a Federálneho rezervného systému.",
     when: "Čas (UTC)",
     country: "Krajina",
