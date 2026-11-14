@@ -6,7 +6,14 @@ export type Tier = "free" | "paid" | "admin";
  * `owner` is true only for a session whose user id is listed in OWNER_USER_IDS (see `isOwnerUser`).
  * `userId`, `plan` and `planEndsAt` are set for a signed-in customer.
  */
-export type Viewer = { tier: Tier; preview: boolean; owner?: boolean; userId?: string | null; plan?: "free" | "plus" | "trial"; planEndsAt?: Date | null };
+export type Viewer = { tier: Tier; preview: boolean; owner?: boolean; userId?: string | null; plan?: "free" | "passive" | "plus" | "trial"; planEndsAt?: Date | null };
+
+/**
+ * The three investor paths (docs/paywall-segments.md). `active` is the Plus plan and the trial: stocks plus everything Passive has.
+ * `passive` is the Passive plan: ETF ratings, fund pages, indices, economy and the calendar. `overview` is a free account or a visitor.
+ * The owner is outside the paths and sees everything.
+ */
+export type InvestorPath = "active" | "passive" | "overview";
 
 /** Request header the proxy sets for `?view=free`. */
 export const PREVIEW_HEADER = "x-tier-preview";
@@ -50,13 +57,75 @@ export function requireFeature(viewer: Viewer, id: TierId): Response | null {
   });
 }
 
+/** A signed-in customer with an active Plus entitlement, paid or trial. */
+export function hasActivePlan(viewer: Pick<Viewer, "userId" | "plan">): boolean {
+  return Boolean(viewer.userId && (viewer.plan === "plus" || viewer.plan === "trial"));
+}
+
+/** A signed-in customer with an active Passive entitlement. */
+export function hasPassivePlan(viewer: Pick<Viewer, "userId" | "plan">): boolean {
+  return Boolean(viewer.userId && viewer.plan === "passive");
+}
+
+/** The path this viewer's plan opens, or null for the owner (who sees every path). */
+export function investorPath(viewer: Viewer): InvestorPath | null {
+  if (isOwner(viewer) && !viewer.preview) return null;
+  if (viewer.preview) return "overview";
+  if (hasActivePlan(viewer)) return "active";
+  if (hasPassivePlan(viewer)) return "passive";
+  return "overview";
+}
+
 /**
- * Vendor-derived data (scores, prices, EPS) for this viewer. The owner always gets it. A customer with an active Plus
- * entitlement (paid or trial, not the PAYWALL-off soft tier) gets it too. Everyone else needs VENDOR_DISPLAY_LICENSE=on
- * while EODHD_PRIVATE_USE is off.
+ * A vendor display licence is in place and private use is off. It widens fund and index data only (marketsViewable: indices,
+ * economy and calendar for a signed-in free account); it never opens stock data.
  */
-export function canUseVendorData(viewer: Viewer, env: Record<string, string | undefined> = process.env): boolean {
-  if (isOwner(viewer)) return true;
-  if (viewer.userId && (viewer.plan === "plus" || viewer.plan === "trial")) return true;
+export function vendorLicensed(env: Record<string, string | undefined> = process.env): boolean {
   return env.EODHD_PRIVATE_USE !== "on" && env.VENDOR_DISPLAY_LICENSE === "on";
+}
+
+/**
+ * Stock score data (scores, prices, EPS, the shortlist, portfolio and track-record score parts) for this viewer: the owner and a
+ * customer with an active Plus entitlement (paid or trial, not the PAYWALL-off soft tier). Product rule of 2026-11-13: this is the
+ * Active path, whatever EODHD_PRIVATE_USE and VENDOR_DISPLAY_LICENSE say. Passive, free accounts and visitors never get it.
+ * `env` is kept for call-site compatibility; no flag widens this permission.
+ */
+export function canUseVendorData(viewer: Viewer, _env: Record<string, string | undefined> = process.env): boolean {
+  void _env;
+  return isOwner(viewer) || hasActivePlan(viewer);
+}
+
+/**
+ * Stock routes are gated whenever they can show stored data: always outside fixture mode. Fixture mode with private use off has only
+ * the checked-in sample universe (no vendor data), which stays open to every visitor for local runs and the e2e suite.
+ */
+export function stockRoutesGated(env: Record<string, string | undefined> = process.env): boolean {
+  return env.EODHD_PRIVATE_USE === "on" || env.DATA_MODE !== "fixture";
+}
+
+/**
+ * May this viewer see stock data on the dashboard and the stock routes (stocks, scanner, shortlist, company, heatmap, portfolio,
+ * track record, insiders)? Stored stock data is the owner or an Active plan (Plus or trial) only, whatever EODHD_PRIVATE_USE and
+ * VENDOR_DISPLAY_LICENSE say. Only the fixture sample universe (stockRoutesGated false) is open. The owner's free preview counts as
+ * a visitor.
+ */
+export function canSeeStockData(viewer: Viewer, env: Record<string, string | undefined> = process.env): boolean {
+  if (!stockRoutesGated(env)) return true;
+  return !viewer.preview && canUseVendorData(viewer);
+}
+
+/**
+ * ETF ratings, the ETF catalog and fund pages: the owner, Active customers and Passive customers, never a preview. A free account and
+ * a visitor do not get them even with a vendor licence; the ETF screen is a paid path.
+ */
+export function canOpenFunds(viewer: Viewer, env: Record<string, string | undefined> = process.env): boolean {
+  return !viewer.preview && canUseFundData(viewer, env) && (isOwner(viewer) || hasActivePlan(viewer) || hasPassivePlan(viewer));
+}
+
+/**
+ * Vendor-derived fund and market data (ETF ratings, fund pages, indices, economy, calendar). Everyone with stock access has it, and
+ * so does a Passive customer. It never opens stock routes: those use canSeeStockData. The licensed free market rule is in marketsViewable.
+ */
+export function canUseFundData(viewer: Viewer, env: Record<string, string | undefined> = process.env): boolean {
+  return canUseVendorData(viewer, env) || hasPassivePlan(viewer);
 }

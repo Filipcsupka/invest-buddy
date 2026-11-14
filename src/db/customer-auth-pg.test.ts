@@ -7,10 +7,10 @@ import { recordBillingEvent } from "./billing-events";
 import { getEntitlement, setEntitlement } from "./entitlements";
 import { createUser, deleteUser, findUserByEmail, linkAccount, recordConsent } from "./users";
 
-async function withScratchDb(run: (db: PGlite, pool: pg.Pool) => Promise<void>) {
+async function withScratchDb(run: (db: PGlite, pool: pg.Pool) => Promise<void>, extra: string[] = []) {
   const db = new PGlite();
   try {
-    for (const name of ["001_initial.sql", "133_customer_auth.sql", "134_customer_entitlements.sql"]) {
+    for (const name of ["001_initial.sql", "133_customer_auth.sql", "134_customer_entitlements.sql", ...extra]) {
       await db.exec(readFileSync(join(process.cwd(), "migrations", name), "utf8"));
     }
     const query = async (sql: string, params?: unknown[]) => {
@@ -62,6 +62,21 @@ describe("customer account schema (scratch Postgres)", () => {
     expect(await recordBillingEvent(pool, event)).toBe(false);
     expect(await count(db, "billing_events")).toBe(1);
   }), 60_000);
+
+  it("accepts the Passive plan only after migration 139", async () => {
+    await withScratchDb(async (_db, pool) => {
+      const user = await createUser(pool, { email: "before@example.test" });
+      await expect(setEntitlement(pool, { userId: user.id, tier: "passive" })).rejects.toThrow(/entitlements_tier_check/);
+    });
+    await withScratchDb(async (_db, pool) => {
+      const user = await createUser(pool, { email: "passive@example.test" });
+      await setEntitlement(pool, { userId: user.id, tier: "passive" });
+      expect((await getEntitlement(pool, user.id)).tier).toBe("passive");
+      await setEntitlement(pool, { userId: user.id, tier: "plus" });
+      expect((await getEntitlement(pool, user.id)).tier).toBe("plus");
+      await expect(pool.query("UPDATE entitlements SET tier = 'gold' WHERE user_id = $1", [user.id])).rejects.toThrow(/entitlements_tier_check/);
+    }, ["139_entitlements_passive.sql"]);
+  }, 60_000);
 
   it("uses indexes for email, session and entitlement lookups", () => withScratchDb(async (db, pool) => {
     const user = await createUser(pool, { email: "plan@example.test" });

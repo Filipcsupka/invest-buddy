@@ -38,7 +38,7 @@ const navigation = { rsc: "1", "next-router-state-tree": "%5B%5D", accept: "*/*"
 const fetchCall = { accept: "*/*", "sec-fetch-dest": "empty", "sec-fetch-mode": "cors" };
 const curl = { accept: "*/*" };
 
-const gated = ["/en/dashboard", "/en/stocks", "/en/track-record", "/en/heatmap", "/en/etf", "/en/company/NVDA", "/en/insiders", "/sk/indices"];
+const gated = ["/en/stocks", "/en/track-record", "/en/heatmap", "/en/etf", "/en/company/NVDA", "/en/insiders", "/sk/indices"];
 /** Next makes a same-origin Location relative on the way out; here the raw header is absolute on the request origin. */
 const where = (response: Response) => { const raw = response.headers.get("location"); if (!raw) return null; const url = new URL(raw); expect(url.origin).toBe("https://example.com"); return `${url.pathname}${url.search}`; };
 const request = (path: string, headers: Record<string, string> = {}) => new NextRequest(`https://example.com${path}`, { headers });
@@ -61,10 +61,20 @@ it.each(gated)("sends an anonymous page load on %s to sign-in with a relative ne
   expect(where(response)).toBe(`/${locale}/sign-in?mode=sign-in&next=${encodeURIComponent(`${path}?tab=1`)}`);
 });
 
+it("opens the dashboard to every viewer; the page withholds its stock data", async () => {
+  setup();
+  for (const headers of [document, prefetch, curl, { ...document, cookie: `${customerCookieName("session", true)}=valid` }]) {
+    const response = await proxy(request("/en/dashboard", headers));
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(response.headers.get("x-robots-tag")).toBe("noindex");
+  }
+});
+
 it("answers prefetches and fetches with a plain 401", async () => {
   setup();
   for (const headers of [prefetch, navigation, fetchCall]) {
-    const response = await proxy(request("/en/dashboard", headers));
+    const response = await proxy(request("/en/stocks", headers));
     expect(response.status).toBe(401);
     expect(response.headers.get("location")).toBeNull();
   }
@@ -80,7 +90,7 @@ it("gives non-browser clients a plain 401, never a Basic challenge or a Basic lo
       expect(response.headers.get("www-authenticate"), path).toBeNull();
     }
   }
-  expect((await proxy(request("/en/dashboard"))).headers.get("www-authenticate")).toBeNull();
+  expect((await proxy(request("/en/stocks"))).headers.get("www-authenticate")).toBeNull();
 });
 
 const session = customerCookieName("session", true);
@@ -92,7 +102,7 @@ it("sends a customer with a verified session to the opens-soon page, not to sign
   expect(response.status).toBe(307);
   expect(where(response)).toBe("/en/opens-soon?page=indices");
   expect(response.headers.get("www-authenticate")).toBeNull();
-  const prefetched = await proxy(request("/en/dashboard", { ...prefetch, cookie }));
+  const prefetched = await proxy(request("/en/stocks", { ...prefetch, cookie }));
   expect(prefetched.status).toBe(401);
   expect(prefetched.headers.get("www-authenticate")).toBeNull();
 });
@@ -112,10 +122,10 @@ it.each([
 
 it("does not read a session for the hint alone or without a cookie, and reads one for a real cookie on a gated route", async () => {
   setup();
-  await proxy(request("/en/dashboard", { ...document, cookie: "ib_signed_in=1" }));
-  await proxy(request("/en/dashboard", curl));
+  await proxy(request("/en/stocks", { ...document, cookie: "ib_signed_in=1" }));
+  await proxy(request("/en/stocks", curl));
   expect(auth.getSession).not.toHaveBeenCalled();
-  await proxy(request("/en/dashboard", { ...prefetch, cookie: `${session}=valid` }));
+  await proxy(request("/en/stocks", { ...prefetch, cookie: `${session}=valid` }));
   expect(auth.getSession).toHaveBeenCalledTimes(1);
   await proxy(request("/en", { ...document, cookie: `${session}=valid` }));
   expect(auth.getSession).toHaveBeenCalledTimes(1);
@@ -125,10 +135,10 @@ it("treats a customer cookie as anonymous when AUTH is off or the session check 
   setup();
   const cookie = `${session}=valid`;
   process.env.AUTH = "off";
-  expect(where(await proxy(request("/en/dashboard", { ...document, cookie })))).toMatch(/^\/en\/sign-in\?/);
+  expect(where(await proxy(request("/en/stocks", { ...document, cookie })))).toMatch(/^\/en\/sign-in\?/);
   process.env.AUTH = "on";
   auth.getSession.mockRejectedValueOnce(new Error("db down"));
-  expect(where(await proxy(request("/en/dashboard", { ...document, cookie })))).toMatch(/^\/en\/sign-in\?/);
+  expect(where(await proxy(request("/en/stocks", { ...document, cookie })))).toMatch(/^\/en\/sign-in\?/);
 });
 
 it("lets a verified owner session through every gated route and never sets a hint cookie itself", async () => {
@@ -153,7 +163,7 @@ it("an account with the owner's email but another user id is not the owner", asy
   expect(gate.status).toBe(307);
   expect(where(gate)).toBe("/en/opens-soon?page=indices");
   expect((await proxy(request("/en/owner/horizons", { ...document, cookie }))).status).toBe(404);
-  expect((await proxy(request("/en/dashboard", { ...curl, cookie }))).status).toBe(401);
+  expect((await proxy(request("/en/stocks", { ...curl, cookie }))).status).toBe(401);
   const identity = await meRoute(new Request("https://example.com/api/me", { headers: { cookie } }));
   expect(await identity.json()).toMatchObject({ kind: "customer", plan: "free", markets: false });
 });
@@ -161,9 +171,9 @@ it("an account with the owner's email but another user id is not the owner", asy
 it("owner access needs AUTH on, and the hint cookie alone grants nothing", async () => {
   setup();
   process.env.AUTH = "off";
-  expect((await proxy(request("/en/dashboard", { ...curl, cookie: `${session}=owner` }))).status).toBe(401);
+  expect((await proxy(request("/en/stocks", { ...curl, cookie: `${session}=owner` }))).status).toBe(401);
   process.env.AUTH = "on";
-  expect((await proxy(request("/en/dashboard", { ...curl, cookie: "ib_signed_in=1" }))).status).toBe(401);
+  expect((await proxy(request("/en/stocks", { ...curl, cookie: "ib_signed_in=1" }))).status).toBe(401);
 });
 
 it("sends an anonymous owner-area page load to sign-in, a signed-in non-owner to 404, and prefetches to a plain 401", async () => {

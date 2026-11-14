@@ -1117,3 +1117,10 @@ a.kit-card:hover,
 @keyframes kit-scan-ping { 0% { transform: scale(0.6); opacity: 0.9; } 100% { transform: scale(3.2); opacity: 0; } }
 @media print { .kit-scan-sweep { display: none; } }
 @media (max-width: 640px) { .kit-scan { width: 100%; } }
+
+/* Area chip: investor-path area (Stocks, ETFs, Indices) in its colour on its wash. Same hues as the sidebar groups. */
+.kit-area { display: inline-flex; align-items: center; gap: 0.4em; padding: 0.15rem 0.6rem; border-radius: var(--radius-pill); background: var(--sheet-hover); color: var(--ink-2); font-size: var(--t-xs); font-weight: 700; line-height: 1.4; white-space: nowrap; }
+.kit-area[data-area="stocks"] { color: var(--area-stocks); background: var(--area-stocks-wash); }
+.kit-area[data-area="etf"] { color: var(--area-etf); background: var(--area-etf-wash); }
+.kit-area[data-area="indices"] { color: var(--area-indices); background: var(--area-indices-wash); }
+.kit-area-dot { flex: none; inline-size: 0.5rem; block-size: 0.5rem; border-radius: var(--radius-pill); background: currentColor; }

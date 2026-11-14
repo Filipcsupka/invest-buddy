@@ -9,6 +9,8 @@ vi.mock("@/viewer/get-viewer", () => ({
     if (cookie.includes("ib_session=owner")) return { tier: "admin", preview: false, owner: true, userId: "1" };
     if (cookie.includes("ib_session=plus")) return { tier: "paid", preview: false, owner: false, userId: "3", plan: "plus" };
     if (cookie.includes("ib_session=trial")) return { tier: "paid", preview: false, owner: false, userId: "4", plan: "trial" };
+    if (cookie.includes("ib_session=passive")) return { tier: "free", preview: false, owner: false, userId: "5", plan: "passive" };
+    if (cookie.includes("ib_session=free")) return { tier: "free", preview: false, owner: false, userId: "6", plan: "free" };
     if (cookie.includes("ib_session=customer")) return { tier: "paid", preview: false, owner: false, userId: "2" };
     return { tier: "free", preview: false };
   },
@@ -19,10 +21,10 @@ const ownerCookie = { cookie: "__Host-ib_session=owner" };
 const customerCookie = { cookie: "__Host-ib_session=customer" };
 const browserDoc = { "sec-fetch-dest": "document", accept: "text/html" };
 
-const original = { mode: process.env.DATA_MODE, ideas: process.env.IDEAS_PAGE, owner: process.env.OWNER_VIEW, paywall: process.env.PAYWALL, auth: process.env.AUTH, advice: process.env.ADVICE_OUTPUT, markets: process.env.MARKETS_VIEWS, privateUse: process.env.EODHD_PRIVATE_USE, insiders: process.env.INSIDERS_PAGE };
+const original = { mode: process.env.DATA_MODE, ideas: process.env.IDEAS_PAGE, owner: process.env.OWNER_VIEW, paywall: process.env.PAYWALL, auth: process.env.AUTH, advice: process.env.ADVICE_OUTPUT, markets: process.env.MARKETS_VIEWS, privateUse: process.env.EODHD_PRIVATE_USE, insiders: process.env.INSIDERS_PAGE, licence: process.env.VENDOR_DISPLAY_LICENSE };
 afterEach(() => {
   universe.mockReset();
-  for (const [key, value] of [["DATA_MODE", original.mode], ["IDEAS_PAGE", original.ideas], ["OWNER_VIEW", original.owner], ["PAYWALL", original.paywall], ["AUTH", original.auth], ["ADVICE_OUTPUT", original.advice], ["MARKETS_VIEWS", original.markets], ["EODHD_PRIVATE_USE", original.privateUse], ["INSIDERS_PAGE", original.insiders]] as const) {
+  for (const [key, value] of [["DATA_MODE", original.mode], ["IDEAS_PAGE", original.ideas], ["OWNER_VIEW", original.owner], ["PAYWALL", original.paywall], ["AUTH", original.auth], ["ADVICE_OUTPUT", original.advice], ["MARKETS_VIEWS", original.markets], ["EODHD_PRIVATE_USE", original.privateUse], ["INSIDERS_PAGE", original.insiders], ["VENDOR_DISPLAY_LICENSE", original.licence]] as const) {
     if (value === undefined) delete process.env[key]; else process.env[key] = value;
   }
 });
@@ -32,7 +34,7 @@ it("keeps vendor-backed pages private while allowing public content and health p
   process.env.MARKETS_VIEWS = "on";
   process.env.AUTH = "on";
   universe.mockResolvedValue([{ ticker: "NVDA" }]);
-  for (const path of ["dashboard", "stocks", "company/NVDA", "etf", "heatmap", "insiders", "portfolio", "track-record"]) {
+  for (const path of ["stocks", "company/NVDA", "etf", "heatmap", "insiders", "portfolio", "track-record"]) {
     const url = `https://example.com/en/${path}`;
     const blocked = await proxy(new NextRequest(url));
     expect(blocked.status, path).toBe(401);
@@ -51,7 +53,7 @@ it("opens vendor-backed pages to Plus and trial customers, not to free customers
   process.env.MARKETS_VIEWS = "on";
   process.env.AUTH = "on";
   universe.mockResolvedValue([{ ticker: "NVDA" }]);
-  for (const path of ["dashboard", "stocks", "company/NVDA", "heatmap", "insiders", "portfolio", "track-record"]) {
+  for (const path of ["stocks", "company/NVDA", "heatmap", "insiders", "portfolio", "track-record"]) {
     const url = `https://example.com/en/${path}`;
     for (const who of ["plus", "trial"]) {
       const response = await proxy(new NextRequest(url, { headers: { cookie: `__Host-ib_session=${who}` } }));
@@ -66,11 +68,81 @@ it("opens vendor-backed pages to Plus and trial customers, not to free customers
   expect(plusAllocation.status).toBe(401);
 });
 
-it("leaves public data routes unchanged when private use is off", async () => {
-  process.env.EODHD_PRIVATE_USE = "off";
-  for (const path of ["dashboard", "stocks", "etf", "heatmap", "portfolio", "track-record"]) {
-    expect((await proxy(new NextRequest(`https://example.com/en/${path}`))).status, path).toBe(200);
+/** Per-route gate for each tier while EODHD_PRIVATE_USE and MARKETS_VIEWS are on. 200 opens, 401 refuses (plain client request). */
+const ROUTE_MATRIX: [string, Record<"anon" | "free" | "passive" | "plus" | "trial" | "owner", number>][] = [
+  ["dashboard", { anon: 200, free: 200, passive: 200, plus: 200, trial: 200, owner: 200 }],
+  ["stocks", { anon: 401, free: 401, passive: 401, plus: 200, trial: 200, owner: 200 }],
+  ["company/NVDA", { anon: 401, free: 401, passive: 401, plus: 200, trial: 200, owner: 200 }],
+  ["heatmap", { anon: 401, free: 401, passive: 401, plus: 200, trial: 200, owner: 200 }],
+  ["track-record", { anon: 401, free: 401, passive: 401, plus: 200, trial: 200, owner: 200 }],
+  ["portfolio", { anon: 401, free: 401, passive: 401, plus: 200, trial: 200, owner: 200 }],
+  ["insiders", { anon: 401, free: 401, passive: 401, plus: 200, trial: 200, owner: 200 }],
+  ["screener", { anon: 401, free: 401, passive: 401, plus: 200, trial: 200, owner: 200 }],
+  ["news", { anon: 401, free: 401, passive: 401, plus: 200, trial: 200, owner: 200 }],
+  ["congress", { anon: 401, free: 401, passive: 401, plus: 200, trial: 200, owner: 200 }],
+  ["etf", { anon: 401, free: 401, passive: 200, plus: 200, trial: 200, owner: 200 }],
+  ["etf/fund/NYSEARCA%3ASPY/holdings", { anon: 401, free: 401, passive: 200, plus: 200, trial: 200, owner: 200 }],
+  ["indices", { anon: 401, free: 401, passive: 200, plus: 200, trial: 200, owner: 200 }],
+  ["economy", { anon: 401, free: 401, passive: 200, plus: 200, trial: 200, owner: 200 }],
+  ["calendar", { anon: 401, free: 401, passive: 200, plus: 200, trial: 200, owner: 200 }],
+];
+
+it.each(ROUTE_MATRIX)("gates /%s per tier: free and Passive never reach stock routes", async (path, expected) => {
+  process.env.EODHD_PRIVATE_USE = "on";
+  process.env.MARKETS_VIEWS = "on";
+  process.env.AUTH = "on";
+  universe.mockResolvedValue([{ ticker: "NVDA" }]);
+  // Many requests from one client key: keep the page limiter out of the result and out of later tests.
+  const { resetRateLimits } = await import("@/security/rate-limit");
+  resetRateLimits();
+  for (const [who, status] of Object.entries(expected)) {
+    const headers = who === "anon" ? undefined : { cookie: `__Host-ib_session=${who}` };
+    const response = await proxy(new NextRequest(`https://example.com/en/${path}`, { headers }));
+    expect(response.status, `${who} /${path}`).toBe(status);
+    expect(response.headers.get("cache-control"), `${who} /${path}`).toBe("private, no-store");
   }
+  resetRateLimits();
+});
+
+it("sends a signed-in Passive browser from a stock page to the Plus preview, and an anonymous one to sign-in", async () => {
+  process.env.EODHD_PRIVATE_USE = "on";
+  process.env.AUTH = "on";
+  const passive = await proxy(new NextRequest("https://example.com/en/stocks", { headers: { ...browserDoc, cookie: "__Host-ib_session=passive" } }));
+  expect(passive.status).toBe(307);
+  expect(passive.headers.get("location")).toBe("https://example.com/en/opens-soon?page=stocks");
+  const anon = await proxy(new NextRequest("https://example.com/en/stocks", { headers: browserDoc }));
+  expect(anon.headers.get("location")).toContain("/en/sign-in?mode=sign-in&next=");
+});
+
+it.each(["on", "off"] as const)("private use %s: stock routes need Active or owner access with and without a display licence, for documents and RSC", async (privateUse) => {
+  process.env.EODHD_PRIVATE_USE = privateUse;
+  process.env.AUTH = "on";
+  process.env.MARKETS_VIEWS = "on";
+  process.env.INSIDERS_PAGE = "on";
+  universe.mockResolvedValue([{ ticker: "NVDA" }]);
+  const { resetRateLimits } = await import("@/security/rate-limit");
+  const routes = ["stocks", "company/NVDA", "heatmap", "portfolio", "track-record", "insiders", "news", "congress", "screener"];
+  for (const licence of ["on", "off"] as const) {
+    process.env.VENDOR_DISPLAY_LICENSE = licence;
+    for (const path of routes) {
+      resetRateLimits();
+      for (const who of [undefined, "free", "passive"]) {
+        const cookie = who ? { cookie: `__Host-ib_session=${who}` } : undefined;
+        const expected = who ? "/en/opens-soon" : "/en/sign-in";
+        const documentResponse = await proxy(new NextRequest(`https://example.com/en/${path}`, { headers: new Headers({ ...browserDoc, ...cookie }) }));
+        expect(documentResponse.status, `${privateUse} ${licence} ${who ?? "anon"} ${path} document`).toBe(307);
+        expect(documentResponse.headers.get("location"), path).toContain(expected);
+        const rscResponse = await proxy(new NextRequest(`https://example.com/en/${path}`, { headers: new Headers({ rsc: "1", ...cookie }) }));
+        expect(rscResponse.status, `${privateUse} ${licence} ${who ?? "anon"} ${path} RSC`).toBe(401);
+      }
+      for (const who of ["plus", "trial", "owner"]) {
+        const headers = { ...browserDoc, cookie: `__Host-ib_session=${who}` };
+        expect((await proxy(new NextRequest(`https://example.com/en/${path}`, { headers }))).status, `${who} ${path}`).toBe(200);
+      }
+    }
+    expect((await proxy(new NextRequest("https://example.com/en/dashboard"))).status).toBe(200);
+  }
+  resetRateLimits();
 });
 
 it("keeps market routes private even when the flag is on", async () => {
@@ -98,7 +170,10 @@ it("keeps insiders available when its flag is on and markets are off", async () 
   process.env.INSIDERS_PAGE = "on";
   process.env.MARKETS_VIEWS = "off";
   process.env.EODHD_PRIVATE_USE = "off";
-  expect((await proxy(new NextRequest("https://example.com/en/insiders"))).status).toBe(200);
+  expect((await proxy(new NextRequest("https://example.com/en/insiders"))).status).toBe(401);
+  process.env.VENDOR_DISPLAY_LICENSE = "on";
+  expect((await proxy(new NextRequest("https://example.com/en/insiders"))).status).toBe(401);
+  delete process.env.VENDOR_DISPLAY_LICENSE;
   process.env.EODHD_PRIVATE_USE = "on";
   expect((await proxy(new NextRequest("https://example.com/en/insiders"))).status).toBe(401);
   expect((await proxy(new NextRequest("https://example.com/en/insiders", { headers: { cookie: "__Host-ib_session=plus" } }))).status).toBe(200);
@@ -110,7 +185,22 @@ it("gates the owner ETF data tabs like market routes and leaves the public fund 
   const tab = "https://example.com/en/etf/fund/NYSEARCA%3ASPY/holdings";
   process.env.MARKETS_VIEWS = "off";
   expect((await proxy(new NextRequest(tab))).status).toBe(404);
-  expect((await proxy(new NextRequest("https://example.com/en/etf/fund/NYSEARCA%3ASPY"))).status).toBe(200);
+  // The fund page is a paid ETF page: Passive and Active, never a visitor or a free account, licence or not.
+  process.env.AUTH = "on";
+  process.env.VENDOR_DISPLAY_LICENSE = "on";
+  expect((await proxy(new NextRequest("https://example.com/en/etf/fund/NYSEARCA%3ASPY"))).status).toBe(401);
+  expect((await proxy(new NextRequest("https://example.com/en/etf/fund/NYSEARCA%3ASPY", { headers: { cookie: "__Host-ib_session=free" } }))).status).toBe(401);
+  expect((await proxy(new NextRequest("https://example.com/en/etf/fund/NYSEARCA%3ASPY", { headers: { cookie: "__Host-ib_session=passive" } }))).status).toBe(200);
+  delete process.env.VENDOR_DISPLAY_LICENSE;
+  // Private use off with a display licence: a free account still cannot open a fund data tab.
+  process.env.MARKETS_VIEWS = "on";
+  process.env.EODHD_PRIVATE_USE = "off";
+  process.env.VENDOR_DISPLAY_LICENSE = "on";
+  expect((await proxy(new NextRequest(tab, { headers: { cookie: "__Host-ib_session=free" } }))).status).toBe(401);
+  expect((await proxy(new NextRequest(tab, { headers: { cookie: "__Host-ib_session=passive" } }))).status).toBe(200);
+  expect((await proxy(new NextRequest("https://example.com/en/indices", { headers: { cookie: "__Host-ib_session=free" } }))).status).toBe(200);
+  delete process.env.VENDOR_DISPLAY_LICENSE;
+  process.env.MARKETS_VIEWS = "off";
   process.env.MARKETS_VIEWS = "on";
   process.env.AUTH = "on";
   expect((await proxy(new NextRequest(tab))).status).toBe(401);
@@ -145,14 +235,17 @@ it("owner session never works while AUTH is off", async () => {
 
 it.each(["en", "sk"])("returns a real 404 for unavailable %s routes", async (locale) => {
   delete process.env.DATA_MODE; delete process.env.IDEAS_PAGE; delete process.env.OWNER_VIEW; delete process.env.PAYWALL; delete process.env.ADVICE_OUTPUT;
+  process.env.AUTH = "on";
+  // An unknown company remains a 404 even when stock access is otherwise locked.
+  process.env.VENDOR_DISPLAY_LICENSE = "on";
   universe.mockResolvedValue([{ ticker: "NVDA" }]);
   for (const path of ["ideas", "owner-allocation", "sizing", "company/ZZZZ"]) {
-    const response = await proxy(new NextRequest(`https://example.com/${locale}/${path}`));
+    const response = await proxy(new NextRequest(`https://example.com/${locale}/${path}`, { headers: path === "company/ZZZZ" ? ownerCookie : undefined }));
     expect(response.status, path).toBe(404);
     expect(response.headers.get("x-request-id")).toBeTruthy();
     expect(await response.text()).toContain("<h1>");
   }
-  const known = await proxy(new NextRequest(`https://example.com/${locale}/company/NVDA`));
+  const known = await proxy(new NextRequest(`https://example.com/${locale}/company/NVDA`, { headers: ownerCookie }));
   expect(known.status).toBe(200);
   expect(known.headers.get("x-request-id")).toBeTruthy();
 });
@@ -166,10 +259,12 @@ it.each(["en", "sk"])("opens the %s sizing guide only with ADVICE_OUTPUT on", as
 
 it.each(["en", "sk"])("keeps %s ideas unavailable while advice is off", async (locale) => {
   process.env.IDEAS_PAGE = "on";
+  process.env.AUTH = "on";
   process.env.ADVICE_OUTPUT = "off";
+  process.env.VENDOR_DISPLAY_LICENSE = "on";
   expect((await proxy(new NextRequest(`https://example.com/${locale}/ideas`))).status).toBe(404);
   process.env.ADVICE_OUTPUT = "on";
-  expect((await proxy(new NextRequest(`https://example.com/${locale}/ideas`))).status).toBe(200);
+  expect((await proxy(new NextRequest(`https://example.com/${locale}/ideas`, { headers: ownerCookie }))).status).toBe(200);
 });
 
 it.each(["en", "sk"])("redirects the %s scanner whatever PAYWALL says", async (locale) => {
@@ -184,8 +279,10 @@ it.each(["en", "sk"])("redirects the %s scanner whatever PAYWALL says", async (l
 
 it("marks ?view= previews noindex and drops a client-sent preview header", async () => {
   process.env.AUTH = "on";
+  process.env.VENDOR_DISPLAY_LICENSE = "on";
   const plain = await proxy(new NextRequest("https://example.com/en/stocks"));
-  expect(plain.headers.get("x-robots-tag")).toBeNull();
+  expect(plain.status).toBe(401);
+  expect(plain.headers.get("x-robots-tag")).toBe("noindex");
   // AUTH off no longer makes every visitor admin: only the owner gets the free preview.
   const anonymous = await proxy(new NextRequest("https://example.com/en/stocks?view=free"));
   expect(anonymous.headers.get("x-robots-tag")).toBe("noindex");
@@ -256,7 +353,9 @@ it.each(["en", "sk"])("hides the %s design kit page in a production build unless
 
 it("replaces a malformed incoming id", async () => {
   process.env.PAYWALL = "on";
-  const response = await proxy(new NextRequest("https://example.com/en/stocks", { headers: { "x-request-id": "bad id<script>" } }));
+  process.env.AUTH = "on";
+  process.env.VENDOR_DISPLAY_LICENSE = "on";
+  const response = await proxy(new NextRequest("https://example.com/en/stocks", { headers: { ...ownerCookie, "x-request-id": "bad id<script>" } }));
   expect(response.headers.get("x-request-id")).toMatch(/^[0-9a-f-]{36}$/);
 });
 

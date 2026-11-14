@@ -2,6 +2,7 @@
 .page { padding-top: var(--s6); }
 .head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--s4) var(--s5); padding-bottom: var(--s5); }
 .main { display: grid; gap: var(--s2); min-width: 0; flex: 1 1 26rem; }
+.area { display: flex; }
 .titleRow { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); }
 .title { margin: 0; font-family: var(--display); font-size: clamp(1.75rem, 1.3rem + 1.5vw, 2.5rem); font-weight: 800; letter-spacing: -0.03em; line-height: 1.1; }
 .lede { max-width: 64ch; margin: 0; color: var(--ink-2); font-size: var(--t-base); }

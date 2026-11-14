@@ -28,6 +28,7 @@ it("blocks public ETF rendering when EODHD enrichment is stored", async () => {
 it.each([
   ["anonymous", { tier: "free", preview: false }, false],
   ["free", { tier: "free", preview: false, userId: "free", plan: "free" }, false],
+  ["passive", { tier: "free", preview: false, userId: "passive", plan: "passive" }, false],
   ["trial", { tier: "paid", preview: false, userId: "trial", plan: "trial" }, true],
   ["plus", { tier: "paid", preview: false, userId: "plus", plan: "plus" }, true],
   ["owner", { tier: "admin", preview: false, owner: true, userId: "owner" }, true],
@@ -39,14 +40,17 @@ it.each([
   else await expect(requireCompanyDataAccess("ASML")).rejects.toThrow(/404|NOT_FOUND/);
 });
 
-it("keeps the existing public license and unlicensed vendor locks", async () => {
-  process.env.EODHD_PRIVATE_USE = "off";
-  state.viewer = { tier: "free", preview: false };
-  delete process.env.VENDOR_DISPLAY_LICENSE;
-  await expect(requireCompanyDataAccess("ASML")).rejects.toThrow(/404|NOT_FOUND/);
-  process.env.VENDOR_DISPLAY_LICENSE = "on";
-  await expect(requireCompanyDataAccess("ASML")).resolves.toBeUndefined();
-  state.present = false;
-  delete process.env.VENDOR_DISPLAY_LICENSE;
-  await expect(requireCompanyDataAccess("ASML")).resolves.toBeUndefined();
+it.each(["on", "off"] as const)("private use %s: a display licence never opens company scores", async (privateUse) => {
+  process.env.EODHD_PRIVATE_USE = privateUse;
+  for (const licence of ["on", "off"]) {
+    process.env.VENDOR_DISPLAY_LICENSE = licence;
+    for (const viewer of [
+      { tier: "free", preview: false } as Viewer,
+      { tier: "free", preview: false, userId: "free", plan: "free" } as Viewer,
+      { tier: "free", preview: false, userId: "passive", plan: "passive" } as Viewer,
+    ]) {
+      state.viewer = viewer;
+      await expect(requireCompanyDataAccess("ASML")).rejects.toThrow(/404|NOT_FOUND/);
+    }
+  }
 });

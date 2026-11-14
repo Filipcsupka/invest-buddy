@@ -23,7 +23,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 async function IndexPage({ params }: Props) {
   const locale = await resolveLocale(params);
-  await assertViewable("eodhd");
+  await assertViewable("eodhd", "indices");
   const vendor = vendorSymbolFor("index", (await params).symbol);
   const detail = vendor ? await assetDetail("index", vendor) : null;
   if (!vendor || !detail) notFound();

@@ -1,7 +1,8 @@
 import type pg from "pg";
 import type { UserId } from "./users";
 
-export type Tier = "free" | "plus";
+/** Stored entitlement tier. `plus` is the Active investor plan; `passive` needs migration 139. */
+export type Tier = "free" | "passive" | "plus";
 export type EntitlementStatus = "active" | "canceled" | "expired";
 export interface Entitlement {
   userId: UserId;

@@ -35,8 +35,9 @@ export default async function AccountPage({ params }: { params: Promise<{ locale
   if (!user) redirect(`/${locale}/sign-in`);
   const hasPassword = linked.rows.some((row) => row.provider_id === "credential");
   const plan = viewer.plan ?? "free";
-  const planName = plan === "free" ? "Free" : plan === "trial" ? (sk ? "Plus, skúšobná verzia" : "Plus trial") : "Plus";
-  const limits = { tier: plan === "free" ? "free" as const : "paid" as const, preview: false };
+  const planName = plan === "free" ? "Free" : plan === "passive" ? (sk ? "Pasívny investor" : "Passive investor") : plan === "trial" ? (sk ? "Plus (aktívny investor), skúšobná verzia" : "Plus (Active investor) trial") : (sk ? "Plus (aktívny investor)" : "Plus (Active investor)");
+  // The watchlist, screen and alert limits are stock features: only the Active plan (Plus or trial) lifts them.
+  const limits = { tier: plan === "plus" || plan === "trial" ? "paid" as const : "free" as const, preview: false };
   const unlimited = sk ? "bez limitu" : "no limit";
   const limit = (key: Parameters<typeof limitFor>[1]) => limitFor(limits, key) ?? unlimited;
 
@@ -53,7 +54,7 @@ export default async function AccountPage({ params }: { params: Promise<{ locale
       <h2>{sk ? "Plán" : "Plan"}</h2>
       <p>{planName}</p>
       {plan === "trial" && viewer.planEndsAt && <p>{sk ? "Skúšobná verzia končí" : "Trial ends"} {date(viewer.planEndsAt)}. {sk ? "Potom účet prejde na Free. Karta sa nevyžaduje." : "The account then moves to Free. No card is needed."}</p>}
-      {plan === "plus" && viewer.planEndsAt && <p>{sk ? "Prístup končí" : "Access ends"} {date(viewer.planEndsAt)}</p>}
+      {(plan === "plus" || plan === "passive") && viewer.planEndsAt && <p>{sk ? "Prístup končí" : "Access ends"} {date(viewer.planEndsAt)}</p>}
       <p>{sk ? "Zoznam sledovaných" : "Watchlist"}: {limit("watchlistTickers")}. {sk ? "Uložené filtre" : "Saved screens"}: {limit("savedScreens")}. {sk ? "Upozornenia" : "Alerts"}: {limit("alerts")}.</p>
       <p>{sk ? "Platby zatiaľ nie sú dostupné." : "Payments are not available yet."}</p>
     </section>

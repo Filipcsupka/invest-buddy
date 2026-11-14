@@ -10,7 +10,7 @@ import { InsiderPanel } from "@/components/insider-panel";
 import { PaywallSegment } from "@/components/paywall-segment";
 import { flags } from "@/config/flags";
 import { assertViewable } from "@/markets/gate";
-import { canUseVendorData, getViewer, limitFor } from "@/viewer/get-viewer";
+import { canSeeStockData, getViewer, limitFor } from "@/viewer/get-viewer";
 import { withinDays } from "./depth";
 import { insiderEvents } from "@/db/insiders";
 import { formatNumber, getMessages } from "@/i18n";
@@ -32,7 +32,7 @@ async function Insiders({ params, searchParams }: LocaleParams & { searchParams?
   if (!flags().INSIDERS_PAGE) notFound();
   if (flags().MARKETS_VIEWS) await assertViewable();
   const viewer = await getViewer();
-  if (process.env.EODHD_PRIVATE_USE === "on" && !canUseVendorData(viewer)) notFound();
+  if (!canSeeStockData(viewer)) notFound();
   const m = getMessages(locale);
   const rp = getRecordPagesMessages(locale).insiders;
   const query = await searchParams;

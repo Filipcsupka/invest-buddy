@@ -19,14 +19,16 @@ import { requireEtfScreeningAccess } from "@/components/etf/owner";
 import { ETF_TABS } from "@/components/etf/tabs";
 
 afterEach(() => vi.unstubAllEnvs());
-const viewers: [string, Viewer, boolean][] = [
-  ["anonymous", { tier: "free", preview: false }, false],
-  ["free", { tier: "free", preview: false, userId: "free", plan: "free" }, false],
-  ["trial", { tier: "paid", preview: false, userId: "trial", plan: "trial" }, true],
-  ["plus", { tier: "paid", preview: false, userId: "plus", plan: "plus" }, true],
-  ["owner", { tier: "admin", preview: false, userId: "owner", owner: true }, true],
+// [name, viewer, ETF pages and tabs, stock-level market gate]
+const viewers: [string, Viewer, boolean, boolean][] = [
+  ["anonymous", { tier: "free", preview: false }, false, false],
+  ["free", { tier: "free", preview: false, userId: "free", plan: "free" }, false, false],
+  ["passive", { tier: "free", preview: false, userId: "passive", plan: "passive" }, true, false],
+  ["trial", { tier: "paid", preview: false, userId: "trial", plan: "trial" }, true, true],
+  ["plus", { tier: "paid", preview: false, userId: "plus", plan: "plus" }, true, true],
+  ["owner", { tier: "admin", preview: false, userId: "owner", owner: true }, true, true],
 ];
-it.each(viewers)("enforces page and vendor tab access for %s", async (_name, viewer, allowed) => {
+it.each(viewers)("enforces page and vendor tab access for %s", async (_name, viewer, allowed, stockMarkets) => {
   vi.stubEnv("DATA_MODE", "db");
   vi.stubEnv("EODHD_PRIVATE_USE", "on");
   vi.stubEnv("MARKETS_VIEWS", "on");
@@ -46,7 +48,7 @@ it.each(viewers)("enforces page and vendor tab access for %s", async (_name, vie
     if (allowed) expect(renderToStaticMarkup(await result)).toContain("frame page");
     else await expect(result).rejects.toThrow(/404|NOT_FOUND/);
   }
-  if (allowed) await expect(assertViewable()).resolves.toBeUndefined();
+  if (stockMarkets) await expect(assertViewable()).resolves.toBeUndefined();
   else await expect(assertViewable()).rejects.toThrow(/404|NOT_FOUND/);
 });
 it.each([[false, false, false], [true, false, false], [false, true, false]])("gates anonymous catalog access for vendor=%s private=%s", async (vendor, privateMode, allowed) => {
@@ -56,4 +58,21 @@ it.each([[false, false, false], [true, false, false], [false, true, false]])("ga
   state.vendor = vendor;
   if (allowed) await expect(requireEtfScreeningAccess()).resolves.toBeUndefined();
   else await expect(requireEtfScreeningAccess()).rejects.toThrow(/404|NOT_FOUND/);
+});
+
+it("a licensed free account opens no ETF page or fund tab; Passive does", async () => {
+  vi.stubEnv("DATA_MODE", "db");
+  vi.stubEnv("EODHD_PRIVATE_USE", "off");
+  vi.stubEnv("VENDOR_DISPLAY_LICENSE", "on");
+  vi.stubEnv("MARKETS_VIEWS", "on");
+  state.vendor = true;
+  const props = { params: Promise.resolve({ locale: "en", key: "TEST" }) };
+  state.viewer = { tier: "free", preview: false, userId: "free", plan: "free" };
+  for (const page of [ListPage, FundPage]) await expect(page(props)).rejects.toThrow(/404|NOT_FOUND/);
+  for (const tab of ETF_TABS) await expect(TabPage({ params: Promise.resolve({ locale: "en", key: "TEST", tab }) })).rejects.toThrow(/404|NOT_FOUND/);
+  // The free licensed market rule still opens indices, economy and calendar.
+  await expect(assertViewable("eodhd", "indices")).resolves.toBeUndefined();
+  await expect(assertViewable("eodhd", "etf")).rejects.toThrow(/404|NOT_FOUND/);
+  state.viewer = { tier: "free", preview: false, userId: "passive", plan: "passive" };
+  for (const tab of ETF_TABS) expect(renderToStaticMarkup(await TabPage({ params: Promise.resolve({ locale: "en", key: "TEST", tab }) }))).toContain("frame page");
 });

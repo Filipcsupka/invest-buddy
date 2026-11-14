@@ -2,14 +2,15 @@ import type pg from "pg";
 import { getEntitlement, type Entitlement } from "@/db/entitlements";
 import { TRIAL_DAYS } from "@/auth/trial";
 
-export type Plan = "free" | "plus" | "trial";
+export type Plan = "free" | "passive" | "plus" | "trial";
 export type PlanState = { plan: Plan; endsAt: Date | null };
 
 /**
- * The plan a resolved entitlement gives. A trial is the manual Plus row grantFirstTrial writes:
+ * The plan a resolved entitlement gives. Passive is its own tier and is never a trial. A trial is the manual Plus row grantFirstTrial writes:
  * exactly TRIAL_DAYS long with an end date. getEntitlement already returns Free once it ends.
  */
 export function planFor(entitlement: Pick<Entitlement, "tier" | "source" | "startsAt" | "endsAt">): PlanState {
+  if (entitlement.tier === "passive") return { plan: "passive", endsAt: entitlement.endsAt };
   if (entitlement.tier !== "plus") return { plan: "free", endsAt: null };
   const { source, startsAt, endsAt } = entitlement;
   const trial = source === "manual" && startsAt !== null && endsAt !== null && endsAt.getTime() - startsAt.getTime() === TRIAL_DAYS * 86_400_000;

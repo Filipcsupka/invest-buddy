@@ -8,6 +8,7 @@ export { Reveal, type RevealProps } from "./reveal";
 export { StateStrip, type StateChange, type StateStripProps } from "./state-strip";
 export { TierBadge, TierFrame, LockCard, TierBanner, type LockCardProps } from "./tier";
 export { SectionHead, type SectionHeadProps } from "./section-head";
+export { AreaChip, areaLabel, type Area } from "./area-chip";
 export { DataTable, DataTableEmpty, type DataTableProps } from "./data-table";
 export { StateIcon, IconLock, IconPause, IconPlay, ResultMark } from "./kit-icons";
 export { Motion } from "./motion";

@@ -51,6 +51,26 @@ it.each(["plus", "trial"] as const)("labels ETF and market links Plus for %s cus
   }
 });
 
+it.each(["en", "sk"] as const)("opens ETF, indices, economy and calendar for Passive, and keeps stock sections locked (%s)", (locale) => {
+  Object.assign(process.env, { MARKETS_VIEWS: "on", EODHD_PRIVATE_USE: "on", INSIDERS_PAGE: "on" });
+  as({ kind: "customer", email: "a@b.cz", plan: "passive", markets: false });
+  const html = renderToStaticMarkup(<Nav locale={locale} />);
+  const hrefs = links(html);
+  for (const route of ["dashboard", "etf", "etf/track-record", "indices", "economy", "calendar", "methodology", "pricing"]) expect(hrefs, route).toContain(`/${locale}/${route}`);
+  for (const route of ["stocks", "heatmap", "track-record", "portfolio", "news", "congress", "insiders", "screener"]) {
+    expect(hrefs, route).not.toContain(`/${locale}/${route}`);
+    expect(hrefs, route).toContain(`/${locale}/plus-preview?page=${encodeURIComponent(route)}`);
+  }
+  const etf = html.match(new RegExp(`<a[^>]*href="/${locale}/etf"[^>]*>[\\s\\S]*?<\\/a>`))?.[0];
+  expect(etf).toContain(locale === "en" ? ">Passive<" : ">Pasívny<");
+});
+
+it("parses the Passive plan from /api/me", async () => {
+  const { parseMe } = await import("./auth/identity-store");
+  expect(parseMe({ kind: "customer", email: "a@b.cz", plan: "passive" })).toEqual({ kind: "customer", email: "a@b.cz", plan: "passive", markets: false });
+  expect(parseMe({ kind: "customer", email: "a@b.cz", plan: "gold" })).toBeNull();
+});
+
 it("shows insiders in Stocks when markets are off", () => {
   Object.assign(process.env, { MARKETS_VIEWS: "off", EODHD_PRIVATE_USE: "on", INSIDERS_PAGE: "on" });
   as({ kind: "customer", email: "a@b.cz", plan: "plus", markets: false });
@@ -71,4 +91,35 @@ it.each([["en", "My portfolio (connect your broker)"], ["sk", "Moje portfólio (
   const group = html.match(/<nav[^>]*nav-later[^>]*>[\s\S]*?<\/nav>/)?.[0] ?? "";
   expect(group).toContain(label);
   expect(group).not.toContain("<a ");
+});
+
+it.each(["en", "sk"] as const)("marks the Stocks, ETFs and Indices groups with their area (%s)", (locale) => {
+  Object.assign(process.env, { MARKETS_VIEWS: "on", EODHD_PRIVATE_USE: "on", INSIDERS_PAGE: "on" });
+  as({ kind: "customer", email: "a@b.cz", plan: "passive", markets: false });
+  const html = renderToStaticMarkup(<Nav locale={locale} />);
+  const group = (area: string) => html.match(new RegExp(`<nav[^>]*data-area="${area}"[^>]*>[\\s\\S]*?</nav>`))?.[0] ?? "";
+  expect(group("stocks")).toContain(`/${locale}/plus-preview?page=stocks`);
+  expect(group("etf")).toContain(`href="/${locale}/etf"`);
+  expect(group("indices")).toContain(`href="/${locale}/indices"`);
+  expect(html.match(/data-area="/g)).toHaveLength(3);
+});
+
+it.each(["en", "sk"] as const)("opens indices, economy and calendar for a licensed free account, and keeps ETF and stock-only markets locked (%s)", (locale) => {
+  Object.assign(process.env, { MARKETS_VIEWS: "on", EODHD_PRIVATE_USE: "off", VENDOR_DISPLAY_LICENSE: "on", INSIDERS_PAGE: "on" });
+  try {
+    as({ kind: "customer", email: "a@b.cz", plan: "free", markets: false });
+    const html = renderToStaticMarkup(<Nav locale={locale} />);
+    const hrefs = links(html);
+    for (const route of ["indices", "economy", "calendar"]) expect(hrefs, route).toContain(`/${locale}/${route}`);
+    for (const route of ["etf", "etf/track-record", "news", "congress", "insiders", "screener"]) expect(hrefs, route).toContain(`/${locale}/plus-preview?page=${encodeURIComponent(route)}`);
+    const indices = html.match(new RegExp(`<a[^>]*href="/${locale}/indices"[^>]*>[\\s\\S]*?</a>`))?.[0];
+    expect(indices).toContain('data-tier="free"');
+    // A visitor still goes to the preview: the licensed rule needs a signed-in account.
+    as({ kind: "anon", markets: false });
+    expect(links(renderToStaticMarkup(<Nav locale={locale} />))).toContain(`/${locale}/plus-preview?page=indices`);
+    // Without the licence the free account is locked out again.
+    delete process.env.VENDOR_DISPLAY_LICENSE;
+    as({ kind: "customer", email: "a@b.cz", plan: "free", markets: false });
+    expect(links(renderToStaticMarkup(<Nav locale={locale} />))).toContain(`/${locale}/plus-preview?page=indices`);
+  } finally { delete process.env.VENDOR_DISPLAY_LICENSE; }
 });

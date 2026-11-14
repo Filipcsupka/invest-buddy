@@ -1,4 +1,5 @@
 import { withPageLog } from "@/app/page-log";
+import { requireStockData } from "@/app/[locale]/(app)/owner/data/access";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { AppPageHead, HeadDisclosure, MetaChip, appPageClass } from "@/components/app-page-head";
@@ -35,6 +36,7 @@ function tone(metric: HeatMetric, value: number | null): string {
 }
 
 async function Heatmap({ params, searchParams }: Props) {
+  await requireStockData();
   const locale = await resolveLocale(params);
   const m = getMessages(locale);
   const h = getHeatmapMessages(locale);

@@ -41,6 +41,15 @@ colors:
   st-none-dark: "#aab3c5"
   tier-light: "#6a3fc2"
   tier-dark: "#c9b3ff"
+  area-stocks-light: "#0a6f68"
+  area-stocks-dark: "#4fd1c5"
+  area-stocks-nav: "#5fdccf"
+  area-etf-light: "#4352c9"
+  area-etf-dark: "#a3adff"
+  area-etf-nav: "#aab3ff"
+  area-indices-light: "#a52f7c"
+  area-indices-dark: "#f590cb"
+  area-indices-nav: "#f7a1d2"
 typography:
   display: { fontFamily: "Manrope", fontWeight: 800 }
   body: { fontFamily: "Inter", fontWeight: 400 }
@@ -72,9 +81,10 @@ Every value is a token in `src/app/globals.css`, set with `light-dark()`. Light 
 - **Accent orange** (`--accent`, #fb8c09 / #ff9a22): the single call to action per view and the active nav icon. Always dark ink on it (`--accent-on`), never white. `--accent-ink` is the AA text version.
 - **State bands**: green Conditions met, blue Watching, amber Waiting, orange Not now, red Criteria broken, grey Not enough data. Each has a text colour, a wash and an on-colour. A state is always shown with an icon and a label as well as colour.
 - **Tier mark**: violet, used only for Paid badges, the paid frame and lock cards.
+- **Area colours** (`--area-stocks`, `--area-etf`, `--area-indices`, each with `-on`, `-wash` and `-nav`): one hue per investor path, so a reader always knows the area. Stocks is teal (Active investor), ETF is indigo (Passive investor), Indices is magenta (Market overview). They mark the sidebar group, the area chip in page headers and the dashboard path cards, and nothing else. `-nav` is the value on the navy sidebar. An area colour always comes with the area name or its icon.
 - **Neutrals**: ground, sheet (white), sheet-hover, sheet-raised, ink, ink-2, ink-3, rule, rule-strong.
 
-Rules: orange is rare. Red and green never carry meaning alone. Dark mode is designed, not inverted: near-black ground, lifted sheets, lighter signal and state colours.
+Rules: orange is rare. Red and green never carry meaning alone. Area colours never stand for a state or a score. Dark mode is designed, not inverted: near-black ground, lifted sheets, lighter signal and state colours.
 
 ## Typography
 
@@ -111,7 +121,8 @@ Two soft, cool shadows (`--shadow-1`, `--shadow-2`) with offset and blur, plus a
 - **Data tables.** A card: 14px radius, shadow-1, sticky tinted header, sheet-hover rows, signal-tint selected row.
 - **Cards and tabs.** `.kit-card` (optionally `data-tone="navy"` or interactive), `.kit-tabs` pill tab bar with a navy active tab, `.kit-input`.
 - **Tier marks.** Pill `Paid` badge in violet, 14px paid frame, lock card.
-- **Navigation.** Navy sidebar, icon plus label rows, 8px radius, the current page on navy-2 with an orange icon. Footer in the content column.
+- **Area chip (`AreaChip`).** Pill with a dot and the area name (Stocks, ETFs, Indices) in the area colour on its wash. Sits above the title on the Stocks, ETF and Indices pages and their detail pages, and at the top of each dashboard path card.
+- **Navigation.** Navy sidebar, icon plus label rows, 8px radius, the current page on navy-2 with an orange icon. The Stocks, ETFs and Indices groups take their area colour instead: a dot and coloured group label, coloured icons, and the current-page mark in the area colour. Footer in the content column.
 - **Title block.** A 14px card of fields separated by hairlines.
 - **Price chart.** Unchanged: close 1.75px ink, MA50 and MA200 lines, a signal-wash dip band.
 - **Motion.** Unchanged vocabulary: settle, check in, count, reveal, strip, plot. Every animation is a `from` keyframe over a final state; reduced motion, no JavaScript and print show the final reading.
@@ -124,6 +135,7 @@ Two soft, cool shadows (`--shadow-1`, `--shadow-2`) with offset and blur, plus a
 - Use one orange call to action per view.
 - Keep state colours paired with an icon and a label.
 - Check any new colour pair in `scripts/check-contrast.ts`.
+- Use the same area colour for an area everywhere: sidebar group, page header chip, dashboard path card.
 
 ### Don't
 - Don't use buy, sell, recommend, best or pick wording, or show prices in the beta (ADR-001).

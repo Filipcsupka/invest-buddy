@@ -70,6 +70,14 @@ export const pairs: [string, string, number, string][] = [
   ["accent-ink", "sheet", 4.5, "accent text on sheet"],
   ["navy-line", "navy", 1.2, "header divider (decorative)"],
   ["accent", "navy", 3, "call to action edge on navy"],
+  // Area colours: area text and chips on grounds and washes, labels on area fills, and the sidebar values on navy.
+  ...["stocks", "etf", "indices"].flatMap((area): [string, string, number, string][] => [
+    ...[...grounds, `area-${area}-wash`].map((bg): [string, string, number, string] => [`area-${area}`, bg, 4.5, "area text"]),
+    [`area-${area}-on`, `area-${area}`, 4.5, "label on area fill"],
+    [`area-${area}-nav`, "navy", 4.5, "sidebar area label"],
+    [`area-${area}-nav`, "navy-2", 4.5, "sidebar area label on hover and current"],
+    [`area-${area}`, "sheet", 3, "area card border"],
+  ]),
 ];
 
 /** Every checked pair with its ratio in both themes, for reports and the /design notes. */

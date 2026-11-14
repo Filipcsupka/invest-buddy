@@ -1,4 +1,5 @@
 import { withPageLog } from "@/app/page-log";
+import { requireStockData } from "@/app/[locale]/(app)/owner/data/access";
 import type { Metadata } from "next";
 import { SampleStamp } from "@/components/operator-disclosure";
 import { latestPortfolio, portfolioIndexedSeries, stale } from "@/data/store";
@@ -31,6 +32,7 @@ export async function generateMetadata({ params }: LocaleParams): Promise<Metada
 }
 
 async function PortfolioPage({ params }: LocaleParams) {
+  await requireStockData();
   const locale = await resolveLocale(params);
   const m = getMessages(locale);
   const rp = getRecordPagesMessages(locale).portfolio;

@@ -5,11 +5,12 @@ import styles from "./app-page.module.css";
 /** Class for the page frame under the header. */
 export const appPageClass = `frame page ${styles.page}`;
 
-/** App-style page header: title with the SAMPLE badge, a lede, a meta row (last update, status), and actions on the right. */
-export function AppPageHead({ title, sample, sampleText, lede, meta, actions }: { title: string; sample?: boolean; sampleText?: string; lede?: ReactNode; meta?: ReactNode; actions?: ReactNode }) {
+/** App-style page header: optional area chip (investor path) above the title, title with the SAMPLE badge, a lede, a meta row (last update, status), and actions on the right. */
+export function AppPageHead({ title, sample, sampleText, lede, meta, actions, area }: { title: string; sample?: boolean; sampleText?: string; lede?: ReactNode; meta?: ReactNode; actions?: ReactNode; area?: ReactNode }) {
   return (
     <header className={styles.head}>
       <div className={styles.main}>
+        {area ? <div className={styles.area}>{area}</div> : null}
         <div className={styles.titleRow}>
           <h1 className={styles.title}>{title}</h1>
           {sample && sampleText ? <SampleStamp text={sampleText} /> : null}

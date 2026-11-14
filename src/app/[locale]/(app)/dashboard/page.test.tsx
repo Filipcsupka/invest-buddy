@@ -21,6 +21,11 @@ beforeEach(() => { viewer.mockResolvedValue({ tier: "free", preview: false }); p
 afterEach(() => { scores.mockReset(); portfolio.mockReset(); viewer.mockReset(); marketData.mockReset(); periodPrices.mockReset(); process.env.DATA_MODE = originalMode; });
 
 describe("merged stock screen", () => {
+  // Stored stock data needs a stock permission (canSeeStockData): these tests render the board for an Active customer.
+  beforeEach(() => {
+    viewer.mockResolvedValue({ tier: "paid", preview: false, userId: "3", plan: "plus" });
+    marketData.mockResolvedValue({ sample: false, funds: [], indices: [] });
+  });
   it.each(["en", "sk"])("shows empty and stale live data in %s", async (locale) => {
     process.env.DATA_MODE = "db";
     portfolio.mockResolvedValue(null);
@@ -145,13 +150,24 @@ describe("cross-market dashboard", () => {
     } finally { if (previous === undefined) delete process.env.SHORTLIST_VIEW; else process.env.SHORTLIST_VIEW = previous; }
   });
 
-  it("shows the free lock during owner preview and does not read market data", async () => {
+  it("shows the free version during owner preview and reads no stock or market data", async () => {
     viewer.mockResolvedValue({ tier: "free", preview: true, owner: true });
     scores.mockResolvedValue({ rows: [], sample: false, lastUpdated: null, stale: false });
     portfolio.mockResolvedValue(null);
     const html = renderToStaticMarkup(await Dashboard(props("en")));
     expect(html).not.toContain("Portfolio structure (example)");
     expect(html).not.toContain('href="/en/indices"');
+    expect(marketData).not.toHaveBeenCalled();
+    expect(scores).not.toHaveBeenCalled();
+    expect(html).toContain("data-investor-paths");
+  });
+
+  it("shows the shortlist lock in the fixture sample universe during owner preview", async () => {
+    process.env.DATA_MODE = "fixture";
+    viewer.mockResolvedValue({ tier: "free", preview: true, owner: true });
+    scores.mockResolvedValue({ rows: [], sample: true, lastUpdated: null, stale: false });
+    portfolio.mockResolvedValue(null);
+    const html = renderToStaticMarkup(await Dashboard(props("en")));
     expect(marketData).not.toHaveBeenCalled();
     expect(html).toContain('data-tier-lock="scanner-shortlist"');
   });

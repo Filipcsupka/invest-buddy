@@ -25,13 +25,16 @@ import { storedMacroEvents } from "@/data/macro-calendar-store";
 import { DataStatus } from "@/components/data-status";
 import { getViewer } from "@/viewer/get-viewer";
 import { latestShortlist, shortlistAccess, shortlistViewEnabled } from "@/data/shortlist";
-import { canUseVendorData } from "@/viewer/viewer";
+import { canOpenFunds, canSeeStockData, canUseVendorData, investorPath, vendorLicensed, type Viewer } from "@/viewer/viewer";
+import { marketsViewable } from "@/markets/gate";
+import { InvestorPaths } from "@/components/dashboard/investor-paths";
+import { PATH_HREF, pathCards } from "@/config/investor-paths";
 import { ShortlistLock, ShortlistView } from "@/components/shortlist-view";
 import { PortfolioStructure } from "@/components/dashboard/portfolio-structure";
 import { PeriodHighlights } from "@/components/dashboard/period-highlights";
 import { assembleCrossMarket, assemblePeriodRows, latestCrossMarketData, latestPeriodPrices, parseDashboardPeriod } from "@/data/cross-market-dashboard";
 import { dashboardCopy } from "@/i18n/dashboard-messages";
-import { fill, formatDate, getMessages, plural } from "@/i18n";
+import { fill, formatDate, getMessages, plural, type Locale } from "@/i18n";
 import { pageMetadata } from "@/i18n/metadata";
 import { resolveLocale, type LocaleParams } from "@/app/[locale]/locale";
 import styles from "./dashboard.module.css";
@@ -44,11 +47,40 @@ export async function generateMetadata({ params }: LocaleParams): Promise<Metada
   return pageMetadata(locale, "/dashboard", m.meta.dashboardTitle, m.meta.dashboardDescription);
 }
 
+/**
+ * Stock data on the dashboard. The proxy does not refuse the page; this check withholds every stored stock block (scores, state
+ * changes, shortlist, portfolio, market sleeves) from viewers without stock access, whatever EODHD_PRIVATE_USE says, and the page
+ * then reads none of that data. Only the fixture sample universe with private use off is open to everyone (canSeeStockData).
+ */
+export function dashboardStockAccess(viewer: Viewer, env: Record<string, string | undefined> = process.env): boolean {
+  return canSeeStockData(viewer, env);
+}
+
+/** The path cards for this viewer, or null for the owner (who sees every path). */
+function pathBlock(locale: Locale, viewer: Viewer, stockAccess: boolean) {
+  const path = investorPath(viewer);
+  if (!path) return null;
+  const indices = marketsViewable(viewer, process.env, "indices");
+  const cards = pathCards({ path, signedIn: Boolean(viewer.userId) && !viewer.preview, access: { active: stockAccess, passive: canOpenFunds(viewer), overview: true }, overviewHref: indices ? PATH_HREF.overview : PATH_HREF.overviewFallback });
+  return <InvestorPaths locale={locale} cards={cards} signedIn={Boolean(viewer.userId) && !viewer.preview} licensed={vendorLicensed()} />;
+}
+
 async function Dashboard({ params, searchParams }: LocaleParams & { searchParams?: Promise<{ period?: string }> }) {
   const locale = await resolveLocale(params);
   const period = parseDashboardPeriod((await searchParams)?.period);
   const m = getMessages(locale);
   const viewer = await getViewer();
+  const stockAccess = dashboardStockAccess(viewer);
+  if (!stockAccess) {
+    // No stock access: the paths, the public US macro calendar and the disclosure. No score, price or portfolio read happens.
+    const macroSchedule = await storedMacroEvents(new Date().toISOString().slice(0, 10));
+    return <div className={appPageClass}>
+      <AppPageHead title={m.dashboard.title} actions={<Link className="button secondary" href={`/${locale}/methodology`}>{m.nav.methodology}</Link>} />
+      {pathBlock(locale, viewer, false)}
+      <MacroEvents locale={locale} schedule={macroSchedule} />
+      <HeadDisclosure text={m.common.operatorDisclosure} />
+    </div>;
+  }
   const access = viewer.preview ? (shortlistViewEnabled() ? "locked" : "hidden") : shortlistAccess(viewer);
   const marketAccess = !viewer.preview && canUseVendorData(viewer);
   const marketBundle = marketAccess ? Promise.all([access === "full" ? latestShortlist() : null, latestCrossMarketData()]).then(async ([shortlist, crossMarket]) => {
@@ -81,6 +113,7 @@ async function Dashboard({ params, searchParams }: LocaleParams & { searchParams
       lede={data.lastUpdated ? fill(m.dashboard.lede, { date: formatDate(locale, session), count: plural(locale, data.sample ? m.plurals.sampleTickers : m.plurals.tickers, rows.length) }) : undefined}
       meta={<DataStatus locale={locale} lastUpdated={data.lastUpdated} stale={data.stale} />}
       actions={<><Link className="button secondary" href={`/${locale}/heatmap`}>{h.navLabel}</Link><Link className="button secondary" href={`/${locale}/methodology`}>{m.nav.methodology}</Link></>} />
+    {pathBlock(locale, viewer, true)}
     {access === "locked" && !marketAccess && <ShortlistLock locale={locale} />}
     {market && <><PeriodHighlights locale={locale} period={period} rows={assemblePeriodRows(market.structure, market.crossMarket.funds, period, market.periodPrices)} sample={market.crossMarket.sample} /><PortfolioStructure locale={locale} data={market.structure} /></>}
     {market && <nav className={styles.marketLinks} aria-label={dashboardCopy(locale).marketLinks}>

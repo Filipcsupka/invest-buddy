@@ -4,8 +4,9 @@
 .head :global(.title) { margin: 0; font-size: clamp(2.25rem, 1.4rem + 3vw, 3.75rem); }
 .head :global(.lede) { margin: 0; }
 
-/* Two plan cards. Prices sit side by side with no pre-selected option and no "most popular" badge. */
-.plans { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s5); align-items: stretch; }
+/* Three plan cards, one per investor path. Prices sit side by side with no pre-selected option and no "most popular" badge. */
+.plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); gap: var(--s5); align-items: stretch; }
+.path { margin: 0; color: var(--ink-3); font-size: var(--t-sm); font-weight: 700; }
 .plan { align-content: start; gap: var(--s4); padding: var(--s6); }
 .planPaid { border-color: var(--tier-line); }
 .planHead { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s2) var(--s4); }

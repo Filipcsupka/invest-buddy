@@ -15,7 +15,7 @@ export async function generateMetadata({ params }: LocaleParams): Promise<Metada
 }
 async function IndicesPage({ params }: LocaleParams) {
   const locale = await resolveLocale(params);
-  await assertViewable("eodhd");
+  await assertViewable("eodhd", "indices");
   const m = getMarketsMessages(locale);
   return <AssetListPage locale={locale} title={m.indices.title} lede={m.indices.lede} caption={m.indices.table} basePath="indices" rows={await assetSummaries("index")} />;
 }
