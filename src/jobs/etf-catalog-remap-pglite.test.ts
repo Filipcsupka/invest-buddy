@@ -20,6 +20,21 @@ const enrichment = (listingKey: string, extra: Partial<Enrichment> = {}): Enrich
   aumUsdM: null, domicile: "IE", replication: null, distribution: null, ucits: null, sourceUrl: "https://eodhd.com/api/v1.1/fundamentals/X.XETRA", source: "eodhd", holdingsCount: 1, ...extra });
 
 describe("ETF catalog mapping against the migrated schema (PGlite)", () => {
+  it("migration 145 rewrites legacy regions once and leaves unique filter options", async () => {
+    const db = new PGlite();
+    try {
+      await db.exec("CREATE TABLE etf_catalog (listing_key text PRIMARY KEY, region text, updated_at timestamptz)");
+      const names = ["North America", "United States", "United States and Canada", "Canada", "Europe Developed", "Developed Europe", "Denmark", "Finland", "Netherlands", "Eurozone", "Europe Emerging", "United Kingdom", "Japan", "Asia Developed", "Developed Asia Pacific ex-Japan", "Asia Emerging", "China", "Australasia", "Latin America", "Brazil", "Chile", "Africa/Middle East", "Israel", "global", "Global", "International", "Global ex United States", "Developed markets ex United States", "Developed markets excluding United States", "Developed markets excluding United States and Canada", "Developed markets ex-North America", "Emerging markets", "Emerging Markets"];
+      for (const [i, name] of names.entries()) await db.query("INSERT INTO etf_catalog(listing_key,region) VALUES ($1,$2)", [String(i), name]);
+      const migration = readFileSync("migrations/145_etf_catalog_regions.sql", "utf8");
+      await db.exec(migration);
+      const once = (await db.query<{ region: string }>("SELECT DISTINCT region FROM etf_catalog ORDER BY region")).rows.map((row) => row.region);
+      expect(once).toEqual(["Africa/Middle East", "Asia Developed", "Asia Emerging", "Australasia", "Emerging Markets", "Europe Developed", "Europe Emerging", "Eurozone", "Global", "Global ex US", "Japan", "Latin America", "North America", "United Kingdom"]);
+      await db.exec(migration);
+      expect((await db.query<{ region: string }>("SELECT DISTINCT region FROM etf_catalog ORDER BY region")).rows.map((row) => row.region)).toEqual(once);
+    } finally { await db.close(); }
+  });
+
   it("keeps the Xetra UCITS hint and TER gap, and accepts money market end to end", async () => {
     const { db, pool } = await migratedPool();
     try {
@@ -52,7 +67,7 @@ describe("ETF catalog mapping against the migrated schema (PGlite)", () => {
         ('IE00000000C3','IE00000000C3','COD3','Codex fund','ETF','XETR','EU','EUR','ok','codex','equity',NULL,NULL,CURRENT_DATE,CURRENT_DATE)`);
       const stats = `INSERT INTO etf_fund_stats (listing_key,as_of,vendor_symbol,origin,payload,fetched_at,source_id,display_allowed) VALUES ($1,CURRENT_DATE - 1,$2,'enrich',$3::jsonb,now(),'eodhd',false)`;
       // Before migration 140: bare ETF_Data, no General.
-      await pool.query(stats, ["IE00000000A1", "OLD1.XETRA", JSON.stringify({ World_Regions: { Europe: { "Equity_%": 90 } }, Dividend_Paying_Frequency: "NA", Asset_Allocation: { "Stock non-US": { "Net_Assets_%": 99 } }, NetExpenseRatio: 0.02 })]);
+      await pool.query(stats, ["IE00000000A1", "OLD1.XETRA", JSON.stringify({ World_Regions: { "Europe Developed": { "Equity_%": 90 } }, Dividend_Paying_Frequency: "NA", Asset_Allocation: { "Stock non-US": { "Net_Assets_%": 99 } }, NetExpenseRatio: 0.02 })]);
       await pool.query(stats, ["IE00000000B2", "NEW2.XETRA", JSON.stringify({ General: { Category: "EUR Money Market" }, ETF_Data: { Dividend_Paying_Frequency: "Accumulating", Holdings: { "A.XETRA": { Code: "A" } } } })]);
       await pool.query(stats, ["IE00000000C3", "COD3.XETRA", JSON.stringify({ General: { Category: "Bond" }, ETF_Data: {} })]);
       await pool.query(`INSERT INTO tracked_assets (vendor_symbol,asset_class,name,currency,exchange,enabled,sort) VALUES ('OLD1.XETRA','etf','Old shape fund','EUR','XETRA',true,1)`);
@@ -67,7 +82,7 @@ describe("ETF catalog mapping against the migrated schema (PGlite)", () => {
       const applied = await runCatalogRemap(pool, { apply: true, limit: null }, () => undefined);
       expect(applied).toMatchObject({ scanned: 2, changed: 2, applied: true });
       expect((await pool.query("SELECT listing_key,asset_class,region,distribution,ter_gap FROM etf_catalog ORDER BY listing_key")).rows).toEqual([
-        { listing_key: "IE00000000A1", asset_class: "equity", region: "Europe", distribution: "dist", ter_gap: "ter_ambiguous" },
+        { listing_key: "IE00000000A1", asset_class: "equity", region: "Europe Developed", distribution: "dist", ter_gap: "ter_ambiguous" },
         { listing_key: "IE00000000B2", asset_class: "money_market", region: "Kept", distribution: "acc", ter_gap: null },
         { listing_key: "IE00000000C3", asset_class: "equity", region: null, distribution: null, ter_gap: null },
       ]);
@@ -76,7 +91,7 @@ describe("ETF catalog mapping against the migrated schema (PGlite)", () => {
   });
 
   it("never erases a stored value with null and parses its options", () => {
-    const row: RemapRow = { listingKey: "K", isin: null, name: "N", symbol: "S", exchange: "XETR", ucitsHint: null, assetClass: "bond", region: "Europe", distribution: "dist", terGap: null,
+    const row: RemapRow = { listingKey: "K", isin: null, name: "N", symbol: "S", exchange: "XETR", ucitsHint: null, assetClass: "bond", region: "Europe Developed", distribution: "dist", terGap: null,
       vendorSymbol: "S.XETRA", general: null, etfData: null, dividendHistory: [] };
     expect(remapRow(row).changes).toEqual({});
     expect(parseRemapArgs([])).toEqual({ apply: false, limit: null });

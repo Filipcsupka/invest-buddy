@@ -132,3 +132,18 @@ it("names the proxy and labels return sources", async () => {
   expect(html).toContain("price return");
   expect(html).toContain("reported return");
 });
+
+it.each([
+  ["ACWI.US", "iShares MSCI ACWI ETF (USD)"], ["URTH.US", "iShares MSCI World ETF (USD)"],
+  ["IUSQ.XETRA", "iShares MSCI ACWI UCITS ETF (EUR)"], ["EUNL.XETRA", "iShares Core MSCI World UCITS ETF (EUR)"],
+])("renders the proper name for %s in both languages", async (benchmarkSymbol, name) => {
+  process.env.DATA_MODE = "fixture";
+  viewable.mockReturnValue(true);
+  detail.mockResolvedValue({ ...fundView(), benchmarkSymbol });
+  for (const locale of ["en", "sk"]) {
+    const html = renderToStaticMarkup(await Page(props("performance", locale)));
+    expect(html).toContain(name);
+    expect(html).toContain(locale === "en" ? "a regional index or a world ETF price series in the fund&#x27;s currency" : "regionálneho indexu alebo z cenovej série svetového ETF v mene fondu");
+    expect(html).not.toContain(benchmarkSymbol);
+  }
+});

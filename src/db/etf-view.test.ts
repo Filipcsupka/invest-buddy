@@ -97,3 +97,23 @@ it("runs category and same-index reads against Postgres, excluding stale and zer
     expect(view.alternatives.map((p) => p.listingKey)).toEqual(["ZERO", "OTHER"]);
   } finally { await db.close(); }
 });
+
+it.each([
+  ["USD", "MSCI ACWI", "ACWI.US"], ["USD", "MSCI World", "URTH.US"],
+  ["EUR", "MSCI ACWI", "IUSQ.XETRA"], ["EUR", "MSCI World", "EUNL.XETRA"], ["GBP", "MSCI World", null],
+])("uses %s price currency and %s index for the fund page", async (currency, index_name, expected) => {
+  detailView.mockResolvedValue({ ...detail(), currency });
+  const fund = { ...sampleEtfCatalog[0], listingKey: "WORLD", assetClass: "equity" as const, region: "Global", trackedIndex: null };
+  const queries: unknown[][] = [];
+  const db = { query: async (sql: string, args: unknown[]) => {
+    if (sql.includes("SELECT s.category,s.index_name")) return { rows: [{ category: "Global Equity", index_name }] };
+    if (sql.includes("FROM asset_bars")) queries.push(args);
+    return { rows: [] };
+  } };
+  expect((await readEtfFundView(fund, "performance", db as never)).benchmarkSymbol).toBe(expected);
+  expect(queries).toEqual(expected ? [[expected, "2026-11-12"]] : []);
+  if (expected) {
+    detailView.mockResolvedValue({ ...detail(), currency, vendorSymbol: expected });
+    expect((await readEtfFundView(fund, "performance", db as never)).benchmarkSymbol).toBeNull();
+  }
+});

@@ -107,16 +107,25 @@ it("does not report truncated country weights as a complete portfolio", async ()
 });
 
 it("selects a benchmark from exposure, never the trading venue", () => {
-  expect(benchmarkSymbol({ region: "US", listing_region: "EU" })).toBe("GSPC.INDX");
-  expect(benchmarkSymbol({ region: "Global", listing_region: "EU" })).toBeNull();
+  expect(benchmarkSymbol({ region: "North America", listing_region: "EU" })).toBe("GSPC.INDX");
+  expect(benchmarkSymbol({ region: "Global", trading_currency: "USD", listing_region: "EU" })).toBe("URTH.US");
   expect(benchmarkSymbol({ region: "Europe", listing_region: "US" })).toBe("STOXX50E.INDX");
-  expect(benchmarkSymbol({ region: "Global", score_category: "US Equity", listing_region: "EU" })).toBeNull();
+  expect(benchmarkSymbol({ region: "Global", score_category: "US Equity", listing_region: "EU" })).toBe("GSPC.INDX");
   expect(benchmarkSymbol({ listing_region: "US" })).toBeNull();
+});
+
+it("uses existing world ETF bars without assigning an ex-US or emerging fund a proxy", () => {
+  for (const category of ["MSCI ACWI Equity", "FTSE All-World", "All World Equity"]) expect(benchmarkSymbol({ region: "Global", trading_currency: "USD", score_category: category })).toBe("ACWI.US");
+  for (const category of ["MSCI World", "Developed World Equity", "Global Equity"]) expect(benchmarkSymbol({ region: "Global", trading_currency: "USD", score_category: category })).toBe("URTH.US");
+  for (const region of ["Global ex US", "Developed markets ex United States", "Developed markets excluding United States and Canada", "Developed markets ex-North America", "International", "Emerging Markets", "Asia Emerging"]) {
+    expect(benchmarkSymbol({ region, score_category: "World Equity" })).toBeNull();
+  }
+  expect(benchmarkSymbol({ region: "Global ex US", score_category: "US Equity" })).toBeNull();
 });
 
 it("uses fund stats category and UCITS hint, without treating a world region as country concentration", async () => {
   const db = { query: async (sql: string) => {
-    if (sql.includes("FROM etf_catalog")) return { rows: [{ listing_key: "X", name: "World ETF", instrument_type: "ETF", region: "Global", listing_region: "EU", score_category: "Catalog category", last_seen: "2026-11-12", ucits_hint: true }] };
+    if (sql.includes("FROM etf_catalog")) return { rows: [{ listing_key: "X", name: "World ETF", instrument_type: "ETF", region: "Global", trading_currency: "USD", listing_region: "EU", score_category: "Catalog category", last_seen: "2026-11-12", ucits_hint: true }] };
     if (sql.includes("FROM etf_fund_stats")) return { rows: [{ listing_key: "X", category: "World Equity", ucits_hint: true, ter_ambiguous: true }] };
     if (sql.includes("FROM etf_exposure")) return { rows: [{ listing_key: "X", kind: "region", label: "North America", weight_pct: 72 }] };
     return { rows: [] };
@@ -133,4 +142,40 @@ it("shows the latest v2 row until a v3 score exists", async () => {
   expect(sql).toContain("rules_version IN ($2,'etf-v2-2026-11-12')");
   expect(score?.rulesVersion).toBe("etf-v2-2026-11-12");
   expect(score?.incompleteData).toBe(false);
+});
+
+it.each(["ex-US", "ex-U.S.", "ex-USA", "exUS", "excluding US", "excluding USA", "excluding United States", "excluding North America", "non-US", "Foreign Large Blend", "MSCI EAFE"])("excludes %s from every US or world proxy", (label) => {
+  for (const region of ["Global", "North America"]) for (const trading_currency of ["USD", "EUR"]) {
+    expect(benchmarkSymbol({ region, category: `World ${label}`, tracked_index: "MSCI ACWI", trading_currency })).toBeNull();
+  }
+});
+it.each([
+  ["USD", "ACWI.US", "URTH.US"], ["EUR", "IUSQ.XETRA", "EUNL.XETRA"],
+  ["GBP", null, null], ["CHF", null, null], [null, null, null],
+])("matches world proxies to %s currency, including index names", (trading_currency, allWorld, world) => {
+  for (const index of ["FTSE All-World", "MSCI ACWI", "All Country World", "FTSE Global All Cap", "FTSE All World"]) {
+    for (const field of ["tracked_index", "index_name"]) expect(benchmarkSymbol({ region: "North America", category: "Unclassified", trading_currency, [field]: index })).toBe(allWorld);
+  }
+  expect(benchmarkSymbol({ region: "Global", category: "Global Equity", trading_currency })).toBe(world);
+});
+it.each([["Japan Equity", "N225.INDX"], ["US Equity", "GSPC.INDX"], ["Europe Equity", "STOXX50E.INDX"], ["Europe Emerging", null]])("prefers the specific %s category over Global", (category, expected) => {
+  expect(benchmarkSymbol({ region: "Global", category, trading_currency: "USD" })).toBe(expected);
+});
+it.each([["ACWI.US", "USD", "MSCI ACWI"], ["URTH.US", "USD", "MSCI World"], ["IUSQ.XETRA", "EUR", "MSCI ACWI"], ["EUNL.XETRA", "EUR", "MSCI World"]])("never compares %s with itself", (vendor_symbol, trading_currency, tracked_index) => {
+  expect(benchmarkSymbol({ region: "Global", tracked_index, vendor_symbol, trading_currency })).toBeNull();
+  expect(benchmarkSymbol({ region: "North America", tracked_index, vendor_symbol, trading_currency })).toBe("GSPC.INDX");
+});
+it.each(["USD", "EUR", "GBP"])("uses dated stats index and price currency for the %s benchmark", async (currency) => {
+  const db = { query: async (sql: string) => {
+    if (sql.includes("FROM etf_catalog")) return { rows: [{ listing_key: "X", vendor_symbol: "X.US", region: "North America", asset_class: "equity", trading_currency: "USD", instrument_type: "ETF", last_seen: "2026-11-12" }] };
+    if (sql.includes("FROM etf_fund_stats")) return { rows: [{ listing_key: "X", index_name: "FTSE All-World", category: "Global Equity", trading_currency: currency }] };
+    if (sql.includes("LIMIT 760")) return { rows: Array.from({ length: 127 }, (_, i) => ({ vendor_symbol: "X.US", date: new Date(Date.parse("2026-11-12") - i * 86400000).toISOString().slice(0, 10), close: 100, currency })) };
+    if (sql.includes("LIMIT 130")) return { rows: ["ACWI.US", "IUSQ.XETRA"].flatMap((vendor_symbol, n) => Array.from({ length: 127 }, (_, i) => ({ vendor_symbol, date: new Date(Date.parse("2026-11-12") - i * 86400000).toISOString().slice(0, 10), close: i === 0 ? 110 + n * 10 : 100 }))) };
+    return { rows: [] };
+  } };
+  const facts = (await readEtfScoreFacts("X", "2026-11-12", db as never))!;
+  if (currency === "GBP") {
+    expect(facts.benchmarkReturn6m).toBeNull();
+    expect(etfScore(facts).rules.find((r) => r.id === "benchmark6m")?.gapReason).toBe("missing_benchmark_proxy");
+  } else expect(facts.benchmarkReturn6m).toBeCloseTo(currency === "USD" ? 0.1 : 0.2);
 });

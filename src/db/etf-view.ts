@@ -130,7 +130,7 @@ export async function readEtfFundView(fund: CatalogFund, tab: EtfTab = "overview
     }
     return view;
   }
-  const benchmark = fund.assetClass === "equity" ? benchmarkSymbol({ region: fund.region, category: view.category }) : null;
+  const benchmark = fund.assetClass === "equity" ? benchmarkSymbol({ region: fund.region, category: view.category, tracked_index: fund.trackedIndex, index_name: view.indexName, trading_currency: detail.currency ?? fund.tradingCurrency, vendor_symbol: detail.vendorSymbol }) : null;
   view.benchmarkSymbol = benchmark;
   let benchmarkCloses: number[] = [];
   if (benchmark) {

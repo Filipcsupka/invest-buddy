@@ -15,6 +15,8 @@ describe("methodology page", () => {
     expect(html).toContain(title);
     expect(html).toContain(phrase);
     expect(html).toContain("etf-v3-2026-11-13");
+    for (const symbol of ["ACWI.US", "URTH.US", "IUSQ.XETRA", "EUNL.XETRA"]) expect(html).toContain(symbol);
+    expect(html).toContain(locale === "en" ? "currency-matched ETF price series" : "cenové série ETF v mene fondu");
     expect(html).toContain("The Journal of Wealth Management");
     expect(html).not.toContain("abstract_id=962461");
     expect(html).not.toContain("eodhd.com");

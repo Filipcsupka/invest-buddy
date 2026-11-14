@@ -1,9 +1,25 @@
 import { expect, it } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
 import { readFileSync } from "node:fs";
-import { latestEtfScores, storeEtfScore } from "./etf-score";
+import { latestEtfScores, loadEtfBenchmarkReturns, storeEtfScore } from "./etf-score";
 import type { EtfScoreResult } from "@/engine/etf-score";
 import { etfScoreStatus } from "@/engine/etf-score";
+
+it("loads six-month returns from tracked ETF bars by vendor symbol", async () => {
+  const db = new PGlite();
+  try {
+    await db.exec(`CREATE TABLE asset_bars (vendor_symbol text, bar_date date, close numeric);
+      INSERT INTO asset_bars SELECT symbol, '2026-11-13'::date - (129 - n), 100 + n
+      FROM generate_series(0,129) n CROSS JOIN (VALUES ('ACWI.US'),('URTH.US'),('IUSQ.XETRA'),('EUNL.XETRA')) symbols(symbol);
+      INSERT INTO asset_bars VALUES ('ACWI.US','2026-11-14',999);`);
+    const returns = await loadEtfBenchmarkReturns("2026-11-13", { query: (sql: string, values?: unknown[]) => db.query(sql, values) } as never);
+    for (const symbol of ["ACWI.US", "URTH.US", "IUSQ.XETRA", "EUNL.XETRA"]) {
+      expect(returns.get(symbol)?.barDate).toBe("2026-11-13");
+      expect(returns.get(symbol)?.return6m).toBeCloseTo(229 / 103 - 1);
+    }
+    expect(returns.has("GSPC.INDX")).toBe(false);
+  } finally { await db.close(); }
+});
 
 it("enforces score bounds and replaces a daily result atomically", async () => {
   const db = new PGlite();
