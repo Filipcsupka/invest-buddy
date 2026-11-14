@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { etfCatalogDetail, etfCatalogList, etfRatingSummary, etfResearchCandidates, etfTopRated, normalizeCatalogFilters } from "./etf-catalog";
+import { etfCatalogDetail, etfCatalogList, etfRatingSummary, etfResearchCandidates, etfTopRated, FX_MAX_AGE_DAYS, normalizeCatalogFilters } from "./etf-catalog";
 import { ETF_RULES_VERSION } from "@/engine/etf-score-config";
 import { ETF_ASSET_CLASSES } from "./etf";
 import { getEtfMessages } from "@/i18n/etf-messages";
@@ -12,7 +12,7 @@ const STATS_TABLES = `CREATE TABLE etf_fund_stats (listing_key text, as_of date,
   category text, ret_1y_pct numeric, ret_3y_pct numeric, vol_1y_pct numeric, yield_pct numeric, holdings_count integer, PRIMARY KEY (listing_key, as_of));
   CREATE TABLE etf_holdings (listing_key text, position integer, weight_pct numeric, PRIMARY KEY (listing_key, position));
   CREATE TABLE asset_bars (vendor_symbol text, bar_date date, close numeric, PRIMARY KEY (vendor_symbol, bar_date));
-  INSERT INTO asset_bars VALUES ('EURUSD.FOREX','2026-11-11',1.25),('EURUSD.FOREX','2026-11-12',1.25);`;
+  INSERT INTO asset_bars VALUES ('EURUSD.FOREX',CURRENT_DATE - 30,2),('EURUSD.FOREX',CURRENT_DATE - 2,1.25);`;
 type Db = NonNullable<Parameters<typeof etfCatalogList>[1]>;
 async function catalogDb(rows: string) {
   const db = new PGlite();
@@ -98,14 +98,16 @@ describe("ETF catalog read model", () => {
     const list = await etfCatalogList({ search: "TEST'; DROP TABLE etf_catalog; --", instrumentType: "all", page: "3", sort: "aum_desc", band: "mostlyMet", ter: "upTo020", aum: "from100to500" }, db);
     expect(list).toMatchObject({ total: 101, rated: 25, withData: 50, page: 3, pages: 3 });
     const count = calls.find((call) => call.sql.includes("count(*)::text AS total"));
-    expect(count?.values).toEqual([ETF_RULES_VERSION, false, "TEST'; DROP TABLE etf_catalog; --", "mostlyMet", 0.2, 100, 500]);
+    expect(count?.values).toEqual([ETF_RULES_VERSION, "TEST'; DROP TABLE etf_catalog; --", "mostlyMet", 0.2, 100, 500]);
     expect(count?.sql).toContain("s.state='rated'");
-    const paged = calls.find((call) => call.sql.includes("LIMIT $8 OFFSET $9"));
-    expect(paged?.values).toEqual([ETF_RULES_VERSION, false, "TEST'; DROP TABLE etf_catalog; --", "mostlyMet", 0.2, 100, 500, 50, 100]);
+    const paged = calls.find((call) => call.sql.includes("LIMIT $7 OFFSET $8"));
+    expect(paged?.values).toEqual([ETF_RULES_VERSION, "TEST'; DROP TABLE etf_catalog; --", "mostlyMet", 0.2, 100, 500, 50, 100]);
     expect(paged?.sql).not.toContain("DROP TABLE");
     expect(paged?.sql).toContain("round(s.earned::numeric / NULLIF(s.evidenced_max,0) * 100)");
-    expect(paged?.sql).toContain("rules_version IN ($1,'etf-v2-2026-11-12') ORDER BY (rules_version=$1) DESC,as_of DESC LIMIT 1");
-    expect(paged?.sql).toContain("st ON $2::boolean");
+    expect(paged?.sql).toContain("latest AS (SELECT max(as_of) AS as_of FROM etf_scores WHERE rules_version=$1)");
+    expect(paged?.sql).toContain("s.rules_version=$1 AND s.as_of=(SELECT as_of FROM latest)");
+    expect(paged?.sql).toContain(`bar_date >= CURRENT_DATE - ${FX_MAX_AGE_DAYS}`);
+    expect(paged?.sql).toContain("st ON false::boolean");
     // Without vendor access no holdings query runs and the category list stays empty.
     expect(calls.some((call) => call.sql.includes("etf_holdings"))).toBe(false);
     expect(list.options.categories).toEqual([]);
@@ -165,6 +167,51 @@ describe("ETF catalog read model", () => {
       expect(plain.funds.every((fund) => fund.facts?.ret1yPct === null && fund.facts?.category === null && fund.facts?.topTenWeightPct === null)).toBe(true);
       expect(plain.funds.find((fund) => fund.listingKey === "thin")?.facts?.terPct).toBe(0.2);
       expect(plain.options.categories).toEqual([]);
+    } finally { await db.close(); }
+  }, 20_000);
+
+  it("converts USD AUM only with a EURUSD close from the last seven days and names the missing rate", async () => {
+    process.env.DATA_MODE = "db";
+    const { db, query } = await catalogDb(`DELETE FROM asset_bars;
+      INSERT INTO asset_bars VALUES ('EURUSD.FOREX',CURRENT_DATE - 8,1.25);
+      INSERT INTO etf_catalog(listing_key,name,instrument_type,exchange,first_seen,last_seen,aum_usd_m,listing_region,trading_currency) VALUES
+      ('us','US listing','ETF','NASDAQ','2026-11-12','2026-11-12',250,'US','USD'),
+      ('eur','Euro stats','ETF','XETR','2026-11-12','2026-11-12',null,'EU','EUR'),
+      ('usd','Dollar stats','ETF','XETR','2026-11-12','2026-11-12',null,'EU','EUR'),
+      ('bare','No currency','ETF','XETR','2026-11-12','2026-11-12',90,'EU','EUR');
+      INSERT INTO etf_fund_stats(listing_key,as_of,total_assets,total_assets_currency) VALUES ('eur','2026-11-10',300000000,'EUR'),('usd','2026-11-10',500000000,'USD');`);
+    try {
+      const gaps = async () => Object.fromEntries((await etfCatalogList({}, query, { vendor: true })).funds.map((fund) => [fund.listingKey, [fund.facts?.aumEurM, fund.facts?.aumGap]]));
+      // An eight-day-old rate is too old: USD figures show the no-rate gap, EUR still converts, a bare figure keeps the currency gap.
+      expect(await gaps()).toEqual({ us: [null, "fx"], eur: [300, null], usd: [null, "fx"], bare: [null, "currency"] });
+      expect((await etfCatalogList({ aum: "from100to500" }, query, { vendor: true })).funds.map((fund) => fund.listingKey)).toEqual(["eur"]);
+      await db.exec("INSERT INTO asset_bars VALUES ('EURUSD.FOREX',CURRENT_DATE - 7,1.25)");
+      expect(await gaps()).toEqual({ us: [200, null], eur: [300, null], usd: [400, null], bare: [null, "currency"] });
+    } finally { await db.close(); }
+  }, 20_000);
+
+  it("reads one current-version run, so the Not rated filter matches the strip", async () => {
+    process.env.DATA_MODE = "db";
+    const { db, query } = await catalogDb(`INSERT INTO etf_catalog(listing_key,name,instrument_type,exchange,first_seen,last_seen) VALUES
+      ('v3','Current rating','ETF','XETR','2026-11-12','2026-11-12'),
+      ('v2only','Previous version only','ETF','XETR','2026-11-12','2026-11-12'),
+      ('dropped','Missing from the latest run','ETF','XETR','2026-11-12','2026-11-12'),
+      ('unrated','Not rated','ETF','XETR','2026-11-12','2026-11-12');
+      INSERT INTO etf_scores(listing_key,as_of,rules_version,rule_hits,earned,evidenced_max,state) VALUES
+      ('v3','2026-11-13','${ETF_RULES_VERSION}','[]',80,90,'rated'),
+      ('v2only','2026-11-12','etf-v2-2026-11-12','[]',30,35,'rated'),
+      ('dropped','2026-11-12','${ETF_RULES_VERSION}','[]',85,90,'rated'),
+      ('unrated','2026-11-13','${ETF_RULES_VERSION}','[]',0,0,'not_rated');`);
+    try {
+      const summary = await etfRatingSummary(query);
+      const notRated = await etfCatalogList({ band: "notRated" }, query);
+      expect(summary).toMatchObject({ asOf: "2026-11-13", inScope: 4, rated: 1, notRated: 3 });
+      expect(notRated.funds.map((fund) => fund.listingKey).sort()).toEqual(["dropped", "unrated", "v2only"]);
+      expect(notRated.total).toBe(summary.notRated);
+      const all = await etfCatalogList({}, query);
+      expect(all).toMatchObject({ total: 4, rated: summary.rated });
+      expect(all.funds[0].listingKey).toBe("v3");
+      expect((await etfCatalogList({ band: "rulesMet" }, query)).total).toBe(summary.bands.rulesMet);
     } finally { await db.close(); }
   }, 20_000);
 
@@ -234,6 +281,30 @@ describe("ETF catalog read model", () => {
       expect((await etfResearchCandidates(9999, query as never)).length).toBe(3);
     } finally { await db.close(); }
   }, 20_000);
+
+  it("keeps per-row work off the count and the pick lookup on the page rows", async () => {
+    process.env.DATA_MODE = "db";
+    const calls: { sql: string; values: unknown[] }[] = [];
+    const db = { query: async (sql: string, values: unknown[] = []) => {
+      calls.push({ sql, values });
+      if (sql.includes("count(*)::text AS total")) return { rows: [{ total: "2", rated: "0", with_data: "0" }] };
+      if (sql.includes("max(last_seen)")) return { rows: [{ size: "2", enriched: "0", shortlist: "0", last_sync: null }] };
+      if (sql.includes("asset_classes")) return { rows: [{ asset_classes: [], regions: [], listing_regions: [], exchanges: [], issuers: [], categories: [] }] };
+      if (sql.includes("FROM etf_picks")) return { rows: [{ listing_key: "B", pick_symbol: "BBB" }] };
+      if (sql.includes("ORDER BY")) return { rows: [{ listing_key: "A", name: "A" }, { listing_key: "B", name: "B" }] };
+      return { rows: [] };
+    } } as unknown as Db;
+    const list = await etfCatalogList({}, db, { vendor: true });
+    const count = calls.find((call) => call.sql.includes("count(*)::text AS total"))!;
+    expect(count.sql).not.toContain("etf_fund_stats");
+    expect(count.sql).not.toContain("etf_picks");
+    expect(calls.find((call) => call.sql.includes("ORDER BY") && call.sql.includes("LIMIT"))!.sql).not.toContain("etf_picks");
+    expect(calls.find((call) => call.sql.includes("FROM etf_picks"))?.values).toEqual([["A", "B"]]);
+    expect(list.funds.map((fund) => fund.pickSymbol)).toEqual([null, "BBB"]);
+    calls.length = 0;
+    await etfCatalogList({ category: "Bonds" }, db, { vendor: true });
+    expect(calls.find((call) => call.sql.includes("count(*)::text AS total"))!.sql).toContain("etf_fund_stats");
+  });
 
   it("drops vendor-only filters and sorts without vendor access", () => {
     expect(normalizeCatalogFilters({ category: "Equity", sort: "ret1y_desc" })).toMatchObject({ category: null, sort: "rating", vendor: false });

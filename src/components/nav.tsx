@@ -63,7 +63,6 @@ export function Nav({ locale }: { locale: Locale }) {
   ];
   const etfItems: NavItem[] = [
     { href: "/etf", text: m.nav.etfResearch, icon: "scanner", locked: true, passive: true },
-    { href: "/etf/track-record", text: m.nav.etfTrackRecord, icon: "track", locked: true, passive: true },
   ];
   return (
     <header className="site-header">
@@ -92,6 +91,8 @@ export function Nav({ locale }: { locale: Locale }) {
             ...(f.ADVICE_OUTPUT ? [{ href: "/sizing", text: m.nav.sizing, icon: "sizing" }] : []),
           ])} />
           <NavLinks locale={locale} label={m.nav.etfs} sectionLabel={m.nav.etfs} lock={lock} area="etf" items={etfItems.map((item) => ({ ...item, tier: "plus" }))} />
+          {/* The ETF track record measures the research model's picks: an owner-only page, so customers never receive the link. */}
+          <NavLinks locale={locale} label={m.nav.etfTrackRecord} sectionLabel={m.nav.etfs} lock={lock} audience="owner" items={[{ href: "/etf/track-record", text: m.nav.etfTrackRecord, icon: "track" }]} />
           {f.MARKETS_VIEWS && <NavLinks locale={locale} label={m.nav.indices} sectionLabel={m.nav.indices} lock={lock} area="indices" items={[{ href: "/indices", text: m.nav.indices, icon: "indices", locked: true, passive: true, freeOpen: freeMarkets, tier: "plus" }]} />}
           {f.MARKETS_VIEWS && <NavLinks locale={locale} label={sections.marketsCalendar} sectionLabel={sections.marketsCalendar} lock={lock} separator items={marketItems.map((item) => ({ ...item, tier: "plus" }))} />}
           <NavLinks locale={locale} label={m.nav.learn} sectionLabel={m.nav.learn} lock={lock} items={[

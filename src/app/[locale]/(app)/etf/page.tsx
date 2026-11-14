@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { withPageLog } from "@/app/page-log";
 import { ETF_ASSET_CLASSES, etfList, type EtfAssetClass, type EtfCall } from "@/db/etf";
-import { AUM_RANGES, RATING_BANDS, TER_RANGES, etfCatalogList, etfRatingSummary, etfTopRated, normalizeCatalogFilters, type CatalogFilters } from "@/db/etf-catalog";
+import { AUM_RANGES, RATING_BANDS, TER_RANGES, etfCatalogList, etfRatingSummary, etfTopRated, normalizeCatalogFilters, type AumGap, type CatalogFilters } from "@/db/etf-catalog";
 import { getEtfMessages, type EtfMessages } from "@/i18n/etf-messages";
-import { etfOwnerView, etfScoreView, requireEtfScreeningAccess } from "@/components/etf/owner";
+import { etfOwnerView, etfPickOwnerView, etfScoreView, requireEtfScreeningAccess } from "@/components/etf/owner";
 import { latestEtfScores } from "@/db/etf-score";
 import { BandBadge, EtfRatingCell } from "@/components/etf/score";
 import { AdrLine } from "@/components/disclaimer";
@@ -13,7 +13,6 @@ import { pageMetadata } from "@/i18n/metadata";
 import { RecordHead } from "@/components/record-parts";
 import { AreaChip } from "@/components/kit";
 import { CallBadge, Figure, Gap, VerificationBadge, amount, displayedDate, millions, percent, signedPercent } from "@/components/etf/format";
-import { getViewer, isOwner } from "@/viewer/get-viewer";
 import s from "@/components/etf/etf.module.css";
 import { resolveLocale } from "@/app/[locale]/locale";
 
@@ -24,10 +23,6 @@ const classes = ETF_ASSET_CLASSES;
 const calls: EtfCall[] = ["BUY_ZONE", "WATCH", "AVOID"];
 const TOP_PER_CLASS = 5;
 
-/** The model research table (call, conviction) is the owner's private workflow. Customers never receive it or its filter. */
-async function ownerViewer(): Promise<boolean> {
-  try { return isOwner(await getViewer()); } catch { return false; }
-}
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   await requireEtfScreeningAccess();
   const locale = await resolveLocale(params);
@@ -40,13 +35,16 @@ const pct1 = (locale: Locale, value: number) => percent(locale, value, 1);
 const signed1 = (locale: Locale, value: number) => signedPercent(locale, value, 1);
 const ter2 = (locale: Locale, value: number) => percent(locale, value, 2);
 const count = (locale: Locale, value: number) => formatNumber(locale, value, 0);
+/** Spoken reason for a blank EUR AUM cell. */
+const aumReason = (m: EtfMessages, gap: AumGap) => gap === "fx" ? m.aumFxGap : gap === "currency" ? m.aumCurrencyGap : undefined;
 
 async function EtfPage({ params, searchParams }: Props) {
   await requireEtfScreeningAccess();
   const locale = await resolveLocale(params);
   const m = getEtfMessages(locale);
   const query = await searchParams ?? {};
-  const [owner, vendor, scoreAccess] = await Promise.all([ownerViewer(), etfOwnerView(), etfScoreView()]);
+  const [owner, vendor, scoreAccess] = await Promise.all([etfPickOwnerView(), etfOwnerView(), etfScoreView()]);
+  // The model research table (call, conviction) is the owner's private workflow (etfPickOwnerView, no free preview).
   // The call parameter is an owner filter on model output. For anyone else it is dropped before any read.
   const catalogQuery: CatalogFilters = { ...query };
   delete (catalogQuery as Query).call;
@@ -84,7 +82,7 @@ async function EtfPage({ params, searchParams }: Props) {
           <span className={s.topFacts}>
             <span>{fill(m.scoreGroupsShort, { count: String(fund.groupsWithData), total: String(fund.applicableGroups) })}{fund.incompleteData ? ` · ${m.scoreIncomplete}` : ""}</span>
             <span>{m.ter} <Figure locale={locale} value={fund.terPct} format={ter2} /></span>
-            <span>{m.aumEur} <Figure locale={locale} value={fund.aumEurM} format={millions} reason={m.aumCurrencyGap} /></span>
+            <span>{m.aumEur} <Figure locale={locale} value={fund.aumEurM} format={millions} reason={aumReason(m, fund.aumGap)} /></span>
           </span>
         </li>)}</ol>
       </section>)}</div>}
@@ -136,7 +134,7 @@ async function EtfPage({ params, searchParams }: Props) {
           <th scope="row"><Link href={`/${locale}/etf/fund/${encodeURIComponent(fund.listingKey)}`}>{fund.name}</Link><span className={s.fundMeta} title={m.fundMeta}>{[fund.mnemonic, fund.exchange, fund.isin].filter(Boolean).join(" · ")}</span></th>
           {scores ? <td><EtfRatingCell score={scores.get(fund.listingKey)} m={m} /></td> : null}
           <td className={s.num}><Figure locale={locale} value={f?.terPct ?? fund.terPct} format={ter2} /></td>
-          <td className={s.num}><Figure locale={locale} value={f?.aumEurM} format={millions} reason={f?.aumGap === "currency" ? m.aumCurrencyGap : undefined} /></td>
+          <td className={s.num}><Figure locale={locale} value={f?.aumEurM} format={millions} reason={aumReason(m, f?.aumGap ?? null)} /></td>
           {vendor ? <>
             <td className={s.num}><Figure locale={locale} value={f?.ret1yPct} format={signed1} /></td>
             <td className={s.num}><Figure locale={locale} value={f?.ret3yPct} format={signed1} /></td>

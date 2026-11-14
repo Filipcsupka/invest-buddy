@@ -1,5 +1,13 @@
 import { vi } from "vitest";
-const access = vi.hoisted(() => ({ owner: false, vendor: true, scores: true }));
+const access = vi.hoisted(() => ({ owner: false, vendor: true, scores: true, gaps: null as null | Record<string, "fx" | "currency" | "missing"> }));
+vi.mock("@/db/etf-catalog", async (original) => {
+  const real = await original<typeof import("@/db/etf-catalog")>();
+  return { ...real, etfCatalogList: async (...args: Parameters<typeof real.etfCatalogList>) => {
+    const list = await real.etfCatalogList(...args);
+    const gaps = access.gaps;
+    return gaps ? { ...list, funds: list.funds.map((fund) => gaps[fund.listingKey] ? { ...fund, facts: { ...fund.facts!, aumEurM: null, aumGap: gaps[fund.listingKey] } } : fund) } : list;
+  } };
+});
 vi.mock("@/components/etf/owner", async (original) => ({ ...await original<typeof import("@/components/etf/owner")>(),
   requireEtfScreeningAccess: async () => undefined, etfOwnerView: async () => access.vendor, etfScoreView: async () => access.scores }));
 vi.mock("@/viewer/get-viewer", async (original) => ({ ...await original<typeof import("@/viewer/get-viewer")>(),
@@ -9,7 +17,7 @@ import { afterEach, beforeEach, expect, it } from "vitest";
 import Page from "./page";
 
 const originalMode = process.env.DATA_MODE;
-beforeEach(() => { access.owner = false; access.vendor = true; access.scores = true; });
+beforeEach(() => { access.owner = false; access.vendor = true; access.scores = true; access.gaps = null; });
 afterEach(() => { process.env.DATA_MODE = originalMode; });
 type Search = Record<string, string>;
 const props = (locale: string, searchParams?: Search) => ({ params: Promise.resolve({ locale }), searchParams: Promise.resolve(searchParams ?? {}) });
@@ -118,4 +126,12 @@ it("links US listings by encoded listing key and marks gaps", async () => {
   const html = await render("en", { search: "S021", listingRegion: "US" });
   expect(html).toContain('href="/en/etf/fund/NASDAQ%3AS021"');
   expect(html).toContain('<span class="visually-hidden">Not recorded</span>');
+});
+
+it.each([["en", "No current EUR exchange rate", "Currency not stated"], ["sk", "Chýba aktuálny kurz EUR", "Mena neuvedená"]] as const)("names why EUR AUM is blank in %s", async (locale, fx, currency) => {
+  process.env.DATA_MODE = "fixture";
+  access.gaps = { DE0000000002: "fx", DE0000000003: "currency" };
+  const html = section(await render(locale), "etf-catalog");
+  expect(html).toContain(`<span class="visually-hidden">${fx}</span>`);
+  expect(html).toContain(`<span class="visually-hidden">${currency}</span>`);
 });

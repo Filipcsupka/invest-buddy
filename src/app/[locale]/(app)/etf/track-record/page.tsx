@@ -10,17 +10,18 @@ import { AreaChip } from "@/components/kit";
 import { signedPercent } from "@/components/etf/format";
 import s from "@/components/etf/etf.module.css";
 import { resolveLocale, type LocaleParams } from "@/app/[locale]/locale";
-import { requireEtfDataAccess } from "../../owner/data/access";
+import { requireEtfResearchOwner } from "@/components/etf/owner";
 
+// Owner only: outcomes of the research model's picks.
 export const dynamic = "force-dynamic";
 export async function generateMetadata({ params }: LocaleParams): Promise<Metadata> {
-  await requireEtfDataAccess();
+  await requireEtfResearchOwner();
   const locale = await resolveLocale(params);
   const m = getEtfMessages(locale);
   return pageMetadata(locale, "/etf/track-record", m.recordTitle, m.recordLede);
 }
 async function EtfTrackRecord({ params }: LocaleParams) {
-  await requireEtfDataAccess();
+  await requireEtfResearchOwner();
   const locale = await resolveLocale(params);
   const m = getEtfMessages(locale);
   const { outcomes, sample } = await etfOutcomes();

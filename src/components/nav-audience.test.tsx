@@ -15,7 +15,7 @@ afterEach(() => {
 });
 const as = (me: Extract<IdentityState, { status: "ready" }>["me"]) => { state.current = { status: "ready", me }; };
 const links = (html: string) => [...html.matchAll(/href="([^"]+)"/g)].map((match) => match[1]!);
-const paid = ["etf", "etf/track-record", "indices", "economy", "calendar", "news", "congress", "insiders", "screener"];
+const paid = ["etf", "indices", "economy", "calendar", "news", "congress", "insiders", "screener"];
 
 it.each(["en", "sk"] as const)("locks paid sections for free and anonymous viewers (%s)", (locale) => {
   Object.assign(process.env, { MARKETS_VIEWS: "on", EODHD_PRIVATE_USE: "on", INSIDERS_PAGE: "on" });
@@ -28,6 +28,7 @@ it.each(["en", "sk"] as const)("locks paid sections for free and anonymous viewe
       expect(hrefs).not.toContain(`/${locale}/${route}`);
       expect(hrefs).toContain(`/${locale}/plus-preview?page=${encodeURIComponent(route)}`);
     }
+    expect(hrefs.some((href) => href.includes("etf/track-record") || href.includes("etf%2Ftrack-record"))).toBe(false);
   }
 });
 
@@ -37,6 +38,9 @@ it.each(["en", "sk"] as const)("opens the sections for owner, Plus and active tr
     as(me);
     const hrefs = links(renderToStaticMarkup(<Nav locale={locale} />));
     for (const route of ["dashboard", "stocks", "heatmap", "track-record", "portfolio", ...paid, "methodology", "pricing"]) expect(hrefs).toContain(`/${locale}/${route}`);
+    // The ETF track record measures the research model's picks: owner only, and customers never receive the link.
+    if (me.kind === "owner") expect(hrefs).toContain(`/${locale}/etf/track-record`);
+    else expect(hrefs.some((href) => href.includes("etf/track-record") || href.includes("etf%2Ftrack-record"))).toBe(false);
   }
 });
 
@@ -44,7 +48,7 @@ it.each(["plus", "trial"] as const)("labels ETF and market links Plus for %s cus
   Object.assign(process.env, { MARKETS_VIEWS: "on", EODHD_PRIVATE_USE: "on", INSIDERS_PAGE: "on" });
   as({ kind: "customer", email: "a@b.cz", plan, markets: false });
   const html = renderToStaticMarkup(<Nav locale="en" />);
-  for (const route of ["etf", "etf/track-record", "indices", "economy", "calendar", "news", "congress", "insiders", "screener"]) {
+  for (const route of ["etf", "indices", "economy", "calendar", "news", "congress", "insiders", "screener"]) {
     const link = html.match(new RegExp(`<a[^>]*href="/en/${route}"[^>]*>[\\s\\S]*?<\\/a>`))?.[0];
     expect(link, route).toContain('data-tier="plus"');
     expect(link, route).not.toContain('data-tier="free"');
@@ -56,7 +60,8 @@ it.each(["en", "sk"] as const)("opens ETF, indices, economy and calendar for Pas
   as({ kind: "customer", email: "a@b.cz", plan: "passive", markets: false });
   const html = renderToStaticMarkup(<Nav locale={locale} />);
   const hrefs = links(html);
-  for (const route of ["dashboard", "etf", "etf/track-record", "indices", "economy", "calendar", "methodology", "pricing"]) expect(hrefs, route).toContain(`/${locale}/${route}`);
+  for (const route of ["dashboard", "etf", "indices", "economy", "calendar", "methodology", "pricing"]) expect(hrefs, route).toContain(`/${locale}/${route}`);
+  expect(hrefs.some((href) => href.includes("track-record") && href.includes("etf"))).toBe(false);
   for (const route of ["stocks", "heatmap", "track-record", "portfolio", "news", "congress", "insiders", "screener"]) {
     expect(hrefs, route).not.toContain(`/${locale}/${route}`);
     expect(hrefs, route).toContain(`/${locale}/plus-preview?page=${encodeURIComponent(route)}`);
@@ -111,7 +116,7 @@ it.each(["en", "sk"] as const)("opens indices, economy and calendar for a licens
     const html = renderToStaticMarkup(<Nav locale={locale} />);
     const hrefs = links(html);
     for (const route of ["indices", "economy", "calendar"]) expect(hrefs, route).toContain(`/${locale}/${route}`);
-    for (const route of ["etf", "etf/track-record", "news", "congress", "insiders", "screener"]) expect(hrefs, route).toContain(`/${locale}/plus-preview?page=${encodeURIComponent(route)}`);
+    for (const route of ["etf", "news", "congress", "insiders", "screener"]) expect(hrefs, route).toContain(`/${locale}/plus-preview?page=${encodeURIComponent(route)}`);
     const indices = html.match(new RegExp(`<a[^>]*href="/${locale}/indices"[^>]*>[\\s\\S]*?</a>`))?.[0];
     expect(indices).toContain('data-tier="free"');
     // A visitor still goes to the preview: the licensed rule needs a signed-in account.

@@ -63,7 +63,11 @@ it.each(["owner", "plus", "trial", "free", "anonymous"])("shows ETF score to %s 
   const fund = renderToStaticMarkup(await FundPage({ params: Promise.resolve({ locale: "en", key: "DE0000000001" }) }));
   if (viewer !== "owner") expect(fund).not.toContain('id="fund-pick"');
   if (["free", "anonymous"].includes(viewer)) { expect(list).not.toContain("Meets 28 of 35"); expect(fund).not.toContain("Meets 28 of 35"); expect(scores).not.toHaveBeenCalled(); }
-  else { expect(list).toMatch(/80%<\/strong><span class="[^"]*" data-band="mostlyMet">Mostly met<\/span>/); expect(list).toContain("0 of 7 groups · Incomplete data"); expect(fund).toContain("Meets 28 of 35"); expect(list + fund).not.toMatch(/Buy zone|Avoid|BUY_ZONE|Nákupná zóna|Vyhnúť sa/); }
+  else { expect(list).toMatch(/80%<\/strong><span class="[^"]*" data-band="mostlyMet">Mostly met<\/span>/); expect(list).toContain("0 of 7 groups · Incomplete data"); expect(fund).toContain("Meets 28 of 35"); 
+    // Customers never see a model call. The owner sees calls only in the owner research section below the catalog.
+    const rated = viewer === "owner" ? list.slice(0, list.indexOf('aria-labelledby="etf-picks"')) : list + fund;
+    if (viewer === "owner") expect(list).toContain('aria-labelledby="etf-picks"');
+    expect(rated).not.toMatch(/Buy zone|Avoid|BUY_ZONE|Nákupná zóna|Vyhnúť sa/); }
 });
 
 it("distinguishes missing scores from computed unrated scores", async () => {

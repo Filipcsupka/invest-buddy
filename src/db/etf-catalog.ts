@@ -8,9 +8,11 @@ import { etfScoreCoverage, type EtfRuleHit } from "@/engine/etf-score";
 
 export type InstrumentType = "ETF" | "ACTIVE_ETF" | "ETC" | "ETN";
 export type CatalogSort = "rating" | "name" | "ter_asc" | "ter_desc" | "aum_asc" | "aum_desc" | "ret1y_desc" | "ret3y_desc";
+/** Why AUM in EUR is blank: no figure, a figure without a stated currency, or a USD figure without a current EURUSD rate. */
+export type AumGap = "missing" | "currency" | "fx" | null;
 /** Stored fund facts for the list. Vendor figures stay null unless the caller passed vendor access. */
 export interface CatalogFacts {
-  terPct: number | null; aumEurM: number | null; aumGap: "currency" | "missing" | null; category: string | null;
+  terPct: number | null; aumEurM: number | null; aumGap: AumGap; category: string | null;
   ret1yPct: number | null; ret3yPct: number | null; vol1yPct: number | null; yieldPct: number | null;
   holdingsCount: number | null; topTenWeightPct: number | null; statsAsOf: string | null;
 }
@@ -59,7 +61,7 @@ type Row = {
   enriched_at: string | Date | null; first_seen: string | Date; last_seen: string | Date; shortlist: boolean; pick_symbol: string | null;
 };
 type FactsRow = {
-  fact_ter_pct: string | number | null; aum_eur_m: string | number | null; aum_gap: "currency" | "missing" | null; category: string | null;
+  fact_ter_pct: string | number | null; aum_eur_m: string | number | null; aum_gap: AumGap; category: string | null;
   ret_1y_pct: string | number | null; ret_3y_pct: string | number | null; vol_1y_pct: string | number | null; yield_pct: string | number | null;
   holdings_count: string | number | null; stats_as_of: string | Date | null;
 };
@@ -82,11 +84,15 @@ const mapFacts = (row: FactsRow, topTen: number | null): CatalogFacts => ({
   holdingsCount: num(row.holdings_count), topTenWeightPct: topTen, statsAsOf: date(row.stats_as_of),
 });
 
-// SQL fragments shared by the list, count, summary and top-rated reads. Aliases: c catalog, s latest score, st latest stats, fx EUR per USD.
+// SQL fragments shared by the list, count, summary and top-rated reads. Aliases: c catalog, s score of the latest run, st latest stats, fx EUR per USD.
 const CATALOG_COLUMNS = "c.listing_key,c.isin,c.listing_region,c.wkn,c.mnemonic,c.name,c.instrument_type,c.exchange,c.trading_currency,c.ucits,c.issuer,c.asset_class,c.region,c.theme,c.tracked_index,c.ter_pct,c.aum_usd_m,c.domicile,c.replication,c.distribution,c.source_url,c.enrichment_status,c.enriched_at,c.first_seen,c.last_seen,c.shortlist";
-const FX_CTE = "fx AS (SELECT 1 / NULLIF(close, 0) AS eur_per_usd FROM asset_bars WHERE vendor_symbol='EURUSD.FOREX' ORDER BY bar_date DESC LIMIT 1)";
+/** A EURUSD close older than this does not convert AUM; the cell shows the no-rate gap instead. */
+export const FX_MAX_AGE_DAYS = 7;
+const FX_CTE = `fx AS (SELECT 1 / NULLIF(close, 0) AS eur_per_usd FROM asset_bars WHERE vendor_symbol='EURUSD.FOREX' AND bar_date >= CURRENT_DATE - ${FX_MAX_AGE_DAYS} ORDER BY bar_date DESC LIMIT 1)`;
+/** The latest current-version score run. The strip, the list, its filters and Highest rated all read this one run. */
+const latestCte = (version: string) => `latest AS (SELECT max(as_of) AS as_of FROM etf_scores WHERE rules_version=${version})`;
 const statsJoin = (vendor: string) => `LEFT JOIN LATERAL (SELECT as_of,total_assets,total_assets_currency,ongoing_charge_pct,net_expense_ratio_pct,category,ret_1y_pct,ret_3y_pct,vol_1y_pct,yield_pct,holdings_count FROM etf_fund_stats WHERE listing_key=c.listing_key ORDER BY as_of DESC LIMIT 1) st ON ${vendor}::boolean`;
-const scoreJoin = (version: string) => `LEFT JOIN LATERAL (SELECT rules_version,state,earned,evidenced_max FROM etf_scores WHERE listing_key=c.listing_key AND rules_version IN (${version},'etf-v2-2026-11-12') ORDER BY (rules_version=${version}) DESC,as_of DESC LIMIT 1) s ON true`;
+const scoreJoin = (version: string) => `LEFT JOIN etf_scores s ON s.listing_key=c.listing_key AND s.rules_version=${version} AND s.as_of=(SELECT as_of FROM latest)`;
 const PCT = "round(s.earned::numeric / NULLIF(s.evidenced_max,0) * 100)";
 /** Mirrors etfBand(): 72/60/48 percent, and below 70 evidenced points the best band is Mostly met. Only current-version rows get a band. */
 const bandSql = (version: string) => `CASE WHEN s.rules_version=${version} AND s.state='rated' AND s.evidenced_max>0 THEN CASE WHEN ${PCT}>=72 AND s.evidenced_max>=${FULL_EVIDENCE} THEN 'rulesMet' WHEN ${PCT}>=60 THEN 'mostlyMet' WHEN ${PCT}>=48 THEN 'partlyMet' ELSE 'fewMet' END END`;
@@ -96,9 +102,12 @@ const TER = "COALESCE(st.ongoing_charge_pct, st.net_expense_ratio_pct, c.ter_pct
 const AUM_EUR = `CASE WHEN st.total_assets IS NOT NULL AND st.total_assets_currency='EUR' THEN st.total_assets / 1e6
   WHEN st.total_assets IS NOT NULL AND st.total_assets_currency='USD' THEN st.total_assets * fx.eur_per_usd / 1e6
   WHEN c.listing_region='US' AND c.trading_currency='USD' AND c.aum_usd_m > 0 THEN c.aum_usd_m * fx.eur_per_usd END`;
-const AUM_GAP = `CASE WHEN (${AUM_EUR}) IS NOT NULL THEN NULL WHEN st.total_assets IS NOT NULL OR c.aum_usd_m IS NOT NULL THEN 'currency' ELSE 'missing' END`;
+const AUM_GAP = `CASE WHEN (${AUM_EUR}) IS NOT NULL THEN NULL
+  WHEN (st.total_assets IS NOT NULL AND st.total_assets_currency='USD') OR (c.listing_region='US' AND c.trading_currency='USD' AND c.aum_usd_m > 0) THEN 'fx'
+  WHEN st.total_assets IS NOT NULL OR c.aum_usd_m IS NOT NULL THEN 'currency' ELSE 'missing' END`;
 const FACT_COLUMNS = `${TER} AS fact_ter_pct,${AUM_EUR} AS aum_eur_m,${AUM_GAP} AS aum_gap,st.category,st.ret_1y_pct,st.ret_3y_pct,st.vol_1y_pct,st.yield_pct,st.holdings_count,st.as_of AS stats_as_of`;
 const PICK_JOIN = "LEFT JOIN LATERAL (SELECT symbol FROM etf_picks WHERE (c.isin IS NOT NULL AND isin=c.isin) OR (exchange=c.exchange AND symbol=c.mnemonic) ORDER BY last_seen_at DESC,symbol LIMIT 1) p ON true";
+const PAGE_PICKS_SQL = `SELECT c.listing_key,p.symbol AS pick_symbol FROM etf_catalog c ${PICK_JOIN} WHERE c.listing_key=ANY($1::text[])`;
 const DETAIL_SQL = `SELECT ${CATALOG_COLUMNS},p.symbol AS pick_symbol FROM etf_catalog c ${PICK_JOIN} WHERE c.listing_key=$1`;
 const TOP_TEN_SQL = `SELECT k.listing_key, CASE WHEN count(h.weight_pct)=10 THEN sum(h.weight_pct) END AS top_ten FROM unnest($1::text[]) k(listing_key)
   CROSS JOIN LATERAL (SELECT weight_pct FROM etf_holdings WHERE listing_key=k.listing_key ORDER BY weight_pct DESC NULLS LAST LIMIT 10) h GROUP BY k.listing_key`;
@@ -135,7 +144,8 @@ export function catalogQuery(f: Normalized) {
   const values: unknown[] = [];
   const p = (value: unknown) => { values.push(value); return `$${values.length}`; };
   const version = p(ETF_RULES_VERSION);
-  const vendor = p(f.vendor);
+  // A server-side boolean, not user input: written as a literal so a count without the stats join binds no unused parameter.
+  const vendor = f.vendor ? "true" : "false";
   const band = bandSql(version);
   const where: string[] = [];
   if (f.search) { const term = p(f.search); where.push(`(c.name ILIKE '%' || ${term} || '%' OR c.isin ILIKE '%' || ${term} || '%' OR c.mnemonic ILIKE '%' || ${term} || '%')`); }
@@ -163,8 +173,10 @@ export function catalogQuery(f: Normalized) {
     aum_asc: `(${AUM_EUR}) ASC NULLS LAST`, aum_desc: `(${AUM_EUR}) DESC NULLS LAST`,
     ret1y_desc: "st.ret_1y_pct DESC NULLS LAST", ret3y_desc: "st.ret_3y_pct DESC NULLS LAST",
   }[f.sort];
-  const from = (joins = "") => `FROM etf_catalog c ${scoreJoin(version)} ${statsJoin(vendor)} LEFT JOIN fx ON true${joins ? ` ${joins}` : ""}${where.length ? ` WHERE ${where.join(" AND ")}` : ""}`;
-  return { values, from, order: `${order}, c.listing_key`, p };
+  // The count reads stats only when a stats filter needs them; the list always does (facts, TER, AUM and return sorts).
+  const statsNeeded = Boolean(f.category || f.ter || f.aum);
+  const from = ({ stats = true } = {}) => `FROM etf_catalog c ${scoreJoin(version)} ${stats || statsNeeded ? statsJoin(vendor) : ""} LEFT JOIN fx ON true${where.length ? ` WHERE ${where.join(" AND ")}` : ""}`;
+  return { values, from, order: `${order}, c.listing_key`, with: `WITH ${FX_CTE}, ${latestCte(version)}`, p };
 }
 
 const sortValue = (fund: CatalogFund, sort: CatalogSort): number | null => sort.startsWith("ter") ? fund.facts?.terPct ?? null : sort.startsWith("aum") ? fund.facts?.aumEurM ?? null : sort === "ret1y_desc" ? fund.facts?.ret1yPct ?? null : sort === "ret3y_desc" ? fund.facts?.ret3yPct ?? null : null;
@@ -231,7 +243,7 @@ export async function etfCatalogList(filters: CatalogFilters = {}, db: Query | n
   if (!db) return { funds: [], total: 0, rated: 0, withData: 0, page: 1, pages: 1, stats: { size: 0, enriched: 0, shortlist: 0, lastSync: null }, options: { assetClasses: [], regions: [], listingRegions: [], exchanges: [], issuers: [], categories: [] }, sample: false };
   const q = catalogQuery(f);
   const [countResult, statsResult, optionsResult] = await Promise.all([
-    db.query<{ total: string; rated: string; with_data: string }>(`WITH ${FX_CTE} SELECT count(*)::text AS total,count(*) FILTER (WHERE s.state='rated')::text AS rated,count(*) FILTER (WHERE c.enrichment_status='ok')::text AS with_data ${q.from()}`, q.values),
+    db.query<{ total: string; rated: string; with_data: string }>(`${q.with} SELECT count(*)::text AS total,count(*) FILTER (WHERE s.state='rated')::text AS rated,count(*) FILTER (WHERE c.enrichment_status='ok')::text AS with_data ${q.from({ stats: false })}`, q.values),
     db.query<{ size: string; enriched: string; shortlist: string; last_sync: string | null }>("SELECT count(*)::text AS size,count(*) FILTER (WHERE enrichment_status='ok')::text AS enriched,count(*) FILTER (WHERE shortlist)::text AS shortlist,max(last_seen)::text AS last_sync FROM etf_catalog"),
     db.query<{ asset_classes: string[]; regions: string[]; listing_regions: string[]; exchanges: string[]; issuers: string[]; categories: string[] | null }>(`SELECT ARRAY(SELECT DISTINCT asset_class FROM etf_catalog WHERE asset_class IS NOT NULL ORDER BY asset_class) AS asset_classes, ARRAY(SELECT DISTINCT region FROM etf_catalog WHERE region IS NOT NULL ORDER BY region) AS regions, ARRAY(SELECT DISTINCT listing_region FROM etf_catalog WHERE listing_region IS NOT NULL ORDER BY listing_region) AS listing_regions, ARRAY(SELECT DISTINCT exchange FROM etf_catalog ORDER BY exchange) AS exchanges, ARRAY(SELECT DISTINCT issuer FROM etf_catalog WHERE issuer IS NOT NULL ORDER BY issuer) AS issuers, CASE WHEN $1::boolean THEN ARRAY(SELECT DISTINCT category FROM etf_fund_stats WHERE category IS NOT NULL ORDER BY category) END AS categories`, [f.vendor]),
   ]);
@@ -239,12 +251,18 @@ export async function etfCatalogList(filters: CatalogFilters = {}, db: Query | n
   const pages = Math.max(1, Math.ceil(total / CATALOG_PAGE_SIZE));
   const page = Math.min(f.page, pages);
   const limit = q.p(CATALOG_PAGE_SIZE), offset = q.p((page - 1) * CATALOG_PAGE_SIZE);
-  const list = await db.query<Row & FactsRow>(`WITH ${FX_CTE} SELECT ${CATALOG_COLUMNS},p.symbol AS pick_symbol,${FACT_COLUMNS} ${q.from(PICK_JOIN)} ORDER BY ${q.order} LIMIT ${limit} OFFSET ${offset}`, q.values);
-  const topTen = f.vendor && list.rows.length ? await db.query<{ listing_key: string; top_ten: string | number | null }>(TOP_TEN_SQL, [list.rows.map((row) => row.listing_key)]) : { rows: [] };
+  const list = await db.query<Row & FactsRow>(`${q.with} SELECT ${CATALOG_COLUMNS},NULL::text AS pick_symbol,${FACT_COLUMNS} ${q.from()} ORDER BY ${q.order} LIMIT ${limit} OFFSET ${offset}`, q.values);
+  // Per-page reads for the 50 rows only: top-10 weight and the linked pick.
+  const keys = list.rows.map((row) => row.listing_key);
+  const [topTen, picks] = keys.length ? await Promise.all([
+    f.vendor ? db.query<{ listing_key: string; top_ten: string | number | null }>(TOP_TEN_SQL, [keys]) : { rows: [] },
+    db.query<{ listing_key: string; pick_symbol: string | null }>(PAGE_PICKS_SQL, [keys]),
+  ]) : [{ rows: [] }, { rows: [] }];
   const topTenBy = new Map(topTen.rows.map((row) => [row.listing_key, num(row.top_ten)]));
+  const pickBy = new Map(picks.rows.map((row) => [row.listing_key, row.pick_symbol]));
   const statsRow = statsResult.rows[0];
   const optionRow = optionsResult.rows[0];
-  return { funds: list.rows.map((row) => ({ ...mapCatalogFund(row), facts: mapFacts(row, topTenBy.get(row.listing_key) ?? null) })), total, rated: Number(countResult.rows[0]?.rated ?? 0), withData: Number(countResult.rows[0]?.with_data ?? 0), page, pages,
+  return { funds: list.rows.map((row) => ({ ...mapCatalogFund({ ...row, pick_symbol: pickBy.get(row.listing_key) ?? null }), facts: mapFacts(row, topTenBy.get(row.listing_key) ?? null) })), total, rated: Number(countResult.rows[0]?.rated ?? 0), withData: Number(countResult.rows[0]?.with_data ?? 0), page, pages,
     stats: { size: Number(statsRow?.size ?? 0), enriched: Number(statsRow?.enriched ?? 0), shortlist: Number(statsRow?.shortlist ?? 0), lastSync: date(statsRow?.last_sync ?? null) },
     options: { assetClasses: optionRow?.asset_classes ?? [], regions: optionRow?.regions ?? [], listingRegions: optionRow?.listing_regions ?? [], exchanges: optionRow?.exchanges ?? [], issuers: optionRow?.issuers ?? [], categories: optionRow?.categories ?? [] }, sample: false };
 }
@@ -267,7 +285,7 @@ export async function etfRatingSummary(db: Query | null = getPool()): Promise<Ra
     return { asOf: "2026-10-21", inScope: funds.length, rated, notRated: funds.length - rated, incomplete, bands, sample: true };
   }
   if (!db) return { asOf: null, inScope: 0, rated: 0, notRated: 0, incomplete: 0, bands: emptyBands(), sample: false };
-  const result = await db.query<{ as_of: string | null; in_scope: string; rated: string; incomplete: string; rules_met: string; mostly_met: string; partly_met: string; few_met: string }>(`WITH latest AS (SELECT max(as_of) AS as_of FROM etf_scores WHERE rules_version=$1),
+  const result = await db.query<{ as_of: string | null; in_scope: string; rated: string; incomplete: string; rules_met: string; mostly_met: string; partly_met: string; few_met: string }>(`WITH ${latestCte("$1")},
     scored AS (SELECT c.listing_key, s.listing_key IS NOT NULL AS has_score, s.state, s.evidenced_max, ${bandSql("$1")} AS band FROM etf_catalog c
       LEFT JOIN etf_scores s ON s.listing_key=c.listing_key AND s.rules_version=$1 AND s.as_of=(SELECT as_of FROM latest)
       WHERE c.instrument_type IN ('ETF','ACTIVE_ETF'))
@@ -284,7 +302,7 @@ export async function etfRatingSummary(db: Query | null = getPool()): Promise<Ra
 export interface TopRatedFund {
   listingKey: string; name: string; mnemonic: string | null; exchange: string; isin: string | null; assetClass: EtfAssetClass;
   percent: number; band: EtfBand; incompleteData: boolean; evidencedMax: number; groupsWithData: number; applicableGroups: number;
-  terPct: number | null; aumEurM: number | null;
+  terPct: number | null; aumEurM: number | null; aumGap: AumGap;
 }
 export interface TopRatedGroup { assetClass: EtfAssetClass; funds: TopRatedFund[] }
 /** Applicable groups for a v3 score: eight, or seven when no income rule applies (accumulating funds). */
@@ -304,14 +322,14 @@ export async function etfTopRated(perClass = 5, db: Query | null = getPool(), ac
       const facts = sampleCatalogFacts(fund, index, access.vendor === true);
       return [{ listingKey: fund.listingKey, name: fund.name, mnemonic: fund.mnemonic, exchange: fund.exchange, isin: fund.isin, assetClass: fund.assetClass ?? "other",
         percent: score.percent, ...etfBand(score.percent, score.evidencedMax), evidencedMax: score.evidencedMax, groupsWithData: etfScoreCoverage(score.rules).groupsWithData,
-        applicableGroups: applicableGroups(score.rules), terPct: facts.terPct, aumEurM: facts.aumEurM }];
+        applicableGroups: applicableGroups(score.rules), terPct: facts.terPct, aumEurM: facts.aumEurM, aumGap: facts.aumGap }];
     });
     const groups = groupTop(funds.sort(topOrder));
     return { groups: groups.map((group) => ({ ...group, funds: group.funds.slice(0, limit) })), sample: true };
   }
   if (!db) return { groups: [], sample: false };
-  const result = await db.query<{ listing_key: string; name: string; mnemonic: string | null; exchange: string; isin: string | null; asset_class: EtfAssetClass | null; earned: number; evidenced_max: number; rule_hits: EtfRuleHit[]; fact_ter_pct: string | number | null; aum_eur_m: string | number | null }>(`WITH ${FX_CTE}, latest AS (SELECT max(as_of) AS as_of FROM etf_scores WHERE rules_version=$1),
-    ranked AS (SELECT c.listing_key,c.name,c.mnemonic,c.exchange,c.isin,c.asset_class,s.earned,s.evidenced_max,s.rule_hits,${TER} AS fact_ter_pct,${AUM_EUR} AS aum_eur_m,
+  const result = await db.query<{ listing_key: string; name: string; mnemonic: string | null; exchange: string; isin: string | null; asset_class: EtfAssetClass | null; earned: number; evidenced_max: number; rule_hits: EtfRuleHit[]; fact_ter_pct: string | number | null; aum_eur_m: string | number | null; aum_gap: AumGap }>(`WITH ${FX_CTE}, ${latestCte("$1")},
+    ranked AS (SELECT c.listing_key,c.name,c.mnemonic,c.exchange,c.isin,c.asset_class,s.earned,s.evidenced_max,s.rule_hits,${TER} AS fact_ter_pct,${AUM_EUR} AS aum_eur_m,${AUM_GAP} AS aum_gap,
       row_number() OVER (PARTITION BY COALESCE(c.asset_class,'other') ORDER BY ${BAND_RANK(bandSql("$1"))}, ${PCT} DESC, s.evidenced_max DESC, (${AUM_EUR}) DESC NULLS LAST, c.listing_key) AS rank
       FROM etf_catalog c JOIN etf_scores s ON s.listing_key=c.listing_key AND s.rules_version=$1 AND s.as_of=(SELECT as_of FROM latest)
       ${statsJoin("$2")} LEFT JOIN fx ON true
@@ -322,7 +340,7 @@ export async function etfTopRated(perClass = 5, db: Query | null = getPool(), ac
     const rules = Array.isArray(row.rule_hits) ? row.rule_hits : [];
     return { listingKey: row.listing_key, name: row.name, mnemonic: row.mnemonic, exchange: row.exchange, isin: row.isin, assetClass: row.asset_class ?? "other",
       percent, ...etfBand(percent, evidencedMax), evidencedMax, groupsWithData: etfScoreCoverage(rules).groupsWithData, applicableGroups: applicableGroups(rules),
-      terPct: num(row.fact_ter_pct), aumEurM: num(row.aum_eur_m) };
+      terPct: num(row.fact_ter_pct), aumEurM: num(row.aum_eur_m), aumGap: row.aum_gap };
   });
   return { groups: groupTop(funds.sort(topOrder)), sample: false };
 }
@@ -339,7 +357,7 @@ type ResearchRow = {
  */
 export async function etfResearchCandidates(limit: number, db: Query) {
   const bounded = Math.max(1, Math.min(RESEARCH_CANDIDATE_LIMIT, Math.trunc(Number.isFinite(limit) ? limit : 25)));
-  const result = await db.query<ResearchRow>(`WITH ${FX_CTE}, latest AS (SELECT max(as_of) AS as_of FROM etf_scores WHERE rules_version=$1)
+  const result = await db.query<ResearchRow>(`WITH ${FX_CTE}, ${latestCte("$1")}
     SELECT c.listing_key AS "listingKey",c.isin,c.name,c.mnemonic AS symbol,c.exchange,c.listing_region AS "listingRegion",c.trading_currency AS "tradingCurrency",c.issuer,
       c.asset_class AS "assetClass",c.region,c.theme,c.tracked_index AS "trackedIndex",c.ter_pct AS "terPct",c.aum_usd_m AS "aumUsdM",
       c.domicile,c.replication,c.distribution,c.source_url AS "sourceUrl",s.earned,s.evidenced_max,s.as_of::text AS "ratingAsOf"
