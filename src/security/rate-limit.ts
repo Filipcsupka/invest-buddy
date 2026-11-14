@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 
 export type Bucket = { tokens: number; at: number };
 export type Limiter = { take(key: string, now?: number): { ok: boolean; retryAfter: number } };
@@ -34,7 +34,12 @@ export function clientKey(headers: Headers, hops = Number(process.env.RATE_LIMIT
 
 export function rateLimitExempt(pathname: string, headers: Headers): boolean {
   if (pathname === "/api/health") return true;
-  return pathname.startsWith("/api/ingest/") && /^Bearer\s+\S/.test(headers.get("authorization") ?? "");
+  if (!pathname.startsWith("/api/ingest/") || !process.env.INGEST_TOKEN) return false;
+  const header = headers.get("authorization");
+  const supplied = header?.startsWith("Bearer ") ? header.slice(7) : "";
+  const providedHash = createHash("sha256").update(supplied).digest();
+  const expectedHash = createHash("sha256").update(process.env.INGEST_TOKEN).digest();
+  return timingSafeEqual(providedHash, expectedHash) && supplied.length > 0;
 }
 
 function intEnv(name: string, fallback: number): number {

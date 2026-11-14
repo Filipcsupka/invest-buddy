@@ -3,7 +3,8 @@ import { clientKey, createLimiter, rateLimit, rateLimitExempt, resetRateLimits }
 import { contentSecurityPolicy, securityHeaders } from "./headers";
 
 const req = (path: string, headers: Record<string, string> = {}) => ({ nextUrl: { pathname: path }, headers: new Headers(headers) });
-afterEach(() => { resetRateLimits(); delete process.env.RATE_LIMIT; delete process.env.RATE_LIMIT_PAGES_PER_MIN; delete process.env.RATE_LIMIT_API_PER_MIN; });
+const originalIngestToken = process.env.INGEST_TOKEN;
+afterEach(() => { resetRateLimits(); delete process.env.RATE_LIMIT; delete process.env.RATE_LIMIT_PAGES_PER_MIN; delete process.env.RATE_LIMIT_API_PER_MIN; if (originalIngestToken === undefined) delete process.env.INGEST_TOKEN; else process.env.INGEST_TOKEN = originalIngestToken; });
 
 it("sets frame-ancestors, referrer and permissions policy; HSTS only in production", () => {
   const prod = Object.fromEntries(securityHeaders(true).map((h) => [h.key, h.value]));
@@ -44,11 +45,27 @@ it("hashes the client IP and ignores forged left-side x-forwarded-for entries", 
   expect(key).not.toContain("9.9.9.9");
 });
 
-it("exempts health and bearer ingest only", () => {
+it("exempts health and authenticated ingest only", () => {
+  process.env.INGEST_TOKEN = "secret";
   expect(rateLimitExempt("/api/health", new Headers())).toBe(true);
-  expect(rateLimitExempt("/api/ingest/scan", new Headers({ authorization: "Bearer t" }))).toBe(true);
+  expect(rateLimitExempt("/api/ingest/scan", new Headers({ authorization: "Bearer secret" }))).toBe(true);
+  expect(rateLimitExempt("/api/ingest/scan", new Headers({ authorization: "Bearer invalid" }))).toBe(false);
   expect(rateLimitExempt("/api/ingest/scan", new Headers())).toBe(false);
-  expect(rateLimitExempt("/en/dashboard", new Headers({ authorization: "Bearer t" }))).toBe(false);
+  expect(rateLimitExempt("/en/dashboard", new Headers({ authorization: "Bearer secret" }))).toBe(false);
+  delete process.env.INGEST_TOKEN;
+  expect(rateLimitExempt("/api/ingest/scan", new Headers({ authorization: "Bearer secret" }))).toBe(false);
+});
+
+it("limits a bad-token ingest flood while leaving authenticated ingest unthrottled", () => {
+  process.env.INGEST_TOKEN = "secret";
+  process.env.RATE_LIMIT_API_PER_MIN = "2";
+  const path = "/api/ingest/scan";
+  const headers = { authorization: "Bearer invalid", "x-forwarded-for": "10.0.0.1" };
+  expect(rateLimit(req(path, headers), 0)).toBeUndefined();
+  expect(rateLimit(req(path, headers), 0)).toBeUndefined();
+  expect(rateLimit(req(path, headers), 0)?.status).toBe(429);
+  expect(rateLimit(req(path, { ...headers, authorization: "Bearer secret" }), 0)).toBeUndefined();
+  expect(rateLimit(req(path, { ...headers, authorization: "Bearer secret" }), 0)).toBeUndefined();
 });
 
 it("returns 429 with Retry-After for pages and JSON for api, and honours off", async () => {
