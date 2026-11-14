@@ -39,6 +39,7 @@ export interface EtfScoreFacts {
   vol1yPct?: number | null; sharpe3y?: number | null;
   retYtdPct?: number | null; ret1yPct?: number | null; ret3yPct?: number | null; ret5yPct?: number | null; ret10yPct?: number | null;
   topTenWeightPct: number | null; maxCountryWeightPct: number | null; maxSectorWeightPct: number | null;
+  countryConcentrationWeightPct?: number | null;
   holdingsCount: number | null; holdingsListed?: number | null;
   yieldPct?: number | null; dividendFrequency?: string | null; dividendsLast12m?: number | null;
   statsDate?: string | null; holdingsDate?: string | null; exposureDate?: string | null;
@@ -72,12 +73,13 @@ export function etfScoreCoverage(rules: readonly EtfRuleHit[]) {
   if (!rules.some((r) => r.group === "trend" && r.evidenced)) gaps.push("priceHistory");
   return { groupsWithData, gaps };
 }
-export function etfScoreStatus(result: Pick<EtfScoreResult, "state" | "rejections" | "rules" | "percent" | "evidencedMax">): EtfBand | "caution" | "rejected" | "outOfScope" | "trendBroken" | "insufficient" {
+export function etfScoreStatus(result: Pick<EtfScoreResult, "state" | "rejections" | "rules" | "percent" | "evidencedMax"> & { rulesVersion?: string }): EtfBand | "caution" | "rejected" | "outOfScope" | "trendBroken" | "insufficient" {
   if (result.rejections.some((r) => ["not_etf_instrument", "leveraged_inverse_daily_reset", "options_overlay"].includes(r))) return "outOfScope";
   if (result.rejections.some((r) => ["ter_over_1_5", "liquidity_under_100k_eur", "age_under_one_year", "aum_under_20m_eur", "isin_mismatch", "not_etf", "stale_listing"].includes(r))) return "rejected";
   if (result.rejections.includes("trend_broken")) return "trendBroken";
   if (result.state === "not_rated" || result.percent === null) return "insufficient";
   if (result.rules.some((r) => r.id === "aum" && r.reason === "aum_under_50m_eur")) return "caution";
+  if (result.rulesVersion?.startsWith("etf-v2-")) return "rulesMet";
   return etfBand(result.percent, result.evidencedMax).band;
 }
 
@@ -115,15 +117,15 @@ export function etfScore(f: EtfScoreFacts): EtfScoreResult {
   add("sma50", "trend", 2, hasTrend && known(f.sma50) && known(f.sma200) ? f.sma50 > f.sma200 ? 2 : 0 : null, "50-day SMA >200-day SMA", f.sma50, f.barDate);
   add("return12to1m", "trend", 3, known(f.return12to1m) ? f.return12to1m > 0 ? 3 : 0 : null, "12-to-1-month return >0", f.return12to1m, f.barDate);
   add("benchmark6m", "trend", 4, f.assetClass === "equity" ? known(f.return6m) && known(f.benchmarkReturn6m) ? f.return6m > f.benchmarkReturn6m ? 4 : 0 : null : null, "6-month return >benchmark proxy", f.return6m, f.barDate, f.assetClass === "equity" ? "missing_benchmark_proxy" : "not_applicable");
-  const bond = f.assetClass === "bond";
+  const bond = f.assetClass === "bond" || f.assetClass === "money_market";
   add("volatility1y", "risk", 4, known(f.vol1yPct) ? f.vol1yPct <= (bond ? 5 : 15) ? 4 : f.vol1yPct <= (bond ? 8 : 20) ? 3 : f.vol1yPct <= (bond ? 12 : 25) ? 1 : 0 : null, bond ? "1-year volatility ≤5/8/12%" : "1-year volatility ≤15/20/25%", f.vol1yPct, f.statsDate);
   add("sharpe3y", "risk", 4, known(f.sharpe3y) ? f.sharpe3y >= 1 ? 4 : f.sharpe3y >= 0.5 ? 3 : f.sharpe3y >= 0 ? 1 : 0 : null, "3-year Sharpe ≥1/0.5/0", f.sharpe3y, f.statsDate);
   add("drawdown3y", "risk", 4, known(f.maxDrawdown3y) ? f.maxDrawdown3y > (bond ? -0.10 : -0.20) ? 4 : f.maxDrawdown3y > (bond ? -0.15 : -0.30) ? 2 : 0 : null, bond ? "3-year drawdown better than -10/-15%" : "3-year drawdown better than -20/-30%", f.maxDrawdown3y, f.barDate);
   const distributing = /^(dist|distributing)$/i.test(f.distribution ?? "");
   if (distributing) {
     add("yield", "income", 4, known(f.yieldPct) && f.yieldPct >= 0 ? f.yieldPct >= 1.5 ? 4 : f.yieldPct >= 0.5 ? 2 : 0 : null, "yield ≥1.5/0.5%", f.yieldPct, f.statsDate);
-    const stated = !!f.dividendFrequency && !/^(na|n\/a|none|unknown)$/i.test(f.dividendFrequency.trim());
-    add("payoutRegularity", "income", 4, known(f.dividendsLast12m) || stated ? (f.dividendsLast12m ?? 0) >= 4 || stated ? 4 : 0 : null, "≥4 payments in 12 months or stated frequency", f.dividendsLast12m ?? f.dividendFrequency, f.statsDate);
+    const regularFrequency = /\b(?:monthly|quarterly|monatlich|vierteljährlich|mesačne|štvrťročne)\b/i.test(f.dividendFrequency ?? "");
+    add("payoutRegularity", "income", 4, known(f.dividendsLast12m) ? f.dividendsLast12m >= 4 ? 4 : 0 : regularFrequency ? 4 : null, "≥4 payments in 12 months or stated monthly/quarterly frequency", f.dividendsLast12m ?? f.dividendFrequency, f.statsDate);
   }
   const rejections: string[] = [];
   const scopeText = `${f.name} ${f.riskType ?? ""}`;
@@ -147,5 +149,5 @@ export function etfScore(f: EtfScoreFacts): EtfScoreResult {
   const { band, incompleteData } = percent === null ? { band: null, incompleteData: evidencedMax < 70 } : etfBand(percent, evidencedMax);
   return { rulesVersion: ETF_RULES_VERSION, rules, earned, evidencedMax, percent, state, rejections, band, incompleteData,
     concentration: { topTenWeightPct: f.topTenWeightPct, maxCountryWeightPct: f.maxCountryWeightPct, maxSectorWeightPct: f.maxSectorWeightPct, holdingsCount: f.holdingsCount,
-      concentrated: (f.topTenWeightPct ?? 0) > B.topTenConcentration || (f.maxCountryWeightPct ?? 0) > B.countryConcentration } };
+      concentrated: (f.topTenWeightPct ?? 0) > B.topTenConcentration || (f.countryConcentrationWeightPct === undefined ? f.maxCountryWeightPct ?? 0 : f.countryConcentrationWeightPct ?? 0) > B.countryConcentration } };
 }

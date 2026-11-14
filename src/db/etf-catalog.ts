@@ -45,7 +45,7 @@ export function mapCatalogFund(row: Row): CatalogFund {
     lastSeen: date(row.last_seen) ?? "", shortlist: row.shortlist, pickSymbol: row.pick_symbol,
   };
 }
-const SCORE_JOIN_SQL = `LEFT JOIN LATERAL (SELECT state,earned,evidenced_max FROM etf_scores WHERE listing_key=c.listing_key AND rules_version=$12 ORDER BY as_of DESC LIMIT 1) s ON true`;
+const SCORE_JOIN_SQL = `LEFT JOIN LATERAL (SELECT state,earned,evidenced_max FROM etf_scores WHERE listing_key=c.listing_key AND rules_version IN ($12,'etf-v2-2026-11-12') ORDER BY (rules_version=$12) DESC,as_of DESC LIMIT 1) s ON true`;
 const COUNT_SQL = `SELECT count(*)::text AS total,count(*) FILTER (WHERE s.state='rated')::text AS rated,count(*) FILTER (WHERE c.enrichment_status='ok')::text AS with_data FROM etf_catalog c ${SCORE_JOIN_SQL} WHERE ($1::text IS NULL OR c.name ILIKE '%' || $1 || '%' OR c.isin ILIKE '%' || $1 || '%' OR c.mnemonic ILIKE '%' || $1 || '%')
   AND ($2::text IS NULL OR c.asset_class=$2)
   AND ($3::text IS NULL OR c.region=$3)

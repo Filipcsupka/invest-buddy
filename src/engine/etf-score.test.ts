@@ -46,6 +46,15 @@ describe("ETF v3 thresholds", () => {
   it("caps a thin high score and marks incomplete data", () => { expect(etfBand(95, 69)).toEqual({ band: "mostlyMet", incompleteData: true }); expect(etfBand(59, 100).band).toBe("partlyMet"); expect(etfBand(47, 100).band).toBe("fewMet"); });
   it("uses bond risk thresholds", () => { expect(hit({ assetClass: "bond", vol1yPct: 8 }, "volatility1y").earned).toBe(3); expect(hit({ assetClass: "bond", maxDrawdown3y: -0.14 }, "drawdown3y").earned).toBe(2); });
   it("keeps concentration separate", () => { expect(score({ topTenWeightPct: 51 }).concentration.concentrated).toBe(true); expect(score({ maxCountryWeightPct: 71 }).concentration.concentrated).toBe(true); });
+  it("requires four payments or a regular monthly or quarterly frequency", () => {
+    expect(hit({ dividendsLast12m: 1, dividendFrequency: "Annually" }, "payoutRegularity").earned).toBe(0);
+    expect(hit({ dividendsLast12m: 1, dividendFrequency: "Quarterly" }, "payoutRegularity").earned).toBe(0);
+    expect(hit({ dividendsLast12m: null, dividendFrequency: "Quarterly" }, "payoutRegularity").earned).toBe(4);
+    expect(hit({ dividendsLast12m: null, dividendFrequency: "Annually" }, "payoutRegularity").evidenced).toBe(false);
+  });
+  it("uses conservative bond risk bands for money market funds", () => {
+    expect(hit({ assetClass: "money_market", vol1yPct: 8 }, "volatility1y").earned).toBe(3);
+  });
 });
 
 it.each([["Physical", "full"], ["Optimized sampling", "sampling"], ["Fund of fund", "fund_of_funds"], ["Swap/derivatives", "synthetic"], ["Options overlay", "overlay"], ["", null]] as const)("normalizes replication %s", (raw, kind) => expect(normalizeReplication(raw)).toBe(kind));

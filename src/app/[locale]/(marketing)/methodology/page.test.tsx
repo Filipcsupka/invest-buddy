@@ -9,7 +9,7 @@ const originalMode = process.env.DATA_MODE;
 afterEach(() => { process.env.DATA_MODE = originalMode; });
 
 describe("methodology page", () => {
-  it.each([["en", "ETF rating", "Sources for the criteria"], ["sk", "Hodnotenie ETF", "chýbajúcich údajov"]])("documents stored ETF rules in %s", async (locale, title, phrase) => {
+  it.each([["en", "ETF rating", "Sources for the criteria"], ["sk", "Hodnotenie ETF", "Neúplné údaje"]])("documents stored ETF rules in %s", async (locale, title, phrase) => {
     const html = renderToStaticMarkup(await Methodology(props(locale)));
     expect(html).toContain('id="etf-rating"');
     expect(html).toContain(title);
@@ -20,11 +20,12 @@ describe("methodology page", () => {
     expect(html).not.toContain("eodhd.com");
   });
   it.each([
-    ["en", ["AUM, trading liquidity, fund age or trend evidence", "more than 30 days", "ISIN mismatch", "not_etf", "insufficient-data results hide the percentage"]],
-    ["sk", ["AUM, likvidite obchodovania, veku fondu alebo trende", "starším než 30 dní", "nesúladom ISIN", "not_etf", "nedostatok údajov skryjú percento"]],
+    ["en", ["Cost, Size and two of Liquidity", "Cost (20)", "TER at or below 0.10", "fewer than 70 evidenced points", "more than 30 days", "ISIN mismatch", "not_etf", "insufficient-data results hide the percentage"]],
+    ["sk", ["náklady, veľkosť a dve zo skupín", "Náklady (20)", "TER do 0,10", "menej ako 70 doložených bodoch", "starší než 30 dní", "nesúlad ISIN", "not_etf", "nedostatok údajov skryjú percento"]],
   ] as const)("explains ETF evidence and hidden percentages in %s", async (locale, phrases) => {
     const html = renderToStaticMarkup(await Methodology(props(locale)));
     for (const phrase of phrases) expect(html).toContain(phrase);
+    expect(html).not.toContain(locale === "en" ? "Cost (10):" : "Náklady (10):");
   });
   it.each(["en", "sk"] as const)("shows version, band steps, worked figures, limits and data provider in %s", async (locale) => {
     process.env.DATA_MODE = "db";

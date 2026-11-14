@@ -1,7 +1,8 @@
 import { expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { parseEtfData } from "./etf-detail";
-import { aumEur, etfBarFacts, readEtfScoreFacts, usEquityWeight } from "./etf-score";
+import { aumEur, benchmarkSymbol, etfBarFacts, latestEtfScores, readEtfScoreFacts, usEquityWeight } from "./etf-score";
+import { etfScore } from "@/engine/etf-score";
 
 it("requires an explicit asset currency, independent of the listing quote", () => {
   expect(aumEur(100_000_000, null, 1)).toEqual({ value: null, reason: "ambiguous_aum_currency" });
@@ -103,4 +104,33 @@ it("does not report truncated country weights as a complete portfolio", async ()
     return { rows: [] };
   } };
   expect((await readEtfScoreFacts("X", "2026-11-12", db as never))?.maxCountryWeightPct).toBeNull();
+});
+
+it("selects a benchmark from exposure, never the trading venue", () => {
+  expect(benchmarkSymbol({ region: "US", listing_region: "EU" })).toBe("GSPC.INDX");
+  expect(benchmarkSymbol({ region: "Global", listing_region: "EU" })).toBeNull();
+  expect(benchmarkSymbol({ region: "Europe", listing_region: "US" })).toBe("STOXX50E.INDX");
+  expect(benchmarkSymbol({ region: "Global", score_category: "US Equity", listing_region: "EU" })).toBeNull();
+  expect(benchmarkSymbol({ listing_region: "US" })).toBeNull();
+});
+
+it("uses fund stats category and UCITS hint, without treating a world region as country concentration", async () => {
+  const db = { query: async (sql: string) => {
+    if (sql.includes("FROM etf_catalog")) return { rows: [{ listing_key: "X", name: "World ETF", instrument_type: "ETF", region: "Global", listing_region: "EU", score_category: "Catalog category", last_seen: "2026-11-12", ucits_hint: true }] };
+    if (sql.includes("FROM etf_fund_stats")) return { rows: [{ listing_key: "X", category: "World Equity", ucits_hint: true, ter_ambiguous: true }] };
+    if (sql.includes("FROM etf_exposure")) return { rows: [{ listing_key: "X", kind: "region", label: "North America", weight_pct: 72 }] };
+    return { rows: [] };
+  } };
+  const facts = (await readEtfScoreFacts("X", "2026-11-12", db as never))!;
+  expect(facts).toMatchObject({ category: "World Equity", ucitsConfirmed: true, terGapReason: "ter_ambiguous", maxCountryWeightPct: 72, countryConcentrationWeightPct: null });
+  expect(etfScore(facts).concentration.concentrated).toBe(false);
+});
+
+it("shows the latest v2 row until a v3 score exists", async () => {
+  let sql = "";
+  const db = { query: async (query: string) => { sql = query; return { rows: [{ listing_key: "X", rules_version: "etf-v2-2026-11-12", rule_hits: [], earned: 25, evidenced_max: 35, state: "rated", rejections: [], concentration: null }] }; } };
+  const score = (await latestEtfScores(["X"], db as never)).get("X");
+  expect(sql).toContain("rules_version IN ($2,'etf-v2-2026-11-12')");
+  expect(score?.rulesVersion).toBe("etf-v2-2026-11-12");
+  expect(score?.incompleteData).toBe(false);
 });

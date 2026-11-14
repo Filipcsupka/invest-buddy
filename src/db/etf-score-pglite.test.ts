@@ -1,8 +1,9 @@
 import { expect, it } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
 import { readFileSync } from "node:fs";
-import { storeEtfScore } from "./etf-score";
+import { latestEtfScores, storeEtfScore } from "./etf-score";
 import type { EtfScoreResult } from "@/engine/etf-score";
+import { etfScoreStatus } from "@/engine/etf-score";
 
 it("enforces score bounds and replaces a daily result atomically", async () => {
   const db = new PGlite();
@@ -43,7 +44,7 @@ it("reads optional category defensively and batches wrapper, risk, exposure and 
     const query = { query: (sql: string, values?: unknown[]) => db.query(sql, values) };
     const { readEtfScoreFactsBatch } = await import("./etf-score");
     const facts = (await readEtfScoreFactsBatch(["X"], "2026-11-12", query as never)).get("X");
-    expect(facts).toMatchObject({ category: null, ucitsConfirmed: true, vol1yPct: 14, sharpe3y: 1, ret1yPct: 12, ret3yPct: 33, dividendsLast12m: 4, maxSectorWeightPct: 25, aumEur: 100000000 });
+    expect(facts).toMatchObject({ category: null, ucitsConfirmed: null, vol1yPct: 14, sharpe3y: 1, ret1yPct: 12, ret3yPct: 33, dividendsLast12m: 4, maxSectorWeightPct: 25, aumEur: 100000000 });
   } finally { await db.close(); }
 });
 
@@ -58,5 +59,23 @@ it("ranks TER within five class and region peers when category is absent", async
     expect(peers.get("A")).toBe(20);
     expect(peers.get("E")).toBe(100);
     expect(peers.has("X")).toBe(false);
+  } finally { await db.close(); }
+});
+
+it("keeps v2 ratings visible until each listing has a v3 row", async () => {
+  const db = new PGlite();
+  try {
+    await db.exec("CREATE TABLE etf_catalog (listing_key text PRIMARY KEY); INSERT INTO etf_catalog VALUES ('A'),('B')");
+    await db.exec(readFileSync("migrations/138_etf_scores.sql", "utf8"));
+    await db.exec(readFileSync("migrations/141_etf_score_v3.sql", "utf8"));
+    await db.exec(`INSERT INTO etf_scores(listing_key,as_of,rules_version,rule_hits,earned,evidenced_max,state) VALUES
+      ('A','2026-11-12','etf-v2-2026-11-12','[]',28,35,'rated'),
+      ('B','2026-11-12','etf-v2-2026-11-12','[]',28,35,'rated'),
+      ('B','2026-11-11','etf-v3-2026-11-13','[]',70,80,'rated')`);
+    const scores = await latestEtfScores(["A", "B"], { query: (sql: string, values?: unknown[]) => db.query(sql, values) } as never);
+    expect(scores.get("A")?.rulesVersion).toBe("etf-v2-2026-11-12");
+    expect(scores.get("A")?.incompleteData).toBe(false);
+    expect(etfScoreStatus(scores.get("A")!)).toBe("rulesMet");
+    expect(scores.get("B")?.rulesVersion).toBe("etf-v3-2026-11-13");
   } finally { await db.close(); }
 });

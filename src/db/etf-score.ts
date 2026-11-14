@@ -50,9 +50,9 @@ export function usEquityWeight(exposure: RecordRow[], holdings: RecordRow[]): nu
 const peerKey = (c: RecordRow) => str(c.category)?.trim().toLowerCase() ? `category:${str(c.category)!.trim().toLowerCase()}` : `class:${str(c.asset_class) ?? "?"}|region:${str(c.region) ?? str(c.listing_region) ?? "?"}`;
 /** Full-universe peer ranks are loaded once per score run. Ties have the same rank. */
 export async function loadEtfPeerPercentiles(asOf: string, db: Query): Promise<Map<string, number>> {
-  const rows = await db.query<RecordRow>(`SELECT c.listing_key,c.asset_class,c.region,c.listing_region,to_jsonb(c)->>'category' AS category,
+  const rows = await db.query<RecordRow>(`SELECT c.listing_key,c.asset_class,c.region,c.listing_region,COALESCE(to_jsonb(s)->>'category',to_jsonb(c)->>'category') AS category,
     COALESCE(s.ongoing_charge_pct,s.net_expense_ratio_pct,c.ter_pct) AS ter_pct
-    FROM etf_catalog c LEFT JOIN LATERAL (SELECT ongoing_charge_pct,net_expense_ratio_pct FROM etf_fund_stats
+    FROM etf_catalog c LEFT JOIN LATERAL (SELECT * FROM etf_fund_stats
     WHERE listing_key=c.listing_key AND as_of<=$1::date ORDER BY as_of DESC LIMIT 1) s ON true WHERE c.instrument_type='ETF'`, [asOf]);
   const groups = new Map<string, { key: string; ter: number }[]>();
   for (const r of rows.rows) { const ter = n(r.ter_pct); if (ter === null || ter <= 0) continue; const key = peerKey(r); const group = groups.get(key) ?? []; group.push({ key: str(r.listing_key)!, ter }); groups.set(key, group); }
@@ -69,17 +69,19 @@ export async function loadEtfPeerPercentiles(asOf: string, db: Query): Promise<M
   }
   return out;
 }
-const benchmarkSymbol = (c: RecordRow): string => {
-  const region = `${str(c.region) ?? ""} ${str(c.listing_region) ?? ""}`.toLowerCase();
-  if (/japan/.test(region)) return "N225.INDX";
-  if (/hong kong/.test(region)) return "HSI.INDX";
-  if (/switzerland|swiss/.test(region)) return "SSMI.INDX";
-  if (/germany/.test(region)) return "GDAXI.INDX";
-  if (/france/.test(region)) return "FCHI.INDX";
-  if (/netherlands/.test(region)) return "AEX.INDX";
-  if (/spain/.test(region)) return "IBEX.INDX";
-  if (/europe|eu/.test(region)) return "STOXX50E.INDX";
-  return "GSPC.INDX";
+export const benchmarkSymbol = (c: RecordRow): string | null => {
+  const exposure = `${str(c.region) ?? ""} ${str(c.score_category) ?? str(c.category) ?? ""}`.toLowerCase();
+  if (/\b(?:world|global|all[ -]?world|international)\b/.test(exposure)) return null; // No world series is collected.
+  if (/\b(?:japan|japanese)\b/.test(exposure)) return "N225.INDX";
+  if (/\bhong[ -]?kong\b/.test(exposure)) return "HSI.INDX";
+  if (/\b(?:switzerland|swiss)\b/.test(exposure)) return "SSMI.INDX";
+  if (/\b(?:germany|german)\b/.test(exposure)) return "GDAXI.INDX";
+  if (/\b(?:france|french)\b/.test(exposure)) return "FCHI.INDX";
+  if (/\b(?:netherlands|dutch)\b/.test(exposure)) return "AEX.INDX";
+  if (/\bspain\b/.test(exposure)) return "IBEX.INDX";
+  if (/\b(?:europe|european|eu)\b/.test(exposure)) return "STOXX50E.INDX";
+  if (/\b(?:united states|usa|us|s&p 500|north america)\b/.test(exposure)) return "GSPC.INDX";
+  return null;
 };
 const byKey = (rows: RecordRow[], field = "listing_key") => { const map = new Map<string, RecordRow[]>(); for (const row of rows) { const key = str(row[field]); if (!key) continue; const values = map.get(key) ?? []; values.push(row); map.set(key, values); } return map; };
 export async function loadEtfBenchmarkReturns(asOf: string, db: Query): Promise<Map<string, { return6m: number | null; barDate: string | null }>> {
@@ -126,22 +128,25 @@ export async function readEtfScoreFactsBatch(keys: readonly string[], asOf: stri
     const completeCountries = h.length > 0 && h.every((r) => str(r.country) && n(r.weight_pct) !== null) && h.reduce((sum, r) => sum + n(r.weight_pct)!, 0) >= 99.99;
     const regions = e.filter((r) => r.kind === "region").map((r) => n(r.weight_pct)).filter((x): x is number => x !== null);
     const sectors = e.filter((r) => r.kind === "sector").map((r) => n(r.weight_pct)).filter((x): x is number => x !== null);
-    const benchmark = benchmarks.get(benchmarkSymbol(c));
+    const benchmarkKey = benchmarkSymbol({ ...c, score_category: str(s?.category) ?? str(c.score_category) });
+    const benchmark = benchmarkKey ? benchmarks.get(benchmarkKey) : undefined;
     const benchmarkFresh = benchmark?.barDate && lastBar && Math.abs(Date.parse(lastBar) - Date.parse(benchmark.barDate)) <= 7 * 86_400_000;
     const barFacts = etfBarFacts(freshBars, validBarFx);
     const payload = s?.payload && typeof s.payload === "object" ? s.payload as RecordRow : null;
     const etfData = payload?.ETF_Data && typeof payload.ETF_Data === "object" ? payload.ETF_Data as RecordRow : null;
     const rawRatio = n(etfData?.NetExpenseRatio ?? payload?.NetExpenseRatio);
-    const terGapReason = rawRatio !== null && rawRatio >= 0.01 && rawRatio <= 0.025 && n(s?.ongoing_charge_pct) === null && n(s?.net_expense_ratio_pct) === null && n(c.ter_pct) === null ? "ter_ambiguous" : null;
-    const ucits = c.ucits === true ? true : c.ucits === false ? false : null;
+    const terGapReason = s?.ter_ambiguous === true || c.ter_gap === "ter_ambiguous" || rawRatio !== null && rawRatio >= 0.01 && rawRatio <= 0.025 && n(s?.ongoing_charge_pct) === null && n(s?.net_expense_ratio_pct) === null && n(c.ter_pct) === null ? "ter_ambiguous" : null;
+    const ucitsHint = s?.ucits_hint ?? c.ucits_hint;
+    const ucits = ucitsHint === true ? true : ucitsHint === false ? false : null;
     results.set(key, { asOf, instrumentType: str(c.instrument_type) ?? "", name: str(c.name) ?? "", riskType: str(c.theme), detailStatus: str(c.detail_status), lastSeen: day(c.last_seen),
       terPct: n(s?.ongoing_charge_pct) ?? n(s?.net_expense_ratio_pct) ?? n(c.ter_pct), terGapReason, terDate: s ? day(s.as_of) : day(c.last_seen), peerPercentile: peers.get(key) ?? null,
       aumEur: aum.value, aumCurrencyReason: aum.reason, aumDate: aum === catalogAum ? day(c.last_seen) : s ? day(s.as_of) : null,
       replication: str(c.replication), ucitsConfirmed: ucits, inceptionDate: s?.inception_date ? day(s.inception_date) : null,
-      domicile: str(c.domicile), assetClass: str(c.asset_class), usEquityWeightPct: usEquityWeight(e, h), trackedIndex: str(c.tracked_index), category: str(c.score_category), distribution: str(c.distribution), catalogDate: day(c.last_seen),
+      domicile: str(c.domicile), assetClass: str(c.asset_class), usEquityWeightPct: usEquityWeight(e, h), trackedIndex: str(s?.index_name) ?? str(c.tracked_index), category: str(s?.category) ?? str(c.score_category), distribution: str(c.distribution), catalogDate: day(c.last_seen),
       ...barFacts, benchmarkReturn6m: benchmarkFresh ? benchmark!.return6m : null, vol1yPct: n(s?.vol_1y_pct) ?? barFacts.volFromBars, sharpe3y: n(s?.sharpe_3y),
       retYtdPct: n(s?.ret_ytd_pct), ret1yPct: n(s?.ret_1y_pct), ret3yPct: n(s?.ret_3y_pct), ret5yPct: n(s?.ret_5y_pct), ret10yPct: n(s?.ret_10y_pct),
       topTenWeightPct: topTen, maxCountryWeightPct: completeCountries ? maxCountry : regions.length ? Math.max(...regions) : (maxCountry ?? 0) > 80 ? maxCountry : null,
+      countryConcentrationWeightPct: completeCountries ? maxCountry : null,
       maxSectorWeightPct: sectors.length ? Math.max(...sectors) : null, holdingsCount: n(s?.holdings_count), holdingsListed: n(s?.holdings_listed),
       yieldPct: n(s?.yield_pct), dividendFrequency: str(s?.dividend_frequency), dividendsLast12m: symbol && c.dividends_fetched_at ? (dividendsBy.get(symbol) ?? []).length : null,
       statsDate: s ? day(s.as_of) : null, holdingsDate: h[0] ? day(h[0].as_of) : null, exposureDate: e[0] ? day(e[0].as_of) : null });
@@ -155,8 +160,8 @@ export async function readEtfScoreFacts(listingKey: string, asOf: string, db: Qu
 export async function latestEtfScores(keys: readonly string[], db: Query | null = getPool()): Promise<Map<string, EtfScoreResult>> {
   if (process.env.DATA_MODE === "fixture") return new Map(keys.flatMap((key) => { const score = sampleEtfScores.get(key); return score ? [[key, score] as const] : []; }));
   if (!db || !keys.length) return new Map();
-  const result = await db.query<{ listing_key: string; rules_version: string; rule_hits: EtfScoreResult["rules"]; earned: number; evidenced_max: number; state: EtfScoreResult["state"]; rejections: string[]; concentration: EtfScoreResult["concentration"] }>(`SELECT DISTINCT ON (listing_key) listing_key,rules_version,rule_hits,earned,evidenced_max,state,rejections,concentration FROM etf_scores WHERE listing_key=ANY($1::text[]) AND rules_version=$2 ORDER BY listing_key,as_of DESC`, [keys, ETF_RULES_VERSION]);
-  return new Map(result.rows.map((r) => { const earned = Number(r.earned), evidencedMax = Number(r.evidenced_max); const percent = r.state === "rated" && evidencedMax > 0 ? Math.round(earned / evidencedMax * 100) : null; return [r.listing_key, { rulesVersion: r.rules_version, rules: r.rule_hits, earned, evidencedMax, percent, state: r.state, rejections: r.rejections, concentration: r.concentration, ...(percent === null ? { band: null, incompleteData: evidencedMax < 70 } : etfBand(percent, evidencedMax)) }]; }));
+  const result = await db.query<{ listing_key: string; rules_version: string; rule_hits: EtfScoreResult["rules"]; earned: number; evidenced_max: number; state: EtfScoreResult["state"]; rejections: string[]; concentration: EtfScoreResult["concentration"] }>(`SELECT DISTINCT ON (listing_key) listing_key,rules_version,rule_hits,earned,evidenced_max,state,rejections,concentration FROM etf_scores WHERE listing_key=ANY($1::text[]) AND rules_version IN ($2,'etf-v2-2026-11-12') ORDER BY listing_key,(rules_version=$2) DESC,as_of DESC`, [keys, ETF_RULES_VERSION]);
+  return new Map(result.rows.map((r) => { const earned = Number(r.earned), evidencedMax = Number(r.evidenced_max); const percent = r.state === "rated" && evidencedMax > 0 ? Math.round(earned / evidencedMax * 100) : null; const v3 = r.rules_version === ETF_RULES_VERSION; return [r.listing_key, { rulesVersion: r.rules_version, rules: r.rule_hits, earned, evidencedMax, percent, state: r.state, rejections: r.rejections, concentration: r.concentration, ...(percent === null ? { band: null, incompleteData: v3 && evidencedMax < 70 } : v3 ? etfBand(percent, evidencedMax) : { band: "rulesMet" as const, incompleteData: false }) }]; }));
 }
 export async function storeEtfScore(listingKey: string, asOf: string, score: EtfScoreResult, db: Query): Promise<void> {
   await db.query(`INSERT INTO etf_scores(listing_key,as_of,rules_version,rule_hits,earned,evidenced_max,state,rejections,concentration) VALUES($1,$2,$3,$4::jsonb,$5,$6,$7,$8::jsonb,$9::jsonb) ON CONFLICT(listing_key,as_of,rules_version) DO UPDATE SET rule_hits=EXCLUDED.rule_hits,earned=EXCLUDED.earned,evidenced_max=EXCLUDED.evidenced_max,state=EXCLUDED.state,rejections=EXCLUDED.rejections,concentration=EXCLUDED.concentration`,
