@@ -1,5 +1,6 @@
 import type pg from "pg";
 import type { CatalogListing } from "../jobs/etf-catalog-data";
+import { normalizeEtfRegion } from "../../scanner/eodhd-etf-enrich.mjs";
 
 export type CatalogDb = Pick<pg.Pool, "query" | "connect">;
 export interface Enrichment {
@@ -47,7 +48,7 @@ export async function ingestEnrichment(db: CatalogDb, rows: Enrichment[]): Promi
         enrich_attempts=enrich_attempts+CASE WHEN $14 IN ('failed','eodhd_unmapped','eodhd_incomplete') THEN 1 ELSE 0 END,
         enriched_at=CASE WHEN $14='ok' THEN now() ELSE enriched_at END,updated_at=now()
         WHERE listing_key=$1 AND enrichment_status<>'ok' AND enrich_attempts<3 RETURNING listing_key`,
-      [row.listingKey,row.issuer,row.assetClass,row.region,row.theme,row.trackedIndex,row.terPct,row.aumUsdM,row.domicile,row.replication,row.distribution,row.ucits,row.sourceUrl,
+      [row.listingKey,row.issuer,row.assetClass,normalizeEtfRegion(row.region),row.theme,row.trackedIndex,row.terPct,row.aumUsdM,row.domicile,row.replication,row.distribution,row.ucits,row.sourceUrl,
         ok ? "ok" : row.source === "eodhd" ? row.sourceUrl ? "eodhd_incomplete" : "eodhd_unmapped" : "failed",row.source ?? "codex",row.holdingsCount ?? null,
         row.ucitsHint ?? null,row.terGap ?? null]);
       if (!result.rowCount) throw new Error(`ETF catalog row not pending: ${row.listingKey}`);

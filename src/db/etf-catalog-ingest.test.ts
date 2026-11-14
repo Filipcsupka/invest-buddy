@@ -9,6 +9,7 @@ describe("catalog enrichment status", () => {
     const db = { connect: async () => ({ query: async (sql: string, args: unknown[] = []) => { if (sql.includes("UPDATE etf_catalog SET issuer")) updates.push({ sql, args }); return { rowCount: 1 }; }, release() {} }) };
     await ingestEnrichment(db as never, [item,{ ...item, listingKey: "NASDAQ:TEST", terPct: null }]);
     expect(updates[0].args[13]).toBe("ok");
+    expect(updates[0].args[3]).toBeNull();
     expect(updates[1].args[13]).toBe("failed");
     await ingestEnrichment(db as never, [{ ...item, listingKey: "XETR:TEST", source: "eodhd", issuer: null, sourceUrl: null }]);
     expect(updates[2].args[13]).toBe("eodhd_unmapped");
@@ -17,5 +18,11 @@ describe("catalog enrichment status", () => {
     expect(updates[0].sql).toContain("ucits=COALESCE($12,ucits)");
     expect(updates[0].sql).toMatch(/enrich_attempts=enrich_attempts\+CASE WHEN \$14 IN \('failed','eodhd_unmapped','eodhd_incomplete'\) THEN 1 ELSE 0 END/);
     expect(updates[0].sql).toContain("enrich_attempts<3");
+  });
+  it("normalizes legacy labels before writing", async () => {
+    const regions: unknown[] = [];
+    const db = { connect: async () => ({ query: async (sql: string, args: unknown[] = []) => { if (sql.includes("UPDATE etf_catalog SET issuer")) regions.push(args[3]); return { rowCount: 1 }; }, release() {} }) };
+    await ingestEnrichment(db as never, [{ ...item, region: "global" }, { ...item, region: "United States" }, { ...item, region: "Global ex United States" }]);
+    expect(regions).toEqual(["Global", "North America", "Global ex US"]);
   });
 });

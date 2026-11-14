@@ -1,5 +1,5 @@
 import pg from "pg";
-import { mapFundamentals } from "../../scanner/eodhd-etf-enrich.mjs";
+import { mapFundamentals, normalizeEtfRegion } from "../../scanner/eodhd-etf-enrich.mjs";
 import { refreshShortlist } from "../db/etf-catalog-ingest";
 
 /**
@@ -20,7 +20,7 @@ export interface RemapChange { listingKey: string; changes: Partial<Record<Remap
 export function remapRow(row: RemapRow): RemapChange {
   const mapped = mapFundamentals(row, row.vendorSymbol, { General: row.general ?? {}, ETF_Data: row.etfData ?? {} });
   const next: Record<RemapField, string | null> = {
-    assetClass: mapped.assetClass ?? row.assetClass, region: mapped.region ?? row.region,
+    assetClass: mapped.assetClass ?? row.assetClass, region: mapped.region ?? normalizeEtfRegion(row.region) ?? row.region,
     distribution: mapped.distribution ?? row.distribution, terGap: row.etfData ? mapped.terGap : row.terGap,
   };
   const changes: RemapChange["changes"] = {};

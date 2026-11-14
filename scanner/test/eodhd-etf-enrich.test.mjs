@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { enrichEodhd, mapFundamentals, vendorSymbol } from "../eodhd-etf-enrich.mjs";
+import { enrichEodhd, mapFundamentals, normalizeEtfRegion, vendorSymbol } from "../eodhd-etf-enrich.mjs";
 import { validateBatch } from "../run-etf-enrich.mjs";
 import { execute, parseArgs } from "../run-etf-enrich.mjs";
 
@@ -86,12 +86,33 @@ test("category, region and payout labels map; the UCITS hint is the catalog's, n
   for (const [category, expected] of [["Global Equity", "equity"], ["Government Bond", "bond"], ["Gold Commodity", "commodity"], ["Balanced Multi Asset", "multi_asset"], ["Money Market", "money_market"], ["Other", "other"], ["Specialty", null]]) {
     const mapped = mapFundamentals(eu, "TEST.XETRA", { General: { Category: category }, ETF_Data: { World_Regions: { Europe: { "Equity_%": 55 }, Asia: { "Equity_%": 45 } }, Dividend_Paying_Frequency: "Vierteljährlich" } });
     assert.equal(mapped.assetClass, expected, category);
-    assert.equal(mapped.region, "global");
+    assert.equal(mapped.region, "Global");
     assert.equal(mapped.distribution, "dist");
     assert.equal(mapped.ucits, null);
     assert.equal(mapped.ucitsHint, true);
   }
   assert.equal(mapFundamentals(eu, "TEST.XETRA", { ETF_Data: { Dividend_Paying_Frequency: "Thesaurierend" } }).distribution, "acc");
+});
+
+test("scanner maps vendor regions to the catalog vocabulary", () => {
+  assert.equal(mapFundamentals(us, "VTI.US", { ETF_Data: { World_Regions: { China: { "Equity_%": 80 } } } }).region, "Asia Emerging");
+  assert.equal(mapFundamentals(us, "VTI.US", { ETF_Data: { World_Regions: { "Europe Developed": { "Equity_%": 55 }, Japan: { "Equity_%": 45 } } } }).region, "Global");
+});
+
+test("region normalizer covers every stored legacy name", () => {
+  const aliases = {
+    "United States": "North America", "United States and Canada": "North America", Canada: "North America",
+    "Developed Europe": "Europe Developed", Denmark: "Europe Developed", Finland: "Eurozone", Netherlands: "Eurozone",
+    "Developed Asia Pacific ex-Japan": "Asia Developed", China: "Asia Emerging", Brazil: "Latin America", Chile: "Latin America", Israel: "Africa/Middle East",
+    global: "Global", International: "Global ex US", "Global ex United States": "Global ex US",
+    "Developed markets ex United States": "Global ex US", "Developed markets excluding United States": "Global ex US",
+    "Developed markets excluding United States and Canada": "Global ex US", "Developed markets ex-North America": "Global ex US",
+    "Emerging markets": "Emerging Markets",
+  };
+  for (const [oldName, newName] of Object.entries(aliases)) assert.equal(normalizeEtfRegion(oldName), newName, oldName);
+  for (const region of new Set(Object.values(aliases))) assert.equal(normalizeEtfRegion(region), region);
+  assert.equal(normalizeEtfRegion("Unknown"), null);
+  assert.equal(normalizeEtfRegion(null), null);
 });
 
 test("the mapper echoes the catalog UCITS hint and never derives one from name or ISIN", () => {

@@ -10,4 +10,5 @@ export interface EodhdEnrichment {
   ucitsHint: boolean | null; terGap: "ter_ambiguous" | null; sourceUrl: string | null; source: "eodhd"; holdingsCount: number | null;
 }
 export function vendorSymbol(row: EodhdEnrichRow): string | null;
+export function normalizeEtfRegion(value: unknown): string | null;
 export function mapFundamentals(row: EodhdEnrichRow, symbol: string | null, data: unknown): EodhdEnrichment;

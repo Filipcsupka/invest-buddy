@@ -2,6 +2,25 @@
 const US_EXCHANGES = new Set(["NYSEARCA", "NASDAQ", "NYSE", "BATS", "AMEX", "IEX"]);
 const text = (value) => typeof value === "string" && value.trim() ? value.trim() : null;
 const number = (value) => value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value)) ? Number(value) : null;
+const REGION_ALIASES = new Map([
+  ["United States", "North America"], ["United States and Canada", "North America"], ["Canada", "North America"],
+  ["Developed Europe", "Europe Developed"], ["Denmark", "Europe Developed"],
+  ["Finland", "Eurozone"], ["Netherlands", "Eurozone"],
+  ["Developed Asia Pacific ex-Japan", "Asia Developed"], ["China", "Asia Emerging"],
+  ["Brazil", "Latin America"], ["Chile", "Latin America"], ["Israel", "Africa/Middle East"],
+  ["global", "Global"], ["International", "Global ex US"], ["Global ex United States", "Global ex US"],
+  ["Developed markets ex United States", "Global ex US"],
+  ["Developed markets excluding United States", "Global ex US"],
+  ["Developed markets excluding United States and Canada", "Global ex US"],
+  ["Developed markets ex-North America", "Global ex US"], ["Emerging markets", "Emerging Markets"],
+]);
+const CANONICAL_REGIONS = new Set(["North America", "Europe Developed", "Europe Emerging", "Eurozone", "United Kingdom", "Japan", "Asia Developed", "Asia Emerging", "Australasia", "Latin America", "Africa/Middle East", "Global", "Global ex US", "Emerging Markets"]);
+export function normalizeEtfRegion(value) {
+  const region = text(value);
+  if (!region) return null;
+  const canonical = REGION_ALIASES.get(region) ?? region;
+  return CANONICAL_REGIONS.has(canonical) ? canonical : null;
+}
 /** Equity_% ranks equity funds; a bond or other fund reports Equity_% 0 and its weights in Fund_%. */
 const regionFrom = (regions) => {
   const entries = Object.entries(regions ?? {});
@@ -9,7 +28,7 @@ const regionFrom = (regions) => {
   const weights = [ranked("Equity_%"), ranked("Fund_%"), ranked(null)].find((list) => list.length) ?? [];
   if (!weights.length) return null;
   weights.sort((a, b) => b[1] - a[1]);
-  return weights[0][1] > 60 ? weights[0][0] : "global";
+  return weights[0][1] > 60 ? normalizeEtfRegion(weights[0][0]) : "Global";
 };
 /** The payout label decides. Otherwise a paid dividend in `history` (stored etf_dividends rows) marks a distributing class. */
 const distributionFrom = (frequency, history) => {
