@@ -1,4 +1,4 @@
-# ETF catalog and weekly picks
+# ETF catalog, ratings and research notes
 
 The catalog covers Xetra ETFs, active ETFs, ETCs and ETNs, plus US ETFs in the Nasdaq Trader symbol directories. It does not filter by broker access or UCITS status. UCITS is informational, and an IE/LU ISIN or a fund name is only a hint until an issuer source confirms it.
 
@@ -14,7 +14,23 @@ Enrichment skips rows that are already `ok`, so a mapping change reaches them on
 
 After each enrichment batch, the server rebuilds a shortlist of up to 150 recent ETF and active ETF listings across the global catalog. It groups funds by `asset_class` and `region`, sorts each group by AUM descending, and uses lower TER when AUM is missing. For share classes tracking the same index within a group, an accumulating class is considered first. It then takes one fund per group in repeated rounds until the list reaches 150. ETCs and ETNs stay in the catalog but do not enter the default shortlist. The stored `shortlist_rank` fixes the order passed to research.
 
-Weekly picks run Monday at 07:40. The runner sends each stored shortlist batch of 25 to the existing Codex adapter without web search. The model writes a BUY_ZONE, WATCH or AVOID screening note for each listing. The runner rejects a changed catalog identity or cost field, an added listing, a fabricated price, evidence link or figure in the prose. The current shortlist has no dated price, so price fields stay null. Empty evidence leaves a pick unverified; the card must not imply that a source page was checked. Each successful batch posts separately to `/api/ingest/etf` and keeps earlier picks and entry prices.
+## What customers see
+
+The `/etf` page opens on the v3 rule rating (`docs/etf-score.md`). A strip at the top counts the in-scope ETFs (ETF and active ETF) in each band of the latest score run: Rules met, Mostly met, Partly met and Few met, plus Incomplete data and Not rated. Each band links to the catalog filtered to that band. Below it, the Highest rated block lists up to five funds per asset class, ordered by band, then percentage, then evidenced points. The band already caps a fund with fewer than 70 evidenced points at Mostly met, so a high percentage on few facts does not lead.
+
+The catalog keeps 50 rows per page and the earlier filters. It adds filters for band, evidence (70 or more evidenced points, or Incomplete data), category, TER range and AUM range, and sorts by rating, TER, AUM and 1-year or 3-year return. Columns show the rating with its band and groups with data, TER, AUM in EUR millions, returns, volatility, yield, holdings, top-10 weight, category, asset class, domicile, distribution, index, issuer, region, UCITS, currency and instrument type.
+
+AUM is shown in EUR only when its currency is known: the stored stats state EUR or USD, or the listing is a USD listing on a US venue, whose catalog figure is in USD. USD converts at the latest stored EURUSD close. Any other stored figure shows a gap with the note "Currency not stated". TER comes from the latest stats (ongoing charge, then net expense ratio) and falls back to the catalog value.
+
+Fund statistics (returns, volatility, yield, holdings, top-10 weight, category) and the category filter and return sorts need the ETF market view (`etfOwnerView`: owner, Plus, trial or Passive, with `MARKETS_VIEWS=on`). The rating needs `etfScoreView` (`canOpenFunds`). Without the market view, the page shows the catalog TER and the AUM it can convert.
+
+## Model research notes (owner only)
+
+The model notes (`etf_picks`: call, conviction, verification) are the owner's private workflow. Only the owner sees the research table, its call filter, the pick links, the shortlist and last-run figures and the track record link on `/etf`. For anyone else the page drops the `call` parameter before any read, so it cannot filter or reveal a classification.
+
+The research runner is optional. By default it reads the highest rated recent ETFs from `/api/ingest/etf-catalog/top-rated?limit=25`, in the same order as the Highest rated block, with `ratingPercent`, `ratingBand` and `evidencedPoints` as context. `--selection shortlist` (or `RESEARCH_ETF_SELECTION=shortlist`) reads the older catalog shortlist instead, and `--limit` (or `RESEARCH_ETF_LIMIT`, 1 to 150) caps the candidates. The runner sends each batch of 25 to the existing Codex adapter without web search. The model writes a BUY_ZONE, WATCH or AVOID screening note for each listing. The runner rejects a changed catalog identity or cost field, an added listing, a fabricated price, evidence link or figure in the prose. The candidates have no dated price, so price fields stay null. Empty evidence leaves a pick unverified, and the card must not imply that a source page was checked. Each successful batch posts separately to `/api/ingest/etf` and keeps earlier picks and entry prices.
+
+The repo copy of the `invest-buddy-etf-research` CronJob is suspended (`suspend: true`, Monday 07:40 schedule kept). To run it once, after owner approval: `kubectl create job --from=cronjob/invest-buddy-etf-research invest-buddy-etf-research-manual -n invest`. The live object follows only after the infra repo copy changes.
 
 ## Measuring picks
 
@@ -28,13 +44,13 @@ The stock judge keeps its Claude CLI subscription provider and receives stored E
 
 Both model runners log expected tokens before a call and actual input, output and cache tokens after it. `AI_JUDGE_MONTHLY_TOKEN_CAP` defaults to 2,000,000 tokens across all recorded AI calls in the UTC month; `AI_EXPECTED_OUTPUT_TOKENS` defaults to 30,000 per call. The estimate is prompt characters divided by three, rounded up, plus that output allowance. A missing usage report stops the call. The existing AI budget ledger records completed judge and ETF calls. For a local offline check, pass `--dry-run --input-file <json>` to either runner. Dry run reports the expected tokens and makes no model call or ingest write.
 
-EODHD-derived facts and ETF picks belong in the owner-authenticated view only. Keep `EODHD_PRIVATE_USE=on` only in that private environment, and leave the public display path disabled until licensing is settled. The judge and ETF research CronJobs remain suspended until their private web path and credentials are checked on the cluster.
+EODHD-derived ETF figures stay behind the gates above, and ETF picks stay owner only. Keep `EODHD_PRIVATE_USE=on` only in that private environment, and leave the public display path disabled until licensing is settled. The judge CronJob stays suspended until its private web path and credentials are checked on the cluster.
 
 ## Placeholders
 
 | Placeholder | Value |
 | --- | --- |
 | `{{asOf}}` | Run date in Europe/Bratislava, as YYYY-MM-DD. |
-| `{{shortlist}}` | JSON array of up to 25 enriched catalog listings for this call. |
+| `{{shortlist}}` | JSON array of up to 25 stored catalog listings for this call: the highest rated funds with their rating fields, or shortlist rows. |
 
 The research output contract is `scanner/schema/etf-output.schema.json`. The EODHD enrichment output and the ingest route validate against `scanner/schema/etf-enrich.schema.json`. Migration `094_etf_catalog.sql` defines the catalog and adds `listing_key` to picks.

@@ -36,9 +36,6 @@
 .pickGroup h3 { margin-bottom: 0.5rem; }
 .filters input { min-height: 2.75rem; min-width: 12rem; padding: 0.5rem 0.75rem; border: 1px solid var(--rule-strong); border-radius: var(--radius); background: var(--sheet); color: var(--ink); }
 .filters input:focus-visible, .filters select:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
-.catalogTable { min-width: 1700px; }
-.catalogTable th:first-child { min-width: 15rem; }
-.catalogTable td, .catalogTable th { overflow-wrap: anywhere; }
 .pagination { display: flex; justify-content: space-between; gap: 1rem; margin-top: 1rem; }
 .pagination a { min-height: 2.75rem; display: inline-flex; align-items: center; padding: 0.4rem 0.9rem; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--sheet); }
 .facts dd { overflow-wrap: anywhere; }
@@ -47,3 +44,61 @@
 .weightCell { display: flex; align-items: center; gap: 0.5rem; justify-content: flex-end; }
 .weightBar { display: inline-block; height: 0.5rem; max-width: 6rem; min-width: 1px; border-radius: 999px; background: var(--rule-strong); }
 .chartEmpty { color: var(--ink-2); }
+
+/* ETF list, rating first. Area colour: --area-etf (indigo). Bands step in shade only; no gain or loss colours. */
+.muted { color: var(--ink-2); }
+.gap { color: var(--ink-3); }
+.ratingStrip { display: grid; gap: 0.75rem; margin: 0 0 2rem; padding: 1rem; border: 1px solid var(--rule); border-left: 4px solid var(--area-etf); border-radius: var(--radius-lg); background: var(--sheet); }
+.ratingHead { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0.25rem 1rem; }
+.ratingHead h2 { margin: 0; font-size: 1.125rem; }
+.ratingHead p { margin: 0; color: var(--ink-2); }
+.bandTiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr)); gap: 0.5rem; margin: 0; padding: 0; list-style: none; }
+.bandTile { display: grid; gap: 0.15rem; min-height: 2.75rem; padding: 0.6rem 0.75rem; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--sheet); color: var(--ink); text-decoration: none; }
+a.bandTile:hover { background: var(--area-etf-wash); }
+a.bandTile:focus-visible { outline: 2px solid var(--area-etf); outline-offset: 2px; }
+.bandTile strong { font-size: 1.375rem; font-variant-numeric: tabular-nums; }
+.bandTile span { font-size: 0.8125rem; color: var(--ink-2); }
+.tileRulesMet { border-top: 4px solid var(--area-etf); }
+.tileMostlyMet { border-top: 4px solid color-mix(in srgb, var(--area-etf) 70%, var(--sheet)); }
+.tilePartlyMet { border-top: 4px solid color-mix(in srgb, var(--area-etf) 45%, var(--sheet)); }
+.tileFewMet { border-top: 4px solid color-mix(in srgb, var(--area-etf) 22%, var(--sheet)); }
+.tileOther { border-top: 4px solid var(--rule); }
+.bandBadge { display: inline-flex; align-items: center; border: 1px solid var(--area-etf); border-radius: 999px; padding: 0.1rem 0.5rem; font-size: 0.75rem; font-weight: 700; white-space: nowrap; }
+.bandRulesMet { background: var(--area-etf); color: var(--area-etf-on); }
+.bandMostlyMet { background: var(--area-etf-wash); color: var(--area-etf); }
+.bandPartlyMet { background: transparent; color: var(--area-etf); }
+.bandFewMet { background: transparent; color: var(--ink-2); border-color: var(--rule-strong); }
+.ratingCell { display: grid; gap: 0.2rem; }
+.ratingLine { display: inline-flex; align-items: center; gap: 0.4rem; white-space: nowrap; }
+.ratingPercent { font-size: 1rem; font-variant-numeric: tabular-nums; }
+.ratingMeta { color: var(--ink-2); font-size: 0.75rem; white-space: nowrap; }
+.ratingState { font-size: 0.8125rem; color: var(--ink-2); white-space: nowrap; }
+.topGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr)); gap: 1rem; }
+.topCard { min-width: 0; padding: 1rem; border: 1px solid var(--rule); border-radius: var(--radius-lg); background: var(--sheet); }
+.topCard h3 { margin: 0 0 0.5rem; font-size: 1rem; }
+.topList { display: grid; margin: 0; padding: 0; list-style: none; }
+.topItem { display: grid; grid-template-columns: 1.5rem minmax(0, 1fr) auto; gap: 0.25rem 0.75rem; align-items: start; padding: 0.6rem 0; border-top: 1px solid var(--rule); }
+.topItem:first-child { border-top: 0; }
+.topRank { color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.topName { min-width: 0; overflow-wrap: anywhere; font-weight: 700; }
+.topFacts { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; color: var(--ink-2); font-size: 0.8125rem; font-variant-numeric: tabular-nums; }
+.catalogWrap { position: relative; overflow-x: auto; border: 1px solid var(--rule); border-radius: var(--radius-lg); background: var(--sheet); -webkit-overflow-scrolling: touch; }
+.catalogWrap:focus-visible { outline: 2px solid var(--area-etf); outline-offset: 2px; }
+.catalogTable { width: max-content; min-width: 100%; }
+.catalogTable th, .catalogTable td { padding: 0.6rem 0.75rem; white-space: nowrap; }
+.catalogTable thead th { position: sticky; top: 0; z-index: 1; vertical-align: bottom; }
+.catalogTable th[scope="row"], .catalogTable thead th:first-child { position: sticky; left: 0; z-index: 2; background: var(--sheet); box-shadow: 1px 0 0 var(--rule); }
+.catalogTable thead th:first-child { z-index: 3; background: var(--sheet-hover); }
+.catalogTable tbody tr:hover th[scope="row"] { background: var(--sheet-hover); }
+.catalogTable th[scope="row"] { min-width: 16rem; max-width: 22rem; white-space: normal; color: var(--ink); font-size: inherit; }
+.catalogTable .num { text-align: right; min-width: 5.5rem; }
+.catalogTable .wide { min-width: 9rem; max-width: 16rem; white-space: normal; }
+.catalogTable .ratingCol { min-width: 11rem; }
+.fundMeta { display: block; margin-top: 0.2rem; color: var(--ink-2); font-size: 0.75rem; font-weight: 400; overflow-wrap: anywhere; }
+.ownerSection { margin-top: 2.5rem; padding-top: 1.5rem; border-top: 1px dashed var(--rule-strong); }
+.ownerTag { display: inline-flex; margin-left: 0.5rem; padding: 0.1rem 0.5rem; border: 1px solid var(--rule-strong); border-radius: 999px; font-size: 0.75rem; font-weight: 700; color: var(--ink-2); vertical-align: middle; }
+@media (max-width: 720px) {
+  .catalogTable { min-width: 0; }
+  .catalogTable th[scope="row"] { min-width: 9.5rem; max-width: 11rem; }
+  .ratingStrip { padding: 0.75rem; }
+}
