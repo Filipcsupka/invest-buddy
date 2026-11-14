@@ -1,9 +1,11 @@
 import Link from "next/link";
 import type { ShortlistData } from "@/data/shortlist";
 import { decidingTieBreak, type ShortlistRow, type TieBreak } from "@/engine/shortlist";
+import { orderedRows, type LensedRow } from "@/engine/model-lens";
 import { SHORTLIST_CONFIG } from "@/engine/shortlist-config";
 import { fill, formatNumber, formatScorePercent, getMessages, intlTag, type Locale } from "@/i18n";
 import { getTierMessages } from "@/i18n/tier-messages";
+import { getShortlistTopMessages, themeLabel } from "@/i18n/shortlist-top-messages";
 import { isSectorGroup } from "@/universe/sector-groups";
 import { TierLock } from "./tier-lock";
 import styles from "./shortlist-view.module.css";
@@ -26,14 +28,19 @@ export function tieBreakValue(locale: Locale, row: ShortlistRow, key: TieBreak |
   return null;
 }
 
+const lensStatus = (row: ShortlistRow | LensedRow) => ("lens" in row ? row.lens?.status : undefined);
+
 /**
  * Order labels for rows shown inside one sector group: the tie-breaker against the row above in the same table. The first row of a
- * group says it is first in the group, unless it is first overall.
+ * group says it is first in the group, unless it is first overall. With the model portfolio lens, a row in an above-cap theme that
+ * follows one outside it is marked `lens` instead of a tie-breaker.
  */
-export function groupOrder(rows: readonly ShortlistRow[]): { row: ShortlistRow; key: TieBreak | null; first: "overall" | "group" | null }[] {
-  return rows.map((row, index) => index === 0
-    ? { row, key: null, first: row.rank === 1 ? "overall" : "group" }
-    : { row, key: decidingTieBreak(rows[index - 1], row), first: null });
+export function groupOrder(rows: readonly (ShortlistRow | LensedRow)[]): { row: ShortlistRow | LensedRow; key: TieBreak | null; first: "overall" | "group" | null; lens: boolean }[] {
+  return rows.map((row, index) => {
+    if (index === 0) return { row, key: null, first: row.rank === 1 ? "overall" : "group", lens: false };
+    const lens = lensStatus(row) === "over" && lensStatus(rows[index - 1]) !== "over";
+    return { row, key: lens ? null : decidingTieBreak(rows[index - 1], row), first: null, lens };
+  });
 }
 
 /** Flags and not-assessed markers of one row, as plain text. */
@@ -69,19 +76,20 @@ function Lens({ locale, data }: { locale: Locale; data: ShortlistData }) {
   </div>;
 }
 
-function RowTable({ locale, rows, names, label }: { locale: Locale; rows: ShortlistRow[]; names: Record<string, string>; label: string }) {
+function RowTable({ locale, rows, names, label }: { locale: Locale; rows: (ShortlistRow | LensedRow)[]; names: Record<string, string>; label: string }) {
   const m = getMessages(locale).shortlist;
+  const t = getShortlistTopMessages(locale);
   return <div className="table-scroll" role="region" tabIndex={0} aria-label={label}><table className="screen">
     <thead><tr><th scope="col">{m.rank}</th><th scope="col">{m.name}</th><th scope="col">{m.percent}</th><th scope="col">{m.checksColumn}</th><th scope="col">{m.orderColumn}</th></tr></thead>
-    <tbody>{groupOrder(rows).map(({ row, key, first }) => {
+    <tbody>{groupOrder(rows).map(({ row, key, first, lens }) => {
       const markers = rowMarkers(locale, row);
       const value = tieBreakValue(locale, row, key);
       return <tr key={row.ticker} data-ticker={row.ticker}>
         <td className="num">{row.rank}</td>
-        <th scope="row"><Link className="ticker" href={`/${locale}/company/${row.ticker}`}>{row.ticker}</Link> <span className="company-name">{names[row.ticker] ?? ""}</span></th>
+        <th scope="row"><Link className="ticker" href={`/${locale}/company/${row.ticker}`}>{row.ticker}</Link> <span className="company-name">{names[row.ticker] ?? ""}</span> <span className="muted small">{themeLabel(locale, row.theme)}</span></th>
         <td className="num">{row.percent === null ? "–" : formatScorePercent(locale, row.percent)}{row.evidencedPoints === null ? null : <span className="muted small"> · {fill(m.coverage, { n: row.evidencedPoints })}</span>}</td>
         <td><span className={styles.markers}>{markers.length ? markers.map((text) => <span key={text} className="tag">{text}</span>) : "–"}</span></td>
-        <td>{first === "overall" ? m.firstRow : first === "group" ? m.firstInGroup : key ? m.tieBreaks[key] : m.tieBreaks.ticker}{value ? <span className="muted small"> · {value}</span> : null}</td>
+        <td>{lens ? fill(t.placedByLens, { cap: SHORTLIST_CONFIG.themeCapPercent }) : first === "overall" ? m.firstRow : first === "group" ? m.firstInGroup : key ? m.tieBreaks[key] : m.tieBreaks.ticker}{value ? <span className="muted small"> · {value}</span> : null}</td>
       </tr>;
     })}</tbody>
   </table></div>;
@@ -91,18 +99,20 @@ function RowTable({ locale, rows, names, label }: { locale: Locale; rows: Shortl
  * Ranked shortlist grouped by sector group, with the concentration lens and the dropped names. `compact` is the dashboard block: the
  * lens and the first `limit` names, with a link to the scanner view. Informational wording only: no actions and no money.
  */
-export function ShortlistView({ locale, data, compact = false, limit = 5 }: { locale: Locale; data: ShortlistData; compact?: boolean; limit?: number }) {
+export function ShortlistView({ locale, data, compact = false, limit = 5, nested = false }: { locale: Locale; data: ShortlistData; compact?: boolean; limit?: number; nested?: boolean }) {
   const m = getMessages(locale).shortlist;
   const { shortlist } = data;
+  const kept = orderedRows(shortlist.kept, data.lens);
   const state = setupLabel(locale);
+  const Title = nested ? "h3" : "h2";
   const head = <div className={styles.head}>
-    <h2 className={styles.title} id="shortlist-title">{m.title}</h2>
+    <Title className={styles.title} id="shortlist-title">{m.title}</Title>
     <p className={styles.summary}>{fill(m.summary, { kept: shortlist.kept.length, candidates: shortlist.candidates, state })}</p>
   </div>;
   if (compact) {
     return <section className={styles.shortlist} aria-labelledby="shortlist-title" data-shortlist="compact">
       {head}
-      {shortlist.kept.length ? <ol className={styles.compact}>{shortlist.kept.slice(0, limit).map((row) => <li key={row.ticker}>
+      {kept.length ? <ol className={styles.compact}>{kept.slice(0, limit).map((row) => <li key={row.ticker}>
         <span className={styles.rank}>{row.rank}.</span>
         <Link className="ticker" href={`/${locale}/company/${row.ticker}`}>{row.ticker}</Link>
         <span className="muted">{sectorGroupLabel(locale, row.sector)}</span>
@@ -114,7 +124,7 @@ export function ShortlistView({ locale, data, compact = false, limit = 5 }: { lo
     </section>;
   }
   const groups = data.concentration.groups;
-  return <section className={styles.shortlist} aria-labelledby="shortlist-title" id="shortlist" data-shortlist="full">
+  return <section className={styles.shortlist} aria-labelledby="shortlist-title" id={nested ? undefined : "shortlist"} data-shortlist="full">
     {head}
     <p className={styles.note}>{fill(m.lede, { state })}</p>
     <Lens locale={locale} data={data} />
@@ -122,7 +132,7 @@ export function ShortlistView({ locale, data, compact = false, limit = 5 }: { lo
       const label = sectorGroupLabel(locale, group.sector);
       return <div key={group.sector} className={styles.group}>
         <h3 className={styles.groupTitle}>{label} ({group.count})</h3>
-        <RowTable locale={locale} rows={shortlist.kept.filter((row) => row.sector === group.sector)} names={data.names} label={`${m.title} · ${label}`} />
+        <RowTable locale={locale} rows={kept.filter((row) => row.sector === group.sector)} names={data.names} label={`${m.title} · ${label}`} />
       </div>;
     }) : <p className={styles.note}>{fill(m.empty, { state })}</p>}
     {shortlist.dropped.length > 0 && <details className={styles.dropped}>

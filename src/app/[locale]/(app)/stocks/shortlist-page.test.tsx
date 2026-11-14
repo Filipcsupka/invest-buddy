@@ -38,14 +38,36 @@ describe("shortlist visibility", () => {
   it.each([["owner", owner], ["Plus", plus], ["trial", trial]] as const)("shows the ranked, grouped shortlist to the %s viewer", async (_, viewer) => {
     who.viewer = viewer;
     const en = await scanner();
+    expect(en).toContain('data-shortlist="top"');
+    expect(en).toContain("Highest ranked by the rules");
     expect(en).toContain('data-shortlist="full"');
     expect(en).toContain("Shortlist");
     expect(en).toContain("Sector concentration in this list");
     expect(en).toContain("Order decided by");
     expect(en).not.toContain('data-tier-lock="scanner-shortlist"');
+    // The top picks come before the scanner groups, and the full shortlist and Setup met list are collapsed below them.
+    expect(en.indexOf('data-shortlist="top"')).toBeLessThan(en.indexOf("scanner-group-"));
+    expect(en).toMatch(/<details[^>]*data-collapsed="shortlist"/);
+    expect(en).toMatch(/<details[^>]*data-collapsed="setup"/);
+    expect(en).not.toMatch(/<details[^>]*data-collapsed="[^"]*"[^>]*open/);
     const sk = await scanner("sk");
     expect(sk).toContain("Užší výber");
-    expect(await dashboard()).toContain('data-shortlist="compact"');
+    expect(sk).toContain("Najvyššie podľa pravidiel");
+    const dash = await dashboard();
+    expect(dash).toContain('data-shortlist="top"');
+    expect(dash).toContain("Open the full shortlist");
+  });
+
+  it("shows the model portfolio lens: whole percents for customers, exact weights for the owner", async () => {
+    who.viewer = plus;
+    const customer = (await scanner()).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+    expect(customer).toContain("Model portfolio: 50% AI and semiconductors and 50% Cloud and software.");
+    expect(customer).toContain("From the public model portfolio of");
+    expect(customer).toContain("Placed after the names above");
+    who.viewer = owner;
+    const own = (await scanner()).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+    expect(own).toContain("Model portfolio: 50.0% AI and semiconductors and 50.0% Cloud and software.");
+    expect(own).toContain("From the stored IBKR snapshot of");
   });
 
   it("gives an anonymous visitor the lock card while PAYWALL is off, without loading the shortlist", async () => {
@@ -82,7 +104,7 @@ describe("shortlist visibility", () => {
     who.viewer = plus;
     for (const locale of ["en", "sk"]) {
       const html = (await scanner(locale)).replace(/<[^>]+>/g, " ");
-      const block = html.slice(html.indexOf(locale === "en" ? "Shortlist" : "Užší výber"));
+      const block = html.slice(html.indexOf(locale === "en" ? "Highest ranked by the rules" : "Najvyššie podľa pravidiel"));
       expect(block).not.toMatch(/\b(buy|sell|hold|you should|recommend\w*|kúpiť|predať|odporúč\w*)\b/i);
       expect(block).not.toMatch(/EUR|€/);
       expect(block).not.toMatch(/EODHD|Alpha Vantage|Twelve Data/i);

@@ -13,3 +13,13 @@
 .compact > li { display: flex; flex-wrap: wrap; gap: var(--s1) var(--s2); align-items: baseline; min-width: 0; }
 .rank { color: var(--ink-3); font-variant-numeric: tabular-nums; }
 .dropped > summary { cursor: pointer; font-weight: 600; }
+/* Top picks block (S1): numbered cards, reason and model portfolio lens lines. */
+.picks { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr)); gap: var(--s2); margin: 0; padding: 0; list-style: none; }
+.picks > li { display: grid; gap: var(--s1); align-content: start; min-width: 0; padding: var(--s2) var(--s3); border: 1px solid var(--rule); border-radius: var(--radius); }
+.picks > li[data-lens="over"] { border-style: dashed; }
+.pickHead { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s1) var(--s2); min-width: 0; }
+.pickScore { margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 600; }
+.pickMeta, .pickReason, .lensLine { margin: 0; font-size: var(--t-sm); }
+.pickMeta { color: var(--ink-2); }
+.lensLine { font-weight: 600; }
+.tickers { margin: var(--s2) 0 0; font-size: var(--t-sm); line-height: 1.8; overflow-wrap: anywhere; }

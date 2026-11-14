@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { ruleGroups } from "@/i18n/rules";
 import type { StoreRow } from "./store";
 import type { Viewer } from "@/viewer/viewer";
-import { evidencedPoints, quoteCurrency, shortlistAccess, shortlistInputs, shortlistViewEnabled } from "./shortlist";
+import { evidencedPoints, modelHoldings, quoteCurrency, shortlistAccess, shortlistInputs, shortlistTopN, shortlistViewEnabled } from "./shortlist";
 
 const hits = (...met: string[]) => ruleGroups.flatMap((group) => group.rules).map((rule) => ({ id: rule.id, label: rule.id, detail: "", points: rule.points, matched: met.includes(rule.id), unknown: rule.id === "catalyst" }));
 const setupHits = hits("revenue-acceleration", "earnings", "above-ma", "uptrend", "green-volume", "dip");
@@ -54,5 +54,38 @@ describe("shortlist inputs", () => {
     expect(inputs.map((input) => input.ticker)).toEqual(["CHIP", "THIN"]);
     expect(inputs[0]).toMatchObject({ displayState: "setup", percent: 73.9, evidencedPoints: 23, currency: "USD", sector: "Technology", reportDate: "2026-11-12", reportStale: false });
     expect(inputs[1]).toMatchObject({ displayState: "ignore", sector: "Unknown", reportDate: null });
+  });
+
+  it("resolves the theme from stored facts, else from the listing label, else Unknown", () => {
+    const facts = new Map([["CHIP", { ticker: "CHIP", instrumentSector: "Unclassified", vendorSector: "Technology", vendorIndustry: "Semiconductors", currency: "USD" }]]);
+    const label = row("BIO", { ticker: "BIO" });
+    label.instrument.sector = "Biotech";
+    const inputs = shortlistInputs([row("CHIP"), label, row("NONE")], "2026-11-10", facts, new Map());
+    expect(inputs.map((input) => [input.ticker, input.theme])).toEqual([["CHIP", "ai-semis"], ["BIO", "healthcare"], ["NONE", "unknown"]]);
+  });
+});
+
+describe("model portfolio", () => {
+  it("gives each holding a theme and sector group; a fund without facts is Unknown", () => {
+    const facts = new Map([
+      ["SNOW", { ticker: "SNOW", instrumentSector: "Cloud & SaaS", vendorSector: "Technology", vendorIndustry: "Software - Application", currency: "USD" }],
+      ["CGNX", { ticker: "CGNX", instrumentSector: "Discovery", vendorSector: "Technology", vendorIndustry: "Scientific & Technical Instruments", currency: "USD" }],
+    ]);
+    const holdings = modelHoldings({ weights: [{ symbol: "SNOW", weightPercent: 16.01 }, { symbol: "CGNX", weightPercent: 1.54 }, { symbol: "CSPX", weightPercent: 10.41 }] }, facts);
+    expect(holdings).toEqual([
+      { symbol: "SNOW", weightPercent: 16.01, theme: "cloud-software", sector: "Technology" },
+      { symbol: "CGNX", weightPercent: 1.54, theme: "robotics", sector: "Technology" },
+      { symbol: "CSPX", weightPercent: 10.41, theme: "unknown", sector: "Unknown" },
+    ]);
+  });
+
+  it("uses the listing label when no facts were read", () => {
+    expect(modelHoldings({ weights: [{ symbol: "NVDA", weightPercent: 34 }] }, new Map(), () => "AI & semiconductors")[0]).toMatchObject({ theme: "ai-semis", sector: "Technology" });
+  });
+
+  it("reads SHORTLIST_TOP_N with a default of 6", () => {
+    expect(shortlistTopN({})).toBe(6);
+    expect(shortlistTopN({ SHORTLIST_TOP_N: "8" })).toBe(8);
+    expect(shortlistTopN({ SHORTLIST_TOP_N: "99" })).toBe(6);
   });
 });
