@@ -1,3 +1,4 @@
+import { MAX_MEMBER_AGE_DAYS } from "./index-rating";
 import type { Covered, IndexRatingInputs } from "./index-types";
 
 /**
@@ -14,8 +15,15 @@ export const isVolatilityIndex = (symbol: string): boolean => VOLATILITY_INDICES
 
 /** Sessions per period, the usual trading-day counts. */
 export const SESSIONS = { d1: 1, d5: 5, m1: 21, m3: 63, y1: 252, y3: 756 } as const;
-/** Constituent bars or scores older than this many days before the index date are not counted. */
-export const MAX_COMPONENT_AGE_DAYS = 10;
+/** Constituent bars or scores older than this many days before the index date are not counted (the rating engine's own limit). */
+export const MAX_COMPONENT_AGE_DAYS = MAX_MEMBER_AGE_DAYS;
+/** A constituent list older than this many days before the index date no longer feeds breadth, growth or score figures. */
+export const MAX_LIST_AGE_DAYS = 14;
+/**
+ * Growth counts only a constituent whose latest period ended within this many days of the index date: the current or the
+ * previous reported quarter (90-day quarter plus filing lag), or the latest half-year. Older filings are not current growth.
+ */
+export const MAX_GROWTH_AGE_DAYS: Readonly<Record<"quarter" | "half", number>> = { quarter: 200, half: 380 };
 const DAY = 86_400_000;
 
 export interface IndexBar { date: string; close: number; high?: number | null; low?: number | null }
@@ -208,7 +216,7 @@ export function sectors(components: readonly ComponentFacts[], asOf: string | nu
 /** One stored point-in-time fact: a revenue or net income value for a quarter or half-year. */
 export interface GrowthFact { ticker: string; source: string; concept: string; period: "quarter" | "half"; periodEnd: string; value: number }
 export interface ComponentGrowth {
-  ticker: string; periodEnd: string;
+  ticker: string; periodEnd: string; period: "quarter" | "half";
   /** Year-on-year change as a ratio (null when the year-ago value is not positive) and its direction. */
   revenueYoy: number | null; revenueUp: boolean;
   /** Revenue growth faster than the prior period's year-on-year growth; null when the prior period is not stored. */
@@ -251,7 +259,7 @@ export function componentGrowth(facts: readonly GrowthFact[]): Map<string, Compo
   }
   const out = new Map<string, ComponentGrowth>();
   for (const [ticker, series] of byTicker) {
-    let best: { periodEnd: string; current: { up: boolean; ratio: number | null }; previous: { up: boolean; ratio: number | null } | null; rank: number } | null = null;
+    let best: { periodEnd: string; period: "quarter" | "half"; current: { up: boolean; ratio: number | null }; previous: { up: boolean; ratio: number | null } | null; rank: number } | null = null;
     let earnings: ReturnType<typeof seriesGrowth> = null;
     for (const [key, points] of series) {
       const [source, concept, period] = key.split(":") as [string, string, "quarter" | "half"];
@@ -259,12 +267,12 @@ export function componentGrowth(facts: readonly GrowthFact[]): Map<string, Compo
       if (!growth) continue;
       if (concept === NET_INCOME) { if (!earnings || growth.periodEnd > earnings.periodEnd) earnings = growth; continue; }
       const rank = (period === "quarter" ? 0 : 2) + (source === "sec" ? 0 : 1);
-      if (!best || growth.periodEnd > best.periodEnd || (growth.periodEnd === best.periodEnd && rank < best.rank)) best = { ...growth, rank };
+      if (!best || growth.periodEnd > best.periodEnd || (growth.periodEnd === best.periodEnd && rank < best.rank)) best = { ...growth, period, rank };
     }
     if (!best) continue;
     const matchingEarnings = earnings && Math.abs(daysBetween(earnings.periodEnd, best.periodEnd)) <= 20 ? earnings : null;
     out.set(ticker, {
-      ticker, periodEnd: best.periodEnd, revenueYoy: best.current.ratio, revenueUp: best.current.up,
+      ticker, periodEnd: best.periodEnd, period: best.period, revenueYoy: best.current.ratio, revenueUp: best.current.up,
       revenueAccelerating: best.current.ratio !== null && best.previous?.ratio != null ? best.current.ratio > best.previous.ratio : null,
       earningsUp: matchingEarnings ? matchingEarnings.current.up : null, earningsYoy: matchingEarnings ? matchingEarnings.current.ratio : null,
     });
@@ -284,13 +292,20 @@ export interface EarningsSummary {
   medianRevenueYoy: number | null;
   /** True when shares are weighted by index weight (every assessed constituent had one); otherwise each counts once. */
   weighted: boolean;
+  /** Oldest, median and newest reporting-period end among the counted constituents; null when none was counted. */
+  periodEnds: { oldest: string; median: string; newest: string } | null;
 }
 
-/** Weighted (when weights exist) share of constituents with growing revenue and earnings, each with its denominator. */
+/**
+ * Weighted (when weights exist) share of constituents with growing revenue and earnings, each with its denominator.
+ * With `asOf`, a constituent counts only when its latest period ended within MAX_GROWTH_AGE_DAYS of it.
+ */
 export function earningsSummary(components: readonly ComponentFacts[], growth: ReadonlyMap<string, ComponentGrowth>, asOf: string | null = null): EarningsSummary {
   const assessed = components.flatMap((c) => {
     const g = c.ticker ? growth.get(c.ticker) : undefined;
-    return g && (!asOf || (daysBetween(g.periodEnd, asOf) >= 0 && daysBetween(g.periodEnd, asOf) <= 550)) ? [{ c, g }] : [];
+    if (!g) return [];
+    const age = asOf ? daysBetween(g.periodEnd, asOf) : 0;
+    return age >= 0 && age <= MAX_GROWTH_AGE_DAYS[g.period] ? [{ c, g }] : [];
   });
   const weighted = assessed.length > 0 && assessed.every(({ c }) => finite(c.weight) && (c.weight as number) > 0);
   const w = (c: ComponentFacts) => weighted ? c.weight as number : 1;
@@ -314,8 +329,15 @@ export function earningsSummary(components: readonly ComponentFacts[], growth: R
     revenueUp: share(assessed, (g) => g.revenueUp),
     earningsUp: share(assessed.filter(({ g }) => g.earningsUp !== null), (g) => g.earningsUp === true),
     weightedRevenueYoyPct: weightedMean("revenueYoy"), weightedEarningsYoyPct: weightedMean("earningsYoy"),
-    medianRevenueYoy: median, weighted,
+    medianRevenueYoy: median, weighted, periodEnds: periodEndRange(assessed.map(({ g }) => g.periodEnd)),
   };
+}
+
+function periodEndRange(dates: readonly string[]): EarningsSummary["periodEnds"] {
+  const sorted = [...dates].sort();
+  if (!sorted.length) return null;
+  // Lower median for an even count, so the reported date is a real member's period end.
+  return { oldest: sorted[0], median: sorted[Math.floor((sorted.length - 1) / 2)], newest: sorted[sorted.length - 1] };
 }
 
 /** Stored rule states as written by scoring (score_results.state). */
@@ -387,14 +409,16 @@ export function indexAnalytics(source: IndexAnalyticsSource): IndexAnalytics {
   const hasList = components.length > 0;
   const matchedCount = components.filter((c) => c.ticker).length;
   const asOf = [price.asOf, hasList ? source.componentsAsOf : null].filter((date): date is string => date !== null).sort().at(-1) ?? null;
+  // An old list (the weekly job stopped) still describes membership, but no longer feeds current member figures.
+  const currentList = hasList && source.componentsAsOf !== null && asOf !== null && daysBetween(source.componentsAsOf, asOf) <= MAX_LIST_AGE_DAYS;
   return {
     symbol: source.symbol, asOf, isVolatilityIndex: vol, price,
     relativeStrength: !vol && source.peers?.length ? { m3: relativeStrength(source.symbol, source.peers, "m3"), y1: relativeStrength(source.symbol, source.peers, "y1") } : null,
     matched: hasList ? { value: round(pct(matchedCount, components.length)), n: matchedCount, of: components.length, asOf: source.componentsAsOf } : null,
-    breadth: hasList ? breadth(components, asOf) : null,
+    breadth: currentList ? breadth(components, asOf) : null,
     sectors: hasList ? sectors(components, source.componentsAsOf) : null,
-    earnings: hasList ? earningsSummary(components, componentGrowth(source.growthFacts), asOf) : null,
-    scores: hasList ? scoreDistribution(components, asOf) : null,
+    earnings: currentList ? earningsSummary(components, componentGrowth(source.growthFacts), asOf) : null,
+    scores: currentList ? scoreDistribution(components, asOf) : null,
     volatility: vol ? volatilityContext(source.symbol, source.bars) : null,
   };
 }
@@ -421,9 +445,11 @@ export function toRatingInputs(analytics: IndexAnalytics, bars: readonly IndexBa
   }
   const e = analytics.earnings;
   // Both shares are needed; the coverage is the smaller of the two denominators (acceleration needs one more stored period).
-  if (e && e.positiveGrowth.value !== null && e.accelerating.value !== null) {
-    // `date` is the PIT assessment day; each Covered figure retains the underlying reporting-period end.
-    out.earnings = { date: analytics.asOf, positiveGrowthPct: e.positiveGrowth.value, acceleratingPct: e.accelerating.value,
+  if (e && e.positiveGrowth.value !== null && e.accelerating.value !== null && e.periodEnds) {
+    // `date` is the point-in-time assessment day (filings known by then); the members' reporting periods travel alongside,
+    // and earningsSummary has already dropped members whose latest period is older than MAX_GROWTH_AGE_DAYS.
+    out.earnings = { date: analytics.asOf, oldestPeriodEnd: e.periodEnds.oldest, medianPeriodEnd: e.periodEnds.median,
+      positiveGrowthPct: e.positiveGrowth.value, acceleratingPct: e.accelerating.value,
       coveragePct: Math.min(coverage(e.positiveGrowth), coverage(e.accelerating)) };
   }
   const s = analytics.scores;

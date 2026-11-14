@@ -1,11 +1,14 @@
-# Weekly index metadata and current constituents; 25 indices at 10 calls each.
+# Weekly index metadata and current constituents; 25 indices at 10 calls each (250 calls a week).
+# Proposal for the infra repo; starts suspended like every proposed job until the EODHD licence is confirmed.
+# Supersedes invest-buddy-eodhd-index-components (markets-cronjob.yaml): retire that job when enabling this one.
+# They cannot double-fetch (this job also updates index_component_refresh, so the 28-day job skips), but one is enough.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: invest-buddy-eodhd-index-fundamentals
   namespace: invest
 spec:
-  suspend: false
+  suspend: true
   schedule: "15 3 * * 6"
   timeZone: Europe/Bratislava
   concurrencyPolicy: Forbid

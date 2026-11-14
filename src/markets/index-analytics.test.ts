@@ -141,9 +141,9 @@ describe("growth from stored filings", () => {
 
   it("derives year-on-year growth, acceleration and the net income direction per ticker", () => {
     const growth = componentGrowth(facts);
-    expect(growth.get("A")).toEqual({ ticker: "A", periodEnd: "2026-09-30", revenueYoy: expect.closeTo(0.2), revenueUp: true, revenueAccelerating: true, earningsUp: true, earningsYoy: expect.closeTo(0.2) });
+    expect(growth.get("A")).toEqual({ ticker: "A", periodEnd: "2026-09-30", period: "quarter", revenueYoy: expect.closeTo(0.2), revenueUp: true, revenueAccelerating: true, earningsUp: true, earningsYoy: expect.closeTo(0.2) });
     expect(growth.get("B")).toMatchObject({ revenueUp: true, revenueAccelerating: null, earningsUp: false, earningsYoy: null });
-    expect(growth.get("C")).toMatchObject({ periodEnd: "2026-06-30", revenueUp: false, earningsUp: null });
+    expect(growth.get("C")).toMatchObject({ periodEnd: "2026-06-30", period: "half", revenueUp: false, earningsUp: null });
     expect(growth.has("D")).toBe(false);
   });
 
@@ -172,6 +172,21 @@ describe("growth from stored filings", () => {
     expect(unweighted.positiveGrowth.value).toBe(50);
     expect(unweighted.weightedRevenueYoyPct.value).toBeNull();
     expect(earningsSummary(list, growth, "2028-11-12").positiveGrowth.n).toBe(0);
+    expect(e.periodEnds).toEqual({ oldest: "2026-06-30", median: "2026-09-30", newest: "2026-09-30" });
+  });
+
+  it("counts only members whose latest quarter is within 200 days, or half-year within 380, of the index date", () => {
+    const growth = componentGrowth(facts);
+    const list = [component({ ticker: "A" }), component({ ticker: "B" }), component({ ticker: "C" })];
+    // 2027-04-18 is 200 days after the 2026-09-30 quarters and 292 after C's 2026-06-30 half-year: all three count.
+    expect(earningsSummary(list, growth, "2027-04-18")).toMatchObject({ revenueUp: { n: 3 }, periodEnds: { oldest: "2026-06-30", median: "2026-09-30" } });
+    // One day later the quarters (A, B) are 201 days old; C's half-year is still within 380 days.
+    const later = earningsSummary(list, growth, "2027-04-19");
+    expect(later.revenueUp).toMatchObject({ value: 0, n: 1, of: 3, asOf: "2026-06-30" });
+    expect(later.periodEnds).toEqual({ oldest: "2026-06-30", median: "2026-06-30", newest: "2026-06-30" });
+    // 381 days after C's half-year nothing counts; a period ending after the index date never counts.
+    expect(earningsSummary(list, growth, "2027-07-16")).toMatchObject({ revenueUp: { value: null, n: 0 }, periodEnds: null });
+    expect(earningsSummary(list, growth, "2026-09-29").revenueUp.n).toBe(1);
   });
 });
 
@@ -202,9 +217,26 @@ describe("index analytics and rating inputs", () => {
       symbol: "GSPC.INDX", asOf, bars: bars.map(({ date, close }) => ({ date, close })), valuation: null, isVolatilityIndex: false,
       components: { matched: 2, total: 4 },
       breadth: { date: asOf, aboveMa50Pct: 50, aboveMa200Pct: 50, coveragePct: 50 },
-      earnings: { date: asOf, positiveGrowthPct: 50, acceleratingPct: 50, coveragePct: 50 },
+      earnings: { date: asOf, oldestPeriodEnd: "2026-09-30", medianPeriodEnd: "2026-09-30", positiveGrowthPct: 50, acceleratingPct: 50, coveragePct: 50 },
       scoreDistribution: { date: asOf, setupMetPct: 50, criteriaBrokenPct: 50, coveragePct: 50 },
     });
+
+    // A list more than 14 days older than the latest bar keeps membership and sectors but feeds no member figures.
+    const listDate = bars.at(-12)!.date;
+    const stale = indexAnalytics({ symbol: "GSPC.INDX", bars, componentsAsOf: listDate, components, growthFacts });
+    expect(stale).toMatchObject({ asOf, matched: { n: 2, of: 4, asOf: listDate }, breadth: null, earnings: null, scores: null });
+    expect(stale.sectors).not.toBeNull();
+    expect(toRatingInputs(stale, bars)).toEqual({ symbol: "GSPC.INDX", asOf, bars: expect.any(Array), valuation: null, isVolatilityIndex: false, components: { matched: 2, total: 4 } });
+    const recent = indexAnalytics({ symbol: "GSPC.INDX", bars, componentsAsOf: bars.at(-10)!.date, components, growthFacts });
+    expect(recent.breadth).not.toBeNull();
+  });
+
+  it("drops members whose bar or rule state is older than the engine's seven-day limit", () => {
+    const old = (days: number) => new Date(Date.parse(`${asOf}T00:00:00Z`) - days * 86_400_000).toISOString().slice(0, 10);
+    const list = [component({ code: "A", ticker: "A", barDate: old(7), close: 10, ma50: 9, ma200: 8, state: SETUP_MET, stateAsOf: old(7) }),
+      component({ code: "B", ticker: "B", barDate: old(8), close: 10, ma50: 9, ma200: 8, state: SETUP_MET, stateAsOf: old(8) })];
+    expect(breadth(list, asOf).aboveMa50).toMatchObject({ n: 1, of: 2 });
+    expect(scoreDistribution(list, asOf).scored).toMatchObject({ n: 1, of: 2 });
   });
 
   it("omits constituent blocks without data and keeps a volatility index to price context", () => {

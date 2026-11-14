@@ -33,7 +33,8 @@ type Api = Pick<EodhdClient, "fundamentals" | "getCallCosts">;
 /**
  * Weekly index snapshots: for each tracked index not attempted within `staleDays`, one request for the `General` block and
  * the current constituents with weights. Both are stored under today's date with their provenance. An index without a list
- * (VIX) is recorded as empty and keeps its `General` block. Stops at the call budget and on an access error.
+ * (VIX) is recorded as empty and keeps its `General` block. Stops at the call budget, on an access error and on a rate limit
+ * (429), which records no attempt so the index stays due.
  */
 export async function runIndexFundamentals(db: Db, api: Api | null, options: IndexFundamentalsArgs, today = new Date().toISOString().slice(0, 10)) {
   const staleBefore = new Date(Date.parse(`${today}T00:00:00Z`) - (options.staleDays - 1) * DAY).toISOString().slice(0, 10);
@@ -48,6 +49,8 @@ export async function runIndexFundamentals(db: Db, api: Api | null, options: Ind
       try { parsed = parseIndexFundamentals(await api.fundamentals<unknown>(symbol, SNAPSHOT_FILTER)); }
       catch (error) {
         failures.push(symbol);
+        // A rate limit says nothing about this index: leave it and the rest unattempted so the next run retries them first.
+        if (error instanceof EodhdHttpError && error.status === 429) { capped = due.length - index - 1; break; }
         await saveIndexSnapshot(db, symbol, today, null, SNAPSHOT_FILTER);
         if (error instanceof EodhdHttpError && [401, 402, 403].includes(error.status)) break;
         continue;

@@ -71,7 +71,7 @@ describe("index fundamentals job (PGlite)", () => {
     expect(model?.analytics.scores?.criteriaBroken).toMatchObject({ value: 100, n: 1, of: 2, asOf: "2026-11-12" });
     expect(model?.analytics.matched).toMatchObject({ n: 1, of: 2, asOf: "2026-11-14" });
     expect(model?.inputs).toMatchObject({ asOf: "2026-11-14", components: { matched: 1, total: 2 },
-      breadth: { date: "2026-11-12", coveragePct: 50 }, earnings: { date: "2026-11-14", coveragePct: 50 },
+      breadth: { date: "2026-11-12", coveragePct: 50 }, earnings: { date: "2026-11-14", oldestPeriodEnd: "2026-09-30", medianPeriodEnd: "2026-09-30", coveragePct: 50 },
       scoreDistribution: { date: "2026-11-12", coveragePct: 50 } });
     expect((await indexRatingReadModel("VIX.INDX", pool))?.inputs).toBeNull();
   }), 60_000);
@@ -85,6 +85,20 @@ describe("index fundamentals job (PGlite)", () => {
     const model = await indexRatingReadModel("GSPC.INDX", pool);
     expect(model?.inputs).toMatchObject({ symbol: "GSPC.INDX", asOf: "2026-11-12", components: { matched: 1, total: 2 } });
     expect(model?.analytics.matched).toMatchObject({ n: 1, of: 2, asOf: "2026-11-12" });
+  }), 60_000);
+
+  it("ranks a stored vendor symbol over a suffixed ticker over a US bare code, and never matches a bare code abroad", () => withDb(async (pool) => {
+    await pool.query(`INSERT INTO instruments(ticker,name,sector,source) VALUES
+      ('SAP','SAP US listing','Technology','sample extension'),('ASML.AS','ASML','Technology','sample extension'),
+      ('ASMLX','ASML vendor-mapped','Technology','sample extension') ON CONFLICT (ticker) DO NOTHING`);
+    await pool.query(`INSERT INTO instrument_ids(ticker,instrument_type,vendor_symbols,valid_from)
+      VALUES ('ASMLX','equity','{"eodhd":"ASML.AS"}'::jsonb,'2020-01-01')`);
+    await pool.query(`INSERT INTO index_components(index_symbol,as_of,code,exchange) VALUES
+      ('GDAXI.INDX','2026-11-12','SAP','XETRA'),('GDAXI.INDX','2026-11-12','ASML','AS'),('GDAXI.INDX','2026-11-12','SAP2',NULL)`);
+    const list = await indexComponentFacts("GDAXI.INDX", "2026-11-12", pool);
+    expect(list.rows.map((row) => [row.code, row.ticker]).sort()).toEqual([["ASML", "ASMLX"], ["SAP", null], ["SAP2", null]]);
+    await pool.query("UPDATE instrument_ids SET valid_to='2026-01-01' WHERE ticker='ASMLX'");
+    expect((await indexComponentFacts("GDAXI.INDX", "2026-11-12", pool)).rows.find((row) => row.code === "ASML")?.ticker).toBe("ASML.AS");
   }), 60_000);
 
   it("stores General and constituents with provenance, records empty lists, respects the budget and logs calls", () => withDb(async (pool) => {
@@ -120,6 +134,16 @@ describe("index fundamentals job (PGlite)", () => {
     await runIndexFundamentals(pool, api, parseIndexFundamentalsArgs(["--only", "GSPC.INDX", "--stale-days", "1"], {}), "2026-11-16");
     await runIndexFundamentals(pool, api, parseIndexFundamentalsArgs(["--only", "GSPC.INDX", "--stale-days", "1"], {}), "2026-11-17");
     expect((await pool.query("SELECT count(*)::int AS n FROM index_snapshots WHERE index_symbol='GSPC.INDX'")).rows[0]).toEqual({ n: 3 });
+  }), 60_000);
+
+  it("stops on a rate limit without recording an attempt, so the index stays due", () => withDb(async (pool) => {
+    let requests = 0;
+    const api = { fundamentals: async () => { requests++; throw new EodhdHttpError(429, "fundamentals"); }, getCallCosts: () => ({ fundamentals: 10 * requests }) };
+    const result = await runIndexFundamentals(pool, api, parseIndexFundamentalsArgs([], {}), "2026-11-15");
+    expect(result).toMatchObject({ due: 25, failures: 1, failedSymbols: "GSPC.INDX", refreshed: 0, capped: 24, calls: 10 });
+    expect(requests).toBe(1);
+    expect((await pool.query("SELECT count(*)::int AS n FROM index_snapshot_refresh")).rows[0]).toEqual({ n: 0 });
+    expect((await runIndexFundamentals(pool, null, parseIndexFundamentalsArgs(["--dry-run"], {}), "2026-11-15")).due).toBe(25);
   }), 60_000);
 
   it("records a failed attempt, stops on an access error and makes no requests on a dry run", () => withDb(async (pool) => {

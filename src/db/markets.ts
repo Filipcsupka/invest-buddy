@@ -273,15 +273,18 @@ export async function indexPeerSeries(db: Query | null = getPool(), sessions = 2
 }
 
 /**
- * Constituent to instrument join, through the security master and never by bare ticker alone: the constituent's vendor
- * symbol (code.exchange) matches instrument_ids.vendor_symbols.eodhd; without a stored vendor symbol, it matches a ticker
- * that is the vendor symbol itself (ASML.AS) or, on the US exchange only, the bare code. An instrument whose stored vendor
- * symbol differs (SQ trades as XYZ.US) never matches by its ticker.
+ * Constituent to instrument join keys, through the security master and never by bare ticker alone: the constituent's
+ * vendor symbol (code.exchange) matches instrument_ids.vendor_symbols.eodhd (rank 0); without a stored vendor symbol, it
+ * matches a ticker that is the vendor symbol itself, ASML.AS (rank 1), or, on the US exchange only, the bare code (rank 2,
+ * keyed as ticker||'.US'). An instrument whose stored vendor symbol differs (SQ trades as XYZ.US) never matches by its
+ * ticker. The keys are built once per query and hash-joined to the list on code.exchange, instead of a per-constituent
+ * subquery over an OR of computed expressions that no index can serve (IXIC has over 3,000 constituents).
  */
-const COMPONENT_TICKER = `(SELECT i.ticker FROM instruments i LEFT JOIN instrument_ids ids ON ids.ticker=i.ticker AND ids.valid_to IS NULL
-  WHERE c.exchange IS NOT NULL AND (ids.vendor_symbols->>'eodhd'=c.code||'.'||c.exchange
-    OR ((ids.vendor_symbols->>'eodhd') IS NULL AND (i.ticker=c.code||'.'||c.exchange OR (c.exchange='US' AND i.ticker=c.code))))
-  ORDER BY CASE WHEN ids.vendor_symbols->>'eodhd'=c.code||'.'||c.exchange THEN 0 WHEN i.ticker=c.code||'.'||c.exchange THEN 1 ELSE 2 END,i.ticker LIMIT 1)`;
+const COMPONENT_KEYS = `SELECT k.key,k.ticker,k.rank FROM instruments i LEFT JOIN instrument_ids ids ON ids.ticker=i.ticker AND ids.valid_to IS NULL
+  CROSS JOIN LATERAL (VALUES (ids.vendor_symbols->>'eodhd',i.ticker,0),
+    (CASE WHEN (ids.vendor_symbols->>'eodhd') IS NULL THEN i.ticker END,i.ticker,1),
+    (CASE WHEN (ids.vendor_symbols->>'eodhd') IS NULL THEN i.ticker||'.US' END,i.ticker,2)) k(key,ticker,rank)
+  WHERE k.key IS NOT NULL`;
 
 type ComponentRow = { code: string; exchange: string | null; name: string | null; sector: string | null; industry: string | null; weight: string | null; ticker: string | null;
   bar_date: string | null; close: string | null; ma50: string | null; ma200: string | null; state: string | null; state_as_of: string | null };
@@ -296,7 +299,9 @@ export async function indexComponentFacts(vendorSymbol: string, asOf: string, db
   const result = await db.query<ComponentRow & { list_as_of: string }>(`WITH c AS (
       SELECT c.as_of,c.code,c.exchange,c.name,c.sector,c.industry,c.weight FROM index_components c
       WHERE c.index_symbol=$1 AND c.as_of=(SELECT max(as_of) FROM index_components WHERE index_symbol=$1 AND as_of<=$2::date)
-    ), m AS (SELECT c.*,${COMPONENT_TICKER} AS ticker FROM c)
+    ), keys AS (${COMPONENT_KEYS}
+    ), m AS (SELECT DISTINCT ON (c.code) c.*,k.ticker FROM c LEFT JOIN keys k ON c.exchange IS NOT NULL AND k.key=c.code||'.'||c.exchange
+      ORDER BY c.code,k.rank,k.ticker)
     SELECT m.as_of::text AS list_as_of,m.code,m.exchange,m.name,m.sector,m.industry,m.weight,m.ticker,
       b.bar_date,b.close,b.ma50,b.ma200,s.state,s.as_of AS state_as_of
     FROM m
@@ -323,7 +328,8 @@ export async function indexComponentFacts(vendorSymbol: string, asOf: string, db
 
 /**
  * Point-in-time revenue and net income facts (quarters, and half-years from the vendor) for the given tickers, filed on or
- * before `asOf`, newest filing per period, the last ~2.5 years of period ends.
+ * before `asOf`, newest filing per period. 950 days of period ends cover a counted half-year up to 380 days old,
+ * its year-ago period and the period before that for acceleration.
  */
 export async function componentGrowthFacts(tickers: string[], asOf: string, db: Query | null = getPool()): Promise<GrowthFact[]> {
   if (!db || !tickers.length) return [];
@@ -332,7 +338,7 @@ export async function componentGrowthFacts(tickers: string[], asOf: string, db: 
        SELECT DISTINCT ON (ticker,source_id,concept,period,period_end) ticker,source_id,concept,period,period_end,value FROM (
          SELECT f.*,CASE WHEN f.period_end-f.period_start BETWEEN 80 AND 100 THEN 'quarter' ELSE 'half' END AS period FROM fundamentals_pit f
          WHERE f.ticker=ANY($1::text[]) AND f.filed<=$2::date AND f.period_start IS NOT NULL AND f.period_end<=$2::date
-           AND f.period_end>$2::date-900
+           AND f.period_end>$2::date-950
            AND (f.period_end-f.period_start BETWEEN 80 AND 100 OR (f.source_id='eodhd' AND f.period_end-f.period_start BETWEEN 170 AND 195))
            AND ((f.source_id='eodhd' AND f.taxonomy='eodhd' AND f.concept='Revenues')
              OR (f.source_id='sec' AND f.taxonomy='us-gaap' AND f.unit='USD' AND f.concept=ANY($3::text[])))
@@ -345,7 +351,8 @@ export interface IndexRatingReadModel { snapshot: IndexSnapshot | null; analytic
 
 /**
  * Everything the index rating and the index pages need for one tracked index, or null when it is not a tracked index.
- * Constituent figures use the list stored on or before the index's latest bar. Display stays behind the vendor gate.
+ * Constituent figures use the list stored on or before the index's latest bar. The model does not check display rights:
+ * every consumer must sit behind the vendor gate (assertViewable / marketsViewable) before rendering any of it.
  */
 export async function indexRatingReadModel(vendorSymbol: string, db: Query | null = getPool()): Promise<IndexRatingReadModel | null> {
   if (!db) return null;

@@ -14,8 +14,14 @@ export interface IndexRatingInputs {
   components?: { matched: number; total: number };
   /** Share of constituents with stored bars that close above their MA50 / MA200. */
   breadth?: { date: string; aboveMa50Pct: number; aboveMa200Pct: number; coveragePct: number };
-  /** Weighted share of constituents with positive year-on-year growth, and with growth faster than the prior quarter's. */
-  earnings?: { date: string; positiveGrowthPct: number; acceleratingPct: number; coveragePct: number };
+  /**
+   * Share of constituents with positive year-on-year growth, and with growth faster than the prior period's. Shares are
+   * weighted by index weight only when every counted constituent has one; otherwise each counts once. `date` is the
+   * assessment day (filings known by then). Only members whose latest quarter ended within 200 days (half-year: 380) are
+   * counted; `oldestPeriodEnd` and `medianPeriodEnd` are the reporting-period ends of the counted members (always set by
+   * toRatingInputs; the engine does not read them).
+   */
+  earnings?: { date: string; oldestPeriodEnd?: string; medianPeriodEnd?: string; positiveGrowthPct: number; acceleratingPct: number; coveragePct: number };
   /** Index valuation is not collected yet. */
   valuation?: null;
   /** Share of scored constituents whose latest rule state is Setup met / Criteria broken. */
