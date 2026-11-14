@@ -53,7 +53,7 @@ export type PathMessages = typeof en;
 
 const sk: PathMessages = {
   title: "Vyberte si cestu",
-  lede: "Tri spôsoby, ako prehľad používať, podľa toho, ako investujete. Každá cesta používa rovnaké zverejnené pravidlá a žiadna z nich nie je osobné poradenstvo.",
+  lede: "Tri spôsoby, ako prehľad používať, podľa toho, ako investujete. Každá cesta používa rovnaké zverejnené pravidlá a žiadna z nich nie je osobným poradenstvom.",
   yourPlan: "Váš plán",
   included: "Súčasť vášho plánu",
   lockedNote: "Nie je vo vašom pláne",
@@ -80,7 +80,7 @@ const sk: PathMessages = {
     overview: {
       name: "Prehľad trhu",
       plan: "Zadarmo",
-      body: "Bezplatný účet. Metodika a makrokalendár sú otvorené; indexy a ekonomika pribudnú, keď to licencia na údaje dovolí, a dovtedy sú súčasťou plánu Pasívny.",
+      body: "Bezplatný účet. Metodika a makrokalendár sú prístupné. Indexy a ekonomika pribudnú, keď to dovolí licencia na údaje; dovtedy sú v pláne Pasívny.",
       action: "Prečítať metodiku",
       items: ["Metodika so všetkými pravidlami a prahmi", "Americký makrokalendár: zverejnenia údajov a rozhodnutia Fedu", "Indexy a ekonomika, keď to licencia na údaje dovolí"],
     },

@@ -69,14 +69,14 @@ const sk: typeof en = {
     signalsLabel: "Zaznamenané signály",
     measuredLabel: "Vyhodnotené po 20 dňoch",
     tickersLabel: "Tickery v snímke",
-    missesStay: "Zlyhania ostávajú v zázname.",
+    missesStay: "Neúspešné signály v zázname zostávajú.",
     benchmarkRow: "Porovnanie",
     hitRateLabel: "Úspešnosť po 20 dňoch",
     hitRateNote: "vyhodnotených: {n}",
     jumpLabel: "Sekcie",
   },
   method: {
-    atGlance: "Súpis pravidiel",
+    atGlance: "Pravidlá v skratke",
     versionLabel: "Verzia pravidiel",
     rulesLabel: "Pravidlá",
     pointsLabel: "Dostupné body",
@@ -92,7 +92,7 @@ const sk: typeof en = {
     stepPoints: "Percento",
   },
   insiders: {
-    filings: "Zobrazené transakcie",
+    filings: "Zobrazené podania",
     companies: "Firmy",
     purchases: "Nákupy na trhu",
     sales: "Predaje na trhu",
@@ -103,13 +103,13 @@ const sk: typeof en = {
     allCodes: "Všetky kódy",
     codeLabel: "Kód Form 4",
     tableNote: "Od najnovších. Každý riadok odkazuje na podanie na SEC.gov.",
-    noMatch: "Tomuto filtru nezodpovedá žiadna transakcia.",
+    noMatch: "Tomuto filtru nezodpovedá žiadne podanie.",
   },
   portfolio: {
     positions: "Pozície",
     largest: "Najväčšia pozícia",
     topThree: "Prvé tri spolu",
-    holdingsNote: "Podiel pozície v portfóliu.",
+    holdingsNote: "Podiel jednotlivých pozícií na portfóliu.",
   },
 };
 

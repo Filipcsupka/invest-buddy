@@ -49,7 +49,7 @@ const sk: TierMessages = {
   previewNote: "Náhľad bezplatnej úrovne (?view=free).",
   days: { one: "{n} deň", few: "{n} dni", many: "{n} dňa", other: "{n} dní" },
   teaser: {
-    "scanner-filters-advanced": "Filtre podľa rozsahu skóre, minima F, T a M, zdroja a držaných titulov a triedenie podľa F, T alebo M.",
+    "scanner-filters-advanced": "Filtre podľa rozsahu skóre, minima F, T a M, zdroja a titulov v portfóliu, aj zoradenie podľa F, T alebo M.",
     "scanner-streak": "Koľko dní každý titul spĺňa svoje pravidlá a koľko pravidiel pribudlo alebo ubudlo.",
     "insiders-history": "Udalosti insiderov staršie než bezplatné okno.",
     "ideas-list": "Zoznam nápadov s dôkazmi.",
@@ -58,7 +58,7 @@ const sk: TierMessages = {
     "discovery-list": "Nové tituly nájdené mimo pevného výberu.",
     "saved-screens": "Viac uložených filtrov.",
     watchlist: "Dlhší zoznam sledovaných titulov.",
-    "alerts-daily": "Denné upozornenia na zmenu stavu titulu pre viac titulov.",
+    "alerts-daily": "Denné upozornenia na zmenu stavu pre viac titulov.",
     "csv-export": "Stiahnutie tabuľky ako súboru CSV.",
     "insiders-filters": "Filtre udalostí insiderov podľa funkcie, typu transakcie a veľkosti.",
     "company-sec-history": "História podaní SEC mimo bezplatného okna.",

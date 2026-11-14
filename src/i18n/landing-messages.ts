@@ -79,10 +79,10 @@ export type LandingMessages = typeof en;
 
 const sk: LandingMessages = {
   specimen: {
-    title: "Pravidlo po pravidle, {ticker}",
-    sampleNote: "Ukážkový ticker. Každé číslo na tomto liste je ukážkový údaj.",
-    liveNote: "Prvý ticker dnešného dňa, čítaný podľa rovnakých pravidiel ako všetky ostatné.",
-    session: "Zasadnutie",
+    title: "{ticker} pravidlo po pravidle",
+    sampleNote: "Ukážkový ticker. Všetky čísla na tejto karte sú ukážkové.",
+    liveNote: "Dnešný prvý ticker, vyhodnotený podľa rovnakých pravidiel ako všetky ostatné.",
+    session: "Obchodný deň",
     sector: "Sektor",
     scoreNote: "{known} z {total} hlavných pravidiel malo údaje",
   },
@@ -90,7 +90,7 @@ const sk: LandingMessages = {
     groupPoints: "{points} bodov",
     coreTag: "Hlavné",
     bonusTag: "Bonus",
-    methodLink: "Prečítať každý prah",
+    methodLink: "Pozrieť všetky prahy",
     rulesCount: "Pravidlá: {n}",
   },
   states: {
@@ -103,15 +103,15 @@ const sk: LandingMessages = {
     boardSample: "Najvyššie skóre v ukážke",
     colScore: "Skóre",
     all: "Zobraziť všetky tickery: {n}",
-    noteFree: "V bete zadarmo na čítanie",
+    noteFree: "Počas bety čítajte zadarmo",
     noteRules: "Každé pravidlo viditeľné",
-    noteMisses: "Chyby zostávajú v zázname",
+    noteMisses: "Neúspechy zostávajú v zázname",
   },
   steps: {
     label: "Krok {n}",
     one: { title: "Zozbierať údaje", body: "Ceny, fundamenty, podania insiderov a makro príznaky sa ukladajú ku každému tickeru s dátumom, kedy boli načítané." },
-    two: { title: "Skontrolovať {n} zverejnených pravidiel", body: "Každé pravidlo je áno, nie alebo bez údajov. Chýbajúce údaje zostávajú mimo percenta a nepočítajú sa ako chyba." },
-    three: { title: "Prečítať jeden stav", body: "Body s údajmi sa premenia na percento a percento určí jeden zo šiestich stavov." },
+    two: { title: "Skontrolovať {n} zverejnených pravidiel", body: "Každé pravidlo je áno, nie alebo bez údajov. Chýbajúce údaje zostávajú mimo percenta a nepočítajú sa ako nesplnené." },
+    three: { title: "Prečítať jeden stav", body: "Z bodov s údajmi vznikne percento a to určí jeden zo šiestich stavov." },
     more: "Ďalších pravidiel: {n}",
     noData: "Bez údajov",
   },
@@ -121,13 +121,13 @@ const sk: LandingMessages = {
   },
   tiers: {
     title: "Čo je zadarmo a čo by bolo platené",
-    lede: "V bete nie je nič v predaji. Toto je rozdelenie, ktoré plánujeme zachovať.",
+    lede: "Počas bety sa nič nepredáva. Toto rozdelenie plánujeme zachovať.",
     freeHeading: "Zadarmo",
     paidHeading: "Platené, plánované",
     free: [
       "Každý ticker so stavom, skóre a pravidlami",
       "Metodika s každým prahom",
-      "Celý záznam signálov vrátane tých nepodarených",
+      "Celý záznam signálov vrátane neúspešných",
       "Denné zmeny stavu na Telegrame",
     ],
     paidNote: "Dlhšia história, jemnejšie filtre a osobné nástroje. Pravidlá a skóre sa nemenia.",
@@ -136,7 +136,7 @@ const sk: LandingMessages = {
   },
   proof: {
     title: "Vytvorené pre slovenských a českých investorov",
-    lede: "Celý web je po slovensky aj po anglicky, s rovnakými pravidlami a číslami. Desatinné čísla a dátumy sa riadia jazykom.",
+    lede: "Celý web je po slovensky aj po anglicky, s rovnakými pravidlami a číslami. Desatinné čísla a dátumy sa zobrazujú podľa zvoleného jazyka.",
     languageEn: "Anglicky",
     languageSk: "Slovensky",
     ruleCaption: "To isté pravidlo v oboch jazykoch",

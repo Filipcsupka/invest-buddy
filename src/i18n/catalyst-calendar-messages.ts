@@ -17,7 +17,7 @@ const en = {
 
 const sk: typeof en = {
   title: "Nadchádzajúce termíny",
-  note: "Iba plánované termíny. Skóre sa nimi nemení.",
+  note: "Iba plánované termíny. Skóre sa kvôli nim nemení.",
   earnings: "Zverejnenie výsledkov",
   timeOfDay: { "pre-market": "pred otvorením trhu", "post-market": "po zatvorení trhu" },
   today: "dnes",

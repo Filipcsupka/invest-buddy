@@ -8,7 +8,7 @@ const en = {
 };
 
 const sk: typeof en = {
-  streakNote: "Stĺpec splnených pravidiel ukazuje aj to, koľko dní každý titul spĺňa svoje pravidlá a koľko pravidiel za týždeň pribudlo alebo ubudlo.",
+  streakNote: "Stĺpec splnených pravidiel ukazuje aj, koľko dní každý ticker spĺňa svoje pravidlá a koľko pravidiel tento týždeň získal alebo stratil.",
   changePresetLock: "V platenej úrovni",
   ideasCount: "Počet nápadov v zozname: {n}.",
 };

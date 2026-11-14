@@ -24,13 +24,13 @@ const en = {
 
 const sk: typeof en = {
   title: "Stav údajov",
-  note: "Najnovší uložený dátum pre každú sadu údajov za touto stránkou. Len informačne.",
+  note: "Najnovší uložený dátum každej sady údajov, z ktorej stránka vychádza. Len na informáciu.",
   datasets: {
     prices: { label: "Ceny", source: "Denný zdroj záverečných cien" },
     fundamentals: { label: "Fundamenty", source: "Finančné výkazy SEC EDGAR" },
     filings: { label: "Podania a 8-K", source: "SEC EDGAR" },
     insider: { label: "Insider Form 4", source: "SEC EDGAR" },
-    macro: { label: "Makro rady", source: "Dátové rady vlády USA" },
+    macro: { label: "Makro údaje", source: "Časové rady vlády USA" },
     news: { label: "Správy", source: "Spravodajské zdroje" },
   },
   state: { current: "aktuálne", stale: "zastarané", none: "bez údajov" },
@@ -39,8 +39,8 @@ const sk: typeof en = {
   coverage: "{known} z {total} základných pravidiel má údaje",
   coveragePoints: "{points} z {max} základných bodov má údaje. Hranica: {guard}.",
   level: { full: "Úplné", partial: "Čiastočné", limited: "Obmedzené", none: "Žiadne" },
-  limitedNote: "Pod hranicou pokrytia {percent} %, preto je skóre označené ako neúplné údaje.",
-  noScore: "Zatiaľ bez skóre, preto nie je čo ukázať z pokrytia pravidiel.",
+  limitedNote: "Pokrytie je pod hranicou {percent} %, preto má skóre označenie Neúplné údaje.",
+  noScore: "Skóre zatiaľ nie je, preto nie je čo ukázať o pokrytí pravidiel.",
 };
 
 export type DataStatusMessages = typeof en;
