@@ -116,5 +116,31 @@ test("account budget limits enrich and an exhausted account sends no vendor requ
     assert.deepEqual(secondRun, { batches: 0, failed: 0, calls: 0, budget: 0, estimatedCalls: 0, deferred: 3 });
     assert.equal(vendorUrls.length, 1);
     assert.deepEqual(reports, [60]);
+    // 9 calls left is less than one fundamentals request, so nothing is sent.
+    remaining = 9;
+    const thirdRun = await execute(opts, { env: { INGEST_TOKEN: "test", EODHD_API_KEY: "test" }, request, log: () => {} });
+    assert.deepEqual(thirdRun, { batches: 0, failed: 0, calls: 0, budget: 0, estimatedCalls: 0, deferred: 3 });
+    assert.equal(vendorUrls.length, 1);
+  } finally { rmSync(outDir, { recursive: true, force: true }); }
+});
+
+test("call report retries with backoff and fails the run after three attempts", async () => {
+  const outDir = mkdtempSync(join(tmpdir(), "etf-enrich-report-")); const waits = []; let reportAttempts = 0;
+  const request = async (url, init = {}) => {
+    if (String(url).endsWith("/calls")) {
+      if (init.method === "POST") { reportAttempts++; return { ok: false, status: 503 }; }
+      return { ok: true, json: async () => ({ accountCallsToday: 0, enrichCallsToday: 0, accountBudget: 70000 }) };
+    }
+    if (String(url).includes("/pending?")) return { ok: true, json: async () => ({ items: [first] }) };
+    if (init.method === "POST") return { ok: true };
+    return { ok: true, json: async () => fixture };
+  };
+  try {
+    await assert.rejects(
+      execute(parseArgs(["--out-dir", outDir]), { env: { INGEST_TOKEN: "test", EODHD_API_KEY: "test" }, request, log: () => {}, sleep: async (ms) => { waits.push(ms); } }),
+      /ETF call report HTTP 503/,
+    );
+    assert.equal(reportAttempts, 3);
+    assert.deepEqual(waits, [1000, 5000]);
   } finally { rmSync(outDir, { recursive: true, force: true }); }
 });

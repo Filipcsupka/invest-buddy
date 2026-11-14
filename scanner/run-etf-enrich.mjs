@@ -49,7 +49,9 @@ export async function postDetails(batch, cache, { base, token, request = fetch, 
   }
   return posted;
 }
-export async function execute(opts, { env = process.env, request = fetch, log = console.log } = {}) {
+const REPORT_BACKOFF_MS = [1_000, 5_000];
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+export async function execute(opts, { env = process.env, request = fetch, log = console.log, sleep = wait } = {}) {
   if (env.RESEARCH_ENABLED === "off") { log("etf-enrich: skipped by RESEARCH_ENABLED=off"); return { batches: 0, failed: 0 }; }
   const maxCalls = Number(env.ETF_EODHD_DAILY_CALL_BUDGET ?? env.ETF_EODHD_MAX_CALLS ?? 15_000);
   if (!Number.isInteger(maxCalls) || maxCalls < 10 || maxCalls > 90_000 || maxCalls % 10 !== 0) throw new Error("ETF_EODHD_DAILY_CALL_BUDGET (or legacy ETF_EODHD_MAX_CALLS) must be a multiple of 10 from 10 to 90000");
@@ -64,7 +66,8 @@ export async function execute(opts, { env = process.env, request = fetch, log = 
     const budget = await budgetResponse.json();
     if (![budget.accountCallsToday, budget.enrichCallsToday, budget.accountBudget].every((n) => Number.isInteger(n) && n >= 0) || budget.accountBudget < 1)
       throw new Error("Invalid ETF account budget response");
-    callBudget = Math.max(0, Math.min(maxCalls, budget.accountBudget - budget.accountCallsToday));
+    // Each fundamentals request costs 10 calls, so round down to stay inside the account cap.
+    callBudget = Math.max(0, Math.floor(Math.min(maxCalls, budget.accountBudget - budget.accountCallsToday) / 10) * 10);
     enrichCallsToday = budget.enrichCallsToday;
   }
   const response = await request(`${base}/api/ingest/etf-catalog/pending?limit=${opts.limit}`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(60_000) });
@@ -87,7 +90,7 @@ export async function execute(opts, { env = process.env, request = fetch, log = 
         const posted = await request(callsUrl, { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify({ totalCalls }), signal: AbortSignal.timeout(60_000) });
         if (posted.ok) return;
         throw new Error(`ETF call report HTTP ${posted.status}`);
-      } catch (error) { if (attempt === 2) throw error; }
+      } catch (error) { if (attempt === 2) throw error; await sleep(REPORT_BACKOFF_MS[attempt]); }
     }
   };
   mkdirSync(opts.outDir, { recursive: true });
