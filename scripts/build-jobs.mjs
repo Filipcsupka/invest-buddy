@@ -30,6 +30,7 @@ const regularJobs = [
   "etf-outcomes.ts",
   "etf-score.ts",
   "etf-catalog.ts",
+  "etf-catalog-remap.ts",
   "symbols-sync.ts",
   "alert-test.ts",
   "watchdog.ts",

@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { etfCatalogDetail, etfCatalogList, normalizeCatalogFilters } from "./etf-catalog";
 import { ETF_RULES_VERSION } from "@/engine/etf-score-config";
+import { ETF_ASSET_CLASSES } from "./etf";
+import { getEtfMessages } from "@/i18n/etf-messages";
 import { PGlite } from "@electric-sql/pglite";
 import { readFileSync } from "node:fs";
 
@@ -89,5 +91,12 @@ describe("ETF catalog read model", () => {
   it("normalizes untrusted page, sort and instrument filters", () => {
     expect(normalizeCatalogFilters({ page: "-4", sort: "DROP TABLE", instrumentType: "bogus" })).toMatchObject({ page: 1, sort: "rating", instrumentType: null });
     expect(normalizeCatalogFilters({ page: "2", instrumentType: "all" })).toMatchObject({ page: 2, sort: "rating", instrumentType: "all" });
+    // Every stored asset class, including money market, is a valid filter with a label in both locales.
+    for (const assetClass of ETF_ASSET_CLASSES) {
+      expect(normalizeCatalogFilters({ assetClass }).assetClass).toBe(assetClass);
+      for (const locale of ["en", "sk"] as const) expect(getEtfMessages(locale)[assetClass]).toBeTruthy();
+    }
+    expect(ETF_ASSET_CLASSES).toContain("money_market");
+    expect(normalizeCatalogFilters({ assetClass: "cash" }).assetClass).toBeNull();
   });
 });

@@ -22,6 +22,9 @@ test("root ETF schema allows 25 shortlist cards and validates complete chunks", 
   assert.deepEqual(strict.required, ["asOf", "candidates"]);
   assert.equal(schema.properties.candidates.maxItems, 28);
   assert.deepEqual(validateEtfOutput(output, output.asOf, [item]), []);
+  // A money market fund from the catalog passes the schema and the catalog identity check.
+  const cash = { ...candidate, assetClass: "money_market" };
+  assert.deepEqual(validateEtfOutput({ ...output, candidates: [cash] }, output.asOf, [{ ...item, assetClass: "money_market" }]), []);
   assert.match(validateEtfOutput({ ...output, candidates: [] }, output.asOf, [item]).join(" "), /missing shortlist/);
   assert.match(validateEtfOutput({ ...output, candidates: [{ ...candidate, price: { ...candidate.price, last: 0 } }] }, output.asOf).join(" "), /positive/);
   assert.match(buildPrompt(output.asOf, [item], "ETF prompt {{shortlist}}"), /NYSEARCA:ETF1/);

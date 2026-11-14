@@ -3,11 +3,15 @@ import type { CatalogListing } from "../jobs/etf-catalog-data";
 
 export type CatalogDb = Pick<pg.Pool, "query" | "connect">;
 export interface Enrichment {
-  listingKey: string; isin: string | null; issuer: string | null; assetClass: "equity" | "bond" | "commodity" | "multi_asset" | "other" | null;
+  listingKey: string; isin: string | null; issuer: string | null; assetClass: "equity" | "bond" | "commodity" | "multi_asset" | "money_market" | "other" | null;
   region: string | null; theme: string | null; trackedIndex: string | null; terPct: number | null;
   aumUsdM: number | null; domicile: string | null; replication: string | null;
   distribution: "acc" | "dist" | null; ucits: boolean | null; sourceUrl: string | null;
   source?: "eodhd" | "codex"; holdingsCount?: number | null;
+  /** Xetra catalog hint echoed by the EODHD mapper; never confirmation. */
+  ucitsHint?: boolean | null;
+  /** Set when NetExpenseRatio fits both units and TER stays null. */
+  terGap?: "ter_ambiguous" | null;
 }
 export interface ShortlistRow { listing_key: string; mnemonic: string | null; asset_class: string | null; region: string | null; tracked_index: string | null; aum_usd_m: number | null; ter_pct: number | null; distribution: string | null; instrument_type: string; enrichment_status: string; last_seen: string }
 
@@ -17,11 +21,11 @@ export async function upsertCatalog(db: CatalogDb, listings: CatalogListing[], t
   try {
     await client.query("BEGIN");
     for (const row of listings) await client.query(`INSERT INTO etf_catalog
-      (listing_key,isin,wkn,mnemonic,name,instrument_type,exchange,listing_region,trading_currency,ucits,first_seen,last_seen)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$11)
+      (listing_key,isin,wkn,mnemonic,name,instrument_type,exchange,listing_region,trading_currency,ucits,ucits_hint,first_seen,last_seen)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$10,$11,$11)
       ON CONFLICT (listing_key) DO UPDATE SET wkn=EXCLUDED.wkn,mnemonic=EXCLUDED.mnemonic,name=EXCLUDED.name,
       instrument_type=EXCLUDED.instrument_type,trading_currency=EXCLUDED.trading_currency,
-      ucits=CASE WHEN etf_catalog.enrichment_status='ok' THEN etf_catalog.ucits ELSE EXCLUDED.ucits END,
+      ucits=CASE WHEN etf_catalog.enrichment_status='ok' THEN etf_catalog.ucits ELSE EXCLUDED.ucits END,ucits_hint=EXCLUDED.ucits_hint,
       last_seen=EXCLUDED.last_seen,updated_at=now()`,
       [row.listingKey,row.isin,row.wkn,row.mnemonic,row.name,row.instrumentType,row.exchange,row.listingRegion,row.tradingCurrency,row.ucits,today]);
     await client.query("COMMIT"); return listings.length;
@@ -39,11 +43,13 @@ export async function ingestEnrichment(db: CatalogDb, rows: Enrichment[]): Promi
         aum_usd_m=$8,domicile=$9,replication=$10,distribution=$11,
         ucits=COALESCE($12,ucits),source_url=$13,
         enrichment_status=$14,enrichment_source=$15,holdings_count=$16,
+        ucits_hint=COALESCE($17,ucits_hint),ter_gap=$18,
         enrich_attempts=enrich_attempts+CASE WHEN $14 IN ('failed','eodhd_unmapped','eodhd_incomplete') THEN 1 ELSE 0 END,
         enriched_at=CASE WHEN $14='ok' THEN now() ELSE enriched_at END,updated_at=now()
         WHERE listing_key=$1 AND enrichment_status<>'ok' AND enrich_attempts<3 RETURNING listing_key`,
       [row.listingKey,row.issuer,row.assetClass,row.region,row.theme,row.trackedIndex,row.terPct,row.aumUsdM,row.domicile,row.replication,row.distribution,row.ucits,row.sourceUrl,
-        ok ? "ok" : row.source === "eodhd" ? row.sourceUrl ? "eodhd_incomplete" : "eodhd_unmapped" : "failed",row.source ?? "codex",row.holdingsCount ?? null]);
+        ok ? "ok" : row.source === "eodhd" ? row.sourceUrl ? "eodhd_incomplete" : "eodhd_unmapped" : "failed",row.source ?? "codex",row.holdingsCount ?? null,
+        row.ucitsHint ?? null,row.terGap ?? null]);
       if (!result.rowCount) throw new Error(`ETF catalog row not pending: ${row.listingKey}`);
       if (row.isin) await client.query("UPDATE etf_catalog SET isin=COALESCE(isin,$2) WHERE listing_key=$1", [row.listingKey,row.isin]);
     }
@@ -90,7 +96,7 @@ export async function refreshShortlist(db: CatalogDb, today: string): Promise<nu
 }
 
 export async function pendingCatalog(db: CatalogDb, limit: number) {
-  const result = await db.query(`SELECT c.listing_key AS "listingKey",c.isin,c.name,c.mnemonic AS symbol,c.exchange,c.trading_currency AS "tradingCurrency",s.vendor_symbol AS "vendorSymbol" FROM etf_catalog c
+  const result = await db.query(`SELECT c.listing_key AS "listingKey",c.isin,c.name,c.mnemonic AS symbol,c.exchange,c.trading_currency AS "tradingCurrency",c.ucits_hint AS "ucitsHint",s.vendor_symbol AS "vendorSymbol" FROM etf_catalog c
     LEFT JOIN LATERAL (SELECT vendor_symbol FROM symbols WHERE c.isin IS NOT NULL AND isin=c.isin AND NOT delisted
       ORDER BY CASE WHEN exchange='XETRA' THEN 0 WHEN exchange='US' THEN 1 ELSE 2 END, vendor_symbol LIMIT 1) s ON true
     WHERE c.enrichment_status <> 'ok' AND c.enrich_attempts < 3 AND c.last_seen >= CURRENT_DATE - 30

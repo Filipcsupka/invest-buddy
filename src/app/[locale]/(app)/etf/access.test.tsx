@@ -4,7 +4,7 @@ import type { Viewer } from "@/viewer/viewer";
 const state = vi.hoisted(() => ({ viewer: {} as Viewer, vendor: true }));
 vi.mock("@/viewer/get-viewer", async (original) => ({ ...await original<typeof import("@/viewer/get-viewer")>(), getViewer: async () => state.viewer }));
 vi.mock("@/db/pool", () => ({ getPool: () => ({ query: async () => ({ rows: [{ present: state.vendor }] }) }) }));
-vi.mock("@/db/etf", () => ({ etfList: async () => ({ picks: [], run: null, sample: false }), etfDetail: async () => null }));
+vi.mock("@/db/etf", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/db/etf")>()), etfList: async () => ({ picks: [], run: null, sample: false }), etfDetail: async () => null }));
 vi.mock("@/db/etf-score", () => ({ latestEtfScores: async () => new Map() }));
 vi.mock("@/db/etf-catalog", () => ({
   etfCatalogList: async () => ({ funds: [], stats: { size: 0, enriched: 0, shortlist: 0 }, options: { assetClasses: [], regions: [], exchanges: [], issuers: [] } }),

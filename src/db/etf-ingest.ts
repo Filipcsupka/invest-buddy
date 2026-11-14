@@ -1,9 +1,10 @@
 import type pg from "pg";
 import { verifyEvidence, type ItemResult } from "../evidence/verify";
+import type { EtfAssetClass } from "./etf";
 
 export interface EtfEvidence { url: string; quote: string; claim: string }
 export interface EtfCandidate {
-  symbol: string; exchange: string | null; name: string; isin: string | null; assetClass: "equity" | "bond" | "commodity" | "multi_asset" | "other"; region: string | null;
+  symbol: string; exchange: string | null; name: string; isin: string | null; assetClass: EtfAssetClass; region: string | null;
   call: "BUY_ZONE" | "WATCH" | "AVOID"; conviction: number; thesis: string; whatHappened: string[]; whyItMatters: string;
   plan: { entryZone: string | null; addWhen: string | null; stopAddingWhen: string | null }; risks: string[];
   cost: { terPct: number | null; aumUsdM: number | null; trackedIndex: string | null; domicile: string | null; replication: string | null };

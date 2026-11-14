@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { withPageLog } from "@/app/page-log";
-import { etfList, type EtfAssetClass, type EtfCall } from "@/db/etf";
+import { ETF_ASSET_CLASSES, etfList, type EtfAssetClass, type EtfCall } from "@/db/etf";
 import { etfCatalogList, type CatalogFilters } from "@/db/etf-catalog";
 import { getEtfDetailMessages, getEtfMessages } from "@/i18n/etf-messages";
 import { etfListStats } from "@/db/etf-detail";
@@ -22,7 +22,7 @@ import { resolveLocale } from "@/app/[locale]/locale";
 
 export const dynamic = "force-dynamic";
 type Props = { params: Promise<{ locale: string }>; searchParams?: Promise<CatalogFilters & { call?: string }> };
-const classes: EtfAssetClass[] = ["equity", "bond", "commodity", "multi_asset", "other"];
+const classes = ETF_ASSET_CLASSES;
 const calls: EtfCall[] = ["BUY_ZONE", "WATCH", "AVOID"];
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   await requireEtfScreeningAccess();

@@ -3,11 +3,11 @@ import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { DETAIL_HOLDINGS, chunks, detailPayload, execute, parseArgs, validateBatch } from "../run-etf-enrich.mjs";
+import { DETAIL_HOLDINGS, chunks, detailPayload, execute, parseArgs, postDetails, validateBatch } from "../run-etf-enrich.mjs";
 
 const fixture = JSON.parse(readFileSync(new URL("./fixtures/eodhd-etf.json", import.meta.url)));
 const first = { listingKey: "NYSEARCA:SPY", isin: null, symbol: "SPY", exchange: "NYSEARCA", name: "SPDR ETF" };
-const enriched = { listingKey: first.listingKey, isin: "US78462F1030", issuer: "State Street", assetClass: "equity", region: "US", theme: null, trackedIndex: "S&P 500", terPct: 0.09, aumUsdM: 600000, domicile: "US", replication: "physical", distribution: "dist", ucits: false, sourceUrl: "https://example.com/spy" };
+const enriched = { listingKey: first.listingKey, isin: "US78462F1030", issuer: "State Street", assetClass: "equity", region: "US", theme: null, trackedIndex: "S&P 500", terPct: 0.09, aumUsdM: 600000, domicile: "US", replication: "physical", distribution: "dist", ucits: false, ucitsHint: null, terGap: null, sourceUrl: "https://example.com/spy" };
 
 test("enrichment schema requires every listing and an HTTPS source", () => {
   assert.deepEqual(validateBatch({ items: [enriched] }, [first]), []);
@@ -47,12 +47,23 @@ test("a missing EODHD key fails the batch without an ingest write", async () => 
   } finally { rmSync(outDir, { recursive: true, force: true }); }
 });
 
-test("detail payload keeps the largest holdings and only identifying General fields", () => {
+test("detail payload keeps the complete paid response", () => {
   const holdings = Object.fromEntries(Array.from({ length: DETAIL_HOLDINGS + 3 }, (_, i) => [`H${i}.US`, { "Assets_%": i }]));
-  const payload = detailPayload({ General: { Type: "ETF", ISIN: "US78462F1030", CurrencyCode: "USD", Description: "long" }, ETF_Data: { Holdings: holdings, Yield: 1 } });
-  assert.deepEqual(payload.General, { Type: "ETF", ISIN: "US78462F1030", CurrencyCode: "USD" });
-  assert.equal(Object.keys(payload.ETF_Data.Holdings).length, DETAIL_HOLDINGS);
+  const payload = detailPayload({ General: { Type: "ETF", ISIN: "US78462F1030", CurrencyCode: "USD", Description: "long" }, Technicals: { "52WeekHigh": 100 }, ETF_Data: { Holdings: holdings, Yield: 1 } });
+  assert.equal(payload.General.Description, "long");
+  assert.equal(payload.Technicals["52WeekHigh"], 100);
+  assert.equal(Object.keys(payload.ETF_Data.Holdings).length, DETAIL_HOLDINGS + 3);
   assert.ok(payload.ETF_Data.Holdings[`H${DETAIL_HOLDINGS + 2}.US`]);
-  assert.equal(payload.ETF_Data.Holdings["H0.US"], undefined);
+  assert.ok(payload.ETF_Data.Holdings["H0.US"]);
   assert.equal(detailPayload({ General: {} }), null);
+});
+
+test("one cached vendor response is stored for every matching listing", async () => {
+  const rows = [first, { ...first, listingKey: "NYSE:SPY" }];
+  const bodies = [];
+  const count = await postDetails(rows, new Map([["SPY.US", fixture]]), {
+    base: "http://localhost", token: "test", request: async (_url, options) => { bodies.push(JSON.parse(options.body)); return { ok: true }; }, log: () => {},
+  });
+  assert.equal(count, 2);
+  assert.deepEqual(bodies.map((body) => body.listingKey), rows.map((row) => row.listingKey));
 });

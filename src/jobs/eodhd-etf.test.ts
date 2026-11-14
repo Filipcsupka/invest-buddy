@@ -58,6 +58,7 @@ describe("runEtfJob", () => {
     const { db, writes } = fakeDb([row({ last_bar_date: "2026-10-26", last_dividend_date: "2025-12-19" })]);
     const { api, seen } = fakeApi({ "SPY.US": spy });
     const result = await runEtfJob(db, api, parseEtfJobArgs([], {}), "2026-11-06");
+    expect(ETF_DETAIL_FILTER).toBe("General,ETF_Data,Technicals");
     expect(seen).toEqual([`f:SPY.US:${ETF_DETAIL_FILTER}`, "d:SPY.US:2025-12-20", "e:SPY.US:2026-10-27"]);
     expect(result).toMatchObject({ processed: 1, holdings: 12, dividends: 3, bars: 3, calls: 12, failures: 0, deferred: 0 });
     expect(writes).toContain("INSERT INTO etf_fund_stats");

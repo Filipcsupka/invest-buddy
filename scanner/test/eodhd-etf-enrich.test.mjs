@@ -14,9 +14,11 @@ test("maps recorded ETF fields and validates the ingest payload", () => {
   assert.equal(row.terPct, 0.03);
   assert.equal(row.aumUsdM, 1800000);
   assert.equal(row.assetClass, "equity");
-  assert.equal(row.region, null);
+  assert.equal(row.region, "North America");
   assert.equal(row.holdingsCount, 3600);
   assert.equal(row.ucits, null);
+  assert.equal(row.ucitsHint, null);
+  assert.equal(row.terGap, null);
   assert.deepEqual(validateBatch({ items: [row] }, [us]), []);
 });
 
@@ -72,10 +74,73 @@ test("one invalid vendor identity does not discard valid rows", async () => {
 test("ambiguous or conflicting TER units remain incomplete", () => {
   const ambiguous = mapFundamentals(us, "VTI.US", { ...fixture, ETF_Data: { ...fixture.ETF_Data, NetExpenseRatio: "0.025" } });
   assert.equal(ambiguous.terPct, null);
+  assert.equal(ambiguous.terGap, "ter_ambiguous");
   const conflicting = mapFundamentals(us, "VTI.US", { ...fixture, ETF_Data: { ...fixture.ETF_Data, Ongoing_Charge: "0.2" } });
   assert.equal(conflicting.terPct, null);
   const tinyOngoing = mapFundamentals(us, "VTI.US", { ...fixture, ETF_Data: { ...fixture.ETF_Data, NetExpenseRatio: null, Ongoing_Charge: "0.003" } });
   assert.equal(tinyOngoing.terPct, null);
+});
+
+test("category, region and payout labels map; the UCITS hint is the catalog's, never confirmation", () => {
+  const eu = { listingKey: "IE00TEST0001", isin: "IE00TEST0001", name: "Sample UCITS ETF", exchange: "XETR", ucitsHint: true };
+  for (const [category, expected] of [["Global Equity", "equity"], ["Government Bond", "bond"], ["Gold Commodity", "commodity"], ["Balanced Multi Asset", "multi_asset"], ["Money Market", "money_market"], ["Other", "other"], ["Specialty", null]]) {
+    const mapped = mapFundamentals(eu, "TEST.XETRA", { General: { Category: category }, ETF_Data: { World_Regions: { Europe: { "Equity_%": 55 }, Asia: { "Equity_%": 45 } }, Dividend_Paying_Frequency: "Vierteljährlich" } });
+    assert.equal(mapped.assetClass, expected, category);
+    assert.equal(mapped.region, "global");
+    assert.equal(mapped.distribution, "dist");
+    assert.equal(mapped.ucits, null);
+    assert.equal(mapped.ucitsHint, true);
+  }
+  assert.equal(mapFundamentals(eu, "TEST.XETRA", { ETF_Data: { Dividend_Paying_Frequency: "Thesaurierend" } }).distribution, "acc");
+});
+
+test("the mapper echoes the catalog UCITS hint and never derives one from name or ISIN", () => {
+  const named = { listingKey: "IE00TEST0002", isin: "IE00TEST0002", name: "Sample UCITS ETF", exchange: "XETR" };
+  assert.equal(mapFundamentals(named, "TEST.XETRA", { ETF_Data: {} }).ucitsHint, null);
+  assert.equal(mapFundamentals({ ...named, ucitsHint: false }, "TEST.XETRA", { ETF_Data: {} }).ucitsHint, false);
+});
+
+test("an unmatched Category leaves the class to Asset_Allocation", () => {
+  const stock = { Asset_Allocation: { "Stock US": { "Net_Assets_%": 99 } } };
+  const bonds = { Asset_Allocation: { Bond: { "Net_Assets_%": 97 } } };
+  for (const category of ["Large Blend", "Foreign Large Blend", "Technology", "Real Estate", "NA"]) assert.equal(mapFundamentals(us, "VTI.US", { General: { Category: category }, ETF_Data: stock }).assetClass, "equity", category);
+  assert.equal(mapFundamentals(us, "VTI.US", { General: { Category: "Long Government" }, ETF_Data: bonds }).assetClass, "bond");
+  assert.equal(mapFundamentals(us, "VTI.US", { General: { Category: "Ultrashort" }, ETF_Data: bonds }).assetClass, "bond");
+});
+
+test("category words match whole words, allocation before equity, equity and bond before commodity or cash words", () => {
+  const cls = (category, allocation = {}) => mapFundamentals(us, "VTI.US", { General: { Category: category }, ETF_Data: { Asset_Allocation: allocation } }).assetClass;
+  assert.equal(cls("Cash Flow Leaders", { "Stock US": { "Net_Assets_%": 98 } }), "equity");
+  assert.equal(cls("Goldman Sachs Equity"), "equity");
+  assert.equal(cls("Equity Precious Metals"), "equity");
+  assert.equal(cls("Allocation--50% to 70% Equity"), "multi_asset");
+  assert.equal(cls("EUR Moderate Allocation - Global"), "multi_asset");
+  assert.equal(cls("Intermediate Core Bond"), "bond");
+  assert.equal(cls("Commodities Broad Basket"), "commodity");
+  assert.equal(cls("Precious Metals"), "commodity");
+  assert.equal(cls("EUR Money Market"), "money_market");
+  assert.equal(cls("Stockholm Small Caps"), null);
+});
+
+test("region uses Fund_% when a bond fund reports Equity_% 0", () => {
+  const regions = { "North America": { "Equity_%": 0, "Fund_%": 80 }, Europe: { "Equity_%": 0, "Fund_%": 20 } };
+  assert.equal(mapFundamentals(us, "VTI.US", { ETF_Data: { World_Regions: regions } }).region, "North America");
+  assert.equal(mapFundamentals(us, "VTI.US", { ETF_Data: { World_Regions: { Europe: { "Equity_%": 0, "Fund_%": 0 } } } }).region, null);
+});
+
+test("stored dividend history marks a distributing class only when the payout label is silent", () => {
+  const row = { ...us, dividendHistory: [{ value: "0.42" }] };
+  assert.equal(mapFundamentals(row, "VTI.US", { ETF_Data: { Dividend_Paying_Frequency: "NA" } }).distribution, "dist");
+  assert.equal(mapFundamentals(row, "VTI.US", { ETF_Data: { Dividend_Paying_Frequency: "Accumulating" } }).distribution, "acc");
+  assert.equal(mapFundamentals({ ...us, dividendHistory: [{ value: 0 }] }, "VTI.US", { ETF_Data: {} }).distribution, null);
+  // Fundamentals carry no dividend list; a Dividends key in the response is ignored.
+  assert.equal(mapFundamentals(us, "VTI.US", { ETF_Data: { Dividends: [{ amount: 1 }] } }).distribution, null);
+});
+
+test("the TER gap is set only when TER stays unknown", () => {
+  const resolved = mapFundamentals(us, "VTI.US", { ETF_Data: { NetExpenseRatio: 0.02, Ongoing_Charge: 2 } });
+  assert.equal(resolved.terPct, 2);
+  assert.equal(resolved.terGap, null);
 });
 
 test("a lone NetExpenseRatio above 0.1 is read as a percent (live 2026-11-06 samples)", () => {

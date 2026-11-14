@@ -33,10 +33,10 @@ describe("eodhd-etf against the migrated schema (PGlite)", () => {
   it("tracks catalog ETFs, stores detail, keeps market bars separate and reruns idempotently", async () => {
     const { db, pool } = await migratedPool();
     try {
-      await pool.query(`INSERT INTO etf_catalog (listing_key,isin,mnemonic,name,instrument_type,exchange,listing_region,trading_currency,enrichment_status,shortlist,shortlist_rank,first_seen,last_seen) VALUES
-        ('NYSEARCA:SPY','US78462F1030','SPY','SPDR S&P 500','ETF','NYSEARCA','US','USD','ok',true,1,CURRENT_DATE,CURRENT_DATE),
-        ('IE00B4L5Y983','IE00B4L5Y983','EUNL','iShares Core MSCI World','ETF','XETR','EU','EUR','ok',false,NULL,CURRENT_DATE,CURRENT_DATE),
-        ('DE0000000999','DE0000000999','PEND','Pending fund','ETF','XETR','EU','EUR','pending',false,NULL,CURRENT_DATE,CURRENT_DATE)`);
+      await pool.query(`INSERT INTO etf_catalog (listing_key,isin,mnemonic,name,instrument_type,exchange,listing_region,trading_currency,enrichment_status,shortlist,shortlist_rank,first_seen,last_seen,ucits_hint) VALUES
+        ('NYSEARCA:SPY','US78462F1030','SPY','SPDR S&P 500','ETF','NYSEARCA','US','USD','ok',true,1,CURRENT_DATE,CURRENT_DATE,NULL),
+        ('IE00B4L5Y983','IE00B4L5Y983','EUNL','iShares Core MSCI World','ETF','XETR','EU','EUR','ok',false,NULL,CURRENT_DATE,CURRENT_DATE,true),
+        ('DE0000000999','DE0000000999','PEND','Pending fund','ETF','XETR','EU','EUR','pending',false,NULL,CURRENT_DATE,CURRENT_DATE,NULL)`);
       await pool.query(`INSERT INTO symbols (vendor_symbol,code,exchange,name,isin,currency,type,first_seen,last_seen) VALUES
         ('IWDA.AS','IWDA','AS','iShares Core MSCI World','IE00B4L5Y983','EUR','ETF',CURRENT_DATE,CURRENT_DATE)`);
       const today = new Date().toISOString().slice(0, 10);
@@ -61,13 +61,18 @@ describe("eodhd-etf against the migrated schema (PGlite)", () => {
       expect((await pool.query("SELECT count(*)::int AS n FROM etf_fund_stats WHERE display_allowed")).rows[0]).toEqual({ n: 0 });
 
       const spyView = await etfDetailView("NYSEARCA:SPY", {}, pool);
-      expect(spyView.stats).toMatchObject({ vendorSymbol: "SPY.US", yieldPct: 1, holdingsCount: 501, holdingsListed: 12, totalAssetsCurrency: null });
+      expect(spyView.stats).toMatchObject({ vendorSymbol: "SPY.US", yieldPct: 1, holdingsCount: 501, holdingsListed: 12, totalAssetsCurrency: "USD" });
+      const captured = await pool.query("SELECT category,open_figi,index_name,total_assets_currency,payload->'General'->>'Category' AS raw_category FROM etf_fund_stats WHERE listing_key='NYSEARCA:SPY'");
+      expect(captured.rows[0]).toMatchObject({ category: "US Equity", open_figi: "BBG000BDTBL9", index_name: "S&P 500 Index", total_assets_currency: "USD", raw_category: "US Equity" });
       expect(spyView.holdings[0]).toMatchObject({ position: 1, symbol: "NVDA", weightPct: 7.8879 });
       expect(spyView.dividends).toHaveLength(3);
       expect(spyView.bars).toHaveLength(3);
       const iwdaView = await etfDetailView("IE00B4L5Y983", {}, pool);
       expect(iwdaView.stats).toMatchObject({ yieldPct: null, ongoingChargePct: 0.1974, holdingsListed: 10 });
       expect(iwdaView.exposure.region.length).toBeGreaterThan(0);
+      // Job rows carry the catalog's Xetra hint and no AUM currency sentinel, like enrich rows.
+      expect((await pool.query("SELECT ucits_hint,total_assets_currency,effective_duration FROM etf_fund_stats WHERE listing_key='IE00B4L5Y983'")).rows[0])
+        .toEqual({ ucits_hint: true, total_assets_currency: null, effective_duration: null });
       expect(iwdaView.dividends).toEqual([]);
       expect((await etfListStats(["NYSEARCA:SPY", "IE00B4L5Y983", "DE0000000999"], pool)).get("NYSEARCA:SPY")).toMatchObject({ yieldPct: 1, ret1yPct: 14.2171 });
 
