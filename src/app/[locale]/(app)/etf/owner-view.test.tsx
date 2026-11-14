@@ -62,7 +62,7 @@ it.each(["owner", "plus", "trial", "free", "anonymous"])("shows ETF score to %s 
   const list = renderToStaticMarkup(await ListPage({ params: Promise.resolve({ locale: "en" }), searchParams: Promise.resolve({}) }));
   const fund = renderToStaticMarkup(await FundPage({ params: Promise.resolve({ locale: "en", key: "DE0000000001" }) }));
   if (["free", "anonymous"].includes(viewer)) { expect(list).not.toContain("Meets 28 of 35"); expect(fund).not.toContain("Meets 28 of 35"); expect(scores).not.toHaveBeenCalled(); }
-  else { expect(list).toContain("80% · Rules met"); expect(fund).toContain("Meets 28 of 35"); expect(list + fund).not.toMatch(/Buy zone|Avoid|BUY_ZONE|Nákupná zóna|Vyhnúť sa/); }
+  else { expect(list).toContain("80% · Mostly met"); expect(fund).toContain("Meets 28 of 35"); expect(list + fund).not.toMatch(/Buy zone|Avoid|BUY_ZONE|Nákupná zóna|Vyhnúť sa/); }
 });
 
 it("distinguishes missing scores from computed unrated scores", async () => {

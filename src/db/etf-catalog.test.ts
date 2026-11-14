@@ -85,7 +85,7 @@ describe("ETF catalog read model", () => {
     expect(paged?.sql).toContain("ORDER BY CASE WHEN $13='rating'");
     expect(paged?.sql).toContain("round(s.earned::numeric / NULLIF(s.evidenced_max,0) * 100)");
     expect(paged?.sql).toContain("c.aum_usd_m END DESC NULLS LAST");
-    expect(paged?.sql).toContain("rules_version=$12 ORDER BY as_of DESC LIMIT 1");
+    expect(paged?.sql).toContain("rules_version IN ($12,'etf-v2-2026-11-12') ORDER BY (rules_version=$12) DESC,as_of DESC LIMIT 1");
   });
 
   it("normalizes untrusted page, sort and instrument filters", () => {
