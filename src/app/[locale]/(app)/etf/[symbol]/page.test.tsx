@@ -30,7 +30,7 @@ it("shows the stored score for the matching listing", async () => {
   sampleEtfPicks[0].exchange = "XETR";
   try {
     const html = renderToStaticMarkup(await Page({ params: Promise.resolve({ locale: "en", symbol: "VWRA" }) }));
-    expect(html).toContain("80% · Rules met");
+    expect(html).toContain("80% · Mostly met");
     expect(html).toContain("Meets 8 of 10 evidenced points");
     expect(html).toContain("Informational screening");
   } finally { sampleEtfPicks[0].exchange = originalExchange; }

@@ -14,7 +14,7 @@ describe("methodology page", () => {
     expect(html).toContain('id="etf-rating"');
     expect(html).toContain(title);
     expect(html).toContain(phrase);
-    expect(html).toContain("etf-v2-2026-11-12");
+    expect(html).toContain("etf-v3-2026-11-13");
     expect(html).toContain("The Journal of Wealth Management");
     expect(html).not.toContain("abstract_id=962461");
     expect(html).not.toContain("eodhd.com");
