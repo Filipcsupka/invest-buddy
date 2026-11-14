@@ -86,13 +86,16 @@ export async function assetDetail(assetClass: AssetClass, vendorSymbol: string, 
 
 export interface IndexComponent { code: string; exchange: string | null; name: string | null; sector: string | null; industry: string | null; weight: number | null }
 
-/** The latest stored constituent list for an index, heaviest first (at most 600 rows). */
+/** Constituent rows an index page renders, heaviest first; the page states the full count when it shows fewer. */
+export const INDEX_COMPONENTS_SHOWN = 600;
+
+/** The latest stored constituent list for an index, heaviest first (at most INDEX_COMPONENTS_SHOWN rows). */
 export async function indexComponents(vendorSymbol: string, db: Query | null = getPool()): Promise<{ asOf: string | null; rows: IndexComponent[] }> {
   if (!db) return { asOf: null, rows: [] };
   const result = await db.query<{ as_of: string; code: string; exchange: string | null; name: string | null; sector: string | null; industry: string | null; weight: string | null }>(
     `SELECT as_of::text AS as_of,code,exchange,name,sector,industry,weight FROM index_components
      WHERE index_symbol=$1 AND as_of=(SELECT max(as_of) FROM index_components WHERE index_symbol=$1)
-     ORDER BY weight DESC NULLS LAST,code LIMIT 600`, [vendorSymbol]);
+     ORDER BY weight DESC NULLS LAST,code LIMIT $2`, [vendorSymbol, INDEX_COMPONENTS_SHOWN]);
   return { asOf: result.rows[0]?.as_of ?? null, rows: result.rows.map((row) => ({ code: row.code, exchange: row.exchange, name: row.name, sector: row.sector, industry: row.industry, weight: num(row.weight) })) };
 }
 
@@ -290,40 +293,65 @@ type ComponentRow = { code: string; exchange: string | null; name: string | null
   bar_date: string | null; close: string | null; ma50: string | null; ma200: string | null; state: string | null; state_as_of: string | null };
 
 /**
+ * Constituent facts for several (index, date) requests in one statement. Each request reads the index's latest list on or
+ * before its date. Member bars and rule states are read once per (ticker, date), so a stock that sits in several indices
+ * (GSPC, NDX, IXIC, DJI) is not read again for each of them. Built per call: the score row rule follows the environment.
+ */
+const componentFactsSql = () => `WITH req AS (SELECT DISTINCT r.index_symbol,r.as_of FROM unnest($1::text[],$2::date[]) AS r(index_symbol,as_of)
+    ), c AS (
+      SELECT r.index_symbol,r.as_of AS req_as_of,c.as_of,c.code,c.exchange,c.name,c.sector,c.industry,c.weight FROM req r
+      JOIN index_components c ON c.index_symbol=r.index_symbol
+        AND c.as_of=(SELECT max(x.as_of) FROM index_components x WHERE x.index_symbol=r.index_symbol AND x.as_of<=r.as_of)
+    ), keys AS (${COMPONENT_KEYS}
+    ), m AS (SELECT DISTINCT ON (c.index_symbol,c.req_as_of,c.code) c.*,k.ticker FROM c LEFT JOIN keys k ON c.exchange IS NOT NULL AND k.key=c.code||'.'||c.exchange
+      ORDER BY c.index_symbol,c.req_as_of,c.code,k.rank,k.ticker
+    ), t AS (SELECT DISTINCT ticker,req_as_of FROM m WHERE ticker IS NOT NULL
+    ), f AS (SELECT t.ticker,t.req_as_of,b.bar_date,b.close,b.ma50,b.ma200,s.state,s.as_of AS state_as_of FROM t
+      LEFT JOIN LATERAL (SELECT max(x.bar_date)::text AS bar_date,(array_agg(x.close ORDER BY x.bar_date DESC))[1] AS close,
+          CASE WHEN count(*) FILTER (WHERE x.rn<=50)=50 THEN avg(x.close) FILTER (WHERE x.rn<=50) END AS ma50,
+          CASE WHEN count(*)=200 THEN avg(x.close) END AS ma200
+        FROM (SELECT d.bar_date,d.close,row_number() OVER (ORDER BY d.bar_date DESC) AS rn FROM daily_bars d
+          WHERE d.ticker=t.ticker AND d.bar_date<=t.req_as_of ORDER BY d.bar_date DESC LIMIT 200) x HAVING count(*)>0) b ON true
+      LEFT JOIN LATERAL (SELECT r.state,r.as_of::text AS as_of FROM score_results r
+        WHERE r.ticker=t.ticker AND r.as_of<=t.req_as_of AND ${pageScoreRow("r")}
+          AND EXISTS (SELECT 1 FROM universe_membership um WHERE um.ticker=r.ticker AND ${scoringMember("um")}
+            AND um.valid_from<=r.as_of AND (um.valid_to IS NULL OR um.valid_to>r.as_of))
+        ORDER BY r.as_of DESC LIMIT 1) s ON true)
+    SELECT m.index_symbol,m.req_as_of::text AS req_as_of,m.as_of::text AS list_as_of,m.code,m.exchange,m.name,m.sector,m.industry,m.weight,m.ticker,
+      f.bar_date,f.close,f.ma50,f.ma200,f.state,f.state_as_of
+    FROM m LEFT JOIN f ON f.ticker=m.ticker AND f.req_as_of=m.req_as_of
+    ORDER BY m.index_symbol,m.req_as_of,m.weight DESC NULLS LAST,m.code`;
+
+export type ComponentFactsList = { asOf: string | null; rows: ComponentFacts[] };
+const factsKey = (symbol: string, asOf: string) => `${symbol}|${asOf}`;
+
+/** Constituent facts for many (index, date) requests in one query, keyed `symbol|asOf`. Requests without a list are absent. */
+export async function indexComponentFactsBatch(requests: readonly { symbol: string; asOf: string }[], db: Query | null = getPool()): Promise<Map<string, ComponentFactsList>> {
+  const out = new Map<string, ComponentFactsList>();
+  if (!db || !requests.length) return out;
+  const result = await db.query<ComponentRow & { index_symbol: string; req_as_of: string; list_as_of: string }>(componentFactsSql(),
+    [requests.map((r) => r.symbol), requests.map((r) => r.asOf)]);
+  for (const row of result.rows) {
+    const key = factsKey(row.index_symbol, row.req_as_of);
+    let list = out.get(key);
+    if (!list) out.set(key, list = { asOf: row.list_as_of, rows: [] });
+    list.rows.push({
+      code: row.code, exchange: row.exchange, vendorSymbol: row.exchange ? `${row.code}.${row.exchange}` : null, ticker: row.ticker,
+      name: row.name, sector: row.sector, industry: row.industry, weight: num(row.weight),
+      barDate: row.bar_date, close: num(row.close), ma50: num(row.ma50), ma200: num(row.ma200), state: row.state, stateAsOf: row.state_as_of,
+    });
+  }
+  return out;
+}
+
+/**
  * The latest constituent list of an index joined to our instruments, with each matched instrument's latest bar on or
  * before `asOf`, its MA50 / MA200 over the stored closes, and its latest published rule state (the same rows the score
  * pages read: pageScoreRow, current scored membership).
  */
-export async function indexComponentFacts(vendorSymbol: string, asOf: string, db: Query | null = getPool()): Promise<{ asOf: string | null; rows: ComponentFacts[] }> {
+export async function indexComponentFacts(vendorSymbol: string, asOf: string, db: Query | null = getPool()): Promise<ComponentFactsList> {
   if (!db) return { asOf: null, rows: [] };
-  const result = await db.query<ComponentRow & { list_as_of: string }>(`WITH c AS (
-      SELECT c.as_of,c.code,c.exchange,c.name,c.sector,c.industry,c.weight FROM index_components c
-      WHERE c.index_symbol=$1 AND c.as_of=(SELECT max(as_of) FROM index_components WHERE index_symbol=$1 AND as_of<=$2::date)
-    ), keys AS (${COMPONENT_KEYS}
-    ), m AS (SELECT DISTINCT ON (c.code) c.*,k.ticker FROM c LEFT JOIN keys k ON c.exchange IS NOT NULL AND k.key=c.code||'.'||c.exchange
-      ORDER BY c.code,k.rank,k.ticker)
-    SELECT m.as_of::text AS list_as_of,m.code,m.exchange,m.name,m.sector,m.industry,m.weight,m.ticker,
-      b.bar_date,b.close,b.ma50,b.ma200,s.state,s.as_of AS state_as_of
-    FROM m
-    LEFT JOIN LATERAL (SELECT max(t.bar_date)::text AS bar_date,(array_agg(t.close ORDER BY t.bar_date DESC))[1] AS close,
-        CASE WHEN count(*) FILTER (WHERE t.rn<=50)=50 THEN avg(t.close) FILTER (WHERE t.rn<=50) END AS ma50,
-        CASE WHEN count(*)=200 THEN avg(t.close) END AS ma200
-      FROM (SELECT d.bar_date,d.close,row_number() OVER (ORDER BY d.bar_date DESC) AS rn FROM daily_bars d
-        WHERE d.ticker=m.ticker AND d.bar_date<=$2::date ORDER BY d.bar_date DESC LIMIT 200) t HAVING count(*)>0) b ON m.ticker IS NOT NULL
-    LEFT JOIN LATERAL (SELECT r.state,r.as_of::text AS as_of FROM score_results r
-      WHERE r.ticker=m.ticker AND r.as_of<=$2::date AND ${pageScoreRow("r")}
-        AND EXISTS (SELECT 1 FROM universe_membership um WHERE um.ticker=r.ticker AND ${scoringMember("um")}
-          AND um.valid_from<=r.as_of AND (um.valid_to IS NULL OR um.valid_to>r.as_of))
-      ORDER BY r.as_of DESC LIMIT 1) s ON m.ticker IS NOT NULL
-    ORDER BY m.weight DESC NULLS LAST,m.code`, [vendorSymbol, asOf]);
-  return {
-    asOf: result.rows[0]?.list_as_of ?? null,
-    rows: result.rows.map((row) => ({
-      code: row.code, exchange: row.exchange, vendorSymbol: row.exchange ? `${row.code}.${row.exchange}` : null, ticker: row.ticker,
-      name: row.name, sector: row.sector, industry: row.industry, weight: num(row.weight),
-      barDate: row.bar_date, close: num(row.close), ma50: num(row.ma50), ma200: num(row.ma200), state: row.state, stateAsOf: row.state_as_of,
-    })),
-  };
+  return (await indexComponentFactsBatch([{ symbol: vendorSymbol, asOf }], db)).get(factsKey(vendorSymbol, asOf)) ?? { asOf: null, rows: [] };
 }
 
 /**
@@ -347,7 +375,15 @@ export async function componentGrowthFacts(tickers: string[], asOf: string, db: 
   return rows.map((row) => ({ ticker: row.ticker, source: row.source_id, concept: row.concept, period: row.period, periodEnd: row.period_end, value: Number(row.value) }));
 }
 
-export interface IndexRatingReadModel { snapshot: IndexSnapshot | null; analytics: IndexAnalytics; inputs: IndexRatingInputs | null; bars: IndexBar[] }
+export interface IndexRatingReadModel {
+  snapshot: IndexSnapshot | null; analytics: IndexAnalytics; inputs: IndexRatingInputs | null; bars: IndexBar[];
+  /** The whole constituent list the analytics used, heaviest first, with member facts and rule states. Not display-gated. */
+  components: ComponentFactsList;
+}
+
+/** The rating date: the latest bar, or a newer weekly list (a list can arrive on a weekend after Friday's bar). */
+const ratingDate = (barDate: string | null, componentDate: string | null) =>
+  [barDate, componentDate].filter((date): date is string => date !== null).sort().at(-1) ?? null;
 
 /**
  * Everything the index rating and the index pages need for one tracked index, or null when it is not a tracked index.
@@ -360,11 +396,10 @@ export async function indexRatingReadModel(vendorSymbol: string, db: Query | nul
   if (!tracked) return null;
   const bars = await indexBars(vendorSymbol, db);
   const volatility = isVolatilityIndex(vendorSymbol);
-  // A weekly list can arrive on a weekend after Friday's latest bar. Keep that list and date the rating on the newer day.
   const componentDate = volatility ? null : (await db.query<{ as_of: string | null }>(
     "SELECT max(as_of)::text AS as_of FROM index_components WHERE index_symbol=$1", [vendorSymbol])).rows[0]?.as_of ?? null;
   const barDate = bars.at(-1)?.date ?? null;
-  const asOf = [barDate, componentDate].filter((date): date is string => date !== null).sort().at(-1) ?? null;
+  const asOf = ratingDate(barDate, componentDate);
   const list = asOf && !volatility ? await indexComponentFacts(vendorSymbol, asOf, db) : { asOf: null, rows: [] };
   const tickers = [...new Set(list.rows.flatMap((row) => row.ticker ? [row.ticker] : []))];
   const [growthFacts, peers, snapshot] = await Promise.all([
@@ -373,5 +408,55 @@ export async function indexRatingReadModel(vendorSymbol: string, db: Query | nul
     latestIndexSnapshot(vendorSymbol, db),
   ]);
   const analytics = indexAnalytics({ symbol: vendorSymbol, bars, componentsAsOf: list.asOf, components: list.rows, growthFacts, peers });
-  return { snapshot, analytics, inputs: barDate ? toRatingInputs(analytics, bars) : null, bars };
+  return { snapshot, analytics, inputs: barDate ? toRatingInputs(analytics, bars) : null, bars, components: list };
+}
+
+export interface IndexListModel { symbol: string; country: string | null; analytics: IndexAnalytics; inputs: IndexRatingInputs | null }
+
+type ListBaseRow = { vendor_symbol: string; dates: string[] | null; closes: (string | number)[] | null; highs: (string | number | null)[] | null;
+  lows: (string | number | null)[] | null; component_date: string | null; country: string | null };
+
+/**
+ * The rating read model for many indices at once, for the index list. It gives the same analytics and inputs as
+ * indexRatingReadModel, without relative strength (the list does not show it), in a fixed number of set-based queries:
+ * one for bars, list dates and countries, one for every constituent list with its member facts, and one growth query per
+ * distinct rating date (usually one or two). Untracked symbols are left out; the order follows `symbols`.
+ */
+export async function indexListModels(symbols: readonly string[], db: Query | null = getPool()): Promise<IndexListModel[]> {
+  if (!db || !symbols.length) return [];
+  const base = (await db.query<ListBaseRow>(`SELECT a.vendor_symbol,b.dates,b.closes,b.highs,b.lows,c.component_date,s.country FROM tracked_assets a
+    LEFT JOIN LATERAL (SELECT array_agg(x.bar_date::text ORDER BY x.bar_date) AS dates,array_agg(x.close ORDER BY x.bar_date) AS closes,
+        array_agg(x.high ORDER BY x.bar_date) AS highs,array_agg(x.low ORDER BY x.bar_date) AS lows FROM asset_bars x
+      WHERE x.vendor_symbol=a.vendor_symbol
+        AND x.bar_date > (SELECT max(bar_date) FROM asset_bars WHERE vendor_symbol=a.vendor_symbol) - make_interval(years => $2::int)) b ON true
+    LEFT JOIN LATERAL (SELECT max(as_of)::text AS component_date FROM index_components WHERE index_symbol=a.vendor_symbol) c ON true
+    LEFT JOIN LATERAL (SELECT country FROM index_snapshots WHERE index_symbol=a.vendor_symbol ORDER BY as_of DESC LIMIT 1) s ON true
+    WHERE a.asset_class='index' AND a.vendor_symbol=ANY($1::text[])`, [symbols, INDEX_RATING_YEARS])).rows;
+  const items = base.map((row) => {
+    const bars = (row.dates ?? []).map((date, i) => mapIndexBar({ bar_date: date, close: String(row.closes?.[i]),
+      high: row.highs?.[i] == null ? null : String(row.highs[i]), low: row.lows?.[i] == null ? null : String(row.lows[i]) }));
+    const volatility = isVolatilityIndex(row.vendor_symbol);
+    const asOf = ratingDate(bars.at(-1)?.date ?? null, volatility ? null : row.component_date);
+    return { symbol: row.vendor_symbol, country: row.country, bars, volatility, asOf };
+  });
+  const lists = await indexComponentFactsBatch(items.flatMap((item) => item.asOf && !item.volatility ? [{ symbol: item.symbol, asOf: item.asOf }] : []), db);
+  const listOf = (item: (typeof items)[number]) => item.asOf && !item.volatility ? lists.get(factsKey(item.symbol, item.asOf)) ?? { asOf: null, rows: [] } : { asOf: null, rows: [] };
+  const tickersByDate = new Map<string, Set<string>>();
+  for (const item of items) {
+    if (!item.asOf) continue;
+    const set = tickersByDate.get(item.asOf) ?? new Set<string>();
+    for (const row of listOf(item).rows) if (row.ticker) set.add(row.ticker);
+    tickersByDate.set(item.asOf, set);
+  }
+  // One growth query per rating date, run in turn so the list never holds more than one pool connection.
+  const growthByDate = new Map<string, GrowthFact[]>();
+  for (const [asOf, tickers] of tickersByDate) growthByDate.set(asOf, await componentGrowthFacts([...tickers], asOf, db));
+  const bySymbol = new Map(items.map((item) => {
+    const list = listOf(item);
+    const tickers = new Set(list.rows.flatMap((row) => row.ticker ? [row.ticker] : []));
+    const growthFacts = item.asOf ? (growthByDate.get(item.asOf) ?? []).filter((fact) => tickers.has(fact.ticker)) : [];
+    const analytics = indexAnalytics({ symbol: item.symbol, bars: item.bars, componentsAsOf: list.asOf, components: list.rows, growthFacts });
+    return [item.symbol, { symbol: item.symbol, country: item.country, analytics, inputs: item.bars.length ? toRatingInputs(analytics, item.bars) : null }] as const;
+  }));
+  return symbols.flatMap((symbol) => bySymbol.get(symbol) ?? []);
 }

@@ -7,14 +7,14 @@ import { formatNumber } from "@/i18n";
 import { indexMessages } from "@/i18n/index-messages";
 import type { AssetSummary } from "@/db/markets";
 import type { IndexPriceAnalytics } from "@/markets/index-analytics";
-import type { IndexRatingResult, VolatilityRegimeLabel } from "@/markets/index-rating";
+import type { IndexListRating } from "@/data/index-list";
 import { day, level, signedRatio } from "./format";
 import s from "./index-pages.module.css";
 
 export type IndexListRow = {
   summary: AssetSummary;
   price: IndexPriceAnalytics | null;
-  rating: (Pick<IndexRatingResult, "kind" | "band" | "score" | "basisText" | "coveragePct" | "asOf"> & { regime: VolatilityRegimeLabel | null }) | null;
+  rating: IndexListRating | null;
   region: "americas" | "europe" | "asiaPacific" | "other";
 };
 

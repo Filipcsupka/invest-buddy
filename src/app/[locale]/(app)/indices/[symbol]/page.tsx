@@ -3,7 +3,7 @@ import { pageMetadata } from "@/i18n/metadata";
 import { notFound } from "next/navigation";
 import { withPageLog } from "@/app/page-log";
 import { assertViewable } from "@/markets/gate";
-import { assetDetail, indexComponentFacts, indexComponents, indexRatingReadModel, vendorSymbolFor } from "@/db/markets";
+import { assetDetail, INDEX_COMPONENTS_SHOWN, indexRatingReadModel, vendorSymbolFor } from "@/db/markets";
 import { rateIndex } from "@/markets/index-rating";
 import { indexMessages } from "@/i18n/index-messages";
 import { canSeeStockData, getViewer } from "@/viewer/get-viewer";
@@ -27,12 +27,11 @@ async function IndexPage({ params }: Props) {
   if (!detail || !model) notFound();
   const rating = model.inputs ? rateIndex(model.inputs) : null;
   const stockStatesVisible = canSeeStockData(viewer);
-  const vix = model.analytics.isVolatilityIndex;
-  const components = vix ? { asOf: null, rows: [] } : stockStatesVisible && model.analytics.asOf
-    ? await indexComponentFacts(vendor, model.analytics.asOf)
-    : await indexComponents(vendor);
-  return <IndexDetail locale={locale} summary={detail.summary} analytics={model.analytics} rating={rating} bars={model.bars}
-    components={components.rows.map((row) => ({ ...row, vendorSymbol: row.exchange ? `${row.code}.${row.exchange}` : null, ticker: "ticker" in row && typeof row.ticker === "string" ? row.ticker : null }))}
-    componentsAsOf={components.asOf} stockStatesVisible={stockStatesVisible} />;
+  // The read model already holds the whole constituent list with member facts: one read, one cap rule for every viewer.
+  const list = model.analytics.isVolatilityIndex ? { asOf: null, rows: [] } : model.components;
+  const components = list.rows.slice(0, INDEX_COMPONENTS_SHOWN)
+    .map((row) => stockStatesVisible ? row : { ...row, state: null, stateAsOf: null, barDate: null, close: null, ma50: null, ma200: null });
+  return <IndexDetail locale={locale} summary={detail.summary} analytics={stockStatesVisible ? model.analytics : { ...model.analytics, scores: null }} rating={rating} bars={model.bars}
+    components={components} componentsTotal={list.rows.length} componentsAsOf={list.asOf} stockStatesVisible={stockStatesVisible} />;
 }
 export default withPageLog("/indices/[symbol]", IndexPage);
