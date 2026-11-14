@@ -178,6 +178,7 @@ test("runner stops at the EODHD call cap and posts the completed prefix", async 
   const rows = ["AAA", "BBB", "CCC"].map((symbol) => ({ ...us, listingKey: `NYSEARCA:${symbol}`, symbol }));
   const posts = []; let vendorCalls = 0;
   const request = async (url, options = {}) => {
+    if (String(url).endsWith("/calls")) return options.method === "POST" ? { ok: true } : { ok: true, json: async () => ({ accountCallsToday: 0, enrichCallsToday: 0, accountBudget: 70000 }) };
     if (options.method === "POST") { posts.push(JSON.parse(options.body)); return { ok: true }; }
     if (String(url).includes("/pending?")) return { ok: true, json: async () => ({ items: rows }) };
     vendorCalls++; return { ok: true, json: async () => fixture };
