@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ingestEnrichment, type Enrichment } from "./etf-catalog-ingest";
 
 const item: Enrichment = { listingKey: "NYSEARCA:SPY", isin: "US78462F1030", issuer: "State Street", assetClass: "equity", region: "US", theme: null, trackedIndex: "S&P 500", terPct: 0.09, aumUsdM: 600000, domicile: "US", replication: "physical", distribution: "dist", ucits: false, sourceUrl: "https://example.com" };
@@ -22,7 +22,16 @@ describe("catalog enrichment status", () => {
   it("normalizes legacy labels before writing", async () => {
     const regions: unknown[] = [];
     const db = { connect: async () => ({ query: async (sql: string, args: unknown[] = []) => { if (sql.includes("UPDATE etf_catalog SET issuer")) regions.push(args[3]); return { rowCount: 1 }; }, release() {} }) };
-    await ingestEnrichment(db as never, [{ ...item, region: "global" }, { ...item, region: "United States" }, { ...item, region: "Global ex United States" }]);
+    await ingestEnrichment(db as never, [{ ...item, region: "GLOBAL" }, { ...item, region: "united states" }, { ...item, region: "global ex united states" }]);
     expect(regions).toEqual(["Global", "North America", "Global ex US"]);
   });
+});
+
+it("warns about non-empty unmapped regions during ingestion", async () => {
+  const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+  const db = { connect: async () => ({ query: async () => ({ rowCount: 1 }), release() {} }) };
+  try {
+    await ingestEnrichment(db as never, [{ ...item, region: "Unknown place" }, { ...item, region: " " }, { ...item, region: null }]);
+    expect(warning).toHaveBeenCalledExactlyOnceWith("ETF region not mapped: Unknown place");
+  } finally { warning.mockRestore(); }
 });

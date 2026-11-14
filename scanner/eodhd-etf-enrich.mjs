@@ -15,11 +15,13 @@ const REGION_ALIASES = new Map([
   ["Developed markets ex-North America", "Global ex US"], ["Emerging markets", "Emerging Markets"],
 ]);
 const CANONICAL_REGIONS = new Set(["North America", "Europe Developed", "Europe Emerging", "Eurozone", "United Kingdom", "Japan", "Asia Developed", "Asia Emerging", "Australasia", "Latin America", "Africa/Middle East", "Global", "Global ex US", "Emerging Markets"]);
+const REGION_LOOKUP = new Map([...REGION_ALIASES, ...[...CANONICAL_REGIONS].map((region) => [region, region])].map(([alias, region]) => [alias.toLowerCase(), region]));
 export function normalizeEtfRegion(value) {
   const region = text(value);
   if (!region) return null;
-  const canonical = REGION_ALIASES.get(region) ?? region;
-  return CANONICAL_REGIONS.has(canonical) ? canonical : null;
+  const canonical = REGION_LOOKUP.get(region.toLowerCase());
+  if (!canonical) console.warn(`ETF region not mapped: ${region}`);
+  return canonical ?? null;
 }
 /** Equity_% ranks equity funds; a bond or other fund reports Equity_% 0 and its weights in Fund_%. */
 const regionFrom = (regions) => {

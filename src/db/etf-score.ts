@@ -69,11 +69,7 @@ export async function loadEtfPeerPercentiles(asOf: string, db: Query): Promise<M
   }
   return out;
 }
-export const benchmarkSymbol = (c: RecordRow): string | null => {
-  const exposure = `${str(c.region) ?? ""} ${str(c.score_category) ?? str(c.category) ?? ""}`.toLowerCase();
-  if (/\b(?:ex[ -]?(?:united states|north america|usa|us)|excluding (?:united states|north america)|international|emerging)\b/.test(exposure)) return null;
-  if (/\b(?:all[ -]?world|acwi)\b/.test(exposure)) return "ACWI.US";
-  if (/\b(?:world|global)\b/.test(exposure)) return "URTH.US";
+const regionalBenchmark = (exposure: string): string | null => {
   if (/\b(?:japan|japanese)\b/.test(exposure)) return "N225.INDX";
   if (/\bhong[ -]?kong\b/.test(exposure)) return "HSI.INDX";
   if (/\b(?:switzerland|swiss)\b/.test(exposure)) return "SSMI.INDX";
@@ -81,13 +77,31 @@ export const benchmarkSymbol = (c: RecordRow): string | null => {
   if (/\b(?:france|french)\b/.test(exposure)) return "FCHI.INDX";
   if (/\b(?:netherlands|dutch)\b/.test(exposure)) return "AEX.INDX";
   if (/\bspain\b/.test(exposure)) return "IBEX.INDX";
-  if (/\b(?:europe|european|eu)\b/.test(exposure)) return "STOXX50E.INDX";
+  if (/\b(?:europe|european|eu|eurozone)\b/.test(exposure)) return "STOXX50E.INDX";
   if (/\b(?:united states|usa|us|s&p 500|north america)\b/.test(exposure)) return "GSPC.INDX";
   return null;
 };
+export const benchmarkSymbol = (c: RecordRow): string | null => {
+  const category = str(c.score_category) ?? str(c.category) ?? "";
+  const exposure = `${str(c.region) ?? ""} ${category} ${str(c.tracked_index) ?? ""} ${str(c.index_name) ?? ""}`.toLowerCase();
+  if (/\b(?:ex[ -]?(?:united states|north america|u\.?s\.?a?)|excluding (?:united states|north america|usa|us)|non[ -]?u\.?s\.?a?|foreign|eafe|international|emerging)\b/.test(exposure)) return null;
+  const currency = str(c.trading_currency)?.trim().toUpperCase();
+  let proxy: string | null;
+  if (/\b(?:all[ -]?world|acwi|all country world|global all cap|ftse all)\b/.test(exposure)) {
+    proxy = currency === "USD" ? "ACWI.US" : currency === "EUR" ? "IUSQ.XETRA" : null;
+  } else {
+    // A specific category is stronger evidence than a broad Global region.
+    proxy = regionalBenchmark(category.toLowerCase());
+    if (!proxy && /\b(?:world|global)\b/.test(exposure)) proxy = currency === "USD" ? "URTH.US" : currency === "EUR" ? "EUNL.XETRA" : null;
+    else if (!proxy) proxy = regionalBenchmark(exposure);
+  }
+  const ownSymbol = str(c.vendor_symbol)?.toUpperCase();
+  if (proxy && proxy === ownSymbol) proxy = regionalBenchmark(str(c.region)?.toLowerCase() ?? "");
+  return proxy === ownSymbol ? null : proxy;
+};
 const byKey = (rows: RecordRow[], field = "listing_key") => { const map = new Map<string, RecordRow[]>(); for (const row of rows) { const key = str(row[field]); if (!key) continue; const values = map.get(key) ?? []; values.push(row); map.set(key, values); } return map; };
 export async function loadEtfBenchmarkReturns(asOf: string, db: Query): Promise<Map<string, { return6m: number | null; barDate: string | null }>> {
-  const result = await db.query<RecordRow>(`SELECT b.vendor_symbol,b.bar_date::text AS date,b.close FROM unnest($1::text[]) sym(vendor_symbol) CROSS JOIN LATERAL (SELECT * FROM asset_bars WHERE vendor_symbol=sym.vendor_symbol AND bar_date<=$2::date ORDER BY bar_date DESC LIMIT 130) b`, [["GSPC.INDX", "STOXX50E.INDX", "GDAXI.INDX", "FCHI.INDX", "AEX.INDX", "IBEX.INDX", "SSMI.INDX", "N225.INDX", "HSI.INDX", "ACWI.US", "URTH.US"], asOf]);
+  const result = await db.query<RecordRow>(`SELECT b.vendor_symbol,b.bar_date::text AS date,b.close FROM unnest($1::text[]) sym(vendor_symbol) CROSS JOIN LATERAL (SELECT * FROM asset_bars WHERE vendor_symbol=sym.vendor_symbol AND bar_date<=$2::date ORDER BY bar_date DESC LIMIT 130) b`, [["GSPC.INDX", "STOXX50E.INDX", "GDAXI.INDX", "FCHI.INDX", "AEX.INDX", "IBEX.INDX", "SSMI.INDX", "N225.INDX", "HSI.INDX", "ACWI.US", "URTH.US", "IUSQ.XETRA", "EUNL.XETRA"], asOf]);
   const grouped = byKey(result.rows, "vendor_symbol");
   return new Map([...grouped].map(([symbol, rows]) => { const facts = etfBarFacts(rows.map((r) => ({ date: day(r.date), close: n(r.close) ?? 0, volume: null, currency: null })), null); return [symbol, { return6m: facts.return6m, barDate: facts.barDate }]; }));
 }
@@ -130,7 +144,8 @@ export async function readEtfScoreFactsBatch(keys: readonly string[], asOf: stri
     const completeCountries = h.length > 0 && h.every((r) => str(r.country) && n(r.weight_pct) !== null) && h.reduce((sum, r) => sum + n(r.weight_pct)!, 0) >= 99.99;
     const regions = e.filter((r) => r.kind === "region").map((r) => n(r.weight_pct)).filter((x): x is number => x !== null);
     const sectors = e.filter((r) => r.kind === "sector").map((r) => n(r.weight_pct)).filter((x): x is number => x !== null);
-    const benchmarkKey = benchmarkSymbol({ ...c, score_category: str(s?.category) ?? str(c.score_category) });
+    const benchmarkCurrency = freshBars.filter((b) => b.currency).sort((a, b) => a.date.localeCompare(b.date)).at(-1)?.currency ?? s?.trading_currency ?? c.trading_currency;
+    const benchmarkKey = benchmarkSymbol({ ...c, score_category: str(s?.category) ?? str(c.score_category), index_name: s?.index_name, trading_currency: benchmarkCurrency });
     const benchmark = benchmarkKey ? benchmarks.get(benchmarkKey) : undefined;
     const benchmarkFresh = benchmark?.barDate && lastBar && Math.abs(Date.parse(lastBar) - Date.parse(benchmark.barDate)) <= 7 * 86_400_000;
     const barFacts = etfBarFacts(freshBars, validBarFx);

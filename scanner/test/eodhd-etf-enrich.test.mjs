@@ -206,3 +206,14 @@ test("runner dry run needs no vendor key and makes no vendor or ingest write", a
   assert.equal(urls.length, 1);
   assert.match(urls[0], /pending\?limit=20$/);
 });
+
+test("region lookup ignores case and warns for an unmapped vendor region", (t) => {
+  assert.equal(normalizeEtfRegion("north america"), "North America");
+  assert.equal(normalizeEtfRegion("GLOBAL EX US"), "Global ex US");
+  assert.equal(normalizeEtfRegion("developed europe"), "Europe Developed");
+  const warn = t.mock.method(console, "warn", () => {});
+  assert.equal(mapFundamentals(us, "VTI.US", { ETF_Data: { World_Regions: { Atlantis: { "Equity_%": 80 } } } }).region, null);
+  assert.equal(normalizeEtfRegion(" "), null);
+  assert.equal(normalizeEtfRegion(null), null);
+  assert.deepEqual(warn.mock.calls.map((call) => call.arguments), [["ETF region not mapped: Atlantis"]]);
+});
