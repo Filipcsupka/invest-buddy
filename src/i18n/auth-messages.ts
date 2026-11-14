@@ -177,7 +177,7 @@ const sk: AuthMessages = {
     busy: "Nastavujeme heslo",
     badCodeTitle: "Kód nefungoval",
     badCodeBody: "Nepatrí k tejto e-mailovej adrese alebo už bol použitý. Skúste iný kód zo zoznamu.",
-    doneTitle: "Žiadosť o zmenu prijatá",
+    doneTitle: "Žiadosť o zmenu sme prijali",
     doneBody: "Ak e-mail a kód sedeli, heslo je zmenené a kód je použitý. Prihláste sa novým heslom; ak to nejde, skontrolujte e-mail a skúste iný kód.",
     doneRemaining: "Zostávajúce nepoužité kódy: {n}.",
     signIn: "Prejsť na prihlásenie",

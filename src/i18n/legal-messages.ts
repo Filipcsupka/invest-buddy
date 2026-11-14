@@ -126,7 +126,7 @@ const sk: LegalMessages = {
   },
   privacy: {
     title: "Zásady ochrany súkromia",
-    lede: "Táto stránka hovorí, aké osobné údaje web spracúva, prečo, ako dlho a ako nás zastihnete.",
+    lede: "Na tejto stránke sa dozviete, aké osobné údaje web spracúva, prečo, ako dlho a ako nás kontaktovať.",
     s1Title: "Kto zodpovedá za údaje",
     s1: "O tom, prečo a ako sa osobné údaje na tomto webe spracúvajú, rozhoduje prevádzkovateľ uvedený nižšie.",
     s2Title: "Záznamy servera",
