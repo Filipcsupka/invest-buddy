@@ -323,17 +323,18 @@ const STATS_COLUMNS = `as_of,vendor_symbol,origin,isin,trading_currency,total_as
   ongoing_charge_pct,net_expense_ratio_pct,ret_ytd_pct,ret_1y_pct,ret_3y_pct,ret_5y_pct,ret_10y_pct,vol_1y_pct,vol_3y_pct,sharpe_3y,holdings_count,holdings_listed,fetched_at`;
 const emptyExposure = (): EtfDetailView["exposure"] => ({ region: [], sector: [], mcap: [], asset: [], credit: [] });
 
-/** Bounded reads for one listing: latest stats, up to `holdingsLimit` holdings, the exposure snapshot, 40 dividends and `barDays` bars. */
-export async function etfDetailView(listingKey: string, options: { holdingsLimit?: number; barDays?: number } = {}, db: Query | null = getPool()): Promise<EtfDetailView> {
+/** Bounded reads for one listing. Tabs can omit datasets they do not display. */
+export async function etfDetailView(listingKey: string, options: { holdingsLimit?: number; holdingsOffset?: number; barDays?: number; stats?: boolean; holdings?: boolean; exposure?: boolean; dividends?: boolean; bars?: boolean } = {}, db: Query | null = getPool()): Promise<EtfDetailView> {
   const view: EtfDetailView = { stats: null, vendorSymbol: null, currency: null, holdings: [], exposure: emptyExposure(), dividends: [], bars: [] };
   if (!db) return view;
   const holdingsLimit = Math.min(Math.max(options.holdingsLimit ?? 100, 1), MAX_STORED_HOLDINGS);
   const barDays = Math.min(Math.max(options.barDays ?? 400, 1), 2000);
+  const wantsBars = options.bars !== false, wantsDividends = options.dividends !== false;
   const [stats, tracked, holdingsRows, exposureRows] = await Promise.all([
-    db.query(`SELECT ${STATS_COLUMNS} FROM etf_fund_stats WHERE listing_key=$1 ORDER BY as_of DESC LIMIT 1`, [listingKey]),
-    db.query<{ vendor_symbol: string; currency: string | null }>(`SELECT t.vendor_symbol, a.currency FROM etf_tracked t JOIN tracked_assets a USING (vendor_symbol) WHERE t.listing_key=$1`, [listingKey]),
-    db.query(`SELECT position,holding_symbol,holding_exchange,name,weight_pct,sector,country FROM etf_holdings WHERE listing_key=$1 ORDER BY position LIMIT $2`, [listingKey, holdingsLimit]),
-    db.query(`SELECT kind,label,weight_pct FROM etf_exposure WHERE listing_key=$1 ORDER BY kind, weight_pct DESC, label LIMIT 200`, [listingKey]),
+    options.stats !== false ? db.query(`SELECT ${STATS_COLUMNS} FROM etf_fund_stats WHERE listing_key=$1 ORDER BY as_of DESC LIMIT 1`, [listingKey]) : Promise.resolve({ rows: [] }),
+    wantsBars || wantsDividends ? db.query<{ vendor_symbol: string; currency: string | null }>(`SELECT t.vendor_symbol, a.currency FROM etf_tracked t JOIN tracked_assets a USING (vendor_symbol) WHERE t.listing_key=$1`, [listingKey]) : Promise.resolve({ rows: [] }),
+    options.holdings !== false ? db.query(`SELECT position,holding_symbol,holding_exchange,name,weight_pct,sector,country FROM etf_holdings WHERE listing_key=$1 ORDER BY position LIMIT $2 OFFSET $3`, [listingKey, holdingsLimit, Math.max(0, options.holdingsOffset ?? 0)]) : Promise.resolve({ rows: [] }),
+    options.exposure !== false ? db.query(`SELECT kind,label,weight_pct FROM etf_exposure WHERE listing_key=$1 ORDER BY kind, weight_pct DESC, label LIMIT 200`, [listingKey]) : Promise.resolve({ rows: [] }),
   ]);
   view.stats = stats.rows[0] ? mapStats(stats.rows[0]) : null;
   view.vendorSymbol = tracked.rows[0]?.vendor_symbol ?? view.stats?.vendorSymbol ?? null;
@@ -342,8 +343,8 @@ export async function etfDetailView(listingKey: string, options: { holdingsLimit
   for (const row of exposureRows.rows) if ((EXPOSURE_KINDS as readonly string[]).includes(row.kind)) view.exposure[row.kind as ExposureKind].push({ label: String(row.label), weightPct: Number(row.weight_pct) });
   if (view.vendorSymbol) {
     const [dividends, bars] = await Promise.all([
-      db.query(`SELECT ex_date,amount,currency,period,pay_date FROM etf_dividends WHERE vendor_symbol=$1 ORDER BY ex_date DESC LIMIT 40`, [view.vendorSymbol]),
-      db.query(`SELECT bar_date,open,high,low,close,volume FROM (SELECT * FROM asset_bars WHERE vendor_symbol=$1 ORDER BY bar_date DESC LIMIT $2) recent ORDER BY bar_date`, [view.vendorSymbol, barDays]),
+      wantsDividends ? db.query(`SELECT ex_date,amount,currency,period,pay_date FROM etf_dividends WHERE vendor_symbol=$1 ORDER BY ex_date DESC LIMIT 40`, [view.vendorSymbol]) : Promise.resolve({ rows: [] }),
+      wantsBars ? db.query(`SELECT bar_date,open,high,low,close,volume FROM (SELECT * FROM asset_bars WHERE vendor_symbol=$1 ORDER BY bar_date DESC LIMIT $2) recent ORDER BY bar_date`, [view.vendorSymbol, barDays]) : Promise.resolve({ rows: [] }),
     ]);
     view.dividends = dividends.rows.map((row) => ({ exDate: day(row.ex_date) ?? "", amount: n(row.amount), currency: row.currency ?? null, period: row.period ?? null, payDate: day(row.pay_date) }));
     view.bars = bars.rows.map((row) => {

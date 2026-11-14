@@ -1,0 +1,25 @@
+.tableScroll { overflow-x: auto; }
+.ruleTable { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.ruleTable th, .ruleTable td { padding: .7rem .8rem; border-bottom: 1px solid var(--rule); text-align: left; vertical-align: top; }
+.ruleTable thead th { color: var(--ink-2); background: var(--sheet-hover); font-size: .8rem; white-space: nowrap; }
+.ruleTable .groupRow th { color: var(--area-etf); background: var(--area-etf-wash); font-family: var(--font-display); font-weight: 800; }
+.ruleTable td.num, .ruleTable th.num { text-align: right; white-space: nowrap; }
+.ruleTable tbody tr:not(.groupRow):hover { background: var(--sheet-hover); }
+.stamp { color: var(--ink-2); font-size: .78rem; font-weight: 600; }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr)); margin: 0; }
+.facts div { padding: .8rem; border-bottom: 1px solid var(--rule); }
+.facts dt { color: var(--ink-2); font-size: .8rem; }
+.facts dd { margin: .25rem 0 0; font-weight: 700; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.note { color: var(--ink-2); font-size: .85rem; line-height: 1.5; }
+.strips { display: grid; gap: .6rem; margin-top: 1rem; }
+.strips > div { display: grid; grid-template-columns: 8rem minmax(0, 1fr); gap: .7rem; align-items: center; color: var(--ink-2); font-size: .78rem; }
+.strip { display: flex; align-items: end; gap: 1px; height: 2.5rem; border-bottom: 1px solid var(--rule); }
+.strip i { flex: 1; min-width: 1px; background: var(--area-etf); opacity: .65; }
+.drawdown i { background: var(--ink-3); }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr)); gap: 1.5rem; }
+.barList { display: grid; gap: .65rem; margin: 0; padding: 0; list-style: none; }
+.barList li { display: grid; grid-template-columns: minmax(6rem, 1fr) minmax(4rem, 2fr) 4.5rem; gap: .5rem; align-items: center; font-size: .83rem; }
+.barList b { font-variant-numeric: tabular-nums; text-align: right; }
+.barTrack { height: .5rem; border-radius: 99px; background: var(--rule); overflow: hidden; }
+.barTrack i { display: block; height: 100%; border-radius: inherit; background: var(--area-etf); }
+@media (max-width: 700px) { .ruleTable { min-width: 680px; } .strips > div { grid-template-columns: 5.5rem minmax(0, 1fr); } }

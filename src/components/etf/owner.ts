@@ -1,11 +1,17 @@
 import { cache } from "react";
 import { marketsViewable } from "@/markets/gate";
 import { canOpenFunds, getViewer } from "@/viewer/get-viewer";
+import { isOwner } from "@/viewer/viewer";
 import { notFound } from "next/navigation";
 
 /** Non-throwing access check for stored ETF fund data (the ETF section of the market gate). */
 export async function etfOwnerView(): Promise<boolean> {
   try { return marketsViewable(await getViewer(), process.env, "etf"); } catch { return false; }
+}
+
+/** Weekly pick records are private to the owner, including on a fund page open to subscribers. */
+export async function etfPickOwnerView(): Promise<boolean> {
+  try { const viewer = await getViewer(); return isOwner(viewer) && !viewer.preview; } catch { return false; }
 }
 
 /** ETF scores and the catalog: the owner, Active customers (Plus or trial) and Passive customers. Never a stock permission. */
