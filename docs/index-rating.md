@@ -10,11 +10,11 @@ Six factors share 100 points. Each factor is either assessed or not assessed; a 
 
 | Factor | Points | Rule |
 | --- | ---: | --- |
-| Trend | 25 | Close above the 50-day average (6), close above the 200-day average (6), 50-day above 200-day average (6), 50-day average higher than 50 sessions earlier (7). Needs 200 bars. |
+| Trend | 25 | Close above the 50-day average (6), close above the 200-day average (6), 50-day above 200-day average (6), 50-day average higher than 50 sessions earlier (7). One condition earns 0; two earn 12; three or four earn the sum of their points. Needs 200 dense bars. |
 | Breadth | 20 | Share of members above their 50-day and above their 200-day average. Each earns 0 at 20% or less and 10 at 80% or more, linear in between. |
 | Valuation | 15 | Valuation against the index's own five-year history. Not assessed until valuation history is stored. |
 | Earnings momentum | 15 | Share of members with positive year-on-year growth (10) and with accelerating growth (5). Each earns 0 at 0%, half at 50% and full at 80% or more, linear in between. |
-| Volatility and drawdown | 15 | 10 × (1 − percentile) of today's 20-session annualized realized volatility among the prior rolling values, up to three years. Drawdown from the 252-session closing high: under 5% earns 5, 5–10% earns 3, over 10% earns 0. Needs 273 bars. |
+| Volatility and drawdown | 15 | 10 × (1 − percentile) of today's 20-session annualized realized volatility among the prior rolling values, up to three years. Drawdown from the 252-session closing high: under 5% earns 5, 5–10% earns 3, over 10% earns 0. Needs 273 dense bars. |
 | Stock-score distribution | 10 | 5, plus up to 5 for the Setup met share (full at 20%), minus up to 5 for the Criteria broken share (full at 50%). Kept between 0 and 10. |
 
 The score is points earned divided by the points of the factors it uses, times 100, rounded to a whole number. Coverage is the points of those factors as a percent of 100.
@@ -44,11 +44,12 @@ The band names describe current measured conditions.
 
 ## Data rules
 
-- Bars dated after the as-of date are ignored. Bars with a missing or non-positive close are dropped, and a repeated date keeps the last entry.
+- The as-of date must be a valid `YYYY-MM-DD` calendar date. Invalid bar dates and bars after the as-of date are ignored. Bars with a missing or non-positive close are dropped, and a repeated date keeps the last entry.
 - The newest bar must be at most 7 calendar days before the as-of date. Older bars leave Trend and Volatility not assessed.
-- Breadth, Earnings momentum and Stock-score distribution need data for at least 70% of members. Percent inputs must be between 0 and 100; anything else marks the factor as invalid data.
+- Bar-based factors use the latest dense run. A gap over 7 calendar days ends that run. Its full span and each 20-bar span must be at most 1.5 calendar days per session interval plus 7 days, allowing weekends and holidays. A sparse run with fewer than the required bars leaves the factor not assessed; volatility is then not annualized from spaced observations.
+- Breadth, Earnings momentum and Stock-score distribution each need an explicit source date no later than the as-of date and at most 7 calendar days old. Undated, future-dated, invalid or stale aggregates are not assessed. They also need data for at least 70% of members. Percent inputs must be between 0 and 100; anything else marks the factor as invalid data.
 - The share of members matched to our instruments is reported separately when known. It does not change the score.
-- Member inputs carry no dates of their own, so those factors use the as-of date.
+- Member factor evidence uses the aggregate's source date.
 
 ## Output
 
@@ -63,11 +64,11 @@ Each result has the score, band, basis and its EN/SK text, coverage, assessed we
 | Volatility and drawdown | Annualized realized volatility, percent |
 | Stock-score distribution | Setup met share minus Criteria broken share |
 
-Note codes: `no-bars`, `stale-bars`, `insufficient-bars`, `no-data`, `invalid-data`, `coverage-below-minimum`, `no-valuation-history`, `volatility-index`, `not-in-composite`. Suppression codes: `trend-not-assessed`, `volatility-not-assessed`, `volatility-index`.
+Note codes: `no-bars`, `stale-bars`, `sparse-bars`, `insufficient-bars`, `no-data`, `undated-data`, `stale-data`, `invalid-data`, `coverage-below-minimum`, `no-valuation-history`, `volatility-index`, `not-in-composite`. Suppression codes: `trend-not-assessed`, `volatility-not-assessed`, `volatility-index`.
 
 ## Volatility indices
 
-A volatility index such as VIX gets no score and no band. It gets a regime label from where its latest close sits among up to three years of prior closes: below the 25th percentile Low, 25th to 75th Normal, 75th to 90th Elevated, 90th and above High. The label needs 252 prior closes and the same 7-day freshness rule.
+A volatility index such as VIX gets no score and no band. It gets a regime label from where its latest close sits among up to three years of prior closes: below the 25th percentile Low, 25th to 75th Normal, 75th to 90th Elevated, 90th and above High. The label needs 252 prior closes from the latest dense run and the same 7-day freshness rule.
 
 ## Display
 

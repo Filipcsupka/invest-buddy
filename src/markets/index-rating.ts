@@ -17,13 +17,13 @@ export interface IndexRatingInputs {
   /** Index members matched to our instruments, out of all current members. */
   components?: { matched: number; total: number };
   /** Percent values 0-100. `coveragePct` is the share of members with data. */
-  breadth?: { aboveMa50Pct: number; aboveMa200Pct: number; coveragePct: number };
+  breadth?: { date: string; aboveMa50Pct: number; aboveMa200Pct: number; coveragePct: number };
   /** Percent values 0-100. */
-  earnings?: { positiveGrowthPct: number; acceleratingPct: number; coveragePct: number };
+  earnings?: { date: string; positiveGrowthPct: number; acceleratingPct: number; coveragePct: number };
   /** No valuation history is stored yet; always not assessed. */
   valuation?: null;
   /** Percent values 0-100 of scored members in each stored state. */
-  scoreDistribution?: { setupMetPct: number; criteriaBrokenPct: number; coveragePct: number };
+  scoreDistribution?: { date: string; setupMetPct: number; criteriaBrokenPct: number; coveragePct: number };
   isVolatilityIndex: boolean;
 }
 
@@ -59,6 +59,12 @@ export const MIN_ASSESSED_WEIGHT_PCT = 60;
 export const MIN_MEMBER_COVERAGE_PCT = 70;
 /** The newest usable bar must be at most this many calendar days before asOf. */
 export const MAX_BAR_AGE_DAYS = 7;
+/** Member aggregates must be dated and recent enough to describe the as-of conditions. */
+export const MAX_MEMBER_AGE_DAYS = 7;
+/** Permit weekends and market holidays, but exclude gaps and sparse histories. */
+export const MAX_BAR_GAP_DAYS = 7;
+export const MAX_CALENDAR_DAYS_PER_SESSION = 1.5;
+export const BAR_SPAN_GRACE_DAYS = 7;
 
 export const TREND_MIN_BARS = 200;
 export const VOL_WINDOW = 20;
@@ -74,8 +80,11 @@ export const VIX_MIN_BARS = VOL_MIN_HISTORY;
 export type IndexRatingNote =
   | "no-bars"
   | "stale-bars"
+  | "sparse-bars"
   | "insufficient-bars"
   | "no-data"
+  | "undated-data"
+  | "stale-data"
   | "invalid-data"
   | "coverage-below-minimum"
   | "no-valuation-history"
@@ -116,7 +125,7 @@ export interface IndexRatingFactor {
   value: number | null;
   /** Plain description of the rule applied. */
   threshold: string;
-  /** Date of the evidence: the last bar used, or asOf for member-based inputs. */
+  /** Date of the evidence: the last bar used, or the member input's source date. */
   date: string | null;
   notes: IndexRatingNote[];
   /** Individual measured inputs behind the points. */
@@ -166,6 +175,12 @@ type Bar = { date: string; close: number };
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
+function isValidDate(date: unknown): date is string {
+  if (typeof date !== "string" || !ISO_DATE.test(date)) return false;
+  const parsed = new Date(`${date}T00:00:00Z`);
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === date;
+}
+
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
@@ -184,9 +199,10 @@ function dayNumber(date: string): number {
 
 /** Valid bars on or before asOf, ascending by date, one bar per date. */
 export function cleanBars(bars: readonly Bar[], asOf: string): Bar[] {
+  if (!isValidDate(asOf)) throw new RangeError("asOf must be a valid ISO date (YYYY-MM-DD)");
   const byDate = new Map<string, number>();
   for (const bar of bars) {
-    if (!ISO_DATE.test(bar.date) || bar.date > asOf) continue;
+    if (!isValidDate(bar.date) || bar.date > asOf) continue;
     if (!Number.isFinite(bar.close) || bar.close <= 0) continue;
     byDate.set(bar.date, bar.close);
   }
@@ -251,7 +267,8 @@ export function trendPoints(t: { close: number; ma50: number; ma200: number; ma5
     [t.ma50 > t.ma200, 6],
     [t.ma50Slope > 0, 7],
   ];
-  return checks.reduce((acc, [ok, pts]) => (ok ? { points: acc.points + pts, met: acc.met + 1 } : acc), { points: 0, met: 0 });
+  const result = checks.reduce((acc, [ok, pts]) => (ok ? { points: acc.points + pts, met: acc.met + 1 } : acc), { points: 0, met: 0 });
+  return { points: result.met < 2 ? 0 : result.met === 2 ? 12 : result.points, met: result.met };
 }
 
 export function breadthPoints(aboveMa50Pct: number, aboveMa200Pct: number): number {
@@ -283,11 +300,11 @@ export function volatilityRegimeLabel(percentile: number): VolatilityRegimeLabel
 // ---------- factor builders ----------
 
 const THRESHOLDS: Record<IndexRatingFactorId, string> = {
-  trend: "Close above MA50 (6), close above MA200 (6), MA50 above MA200 (6), MA50 higher than 50 sessions earlier (7); needs 200 bars",
+  trend: "Close above MA50 (6), close above MA200 (6), MA50 above MA200 (6), MA50 higher than 50 sessions earlier (7); 0 below two conditions, 12 for two; needs 200 dense bars",
   breadth: "Members above MA50 and above MA200: each 0 points at 20% or less, 10 at 80% or more, linear between; needs 70% member coverage",
   valuation: "Valuation against the index's own five-year history; not assessed until valuation history is stored",
   earnings: "Members with positive growth (10) and accelerating growth (5): 0 at 0%, half at 50%, full at 80%; needs 70% member coverage",
-  volatility: "20-session realized volatility percentile against up to 3 years (10 x (1 - percentile)); drawdown from 252-session high under 5% (5), 5-10% (3), over 10% (0); needs 273 bars",
+  volatility: "20-session realized volatility percentile against up to 3 years (10 x (1 - percentile)); drawdown from 252-session high under 5% (5), 5-10% (3), over 10% (0); needs 273 dense bars",
   distribution: "5 plus 0-5 for Setup met share (full at 20%) minus 0-5 for Criteria broken share (full at 50%); needs 70% scored coverage",
 };
 
@@ -305,21 +322,38 @@ interface BarState {
   lastDate: string | null;
   /** Shared reason the bar-based factors cannot be assessed, if any. */
   blocked: IndexRatingNote | null;
+  sparse: boolean;
+}
+
+/** Retain the latest run with no large gaps or excessive calendar span. */
+function denseSuffix(bars: Bar[]): Bar[] {
+  let start = bars.length - 1;
+  while (start > 0) {
+    const gap = dayNumber(bars[start].date) - dayNumber(bars[start - 1].date);
+    const count = bars.length - start + 1;
+    const span = dayNumber(bars.at(-1)!.date) - dayNumber(bars[start - 1].date);
+    const localSpan = count >= VOL_WINDOW ? dayNumber(bars[start + VOL_WINDOW - 2].date) - dayNumber(bars[start - 1].date) : 0;
+    if (gap > MAX_BAR_GAP_DAYS || span > MAX_CALENDAR_DAYS_PER_SESSION * (count - 1) + BAR_SPAN_GRACE_DAYS ||
+      (count >= VOL_WINDOW && localSpan > MAX_CALENDAR_DAYS_PER_SESSION * (VOL_WINDOW - 1) + BAR_SPAN_GRACE_DAYS)) break;
+    start--;
+  }
+  return bars.slice(start);
 }
 
 function barState(inputs: IndexRatingInputs): BarState {
-  const bars = cleanBars(inputs.bars ?? [], inputs.asOf);
+  const allBars = cleanBars(inputs.bars ?? [], inputs.asOf);
+  const bars = denseSuffix(allBars);
   const closes = bars.map((b) => b.close);
   const lastDate = bars.at(-1)?.date ?? null;
   let blocked: IndexRatingNote | null = null;
   if (lastDate === null) blocked = "no-bars";
   else if (dayNumber(inputs.asOf) - dayNumber(lastDate) > MAX_BAR_AGE_DAYS) blocked = "stale-bars";
-  return { bars, closes, lastDate, blocked };
+  return { bars, closes, lastDate, blocked, sparse: bars.length < allBars.length };
 }
 
 function trendFactor(s: BarState): IndexRatingFactor {
   if (s.blocked) return emptyFactor("trend", [s.blocked], s.lastDate);
-  if (s.closes.length < TREND_MIN_BARS) return emptyFactor("trend", ["insufficient-bars"], s.lastDate, { bars: s.closes.length });
+  if (s.closes.length < TREND_MIN_BARS) return emptyFactor("trend", [s.sparse ? "sparse-bars" : "insufficient-bars"], s.lastDate, { bars: s.closes.length });
   const close = s.closes[s.closes.length - 1];
   const ma50 = sma(s.closes, 50)!;
   const ma200 = sma(s.closes, 200)!;
@@ -331,7 +365,7 @@ function trendFactor(s: BarState): IndexRatingFactor {
 
 function volatilityFactor(s: BarState): IndexRatingFactor {
   if (s.blocked) return emptyFactor("volatility", [s.blocked], s.lastDate);
-  if (s.closes.length < VOLATILITY_MIN_BARS) return emptyFactor("volatility", ["insufficient-bars"], s.lastDate, { bars: s.closes.length });
+  if (s.closes.length < VOLATILITY_MIN_BARS) return emptyFactor("volatility", [s.sparse ? "sparse-bars" : "insufficient-bars"], s.lastDate, { bars: s.closes.length });
   const n = s.closes.length;
   const current = realizedVol(s.closes, VOL_WINDOW, n)!;
   // Prior rolling values only: windows ending before today, up to three years back.
@@ -351,7 +385,7 @@ function volatilityFactor(s: BarState): IndexRatingFactor {
   });
 }
 
-function memberFactor<T extends { coveragePct: number }>(
+function memberFactor<T extends { date: string; coveragePct: number }>(
   id: IndexRatingFactorId,
   data: T | undefined | null,
   asOf: string,
@@ -361,16 +395,19 @@ function memberFactor<T extends { coveragePct: number }>(
   if (!data) return emptyFactor(id, ["no-data"]);
   const inputs: Record<string, number | null> = { coveragePct: isPct(data.coveragePct) ? data.coveragePct : null };
   for (const f of fields) inputs[f] = isPct(data[f]) ? (data[f] as number) : null;
-  if (Object.values(inputs).some((v) => v === null)) return emptyFactor(id, ["invalid-data"], asOf, inputs);
-  if (data.coveragePct < MIN_MEMBER_COVERAGE_PCT) return emptyFactor(id, ["coverage-below-minimum"], asOf, inputs);
+  if (!data.date) return emptyFactor(id, ["undated-data"], null, inputs);
+  if (!isValidDate(data.date) || data.date > asOf) return emptyFactor(id, ["invalid-data"], null, inputs);
+  if (Object.values(inputs).some((v) => v === null)) return emptyFactor(id, ["invalid-data"], data.date, inputs);
+  if (dayNumber(asOf) - dayNumber(data.date) > MAX_MEMBER_AGE_DAYS) return emptyFactor(id, ["stale-data"], data.date, inputs);
+  if (data.coveragePct < MIN_MEMBER_COVERAGE_PCT) return emptyFactor(id, ["coverage-below-minimum"], data.date, inputs);
   const { points, value } = score(data);
-  return assessedFactor(id, points, value, asOf, inputs);
+  return assessedFactor(id, points, value, data.date, inputs);
 }
 
 function volatilityRegime(s: BarState): VolatilityRegime {
   const base = { assessed: false, label: null, close: null, percentile: null, historySessions: 0, date: s.lastDate };
   if (s.blocked) return { ...base, notes: [s.blocked] };
-  if (s.closes.length < VIX_MIN_BARS + 1) return { ...base, notes: ["insufficient-bars"], historySessions: Math.max(0, s.closes.length - 1) };
+  if (s.closes.length < VIX_MIN_BARS + 1) return { ...base, notes: [s.sparse ? "sparse-bars" : "insufficient-bars"], historySessions: Math.max(0, s.closes.length - 1) };
   const close = s.closes[s.closes.length - 1];
   const history = s.closes.slice(Math.max(0, s.closes.length - 1 - VOL_HISTORY_SESSIONS), -1);
   const percentile = round2(percentileBelow(close, history)! * 100);

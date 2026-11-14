@@ -38,14 +38,14 @@ const asOf = day(N - 1);
 
 const full = { coveragePct: 90 };
 const strongMembers = {
-  breadth: { aboveMa50Pct: 85, aboveMa200Pct: 90, ...full },
-  earnings: { positiveGrowthPct: 85, acceleratingPct: 80, ...full },
-  scoreDistribution: { setupMetPct: 25, criteriaBrokenPct: 0, ...full },
+  breadth: { date: asOf, aboveMa50Pct: 85, aboveMa200Pct: 90, ...full },
+  earnings: { date: asOf, positiveGrowthPct: 85, acceleratingPct: 80, ...full },
+  scoreDistribution: { date: asOf, setupMetPct: 25, criteriaBrokenPct: 0, ...full },
 };
 const weakMembers = {
-  breadth: { aboveMa50Pct: 10, aboveMa200Pct: 20, ...full },
-  earnings: { positiveGrowthPct: 0, acceleratingPct: 0, ...full },
-  scoreDistribution: { setupMetPct: 0, criteriaBrokenPct: 60, ...full },
+  breadth: { date: asOf, aboveMa50Pct: 10, aboveMa200Pct: 20, ...full },
+  earnings: { date: asOf, positiveGrowthPct: 0, acceleratingPct: 0, ...full },
+  scoreDistribution: { date: asOf, setupMetPct: 0, criteriaBrokenPct: 60, ...full },
 };
 
 function inputs(change: Partial<IndexRatingInputs> = {}): IndexRatingInputs {
@@ -85,9 +85,20 @@ describe("pure helpers", () => {
       { date: "2026-01-02", close: Number.NaN },
       { date: "2026-01-01", close: 1.5 },
       { date: "2026-01-04", close: 4 },
+      { date: "2026-02-30", close: 5 },
+      { date: "2026-13-01", close: 6 },
       { date: "bad", close: 5 },
     ];
     expect(cleanBars(bars, "2026-01-03")).toEqual([{ date: "2026-01-01", close: 1.5 }, { date: "2026-01-03", close: 3 }]);
+    expect(cleanBars(bars, "2026-03-10")).toEqual([
+      { date: "2026-01-01", close: 1.5 },
+      { date: "2026-01-03", close: 3 },
+      { date: "2026-01-04", close: 4 },
+    ]);
+  });
+  it.each(["bad", "2026-02-30", "2026-13-01"])("rejects invalid as-of date %s", (bad) => {
+    expect(() => cleanBars([], bad)).toThrow(RangeError);
+    expect(() => rateIndex(inputs({ asOf: bad }))).toThrow(RangeError);
   });
 });
 
@@ -96,10 +107,12 @@ describe("factor rules", () => {
   it.each([
     [{ close: 110, ma50: 105, ma200: 100, ma50Slope: 1 }, 25, 4],
     [{ close: 110, ma50: 105, ma200: 100, ma50Slope: 0 }, 18, 3],
-    [{ close: 102, ma50: 105, ma200: 104, ma50Slope: -1 }, 6, 1],
-    [{ close: 101, ma50: 100, ma200: 105, ma50Slope: -1 }, 6, 1],
-    [{ close: 104, ma50: 100, ma200: 105, ma50Slope: -1 }, 6, 1],
+    [{ close: 102, ma50: 105, ma200: 104, ma50Slope: -1 }, 0, 1],
+    [{ close: 101, ma50: 100, ma200: 105, ma50Slope: -1 }, 0, 1],
+    [{ close: 104, ma50: 100, ma200: 105, ma50Slope: -1 }, 0, 1],
+    [{ close: 101, ma50: 100, ma200: 105, ma50Slope: 1 }, 12, 2],
     [{ close: 106, ma50: 107, ma200: 105, ma50Slope: -1 }, 12, 2],
+    [{ close: 90, ma50: 100, ma200: 105, ma50Slope: 1 }, 0, 1],
     [{ close: 90, ma50: 100, ma200: 105, ma50Slope: -1 }, 0, 0],
   ])("trend %o earns %s", (t, points, met) => expect(trendPoints(t)).toEqual({ points, met }));
   it.each([
@@ -242,8 +255,28 @@ describe("not assessed paths", () => {
     const ok = rateIndex(inputs({ ...strongMembers, [key]: { ...strongMembers[key], coveragePct: 70 } }));
     expect(factor(ok, id).assessed).toBe(true);
   });
+  it.each(["breadth", "earnings", "scoreDistribution"] as const)("requires a dated, recent %s aggregate", (key) => {
+    const id = key === "scoreDistribution" ? "distribution" : key;
+    const undated = rateIndex(inputs({ ...strongMembers, [key]: { ...strongMembers[key], date: undefined } }));
+    expect(factor(undated, id)).toMatchObject({ assessed: false, date: null, notes: ["undated-data"] });
+    const staleDate = day(N - 9);
+    const stale = rateIndex(inputs({ ...strongMembers, [key]: { ...strongMembers[key], date: staleDate } }));
+    expect(factor(stale, id)).toMatchObject({ assessed: false, date: staleDate, notes: ["stale-data"] });
+    const recentDate = day(N - 8);
+    expect(factor(rateIndex(inputs({ ...strongMembers, [key]: { ...strongMembers[key], date: recentDate } })), id)).toMatchObject({ assessed: true, date: recentDate });
+    for (const badDate of ["2026-02-30", "2026-13-01", day(N)]) {
+      expect(factor(rateIndex(inputs({ ...strongMembers, [key]: { ...strongMembers[key], date: badDate } })), id)).toMatchObject({ assessed: false, date: null, notes: ["invalid-data"] });
+    }
+  });
+  it("excludes undated member aggregates from the full composite", () => {
+    const undated = undefined as unknown as string;
+    const r = rateIndex(inputs({ ...strongMembers, breadth: { ...strongMembers.breadth, date: undated }, earnings: { ...strongMembers.earnings, date: undated } }));
+    expect(r).toMatchObject({ status: "rated", basis: "price-only", assessedWeight: 40, score: 100 });
+    expect(factor(r, "breadth").assessed).toBe(false);
+    expect(factor(r, "earnings").assessed).toBe(false);
+  });
   it.each([Number.NaN, -1, 101])("rejects out-of-range percent %s", (bad) => {
-    const r = rateIndex(inputs({ ...strongMembers, breadth: { aboveMa50Pct: bad, aboveMa200Pct: 50, coveragePct: 90 } }));
+    const r = rateIndex(inputs({ ...strongMembers, breadth: { date: asOf, aboveMa50Pct: bad, aboveMa200Pct: 50, coveragePct: 90 } }));
     expect(factor(r, "breadth")).toMatchObject({ assessed: false, notes: ["invalid-data"], inputs: { aboveMa50Pct: null } });
   });
   it("leaves trend and volatility not assessed without bars", () => {
@@ -258,6 +291,31 @@ describe("not assessed paths", () => {
     expect(factor(r, "trend").notes).toEqual(["stale-bars"]);
     expect(factor(r, "volatility").notes).toEqual(["stale-bars"]);
     expect(factor(rateIndex(inputs({ asOf: day(N - 1 + 7) })), "trend").assessed).toBe(true);
+  });
+  it("rejects widely spaced bars for trend, volatility, and the composite", () => {
+    const sparse = calmUptrend.slice(0, 300).map((bar, i) => ({ ...bar, date: day(i * 2) }));
+    const r = rateIndex(inputs({ bars: sparse, asOf: day(598) }));
+    expect(factor(r, "trend")).toMatchObject({ assessed: false, notes: ["sparse-bars"] });
+    expect(factor(r, "volatility")).toMatchObject({ assessed: false, notes: ["sparse-bars"] });
+    expect(r).toMatchObject({ status: "not-enough-data", score: null });
+  });
+  it("excludes a long gap and uses the latest dense history", () => {
+    const old = calmUptrend.slice(0, 300);
+    const recent = calmUptrend.slice(300, 600).map((bar, i) => ({ ...bar, date: day(400 + i) }));
+    const r = rateIndex(inputs({ bars: [...old, ...recent], asOf: day(699) }));
+    expect(factor(r, "trend").assessed).toBe(true);
+    expect(factor(r, "volatility")).toMatchObject({ assessed: true, inputs: { historySessions: 279 } });
+  });
+  it("rejects a large gap inside the volatility window", () => {
+    const sparse = calmUptrend.slice(0, 273).map((bar, i) => ({ ...bar, date: day(i < 260 ? i : i + 30) }));
+    const r = rateIndex(inputs({ bars: sparse, asOf: day(302) }));
+    expect(factor(r, "volatility")).toMatchObject({ assessed: false, notes: ["sparse-bars"] });
+  });
+  it("rejects a sparse 20-bar window inside an otherwise dense history", () => {
+    const sparse = calmUptrend.map((bar, i) => ({ ...bar, date: day(i + Math.max(0, Math.min(i - 750, 24))) }));
+    const r = rateIndex(inputs({ bars: sparse, asOf: day(N - 1 + 24) }));
+    expect(factor(r, "trend")).toMatchObject({ assessed: false, notes: ["sparse-bars"] });
+    expect(factor(r, "volatility")).toMatchObject({ assessed: false, notes: ["sparse-bars"] });
   });
   it("ignores bars after asOf", () => {
     const cut = 400;
@@ -278,7 +336,8 @@ describe("not assessed paths", () => {
 
 describe("composite basis and suppression", () => {
   it("suppresses without trend even when member factors are strong", () => {
-    const r = rateIndex(inputs({ ...strongMembers, bars: calmUptrend.slice(0, 150), asOf: day(149) }));
+    const date = day(149);
+    const r = rateIndex(inputs({ ...strongMembers, breadth: { ...strongMembers.breadth, date }, earnings: { ...strongMembers.earnings, date }, scoreDistribution: { ...strongMembers.scoreDistribution, date }, bars: calmUptrend.slice(0, 150), asOf: date }));
     expect(r).toMatchObject({ status: "not-enough-data", score: null, band: null, basis: null, basisText: null });
     expect(r.suppressedBy).toEqual(["trend-not-assessed", "volatility-not-assessed"]);
     // breadth 20 + earnings 15 + distribution 10 assessed, none in a composite
@@ -303,13 +362,15 @@ describe("composite basis and suppression", () => {
   });
   it("suppresses when volatility is missing and the full guard is not met", () => {
     // trend 25 + earnings 15 + distribution 10 = 50, volatility needs 273 bars
-    const r = rateIndex(inputs({ earnings: strongMembers.earnings, scoreDistribution: strongMembers.scoreDistribution, bars: calmUptrend.slice(0, 250), asOf: day(249) }));
+    const date = day(249);
+    const r = rateIndex(inputs({ earnings: { ...strongMembers.earnings, date }, scoreDistribution: { ...strongMembers.scoreDistribution, date }, bars: calmUptrend.slice(0, 250), asOf: date }));
     expect(r.suppressedBy).toEqual(["volatility-not-assessed"]);
     expect(r).toMatchObject({ basis: null, score: null, coveragePct: 50 });
   });
   it("uses the full basis without volatility when member factors meet the guard", () => {
     // trend 25 + breadth 20 + earnings 15 = 60
-    const r = rateIndex(inputs({ breadth: strongMembers.breadth, earnings: strongMembers.earnings, bars: calmUptrend.slice(0, 250), asOf: day(249) }));
+    const date = day(249);
+    const r = rateIndex(inputs({ breadth: { ...strongMembers.breadth, date }, earnings: { ...strongMembers.earnings, date }, bars: calmUptrend.slice(0, 250), asOf: date }));
     expect(r).toMatchObject({ basis: "full", coveragePct: 60, score: 100, suppressedBy: [] });
   });
   it("uses the full basis at exactly 60% weight: trend, volatility, breadth", () => {
@@ -359,5 +420,9 @@ describe("volatility index", () => {
     expect(vix(series(253, 0, 0.01, 0.01), { asOf: day(252) }).volatilityRegime!.assessed).toBe(true);
     expect(vix(undefined, { asOf: day(N + 10) }).volatilityRegime).toMatchObject({ assessed: false, notes: ["stale-bars"] });
     expect(vix([]).volatilityRegime).toMatchObject({ assessed: false, notes: ["no-bars"], date: null });
+  });
+  it("does not label a volatility index from sparse observations", () => {
+    const bars = series(253, 0, 0.01, 0.01).map((bar, i) => ({ ...bar, date: day(i * 2) }));
+    expect(vix(bars, { asOf: day(504) }).volatilityRegime).toMatchObject({ assessed: false, notes: ["sparse-bars"] });
   });
 });
