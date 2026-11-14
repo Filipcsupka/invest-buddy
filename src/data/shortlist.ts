@@ -6,8 +6,13 @@ import { displayScore } from "@/engine/display-score";
 import { evidencedMaxOf } from "@/engine/relative";
 import { buildShortlist, sectorConcentration, type Shortlist, type ShortlistInput, type SectorConcentration } from "@/engine/shortlist";
 import { SHORTLIST_CONFIG } from "@/engine/shortlist-config";
+import { applyModelLens, topNFrom, type ModelHolding, type ModelLens, type ModelPortfolio } from "@/engine/model-lens";
 import { stateKey } from "@/i18n/score-text";
-import { canUseVendorData, type Viewer } from "@/viewer/viewer";
+import { samplePortfolio } from "@/portfolio/fixture";
+import type { PortfolioSnapshot } from "@/portfolio/model";
+import { sectorGroup } from "@/universe/sector-groups";
+import { themeOf } from "@/universe/themes";
+import { canUseVendorData, isOwner, type Viewer } from "@/viewer/viewer";
 import { nextEarnings } from "./catalyst-calendar";
 import { readListingFacts, sectorGroupsFor, type ListingFacts } from "./shortlist-sectors";
 import { latestScores, type StoreRow } from "./store";
@@ -27,7 +32,13 @@ export function shortlistAccess(viewer: Viewer, env: Record<string, string | und
 }
 
 export interface EarningsFact { reportDate: string | null; stale: boolean }
-export interface ShortlistData { shortlist: Shortlist; concentration: SectorConcentration; names: Record<string, string>; sample: boolean }
+export interface ShortlistData {
+  shortlist: Shortlist; concentration: SectorConcentration; names: Record<string, string>; sample: boolean;
+  /** Model portfolio lens for this viewer (S1). Null when no portfolio snapshot is stored; absent before withModelLens runs. */
+  lens?: ModelLens | null;
+  /** The owner sees exact model weights; everyone else sees whole percents. */
+  exactWeights?: boolean;
+}
 
 /** Points with data out of 25: the stored value, else computed from the rule hits, else null. */
 export function evidencedPoints(result: Pick<ScoreResult, "evidencedMax" | "ruleHits">): number | null {
@@ -58,7 +69,23 @@ export function shortlistInputs(rows: readonly StoreRow[], asOf: string, facts: 
       bars: result.inputs?.bars ?? [], currency: quoteCurrency(instrument.ticker, facts.get(instrument.ticker)),
       reportDate: report?.reportDate ?? null, reportStale: report?.stale ?? false,
       sector: sectors.get(instrument.ticker)?.group ?? "Unknown",
+      theme: themeFor(instrument.ticker, facts, listingSector.get(instrument.ticker) ?? null),
     };
+  });
+}
+
+/** Theme of one listing from its stored facts; the listing's own sector label fills in when no facts were read (fixture mode). */
+function themeFor(ticker: string, facts: ReadonlyMap<string, ListingFacts>, listingSector: string | null) {
+  const row = facts.get(ticker.toUpperCase());
+  return themeOf({ instrumentSector: row?.instrumentSector ?? listingSector, vendorSector: row?.vendorSector, vendorIndustry: row?.vendorIndustry }).theme;
+}
+
+/** Model portfolio holdings with theme and sector group. Pure; a symbol without stored facts uses `listingSector`, else Unknown. */
+export function modelHoldings(snapshot: Pick<PortfolioSnapshot, "weights">, facts: ReadonlyMap<string, ListingFacts>, listingSector: (symbol: string) => string | null = () => null): ModelHolding[] {
+  return snapshot.weights.map(({ symbol, weightPercent }) => {
+    const row = facts.get(symbol.toUpperCase());
+    const sectorFacts = { instrumentSector: row?.instrumentSector ?? listingSector(symbol), vendorSector: row?.vendorSector, vendorIndustry: row?.vendorIndustry };
+    return { symbol, weightPercent, theme: themeOf(sectorFacts).theme, sector: sectorGroup(sectorFacts).group };
   });
 }
 
@@ -96,3 +123,48 @@ async function latestShortlistUncached(): Promise<ShortlistData | null> {
 }
 
 export const latestShortlist = cache(webCached(latestShortlistUncached, "latest-shortlist", [CACHE_TAGS.scores], { bypass: () => !getPool() }));
+
+/** Names in the top picks block: SHORTLIST_TOP_N within the config bounds, default 6. */
+export const shortlistTopN = (env: Record<string, string | undefined> = process.env): number => topNFrom(env.SHORTLIST_TOP_N);
+
+type Query = Parameters<typeof readListingFacts>[0];
+
+/**
+ * Model portfolio from the stored IBKR Flex snapshot (portfolio_snapshots, weights only). The owner gets the newest stored snapshot;
+ * everyone else the newest published one, the same snapshot the public portfolio page shows. A stored sample snapshot is skipped,
+ * as in `latestPortfolio`. Read only. Null when no real snapshot is stored. A failed read throws, so the lens is switched off for
+ * that request (the shortlist order stays) instead of running with every holding Unknown; the failure is logged.
+ */
+export async function readModelPortfolio(db: Query, audience: "owner" | "public", today: string): Promise<ModelPortfolio | null> {
+  try {
+    const result = await db.query<{ snapshot: PortfolioSnapshot }>(audience === "owner"
+      ? "SELECT snapshot FROM portfolio_snapshots ORDER BY as_of DESC LIMIT 1"
+      : "SELECT snapshot FROM portfolio_snapshots WHERE publish_on <= $1 ORDER BY as_of DESC LIMIT 1", audience === "owner" ? [] : [today]);
+    const snapshot = result.rows[0]?.snapshot;
+    if (!snapshot?.weights?.length || snapshot.sample) return null;
+    const facts = await readListingFacts(db, snapshot.weights.map((w) => w.symbol), snapshot.asOf);
+    return { asOf: snapshot.asOf, holdings: modelHoldings(snapshot, facts) };
+  } catch (error) {
+    console.warn(JSON.stringify({ event: "model_lens_read_failed", audience, error: error instanceof Error ? error.name : "unknown" }));
+    throw error;
+  }
+}
+
+async function modelPortfolioUncached(audience: "owner" | "public"): Promise<ModelPortfolio | null> {
+  if (process.env.DATA_MODE === "fixture") {
+    const scores = await latestScores();
+    const listing = new Map(scores.rows.map((row) => [row.instrument.ticker, row.instrument.sector]));
+    return { asOf: samplePortfolio.asOf, holdings: modelHoldings(samplePortfolio, new Map(), (symbol) => listing.get(symbol) ?? null) };
+  }
+  const db = getPool();
+  return db ? readModelPortfolio(db, audience, new Date().toISOString().slice(0, 10)) : null;
+}
+
+export const latestModelPortfolio = cache(webCached(modelPortfolioUncached, "model-portfolio", [CACHE_TAGS.portfolio], { bypass: () => !getPool() }));
+
+/** The shortlist with the model portfolio lens for this viewer. Without a snapshot, or when the read fails, the lens is null and the order stays. */
+export async function withModelLens(data: ShortlistData, viewer: Viewer): Promise<ShortlistData> {
+  const owner = isOwner(viewer) && !viewer.preview;
+  const model = await latestModelPortfolio(owner ? "owner" : "public").catch(() => null);
+  return { ...data, lens: applyModelLens(data.shortlist.kept, model), exactWeights: owner };
+}

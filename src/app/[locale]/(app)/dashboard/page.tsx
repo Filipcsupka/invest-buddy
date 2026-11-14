@@ -24,12 +24,13 @@ import { MacroEvents } from "@/components/macro-events";
 import { storedMacroEvents } from "@/data/macro-calendar-store";
 import { DataStatus } from "@/components/data-status";
 import { getViewer } from "@/viewer/get-viewer";
-import { latestShortlist, shortlistAccess, shortlistViewEnabled } from "@/data/shortlist";
+import { latestShortlist, shortlistAccess, shortlistTopN, shortlistViewEnabled, withModelLens } from "@/data/shortlist";
 import { canOpenFunds, canSeeStockData, canUseVendorData, investorPath, vendorLicensed, type Viewer } from "@/viewer/viewer";
 import { marketsViewable } from "@/markets/gate";
 import { InvestorPaths } from "@/components/dashboard/investor-paths";
 import { PATH_HREF, pathCards } from "@/config/investor-paths";
-import { ShortlistLock, ShortlistView } from "@/components/shortlist-view";
+import { ShortlistLock } from "@/components/shortlist-view";
+import { ShortlistTopPicks } from "@/components/shortlist-top-picks";
 import { PortfolioStructure } from "@/components/dashboard/portfolio-structure";
 import { PeriodHighlights } from "@/components/dashboard/period-highlights";
 import { assembleCrossMarket, assemblePeriodRows, latestCrossMarketData, latestPeriodPrices, parseDashboardPeriod } from "@/data/cross-market-dashboard";
@@ -83,7 +84,7 @@ async function Dashboard({ params, searchParams }: LocaleParams & { searchParams
   }
   const access = viewer.preview ? (shortlistViewEnabled() ? "locked" : "hidden") : shortlistAccess(viewer);
   const marketAccess = !viewer.preview && canUseVendorData(viewer);
-  const marketBundle = marketAccess ? Promise.all([access === "full" ? latestShortlist() : null, latestCrossMarketData()]).then(async ([shortlist, crossMarket]) => {
+  const marketBundle = marketAccess ? Promise.all([access === "full" ? latestShortlist().then((list) => list && withModelLens(list, viewer)) : null, latestCrossMarketData()]).then(async ([shortlist, crossMarket]) => {
     const structure = assembleCrossMarket(shortlist, crossMarket.funds, crossMarket.indices, crossMarket.sample);
     const seenIndices = new Set<string>();
     const symbols = [...crossMarket.funds].sort((a, b) => b.scorePercent - a.scorePercent || a.key.localeCompare(b.key))
@@ -128,7 +129,7 @@ async function Dashboard({ params, searchParams }: LocaleParams & { searchParams
       </section>}
     </div>
     <ScoreStrip locale={locale} rows={rows} />
-    {access === "full" && market?.shortlist ? <ShortlistView locale={locale} data={market.shortlist} compact /> : null}
+    {access === "full" && market?.shortlist ? <ShortlistTopPicks locale={locale} data={market.shortlist} limit={shortlistTopN()} variant="dashboard" /> : null}
     <HeadDisclosure text={m.common.operatorDisclosure} />
     <StateFilterProvider>
     <ScannerTable locale={locale} rows={rows} profiles={Object.fromEntries(Object.entries(horizons).map(([ticker, h]) => [ticker, h.profile]))} aside={<MacroEvents locale={locale} schedule={macroSchedule} />} heldTickers={portfolio?.weights.filter((p) => p.weightPercent > 0).map((p) => p.symbol.toUpperCase()) ?? []} text={{

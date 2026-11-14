@@ -5,7 +5,7 @@ import { SCANNER_FLOOR } from "@/app/[locale]/(app)/scanner/floor";
  * The shortlist is an informational view over names whose displayed state is Setup met. It never changes a score, state or history.
  */
 export const SHORTLIST_CONFIG = {
-  version: "2026-11-12.1",
+  version: "2026-11-14.1",
   /** F1 full evidence: points with data, out of 25, at or above this. The score's coverage guard is 20 (src/engine/relative.ts). */
   minEvidencedPoints: 23,
   /** F2 leadership: percentile of the price return over `rsSessions` inside the scored universe. IBD/O'Neil use RS rank 80. */
@@ -24,6 +24,14 @@ export const SHORTLIST_CONFIG = {
   drawdownSessions: 63,
   /** Concentration lens: a sector group above this share of the shortlist is flagged (SEC 25% industry test, MSCI capped indexes). */
   sectorShareFlagPercent: 30,
+  /** Top picks block (S1): names shown before the full list. SHORTLIST_TOP_N overrides it within topNMin..topNMax. */
+  topN: 6,
+  topNMin: 1,
+  topNMax: 15,
+  /** Model portfolio lens (S1): a theme above this share of the model portfolio counts as above its cap. Draft. */
+  themeCapPercent: 25,
+  /** Model portfolio lens (S1): a sector group above this share is noted; same draft value as the owner SECTOR_CAP. */
+  sectorGroupCapPercent: 30,
 } as const;
 
 export type ShortlistConfig = { [K in keyof typeof SHORTLIST_CONFIG]: (typeof SHORTLIST_CONFIG)[K] extends string ? string : number };

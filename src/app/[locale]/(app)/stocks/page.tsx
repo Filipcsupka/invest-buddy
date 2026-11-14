@@ -35,8 +35,9 @@ import { getScannerFloorMessages, hiddenText } from "@/i18n/scanner-floor-messag
 import { getNavSectionsMessages } from "@/i18n/nav-sections-messages";
 import { getScannerBentoMessages } from "@/i18n/scanner-bento-messages";
 import { latestShareCounts } from "@/data/flag-facts";
-import { latestShortlist, shortlistAccess } from "@/data/shortlist";
-import { ShortlistLock, ShortlistView } from "@/components/shortlist-view";
+import { latestShortlist, shortlistAccess, shortlistTopN, withModelLens } from "@/data/shortlist";
+import { ShortlistLock } from "@/components/shortlist-view";
+import { ShortlistTopPicks } from "@/components/shortlist-top-picks";
 import { filterScores, filtersHref, parseFilters, type Query, type ScannerFilters } from "../scanner/filters";
 import { floorMetrics, floorState, SCANNER_FLOOR } from "../scanner/floor";
 import { ruleCountLabel, streakText } from "../scanner/format";
@@ -124,7 +125,7 @@ async function Scanner({ params, searchParams }: Props) {
   const c = copy[locale];
   const filters = limitFiltersFor(viewer, parseFilters(await searchParams));
   const access = shortlistAccess(viewer);
-  const [data, portfolio, streakData, horizons, shortlist] = await Promise.all([latestScores(), latestPortfolio(), ruleStreaks(), publicHorizons(), access === "full" ? latestShortlist() : null]);
+  const [data, portfolio, streakData, horizons, shortlist] = await Promise.all([latestScores(), latestPortfolio(), ruleStreaks(), publicHorizons(), access === "full" ? latestShortlist().then((list) => list && withModelLens(list, viewer)) : null]);
   // A free viewer gets no streak data, neither in the column nor in the change presets.
   const streaks = viewer.tier === "free" ? {} : streakData;
   const held = new Set(portfolio?.weights.filter((row) => row.weightPercent > 0).map((row) => row.symbol.toUpperCase()) ?? []);
@@ -158,10 +159,10 @@ async function Scanner({ params, searchParams }: Props) {
       meta={<DataStatus locale={locale} lastUpdated={data.lastUpdated} stale={data.stale} />}
       actions={<><Link className="button secondary" href={`/${locale}/heatmap`}>{h.navLabel}</Link><Link className="button secondary" href={`/${locale}/methodology`}>{m.nav.methodology}</Link></>} />
     <HeadDisclosure text={m.common.operatorDisclosure} />
+    {access === "locked" ? <ShortlistLock locale={locale} /> : shortlist ? <ShortlistTopPicks locale={locale} data={shortlist} limit={shortlistTopN()} variant="scanner" /> : null}
     <ScannerBento locale={locale} counts={stateCounts} total={stateBase.length} labels={stateLabels}
       href={(state) => `${filtersHref(locale, { ...filters, state }, filters.floor)}#scanner-group-${state}`} />
     <PresetBar locale={locale} filters={filters} counts={presetCounts} total={data.rows.length} viewer={viewer} />
-    {access === "locked" ? <ShortlistLock locale={locale} /> : shortlist ? <ShortlistView locale={locale} data={shortlist} /> : null}
     <div className={styles.wrap}><div className={styles.layout}>
     <aside className={styles.rail} aria-label={sc.filters}><FilterForm locale={locale} filters={filters} sectors={sectors} viewer={viewer} /></aside>
     <div className={styles.results}>

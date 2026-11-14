@@ -7,23 +7,26 @@ import type { ScoreResult } from "../src/engine";
 import { buildShortlist, sectorConcentration, type CheckId, type SectorConcentration, type SectorShare, type Shortlist } from "../src/engine/shortlist";
 import { SHORTLIST_CONFIG } from "../src/engine/shortlist-config";
 import { readListingFacts } from "../src/data/shortlist-sectors";
-import { shortlistInputs, type EarningsFact } from "../src/data/shortlist";
+import { modelHoldings, shortlistInputs, type EarningsFact } from "../src/data/shortlist";
+import { applyModelLens, orderedRows, widenedThemes, type ModelLens, type ModelPortfolio } from "../src/engine/model-lens";
+import type { PortfolioSnapshot } from "../src/portfolio/model";
 import type { StoreRow } from "../src/data/store";
 
 /**
  * Replays the shortlist gates over stored scores (docs/shortlist.md). Read only: every query runs inside a READ ONLY transaction that is
  * rolled back. Run it against a local or disposable database; the coordinator runs it read-only elsewhere.
  *
- *   DATABASE_URL=... npx tsx scripts/shortlist-replay.ts [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--days N] [--names]
+ *   DATABASE_URL=... npx tsx scripts/shortlist-replay.ts [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--days N] [--top N] [--names]
  *
- * Without dates it replays the newest `--days` score dates (default 5).
+ * Without dates it replays the newest `--days` score dates (default 5). Per date it also prints the top `--top` names (default
+ * SHORTLIST_CONFIG.topN) after the model portfolio lens, using the newest stored portfolio snapshot on or before that date.
  */
 
 type Query = Pick<pg.PoolClient, "query">;
-export interface ReplayOptions { from: string | null; to: string | null; days: number; names: boolean }
+export interface ReplayOptions { from: string | null; to: string | null; days: number; names: boolean; top: number }
 
 export function parseArgs(argv: string[]): ReplayOptions {
-  const out: ReplayOptions = { from: null, to: null, days: 5, names: false };
+  const out: ReplayOptions = { from: null, to: null, days: 5, names: false, top: SHORTLIST_CONFIG.topN };
   const date = (value: string | undefined, flag: string) => {
     if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error(`${flag} needs a date YYYY-MM-DD`);
     return value;
@@ -33,6 +36,7 @@ export function parseArgs(argv: string[]): ReplayOptions {
     if (arg === "--from") out.from = date(argv[++i], arg);
     else if (arg === "--to") out.to = date(argv[++i], arg);
     else if (arg === "--days") { const n = Number(argv[++i]); if (!Number.isInteger(n) || n < 1 || n > 60) throw new Error("--days needs 1 to 60"); out.days = n; }
+    else if (arg === "--top") { const n = Number(argv[++i]); if (!Number.isInteger(n) || n < SHORTLIST_CONFIG.topNMin || n > SHORTLIST_CONFIG.topNMax) throw new Error(`--top needs ${SHORTLIST_CONFIG.topNMin} to ${SHORTLIST_CONFIG.topNMax}`); out.top = n; }
     else if (arg === "--names") out.names = true;
     else throw new Error(`Unknown argument ${arg}`);
   }
@@ -58,13 +62,25 @@ export async function scoreRowsOn(db: Query, asOf: string): Promise<StoreRow[]> 
   return result.rows.map((row) => ({ instrument: { ticker: row.ticker, name: row.name, sector: row.sector, tier: row.tier, source: row.source, list: row.list }, result: row.audit }));
 }
 
-export async function replayDay(db: Query, asOf: string): Promise<{ scored: number; shortlist: Shortlist }> {
+/** The newest stored portfolio snapshot on or before the date, with theme and sector group per holding. Null when none is stored or it is a sample. */
+export async function modelPortfolioOn(db: Query, asOf: string): Promise<ModelPortfolio | null> {
+  const result = await db.query<{ snapshot: PortfolioSnapshot }>("SELECT snapshot FROM portfolio_snapshots WHERE as_of <= $1::date ORDER BY as_of DESC LIMIT 1", [asOf]);
+  const snapshot = result.rows[0]?.snapshot;
+  if (!snapshot?.weights?.length || snapshot.sample) return null;
+  const facts = await readListingFacts(db, snapshot.weights.map((w) => w.symbol), snapshot.asOf);
+  return { asOf: snapshot.asOf, holdings: modelHoldings(snapshot, facts) };
+}
+
+export interface ReplayDay { asOf: string; scored: number; shortlist: Shortlist; lens?: ModelLens | null }
+
+export async function replayDay(db: Query, asOf: string): Promise<Omit<ReplayDay, "asOf">> {
   const rows = await scoreRowsOn(db, asOf);
   const tickers = rows.map((row) => row.instrument.ticker);
   const facts = await readListingFacts(db, tickers, asOf);
   const { rows: snapshots, latestPull } = await readEarningsSnapshots(db, asOf, tickers);
   const earnings = new Map<string, EarningsFact>(nextEarnings(snapshots, asOf, { latestPull }).map((next) => [next.ticker, { reportDate: next.reportDate, stale: next.stale }]));
-  return { scored: rows.length, shortlist: buildShortlist(asOf, shortlistInputs(rows, asOf, facts, earnings), SHORTLIST_CONFIG) };
+  const shortlist = buildShortlist(asOf, shortlistInputs(rows, asOf, facts, earnings), SHORTLIST_CONFIG);
+  return { scored: rows.length, shortlist, lens: applyModelLens(shortlist.kept, await modelPortfolioOn(db, asOf)) };
 }
 
 const CHECKS: CheckId[] = ["evidence", "rs", "liquidity", "report", "drawdown"];
@@ -74,8 +90,34 @@ export function largestGroup(concentration: SectorConcentration): SectorShare | 
   return concentration.groups.reduce<SectorShare | null>((best, group) => (!best || group.count > best.count ? group : best), null);
 }
 
-/** One markdown table row per date, then optional name lists. */
-export function formatReplay(days: { asOf: string; scored: number; shortlist: Shortlist }[], names = false): string {
+const pct = (value: number) => `${Math.round(value)}%`;
+
+/** Top-N and model portfolio lens table: one row per date. */
+export function formatTopPicks(days: ReplayDay[], top: number = SHORTLIST_CONFIG.topN): string[] {
+  const cells = (values: (string | number)[]) => `| ${values.join(" | ")} |`;
+  const lines = [
+    "",
+    `Top ${top} after the model portfolio lens (theme cap ${SHORTLIST_CONFIG.themeCapPercent}%, sector group cap ${SHORTLIST_CONFIG.sectorGroupCapPercent}%). Names in an above-cap theme move below the rest; each part keeps the shortlist order.`,
+    "",
+    cells(["Date", "Kept", "Model snapshot", "Themes above cap", "Sector groups above cap", "Moved down", `Top ${top}`, "Themes the top names widen"]),
+    cells(["---", "---:", "---", "---", "---", "---:", "---", "---"]),
+  ];
+  for (const { asOf, shortlist, lens } of days) {
+    const rows = orderedRows(shortlist.kept, lens).slice(0, top);
+    const topText = rows.map((row) => `${row.ticker} (${row.theme}${"lens" in row && row.lens?.status === "over" ? ", over" : ""})`).join(", ") || "none";
+    lines.push(cells(lens
+      ? [asOf, shortlist.kept.length, lens.weights.asOf, lens.overThemes.map((s) => `${s.key} ${pct(s.weightPercent)}`).join(", ") || "none",
+        lens.weights.sectors.filter((s) => s.overCap).map((s) => `${s.key} ${pct(s.weightPercent)}`).join(", ") || "none", lens.moved, topText, widenedThemes(rows).join(", ") || "none"]
+      : [asOf, shortlist.kept.length, "none", "no lens", "no lens", 0, topText, "no lens"]));
+  }
+  const last = days.at(-1)?.lens;
+  if (last) lines.push("", `Model portfolio ${last.weights.asOf} by theme: ${last.weights.themes.map((s) => `${s.key} ${pct(s.weightPercent)}`).join(", ")}.`,
+    `By sector group: ${last.weights.sectors.map((s) => `${s.key} ${pct(s.weightPercent)}`).join(", ")}.`);
+  return lines;
+}
+
+/** One markdown table row per date, then optional name lists, then the top-N lens table. */
+export function formatReplay(days: ReplayDay[], names = false, top: number = SHORTLIST_CONFIG.topN): string {
   const cells = (values: (string | number)[]) => `| ${values.join(" | ")} |`;
   const lines = [
     `Shortlist replay, config ${SHORTLIST_CONFIG.version}. F1 >= ${SHORTLIST_CONFIG.minEvidencedPoints}/25 points with data; F2 RS percentile >= ${SHORTLIST_CONFIG.minRsPercentile} and traded value >= ${SHORTLIST_CONFIG.minTradedValueUsd} USD; F3 flags only.`,
@@ -94,6 +136,10 @@ export function formatReplay(days: { asOf: string; scored: number; shortlist: Sh
     lines.push("", `${asOf} kept: ${shortlist.kept.map((row) => `${row.rank}. ${row.ticker} (${row.sector})`).join(", ") || "none"}`);
     lines.push(`${asOf} dropped: ${shortlist.dropped.map((row) => `${row.ticker} ${row.dropReasons.join("+")}`).join(", ") || "none"}`);
   }
+  lines.push(...formatTopPicks(days, top));
+  if (names) for (const { asOf, shortlist, lens } of days) {
+    lines.push("", `${asOf} lens order: ${orderedRows(shortlist.kept, lens).map((row) => `${row.rank}. ${row.ticker} (${row.theme}${"lens" in row && row.lens ? `, ${row.lens.status}` : ""})`).join(", ") || "none"}`);
+  }
   return `${lines.join("\n")}\n`;
 }
 
@@ -102,9 +148,9 @@ export async function runReplay(db: Pick<pg.Pool, "connect">, options: ReplayOpt
   const client = await db.connect();
   try {
     await client.query("BEGIN TRANSACTION READ ONLY");
-    const days = [];
+    const days: ReplayDay[] = [];
     for (const asOf of await replayDates(client, options)) days.push({ asOf, ...(await replayDay(client, asOf)) });
-    return formatReplay(days, options.names);
+    return formatReplay(days, options.names, options.top);
   } finally {
     await client.query("ROLLBACK").finally(() => client.release());
   }

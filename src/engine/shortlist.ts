@@ -1,6 +1,7 @@
 import { floorMetrics, type SCANNER_FLOOR } from "@/app/[locale]/(app)/scanner/floor";
 import { sessionsBetween } from "@/data/trading-calendar";
 import type { SectorGroup } from "@/universe/sector-groups";
+import type { Theme } from "@/universe/themes";
 import type { StateKey } from "@/i18n/rules";
 import { SHORTLIST_CONFIG, type ShortlistConfig } from "./shortlist-config";
 
@@ -47,6 +48,8 @@ export interface ShortlistInput {
   reportDate: string | null;
   reportStale?: boolean;
   sector: SectorGroup;
+  /** Theme (src/universe/themes.ts); Unknown when missing. */
+  theme?: Theme;
 }
 
 export interface ShortlistCheck { id: CheckId; gate: GateId; status: CheckStatus; reason: ShortlistReason }
@@ -54,6 +57,7 @@ export interface ShortlistMetrics { rsReturnPercent: number | null; rsPercentile
 export interface ShortlistRow extends ShortlistMetrics {
   ticker: string;
   sector: SectorGroup;
+  theme: Theme;
   percent: number | null;
   evidencedPoints: number | null;
   reportDate: string | null;
@@ -202,7 +206,7 @@ export function buildShortlist(asOf: string, universe: readonly ShortlistInput[]
     const checks = checksFor(input, metrics, config);
     const dropReasons = checks.filter((c) => c.status === "fail").map((c) => c.reason);
     return {
-      ticker: input.ticker, sector: input.sector, percent: input.percent, evidencedPoints: input.evidencedPoints, reportDate: input.reportDate, ...metrics, checks,
+      ticker: input.ticker, sector: input.sector, theme: input.theme ?? "unknown", percent: input.percent, evidencedPoints: input.evidencedPoints, reportDate: input.reportDate, ...metrics, checks,
       kept: dropReasons.length === 0, dropReasons,
       notAssessed: checks.filter((c) => c.status === "not-assessed").map((c) => c.id),
       flags: checks.filter((c) => c.status === "flag").map((c) => c.reason),
