@@ -107,11 +107,20 @@ it("does not report truncated country weights as a complete portfolio", async ()
 });
 
 it("selects a benchmark from exposure, never the trading venue", () => {
-  expect(benchmarkSymbol({ region: "US", listing_region: "EU" })).toBe("GSPC.INDX");
-  expect(benchmarkSymbol({ region: "Global", listing_region: "EU" })).toBeNull();
+  expect(benchmarkSymbol({ region: "North America", listing_region: "EU" })).toBe("GSPC.INDX");
+  expect(benchmarkSymbol({ region: "Global", listing_region: "EU" })).toBe("URTH.US");
   expect(benchmarkSymbol({ region: "Europe", listing_region: "US" })).toBe("STOXX50E.INDX");
-  expect(benchmarkSymbol({ region: "Global", score_category: "US Equity", listing_region: "EU" })).toBeNull();
+  expect(benchmarkSymbol({ region: "Global", score_category: "US Equity", listing_region: "EU" })).toBe("URTH.US");
   expect(benchmarkSymbol({ listing_region: "US" })).toBeNull();
+});
+
+it("uses existing world ETF bars without assigning an ex-US or emerging fund a proxy", () => {
+  for (const category of ["MSCI ACWI Equity", "FTSE All-World", "All World Equity"]) expect(benchmarkSymbol({ region: "Global", score_category: category })).toBe("ACWI.US");
+  for (const category of ["MSCI World", "Developed World Equity", "Global Equity"]) expect(benchmarkSymbol({ region: "Global", score_category: category })).toBe("URTH.US");
+  for (const region of ["Global ex US", "Developed markets ex United States", "Developed markets excluding United States and Canada", "Developed markets ex-North America", "International", "Emerging Markets", "Asia Emerging"]) {
+    expect(benchmarkSymbol({ region, score_category: "World Equity" })).toBeNull();
+  }
+  expect(benchmarkSymbol({ region: "Global ex US", score_category: "US Equity" })).toBeNull();
 });
 
 it("uses fund stats category and UCITS hint, without treating a world region as country concentration", async () => {

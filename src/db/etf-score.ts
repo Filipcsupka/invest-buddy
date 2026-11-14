@@ -71,7 +71,9 @@ export async function loadEtfPeerPercentiles(asOf: string, db: Query): Promise<M
 }
 export const benchmarkSymbol = (c: RecordRow): string | null => {
   const exposure = `${str(c.region) ?? ""} ${str(c.score_category) ?? str(c.category) ?? ""}`.toLowerCase();
-  if (/\b(?:world|global|all[ -]?world|international)\b/.test(exposure)) return null; // No world series is collected.
+  if (/\b(?:ex[ -]?(?:united states|north america|usa|us)|excluding (?:united states|north america)|international|emerging)\b/.test(exposure)) return null;
+  if (/\b(?:all[ -]?world|acwi)\b/.test(exposure)) return "ACWI.US";
+  if (/\b(?:world|global)\b/.test(exposure)) return "URTH.US";
   if (/\b(?:japan|japanese)\b/.test(exposure)) return "N225.INDX";
   if (/\bhong[ -]?kong\b/.test(exposure)) return "HSI.INDX";
   if (/\b(?:switzerland|swiss)\b/.test(exposure)) return "SSMI.INDX";
@@ -85,7 +87,7 @@ export const benchmarkSymbol = (c: RecordRow): string | null => {
 };
 const byKey = (rows: RecordRow[], field = "listing_key") => { const map = new Map<string, RecordRow[]>(); for (const row of rows) { const key = str(row[field]); if (!key) continue; const values = map.get(key) ?? []; values.push(row); map.set(key, values); } return map; };
 export async function loadEtfBenchmarkReturns(asOf: string, db: Query): Promise<Map<string, { return6m: number | null; barDate: string | null }>> {
-  const result = await db.query<RecordRow>(`SELECT b.vendor_symbol,b.bar_date::text AS date,b.close FROM unnest($1::text[]) sym(vendor_symbol) CROSS JOIN LATERAL (SELECT * FROM asset_bars WHERE vendor_symbol=sym.vendor_symbol AND bar_date<=$2::date ORDER BY bar_date DESC LIMIT 130) b`, [["GSPC.INDX", "STOXX50E.INDX", "GDAXI.INDX", "FCHI.INDX", "AEX.INDX", "IBEX.INDX", "SSMI.INDX", "N225.INDX", "HSI.INDX"], asOf]);
+  const result = await db.query<RecordRow>(`SELECT b.vendor_symbol,b.bar_date::text AS date,b.close FROM unnest($1::text[]) sym(vendor_symbol) CROSS JOIN LATERAL (SELECT * FROM asset_bars WHERE vendor_symbol=sym.vendor_symbol AND bar_date<=$2::date ORDER BY bar_date DESC LIMIT 130) b`, [["GSPC.INDX", "STOXX50E.INDX", "GDAXI.INDX", "FCHI.INDX", "AEX.INDX", "IBEX.INDX", "SSMI.INDX", "N225.INDX", "HSI.INDX", "ACWI.US", "URTH.US"], asOf]);
   const grouped = byKey(result.rows, "vendor_symbol");
   return new Map([...grouped].map(([symbol, rows]) => { const facts = etfBarFacts(rows.map((r) => ({ date: day(r.date), close: n(r.close) ?? 0, volume: null, currency: null })), null); return [symbol, { return6m: facts.return6m, barDate: facts.barDate }]; }));
 }
