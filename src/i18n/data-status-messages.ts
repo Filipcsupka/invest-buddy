@@ -24,7 +24,7 @@ const en = {
 
 const sk: typeof en = {
   title: "Stav údajov",
-  note: "Najnovší uložený dátum pre každú sadu údajov pre túto stránku. Len na informáciu.",
+  note: "Najnovší uložený dátum každej sady údajov, z ktorej stránka vychádza. Len na informáciu.",
   datasets: {
     prices: { label: "Ceny", source: "Denný zdroj záverečných cien" },
     fundamentals: { label: "Fundamenty", source: "Finančné výkazy SEC EDGAR" },
