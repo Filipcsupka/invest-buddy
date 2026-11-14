@@ -1,5 +1,6 @@
 import pg from "pg";
-import { scoreEtfListing, storeEtfScore } from "@/db/etf-score";
+import { loadEtfBenchmarkReturns, loadEtfPeerPercentiles, readEtfScoreFactsBatch, storeEtfScore } from "@/db/etf-score";
+import { etfScore } from "@/engine/etf-score";
 import { runLoggedJob } from "./job-log";
 
 /** Run after ETF detail refresh. A failed listing does not prevent the remaining writes. */
@@ -8,17 +9,30 @@ export async function runEtfScore(db: pg.Pool, asOf: string) {
   let rated = 0, processed = 0, failures = 0;
   const rejections: Record<string, number> = {};
   const evidence: Record<string, number> = {};
-  for (const row of listings.rows) {
-    try {
-      const score = await scoreEtfListing(row.listing_key, asOf, db);
-      if (!score) continue;
-      // Each upsert is atomic; a retry safely replaces already-written rows.
-      await storeEtfScore(row.listing_key, asOf, score, db);
-      processed++;
-      if (score.state === "rated") rated++;
-      for (const reason of score.rejections) rejections[reason] = (rejections[reason] ?? 0) + 1;
-      evidence[score.evidencedMax] = (evidence[score.evidencedMax] ?? 0) + 1;
-    } catch { failures++; }
+  const [peers, benchmarks] = await Promise.all([loadEtfPeerPercentiles(asOf, db), loadEtfBenchmarkReturns(asOf, db)]);
+  for (let offset = 0; offset < listings.rows.length; offset += 50) {
+    const keys = listings.rows.slice(offset, offset + 50).map((row) => row.listing_key);
+    let facts;
+    try { facts = await readEtfScoreFactsBatch(keys, asOf, db, peers, benchmarks); }
+    catch {
+      facts = new Map();
+      for (const key of keys) {
+        try { const one = await readEtfScoreFactsBatch([key], asOf, db, peers, benchmarks); if (one.has(key)) facts.set(key, one.get(key)!); }
+        catch { failures++; }
+      }
+    }
+    for (const key of keys) {
+      try {
+        const input = facts.get(key);
+        if (!input) continue;
+        const score = etfScore(input);
+        await storeEtfScore(key, asOf, score, db);
+        processed++;
+        if (score.state === "rated") rated++;
+        for (const reason of score.rejections) rejections[reason] = (rejections[reason] ?? 0) + 1;
+        evidence[score.evidencedMax] = (evidence[score.evidencedMax] ?? 0) + 1;
+      } catch { failures++; }
+    }
   }
   // Bound history to 401 dates per listing and rule version, including unrated rows.
   const expired = await db.query(`DELETE FROM etf_scores WHERE as_of < $1::date - 400`, [asOf]);

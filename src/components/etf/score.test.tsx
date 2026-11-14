@@ -8,7 +8,7 @@ const facts: EtfScoreFacts = { asOf: "2026-11-12", instrumentType: "ETF", name: 
 
 it.each(["en", "sk"] as const)("shows stored score coverage and missing facts in %s", (locale) => {
   const html = renderToStaticMarkup(<EtfStoredScore score={etfScore(facts)} m={getEtfMessages(locale)} />);
-  expect(html).toContain(locale === "en" ? "2 of 4 groups with data" : "Údaje v 2 zo 4 skupín");
+  expect(html).toContain(locale === "en" ? "2 of 8 groups with data" : "Údaje v 2 zo 8 skupín");
   expect(html).toContain(locale === "en" ? "Missing data" : "Chýbajúci údaj");
   expect(html).toContain(locale === "en" ? "price history" : "cenová história");
 });

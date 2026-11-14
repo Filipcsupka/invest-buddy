@@ -26,8 +26,8 @@ it("reads only point-in-time inputs", async () => {
 });
 it("uses US catalog AUM when fund-stat currency is unknown", async () => {
   const db = { query: async (sql: string) => {
-    if (sql.includes("FROM etf_catalog")) return { rows: [{ name: "Plain fund", instrument_type: "ETF", listing_region: "US", trading_currency: "USD", aum_usd_m: 100, last_seen: "2026-11-12" }] };
-    if (sql.includes("FROM etf_fund_stats")) return { rows: [{ total_assets: 200_000_000, total_assets_currency: null }] };
+    if (sql.includes("FROM etf_catalog")) return { rows: [{ listing_key: "X", name: "Plain fund", instrument_type: "ETF", listing_region: "US", trading_currency: "USD", aum_usd_m: 100, last_seen: "2026-11-12" }] };
+    if (sql.includes("FROM etf_fund_stats")) return { rows: [{ listing_key: "X", total_assets: 200_000_000, total_assets_currency: null }] };
     if (sql.includes("EURUSD.FOREX")) return { rows: [{ close: 2 }] };
     return { rows: [] };
   } };
@@ -39,8 +39,8 @@ it.each([
   ["missing fund-stat AUM", { total_assets: null, total_assets_currency: "USD" }],
 ] as const)("uses US catalog AUM with %s", async (_case, fundStats) => {
   const db = { query: async (sql: string) => {
-    if (sql.includes("FROM etf_catalog")) return { rows: [{ name: "Plain fund", instrument_type: "ETF", listing_region: "US", trading_currency: "USD", aum_usd_m: 100, last_seen: "2026-11-12" }] };
-    if (sql.includes("FROM etf_fund_stats")) return { rows: fundStats ? [fundStats] : [] };
+    if (sql.includes("FROM etf_catalog")) return { rows: [{ listing_key: "X", name: "Plain fund", instrument_type: "ETF", listing_region: "US", trading_currency: "USD", aum_usd_m: 100, last_seen: "2026-11-12" }] };
+    if (sql.includes("FROM etf_fund_stats")) return { rows: fundStats ? [{ listing_key: "X", ...fundStats }] : [] };
     if (sql.includes("EURUSD.FOREX")) return { rows: [{ close: 2 }] };
     return { rows: [] };
   } };
@@ -48,7 +48,7 @@ it.each([
 });
 it("does not infer fund currency from a European listing", async () => {
   const db = { query: async (sql: string) => {
-    if (sql.includes("FROM etf_catalog")) return { rows: [{ name: "Plain fund", instrument_type: "ETF", listing_region: "EU", trading_currency: "USD", aum_usd_m: 100, last_seen: "2026-11-12" }] };
+    if (sql.includes("FROM etf_catalog")) return { rows: [{ listing_key: "X", name: "Plain fund", instrument_type: "ETF", listing_region: "EU", trading_currency: "USD", aum_usd_m: 100, last_seen: "2026-11-12" }] };
     if (sql.includes("EURUSD.FOREX")) return { rows: [{ close: 2 }] };
     return { rows: [] };
   } };
@@ -75,10 +75,10 @@ it.each([false, true])("reads dated TER and USD FX, stale bars=%s", async (stale
   const seen: string[] = [];
   const db = { query: async (sql: string) => {
     seen.push(sql);
-    if (sql.includes("FROM etf_catalog")) return { rows: [{ name: "Plain fund", instrument_type: "ETF", trading_currency: "USD", ter_pct: 9, vendor_symbol: "X.US" }] };
-    if (sql.includes("FROM etf_fund_stats")) return { rows: [{ ongoing_charge_pct: "0.15", total_assets: 100, total_assets_currency: "USD" }] };
+    if (sql.includes("FROM etf_catalog")) return { rows: [{ listing_key: "X", name: "Plain fund", instrument_type: "ETF", trading_currency: "USD", ter_pct: 9, vendor_symbol: "X.US" }] };
+    if (sql.includes("FROM etf_fund_stats")) return { rows: [{ listing_key: "X", ongoing_charge_pct: "0.15", total_assets: 100, total_assets_currency: "USD" }] };
     if (sql.includes("EURUSD.FOREX")) return { rows: [{ close: 2 }] };
-    if (sql.includes("FROM asset_bars")) return { rows: Array.from({ length: 252 }, (_, i) => ({ date: new Date(Date.parse(stale ? "2026-01-01" : "2026-11-12") - i * 86400000).toISOString().slice(0, 10), close: 100, volume: 10, currency: "USD" })) };
+    if (sql.includes("b.high,b.low")) return { rows: Array.from({ length: 252 }, (_, i) => ({ vendor_symbol: "X.US", date: new Date(Date.parse(stale ? "2026-01-01" : "2026-11-12") - i * 86400000).toISOString().slice(0, 10), close: 100, volume: 10, currency: "USD" })) };
     return { rows: [] };
   } };
   const f = await readEtfScoreFacts("X", "2026-11-12", db as never);
@@ -97,9 +97,9 @@ it.each([200, 251, 252])("requires 252 bars for year-long trend facts (%s bars)"
 
 it("does not report truncated country weights as a complete portfolio", async () => {
   const db = { query: async (sql: string) => {
-    if (sql.includes("FROM etf_catalog")) return { rows: [{ name: "Plain", instrument_type: "ETF" }] };
+    if (sql.includes("FROM etf_catalog")) return { rows: [{ listing_key: "X", name: "Plain", instrument_type: "ETF" }] };
     if (sql.includes("FROM etf_fund_stats")) return { rows: [{ holdings_count: 10 }] };
-    if (sql.includes("FROM etf_holdings")) return { rows: Array.from({ length: 10 }, () => ({ country: "United States", weight_pct: 3 })) };
+    if (sql.includes("FROM etf_holdings")) return { rows: Array.from({ length: 10 }, () => ({ listing_key: "X", country: "United States", weight_pct: 3 })) };
     return { rows: [] };
   } };
   expect((await readEtfScoreFacts("X", "2026-11-12", db as never))?.maxCountryWeightPct).toBeNull();
