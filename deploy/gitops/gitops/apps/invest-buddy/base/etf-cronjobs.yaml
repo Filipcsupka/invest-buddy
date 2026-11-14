@@ -1,4 +1,4 @@
-# Xetra catalog sync runs Sunday; ETF enrichment drains pending rows daily after stock jobs.
+# Xetra catalog sync runs Sunday; ETF enrichment drains pending rows Monday to Saturday after stock jobs, off the Sunday universe seed.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -63,7 +63,7 @@ metadata:
   namespace: invest
 spec:
   suspend: false
-  schedule: "10 10 * * *"
+  schedule: "10 10 * * 1-6"
   timeZone: Europe/Bratislava
   concurrencyPolicy: Forbid
   startingDeadlineSeconds: 300
@@ -93,7 +93,7 @@ spec:
           containers:
             - name: etf-enrich
               image: ghcr.io/filipcsupka/invest-buddy-scanner:latest
-              command: ["node", "/app/scanner/run-etf-enrich.mjs", "--limit", "3000", "--timeout-s", "1200"]
+              command: ["node", "/app/scanner/run-etf-enrich.mjs", "--limit", "1500", "--timeout-s", "1200"]
               securityContext:
                 allowPrivilegeEscalation: false
                 readOnlyRootFilesystem: true
@@ -107,7 +107,7 @@ spec:
                       name: invest-buddy-research-config
                       key: RESEARCH_ENABLED
                 - name: ETF_EODHD_DAILY_CALL_BUDGET
-                  value: "30000"
+                  value: "15000"
                 - name: EODHD_API_KEY
                   valueFrom:
                     secretKeyRef:

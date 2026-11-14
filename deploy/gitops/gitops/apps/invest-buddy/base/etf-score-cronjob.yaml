@@ -1,4 +1,4 @@
-# ETF rule scores run after the 01:10 fund detail refresh finishes.
+# ETF rule scores run after the 02:35 ETF bars job (deadline 50 minutes) finishes.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -6,7 +6,7 @@ metadata:
   namespace: invest
 spec:
   suspend: true
-  schedule: "30 2 * * *"
+  schedule: "30 3 * * *"
   timeZone: Europe/Bratislava
   concurrencyPolicy: Forbid
   startingDeadlineSeconds: 300

@@ -181,7 +181,7 @@ test("runner dry run needs no vendor key and makes no vendor or ingest write", a
   const result = await execute(parseArgs(["--dry-run"], {}), {
     env: { INGEST_TOKEN: "fixture" }, request, log: () => {},
   });
-  assert.deepEqual(result, { batches: 1, failed: 0, calls: 0, budget: 30000, estimatedCalls: 10, deferred: 0 });
+  assert.deepEqual(result, { batches: 1, failed: 0, calls: 0, budget: 15000, estimatedCalls: 10, deferred: 0 });
   assert.equal(urls.length, 1);
   assert.match(urls[0], /pending\?limit=20$/);
 });

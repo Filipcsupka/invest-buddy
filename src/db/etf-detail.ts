@@ -249,16 +249,26 @@ export async function etfTrackingCandidates(db: Query, limit = 0): Promise<EtfCa
   return (limit ? ordered.slice(0, limit) : ordered).map((row, index) => ({ ...row, rank: index + 1 }));
 }
 
-/** Adds candidates to tracked_assets (class etf) and etf_tracked, and deactivates listings no longer selected. */
-export async function syncEtfTracking(db: Query, candidates: EtfCandidate[]): Promise<{ active: number; deactivated: number }> {
+/**
+ * Adds candidates to tracked_assets (class etf) and etf_tracked. A listing whose vendor symbol changed starts over:
+ * its fetch timestamps reset so the new symbol gets history, dividends and detail. With `deactivate` false (a capped
+ * run) listings outside the selection stay active.
+ */
+export async function syncEtfTracking(db: Query, candidates: EtfCandidate[], deactivate = true): Promise<{ active: number; deactivated: number }> {
   for (const row of candidates) {
     await db.query(`INSERT INTO tracked_assets (vendor_symbol,asset_class,name,currency,exchange,enabled,sort) VALUES ($1,'etf',$2,$3,$4,true,$5)
       ON CONFLICT (vendor_symbol) DO UPDATE SET name=EXCLUDED.name,currency=COALESCE(EXCLUDED.currency,tracked_assets.currency),enabled=true,sort=EXCLUDED.sort
       WHERE tracked_assets.asset_class='etf'`, [row.vendor_symbol, row.name, row.currency, row.exchange, row.rank]);
     await db.query(`INSERT INTO etf_tracked (listing_key,vendor_symbol,rank,active) SELECT $1,$2,$3,true
       WHERE EXISTS (SELECT 1 FROM tracked_assets WHERE vendor_symbol=$2 AND asset_class='etf')
-      ON CONFLICT (listing_key) DO UPDATE SET vendor_symbol=EXCLUDED.vendor_symbol,rank=EXCLUDED.rank,active=true`, [row.listing_key, row.vendor_symbol, row.rank]);
+      ON CONFLICT (listing_key) DO UPDATE SET vendor_symbol=EXCLUDED.vendor_symbol,rank=EXCLUDED.rank,active=true,
+        detail_fetched_at=CASE WHEN etf_tracked.vendor_symbol=EXCLUDED.vendor_symbol THEN etf_tracked.detail_fetched_at END,
+        detail_status=CASE WHEN etf_tracked.vendor_symbol=EXCLUDED.vendor_symbol THEN etf_tracked.detail_status END,
+        dividends_fetched_at=CASE WHEN etf_tracked.vendor_symbol=EXCLUDED.vendor_symbol THEN etf_tracked.dividends_fetched_at END,
+        bars_fetched_at=CASE WHEN etf_tracked.vendor_symbol=EXCLUDED.vendor_symbol THEN etf_tracked.bars_fetched_at END,
+        bars_retry_after=CASE WHEN etf_tracked.vendor_symbol=EXCLUDED.vendor_symbol THEN etf_tracked.bars_retry_after END`, [row.listing_key, row.vendor_symbol, row.rank]);
   }
+  if (!deactivate) return { active: candidates.length, deactivated: 0 };
   const keys = candidates.map((row) => row.listing_key);
   const dropped = await db.query(`UPDATE etf_tracked SET active=false WHERE active AND NOT (listing_key = ANY($1::text[])) RETURNING vendor_symbol`, [keys]);
   await db.query(`UPDATE tracked_assets a SET enabled=false WHERE asset_class='etf' AND enabled
@@ -266,24 +276,25 @@ export async function syncEtfTracking(db: Query, candidates: EtfCandidate[]): Pr
   return { active: candidates.length, deactivated: dropped.rowCount ?? 0 };
 }
 
-export interface DueEtf { listing_key: string; vendor_symbol: string; isin: string | null; ucits_hint: boolean | null; currency: string | null; exchange: string; detail_fresh: boolean; last_bar_date: string | null; last_dividend_date: string | null }
+export interface DueEtf { listing_key: string; vendor_symbol: string; isin: string | null; ucits_hint: boolean | null; currency: string | null; exchange: string; detail_fresh: boolean; last_bar_date: string | null; last_close: number | null; last_dividend_date: string | null }
 export type EtfDueMode = "bars" | "backfill" | "dividends" | "fundamentals";
 
 /**
- * Active listings due for the selected collection mode. A recent enrich payload satisfies the
+ * Active listings due for the selected collection mode, with the newest stored bar. A recent enrich payload satisfies the
  * monthly fundamentals refresh without a second vendor request.
  */
 export async function dueEtfs(db: Query, mode: EtfDueMode, limit = 0): Promise<DueEtf[]> {
   const result = await db.query<DueEtf>(`SELECT t.listing_key, t.vendor_symbol, c.isin, c.ucits_hint, a.currency, a.exchange,
       EXISTS (SELECT 1 FROM etf_fund_stats f WHERE f.listing_key=t.listing_key AND f.vendor_symbol=t.vendor_symbol AND f.fetched_at > now() - interval '29 days') AS detail_fresh,
-      (SELECT max(bar_date)::text FROM asset_bars b WHERE b.vendor_symbol=t.vendor_symbol) AS last_bar_date,
+      lb.bar_date::text AS last_bar_date, lb.close::float8 AS last_close,
       (SELECT max(ex_date)::text FROM etf_dividends d WHERE d.vendor_symbol=t.vendor_symbol) AS last_dividend_date
     FROM etf_tracked t JOIN etf_catalog c USING (listing_key) JOIN tracked_assets a ON a.vendor_symbol=t.vendor_symbol
+    LEFT JOIN LATERAL (SELECT bar_date, close FROM asset_bars b WHERE b.vendor_symbol=t.vendor_symbol ORDER BY bar_date DESC LIMIT 1) lb ON true
     WHERE t.active AND ($1='fundamentals' OR t.detail_status IS NULL OR t.detail_status NOT IN ('not_etf','isin_mismatch'))
       AND (CASE $1::text
       WHEN 'fundamentals' THEN t.detail_fetched_at IS NULL OR t.detail_fetched_at < now() - interval '30 days'
       WHEN 'dividends' THEN t.dividends_fetched_at IS NULL OR t.dividends_fetched_at < now() - interval '7 days'
-      WHEN 'backfill' THEN t.bars_fetched_at IS NULL
+      WHEN 'backfill' THEN t.bars_fetched_at IS NULL AND (t.bars_retry_after IS NULL OR t.bars_retry_after <= now())
       ELSE true END)
     ORDER BY CASE $1::text WHEN 'fundamentals' THEN t.detail_fetched_at WHEN 'dividends' THEN t.dividends_fetched_at WHEN 'backfill' THEN t.bars_fetched_at ELSE NULL END NULLS FIRST, t.rank
     LIMIT CASE WHEN $2::int=0 THEN NULL ELSE $2 END`, [mode, limit]);
@@ -295,12 +306,14 @@ export async function countActiveEtfs(db: Query): Promise<number> {
   return Number(result.rows[0]?.n ?? 0);
 }
 
+/** A failed or empty history backfill waits seven days before the symbol is due again, so it cannot block the queue. */
 export async function markEtfFetched(db: Query, listingKey: string, part: "fundamentals" | "dividends" | "backfill", status: "ok" | "not_etf" | "isin_mismatch" | "failed" = "ok"): Promise<void> {
   await db.query(`UPDATE etf_tracked SET
     detail_fetched_at=CASE WHEN $2='fundamentals' THEN now() ELSE detail_fetched_at END,
     detail_status=CASE WHEN $2='fundamentals' THEN $3 ELSE detail_status END,
     dividends_fetched_at=CASE WHEN $2='dividends' THEN now() ELSE dividends_fetched_at END,
-    bars_fetched_at=CASE WHEN $2='backfill' AND $3='ok' THEN now() ELSE bars_fetched_at END
+    bars_fetched_at=CASE WHEN $2='backfill' AND $3='ok' THEN now() ELSE bars_fetched_at END,
+    bars_retry_after=CASE WHEN $2<>'backfill' THEN bars_retry_after WHEN $3='ok' THEN NULL ELSE now() + interval '7 days' END
     WHERE listing_key=$1`, [listingKey, part, status]);
 }
 

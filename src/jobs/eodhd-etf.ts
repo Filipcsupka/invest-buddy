@@ -1,5 +1,5 @@
 import pg from "pg";
-import { EodhdClient, EodhdHttpError, type BulkLastDayBar } from "../data-providers/eodhd/client";
+import { EodhdClient, EodhdHttpError, type BulkLastDayBar, type EodBar, type Split } from "../data-providers/eodhd/client";
 import { logEodhdCalls, upsertAssetBars } from "../db/asset-bars";
 import {
   countActiveEtfs, dueEtfs, etfTrackingCandidates, markEtfFetched, parseEtfData, storeEtfDetail, syncEtfTracking, upsertEtfDividends,
@@ -8,11 +8,14 @@ import {
 import { runLoggedJob } from "./job-log";
 
 const DAY = 86_400_000;
-export const ETF_COSTS = { fundamentals: 10, dividends: 1, eod: 1, bulk: 100 } as const;
+export const ETF_COSTS = { fundamentals: 10, dividends: 1, eod: 1, splits: 1, bulk: 100 } as const;
+/** Account-wide default: the 100,000-call plan minus room for EODHD jobs that do not write eodhd_call_log. */
+export const ACCOUNT_DAILY_BUDGET = 70_000;
 export const ETF_DETAIL_FILTER = "General,ETF_Data,Technicals";
-export interface EtfJobArgs { mode: EtfDueMode; dryRun: boolean; maxTracked: number; maxCalls: number; backfill: number; limit: number }
+export interface EtfJobArgs { mode: EtfDueMode; dryRun: boolean; maxTracked: number; maxCalls: number; accountBudget: number; backfill: number; limit: number }
 export function parseEtfJobArgs(args: string[], env: Record<string, string | undefined> = process.env): EtfJobArgs {
-  const out: EtfJobArgs = { mode: "bars", dryRun: false, maxTracked: Number(env.ETF_MAX_TRACKED ?? 0), maxCalls: Number(env.ETF_EODHD_MAX_CALLS ?? 10_000), backfill: 5, limit: 0 };
+  const out: EtfJobArgs = { mode: "bars", dryRun: false, maxTracked: Number(env.ETF_MAX_TRACKED ?? 0), maxCalls: Number(env.ETF_EODHD_MAX_CALLS ?? 10_000),
+    accountBudget: Number(env.EODHD_ACCOUNT_DAILY_BUDGET ?? ACCOUNT_DAILY_BUDGET), backfill: 5, limit: 0 };
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--dry-run") out.dryRun = true;
     else if (args[i] === "--mode") out.mode = args[++i] as EtfDueMode;
@@ -25,6 +28,7 @@ export function parseEtfJobArgs(args: string[], env: Record<string, string | und
   if (!["bars", "backfill", "dividends", "fundamentals"].includes(out.mode)) throw new Error("--mode needs bars, backfill, dividends or fundamentals");
   if (!Number.isInteger(out.maxTracked) || out.maxTracked < 0 || out.maxTracked > 100_000) throw new Error("ETF_MAX_TRACKED (or --max-tracked) needs 0..100000; 0 means all");
   if (!Number.isInteger(out.maxCalls) || out.maxCalls < 1 || out.maxCalls > 90_000) throw new Error("ETF_EODHD_MAX_CALLS (or --max-calls) needs 1..90000");
+  if (!Number.isInteger(out.accountBudget) || out.accountBudget < 1 || out.accountBudget > 100_000) throw new Error("EODHD_ACCOUNT_DAILY_BUDGET needs 1..100000");
   if (!Number.isInteger(out.backfill) || out.backfill < 1 || out.backfill > 30) throw new Error("--backfill needs 1..30 years");
   if (!Number.isInteger(out.limit) || out.limit < 0 || out.limit > 100_000) throw new Error("--limit needs 0..100000; 0 means all");
   return out;
@@ -49,34 +53,88 @@ const barsCost = (due: DueEtf[]) => {
   for (const fund of due) sizes.set(fund.exchange, (sizes.get(fund.exchange) ?? 0) + 1);
   return [...sizes.values()].reduce((sum, n) => sum + Math.min(n, ETF_COSTS.bulk), 0);
 };
+/** A one-day close move of 1.4x either way is treated as a possible split. Leveraged and inverse funds are out of scope. */
+export const SPLIT_JUMP = 1.4;
+export function suspectSplit(previousClose: number | null, rows: Pick<EodBar, "date" | "close">[]): boolean {
+  let last = previousClose;
+  for (const row of [...rows].sort((a, b) => a.date.localeCompare(b.date))) {
+    if (!(typeof row.close === "number" && row.close > 0)) continue;
+    if (last && (row.close / last >= SPLIT_JUMP || last / row.close >= SPLIT_JUMP)) return true;
+    last = row.close;
+  }
+  return false;
+}
+const splitRatio = (split: Split) => {
+  const match = /^(\d+(?:\.\d+)?)\/(\d+(?:\.\d+)?)$/.exec(split.split ?? "");
+  const ratio = match ? Number(match[1]) / Number(match[2]) : NaN;
+  return /^\d{4}-\d{2}-\d{2}$/.test(split.date) && Number.isFinite(ratio) && ratio > 0 && ratio !== 1 ? ratio : null;
+};
+/**
+ * Divides prices before each split date by the split ratio ("new/old"), so the stored ETF series has no split jump.
+ * EODHD already reports volume adjusted for later splits.
+ */
+export function splitAdjust(rows: EodBar[], splits: Split[]): EodBar[] {
+  const valid = splits.map((split) => ({ date: split.date, ratio: splitRatio(split) })).filter((split): split is { date: string; ratio: number } => split.ratio !== null);
+  return rows.map((row) => {
+    const factor = valid.filter((split) => split.date > row.date).reduce((product, split) => product * split.ratio, 1);
+    if (factor === 1) return row;
+    const scale = (value: number | null | undefined) => (typeof value === "number" ? value / factor : value);
+    return { ...row, open: scale(row.open), high: scale(row.high), low: scale(row.low), close: scale(row.close) } as EodBar;
+  });
+}
 const yearsBack = (today: string, years: number) => new Date(Date.parse(`${today}T00:00:00Z`) - Math.round(years * 365.25) * DAY).toISOString().slice(0, 10);
 const stopping = (error: unknown) => error instanceof EodhdHttpError && [401, 402, 403, 429].includes(error.status);
-type Api = Pick<EodhdClient, "fundamentals" | "dividends" | "eod" | "getCallCosts"> & { eodBulkLastDay(exchange: string): Promise<BulkLastDayBar[]> };
+type Api = Pick<EodhdClient, "fundamentals" | "dividends" | "eod" | "splits" | "getCallCosts"> & { eodBulkLastDay(exchange: string): Promise<BulkLastDayBar[]> };
 type Db = Pick<pg.Pool, "query" | "connect">;
 const spentCalls = (api: Api) => Object.values(api.getCallCosts()).reduce((sum, calls) => sum + calls, 0);
 const asset = (fund: DueEtf) => ({ vendor_symbol: fund.vendor_symbol, asset_class: "etf" as const, currency: fund.currency, last_bar_date: fund.last_bar_date });
 const code = (symbol: string) => symbol.slice(0, symbol.lastIndexOf("."));
 
+async function callsToday(db: Pick<pg.Pool, "query">): Promise<number> {
+  const result = await db.query<{ calls: string | null }>("SELECT sum(calls)::text AS calls FROM eodhd_call_log WHERE run_date=CURRENT_DATE", []);
+  return Number(result.rows[0]?.calls ?? 0);
+}
+
 /** Synchronize the in-scope universe, then run one independently budgeted collection mode. */
 export async function runEtfJob(db: Db, api: Api | null, options: EtfJobArgs, today = new Date().toISOString().slice(0, 10)) {
   const candidates = await etfTrackingCandidates(db, options.maxTracked);
   const counts = { mode: options.mode, candidates: candidates.length, active: 0, deactivated: 0, due: 0, processed: 0, freshSkipped: 0,
-    holdings: 0, exposure: 0, dividends: 0, bars: 0, bulkExchanges: 0, deferred: 0, failures: 0, failedSymbols: "",
-    cap: options.maxCalls, estimatedCalls: 0, calls: 0, dryRun: options.dryRun };
+    holdings: 0, exposure: 0, dividends: 0, bars: 0, bulkExchanges: 0, splitChecks: 0, splitAdjusted: 0, empty: 0, deferred: 0, failures: 0, failedSymbols: "",
+    cap: options.maxCalls, accountCallsToday: 0, estimatedCalls: 0, calls: 0, dryRun: options.dryRun };
+  // eodhd_call_log holds today's logged calls from every job; the run never takes the account past its daily budget.
+  counts.accountCallsToday = await callsToday(db);
+  counts.cap = Math.max(0, Math.min(options.maxCalls, options.accountBudget - counts.accountCallsToday));
   if (options.dryRun || !api) {
     const tracked = await countActiveEtfs(db);
     const due = tracked ? await dueEtfs(db, options.mode, options.limit) : [];
     counts.due = tracked ? due.length : candidates.length;
-    counts.estimatedCalls = options.mode === "bars" ? Math.min(options.maxCalls, barsCost(due))
-      : Math.min(options.maxCalls, counts.due * (options.mode === "fundamentals" ? ETF_COSTS.fundamentals : ETF_COSTS.eod));
+    counts.estimatedCalls = options.mode === "bars" ? Math.min(counts.cap, barsCost(due))
+      : Math.min(counts.cap, counts.due * (options.mode === "fundamentals" ? ETF_COSTS.fundamentals : ETF_COSTS.eod));
     return counts;
   }
-  const sync = await syncEtfTracking(db, candidates);
+  const sync = await syncEtfTracking(db, candidates, options.maxTracked === 0);
   counts.active = sync.active; counts.deactivated = sync.deactivated;
   const due = await dueEtfs(db, options.mode, options.limit);
   counts.due = due.length;
   const failed: string[] = [];
-  const room = (cost: number) => spentCalls(api) + cost <= options.maxCalls;
+  const room = (cost: number) => spentCalls(api) + cost <= counts.cap;
+  /**
+   * Bars that jump by a split-sized move trigger a splits request. When the vendor confirms a split after the stored
+   * bars, the symbol's history is fetched again and every stored price is restated on the post-split basis.
+   */
+  const storeBars = async (fund: DueEtf, rows: EodBar[], history: boolean) => {
+    if (rows.length && suspectSplit(fund.last_close, rows) && room(ETF_COSTS.splits + (history ? 0 : ETF_COSTS.eod))) {
+      const from = yearsBack(today, options.backfill);
+      counts.splitChecks++;
+      const splits = (await api.splits(fund.vendor_symbol, { from, to: today })).filter((split) => splitRatio(split) !== null);
+      const fresh = history ? splits : splits.filter((split) => !fund.last_bar_date || split.date > fund.last_bar_date);
+      if (fresh.length) {
+        counts.splitAdjusted++;
+        rows = splitAdjust(history ? rows : await api.eod(fund.vendor_symbol, { from, to: today }), splits);
+      }
+    }
+    return upsertAssetBars(db, asset(fund), rows);
+  };
   try {
     if (options.mode === "bars") {
       const groups = new Map<string, DueEtf[]>();
@@ -85,7 +143,7 @@ export async function runEtfJob(db: Db, api: Api | null, options: EtfJobArgs, to
       // One symbol request (1 call) fills a gap or a fund missing from the bulk file.
       const single = async (fund: DueEtf) => {
         const from = fund.last_bar_date ? nextDay(fund.last_bar_date) : daysBack(today, 14);
-        return from > today ? 0 : upsertAssetBars(db, asset(fund), await api.eod(fund.vendor_symbol, { from, to: today }));
+        return from > today ? 0 : storeBars(fund, await api.eod(fund.vendor_symbol, { from, to: today }), false);
       };
       exchanges: for (const [exchange, funds] of groups) {
         let byCode: Map<string, BulkLastDayBar> | null = null;
@@ -110,7 +168,7 @@ export async function runEtfJob(db: Db, api: Api | null, options: EtfJobArgs, to
           if (perSymbol && !room(ETF_COSTS.eod)) { counts.deferred = due.length - visited; break exchanges; }
           try {
             if (perSymbol) counts.bars += await single(fund);
-            else if (!fund.last_bar_date || bar.date > fund.last_bar_date) counts.bars += await upsertAssetBars(db, asset(fund), [bar]);
+            else if (!fund.last_bar_date || bar.date > fund.last_bar_date) counts.bars += await storeBars(fund, [bar], false);
             counts.processed++;
           } catch (error) {
             failed.push(fund.vendor_symbol);
@@ -140,8 +198,9 @@ export async function runEtfJob(db: Db, api: Api | null, options: EtfJobArgs, to
             await markEtfFetched(db, fund.listing_key, "dividends");
           } else {
             // bars_fetched_at is set only after a successful history request. Daily bulk bars never consume this queue.
-            const saved = await upsertAssetBars(db, asset(fund), await api.eod(fund.vendor_symbol, { from: yearsBack(today, options.backfill), to: today }));
-            if (!saved) { failed.push(fund.vendor_symbol); continue; }
+            // An empty answer waits seven days (bars_retry_after) so it does not head every later chunk.
+            const saved = await storeBars({ ...fund, last_close: null }, await api.eod(fund.vendor_symbol, { from: yearsBack(today, options.backfill), to: today }), true);
+            if (!saved) { counts.empty++; await markEtfFetched(db, fund.listing_key, "backfill", "failed"); continue; }
             counts.bars += saved;
             await markEtfFetched(db, fund.listing_key, "backfill");
           }
@@ -149,6 +208,7 @@ export async function runEtfJob(db: Db, api: Api | null, options: EtfJobArgs, to
         } catch (error) {
           failed.push(fund.vendor_symbol);
           if (error instanceof EodhdHttpError && error.status === 404 && options.mode === "fundamentals") await markEtfFetched(db, fund.listing_key, "fundamentals", "failed");
+          if (options.mode === "backfill" && !stopping(error)) await markEtfFetched(db, fund.listing_key, "backfill", "failed");
           if (stopping(error)) { counts.deferred = due.length - index - 1; break; }
         }
       }

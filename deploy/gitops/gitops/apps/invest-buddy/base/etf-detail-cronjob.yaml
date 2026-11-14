@@ -1,4 +1,5 @@
-# ETF daily bars use one bulk EOD request per tracked exchange. History backfill is a manual mode.
+# ETF daily bars, Tuesday to Saturday after the stock jobs and before etf-score (03:30): one bulk EOD request per large exchange.
+# History backfill is a manual mode. EODHD_ACCOUNT_DAILY_BUDGET stops each run before eodhd_call_log reaches it for the day.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -6,7 +7,7 @@ metadata:
   namespace: invest
 spec:
   suspend: false
-  schedule: "10 3 * * *"
+  schedule: "35 2 * * 2-6"
   timeZone: Europe/Bratislava
   concurrencyPolicy: Forbid
   startingDeadlineSeconds: 300
@@ -15,7 +16,7 @@ spec:
   jobTemplate:
     spec:
       backoffLimit: 0
-      activeDeadlineSeconds: 7200
+      activeDeadlineSeconds: 3000
       template:
         metadata:
           labels:
@@ -45,6 +46,8 @@ spec:
               env:
                 - name: ETF_EODHD_MAX_CALLS
                   value: "10000"
+                - name: EODHD_ACCOUNT_DAILY_BUDGET
+                  value: "70000"
                 - name: DATABASE_URL
                   valueFrom:
                     secretKeyRef:
@@ -110,6 +113,8 @@ spec:
               env:
                 - name: ETF_EODHD_MAX_CALLS
                   value: "10000"
+                - name: EODHD_ACCOUNT_DAILY_BUDGET
+                  value: "70000"
                 - name: DATABASE_URL
                   valueFrom:
                     secretKeyRef:
@@ -175,6 +180,8 @@ spec:
               env:
                 - name: ETF_EODHD_MAX_CALLS
                   value: "10000"
+                - name: EODHD_ACCOUNT_DAILY_BUDGET
+                  value: "70000"
                 - name: DATABASE_URL
                   valueFrom:
                     secretKeyRef:

@@ -211,7 +211,7 @@ describe("Monday catch-up", () => {
     // Detect writes a gate per date and extract reads one pending gate per run, so a Monday gate would push Tuesday's gate to Wednesday.
     // A Monday extract is judged on Tuesday against Friday's scores, and Tuesday's detect skips filings already extracted.
     // These jobs do not open a stock gate. ETF research runs its own weekly model pass; ETF outcomes reads price bars.
-    const daily = ["pool-bars", "earnings-calendar", "retention", "discovery-auto-promote", "discovery", "etf-research", "etf-outcomes", "eodhd-etf", "eodhd-etf-fundamentals", "etf-enrich"];
+    const daily = ["pool-bars", "earnings-calendar", "retention", "discovery-auto-promote", "discovery", "etf-research", "etf-outcomes", "eodhd-etf-fundamentals", "etf-enrich"];
     expect(scheduled.filter((job) => job.active && job.days.includes(1) && !daily.includes(job.name)).map((job) => job.name)).toEqual(["collect"]);
     for (const name of ["prices", "watch", "detect", "extract", "macro", "reconcile", "daily", "judge", "digest"]) expect(days(minutes(name).days), name).not.toContain(1);
   });
@@ -287,14 +287,14 @@ describe("GDELT collector proposal", () => {
 describe("ETF research and outcomes", () => {
   it("syncs global listings before the daily enrichment run", () => {
     expect(minutes("etf-catalog-sync")).toEqual({ at: 5 * 60 + 10, days: "0" });
-    expect(minutes("etf-enrich")).toEqual({ at: 10 * 60 + 10, days: "*" });
+    expect(minutes("etf-enrich")).toEqual({ at: 10 * 60 + 10, days: "1-6" });
     expect(minutes("etf-catalog-sync").at + startWindow("etf-catalog-sync") + deadline("etf-catalog-sync")).toBeLessThanOrEqual(minutes("etf-enrich").at);
     expect(job("etf-catalog-sync")).toContain('command: ["node", "dist/jobs/etf-catalog.js"]');
     expect(job("etf-catalog-sync")).not.toContain("CODEX_ACCESS_TOKEN");
     expect(job("etf-enrich")).toContain("run-etf-enrich.mjs");
-    expect(job("etf-enrich")).toContain('"--limit", "3000"');
+    expect(job("etf-enrich")).toContain('"--limit", "1500"');
     expect(job("etf-enrich")).toContain("name: ETF_EODHD_DAILY_CALL_BUDGET");
-    expect(job("etf-enrich")).toContain('value: "30000"');
+    expect(job("etf-enrich")).toContain('value: "15000"');
     expect(job("etf-enrich")).toContain("name: EODHD_API_KEY");
     expect(job("etf-enrich")).not.toContain("CODEX_ACCESS_TOKEN");
     expect(job("etf-enrich")).toContain("name: RESEARCH_ENABLED");
@@ -330,7 +330,7 @@ describe("corporate actions job", () => {
 
 describe("EODHD ETF collection", () => {
   it("schedules independent bars, dividends and fundamentals outside stock collection hours", () => {
-    const modes = [{ name: "eodhd-etf", mode: "bars", at: 3 * 60 + 10, days: "*" },
+    const modes = [{ name: "eodhd-etf", mode: "bars", at: 2 * 60 + 35, days: "2-6" },
       { name: "eodhd-etf-dividends", mode: "dividends", at: 9 * 60 + 10, days: "0" },
       { name: "eodhd-etf-fundamentals", mode: "fundamentals", at: 11 * 60 + 10, days: "*" }];
     for (const mode of modes) {
@@ -343,7 +343,11 @@ describe("EODHD ETF collection", () => {
       expect(doc).toContain('value: "10000"');
       expect(doc).toContain("name: invest-buddy-eodhd");
       expect(mode.at).toBeGreaterThan(2 * 60 + 30);
+      expect(doc).toContain("name: EODHD_ACCOUNT_DAILY_BUDGET");
       for (const text of ["runAsNonRoot: true", "automountServiceAccountToken: false", "readOnlyRootFilesystem: true", "concurrencyPolicy: Forbid"]) expect(doc).toContain(text);
     }
+  });
+  it("finishes the bars run before the ETF score reads them", () => {
+    expect(minutes("etf-score").at).toBeGreaterThanOrEqual(minutes("eodhd-etf").at + deadline("eodhd-etf"));
   });
 });

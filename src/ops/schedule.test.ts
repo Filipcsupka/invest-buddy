@@ -29,7 +29,7 @@ describe("expected job schedule", () => {
       expect(job.enabled).toBe(!m!.suspended);
       expect(job.graceMinutes).toBeGreaterThanOrEqual(m!.deadlineMinutes);
       if (job.runJob) {
-        expect(m!.jobFiles).toEqual([job.runJob]);
+        expect(m!.jobFiles).toEqual([job.jobFile ?? job.runJob]);
         expect(m!.args).toBe("");
       } else {
         expect(job.note, "an untracked job says why").toBeTruthy();

@@ -51,7 +51,7 @@ export async function postDetails(batch, cache, { base, token, request = fetch, 
 }
 export async function execute(opts, { env = process.env, request = fetch, log = console.log } = {}) {
   if (env.RESEARCH_ENABLED === "off") { log("etf-enrich: skipped by RESEARCH_ENABLED=off"); return { batches: 0, failed: 0 }; }
-  const maxCalls = Number(env.ETF_EODHD_DAILY_CALL_BUDGET ?? env.ETF_EODHD_MAX_CALLS ?? 30_000);
+  const maxCalls = Number(env.ETF_EODHD_DAILY_CALL_BUDGET ?? env.ETF_EODHD_MAX_CALLS ?? 15_000);
   if (!Number.isInteger(maxCalls) || maxCalls < 10 || maxCalls > 90_000 || maxCalls % 10 !== 0) throw new Error("ETF_EODHD_DAILY_CALL_BUDGET (or legacy ETF_EODHD_MAX_CALLS) must be a multiple of 10 from 10 to 90000");
   const token = env.INGEST_TOKEN || getToken(); if (!token) throw new Error("INGEST_TOKEN is required");
   const base = opts.baseUrl.replace(/\/$/, "");
