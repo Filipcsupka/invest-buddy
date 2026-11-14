@@ -164,7 +164,7 @@ test("runner stops at the EODHD call cap and posts the completed prefix", async 
   const result = await execute(parseArgs(["--limit", "3"], {}), {
     env: { ETF_EODHD_MAX_CALLS: "20", INGEST_TOKEN: "fixture", EODHD_API_KEY: "fixture" }, request, log: () => {},
   });
-  assert.deepEqual(result, { batches: 1, failed: 0 });
+  assert.deepEqual(result, { batches: 1, failed: 0, calls: 20, budget: 20, estimatedCalls: 20, deferred: 1 });
   assert.equal(vendorCalls, 2);
   assert.deepEqual(posts[0].items.map((row) => row.listingKey), rows.slice(0, 2).map((row) => row.listingKey));
 });
@@ -181,7 +181,7 @@ test("runner dry run needs no vendor key and makes no vendor or ingest write", a
   const result = await execute(parseArgs(["--dry-run"], {}), {
     env: { INGEST_TOKEN: "fixture" }, request, log: () => {},
   });
-  assert.deepEqual(result, { batches: 1, failed: 0 });
+  assert.deepEqual(result, { batches: 1, failed: 0, calls: 0, budget: 15000, estimatedCalls: 10, deferred: 0 });
   assert.equal(urls.length, 1);
   assert.match(urls[0], /pending\?limit=20$/);
 });

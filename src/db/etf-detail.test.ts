@@ -3,7 +3,7 @@ import type pg from "pg";
 import iwda from "../jobs/fixtures/eodhd-etf/iwda-etf.json";
 import spy from "../jobs/fixtures/eodhd-etf/spy-etf.json";
 import spyDividends from "../jobs/fixtures/eodhd-etf/spy-div.json";
-import { MAX_STORED_HOLDINGS, etfDetailView, etfListStats, etfPayloadRoot, mapStats, parseEtfData, storeEtfDetail, totalAssetsCurrency, upsertEtfDividends } from "./etf-detail";
+import { MAX_STORED_HOLDINGS, etfDetailView, etfListStats, etfPayloadRoot, markEtfFetched, mapStats, parseEtfData, storeEtfDetail, totalAssetsCurrency, upsertEtfDividends } from "./etf-detail";
 
 describe("parseEtfData (live responses captured 2026-11-06, trimmed)", () => {
   it("maps SPY.US: fraction expense ratio, percent yield, full holdings count and exposure", () => {
@@ -99,6 +99,15 @@ function recordingClient() {
 }
 
 describe("writers", () => {
+  it("marks only the completed collection part", async () => {
+    const { sql, query } = recordingClient();
+    await markEtfFetched({ query } as unknown as Pick<pg.Pool, "query">, "NYSEARCA:SPY", "dividends");
+    expect(sql[0].text).toContain("dividends_fetched_at=CASE WHEN $2='dividends'");
+    expect(sql[0].values).toEqual(["NYSEARCA:SPY", "dividends", "ok"]);
+    await markEtfFetched({ query } as unknown as Pick<pg.Pool, "query">, "NYSEARCA:SPY", "fundamentals", "isin_mismatch");
+    expect(sql[1].values).toEqual(["NYSEARCA:SPY", "fundamentals", "isin_mismatch"]);
+  });
+
   it("replaces the holdings and exposure snapshot inside one transaction, display restricted", async () => {
     const { sql, db } = recordingClient();
     const stored = await storeEtfDetail(db, { listingKey: "NYSEARCA:SPY", vendorSymbol: "SPY.US", asOf: "2026-11-06", origin: "job", data: parseEtfData(spy)! });

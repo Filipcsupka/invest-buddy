@@ -11,6 +11,8 @@ export interface ExpectedJob {
   enabled: boolean;
   /** The name runLoggedJob stores in job_runs.job. Null when the job is not logged there or shares a name with another CronJob. */
   runJob: string | null;
+  /** The dist/jobs script when it differs from runJob, for one script run in several modes. */
+  jobFile?: string;
   /** Minutes after a scheduled start before a missing run is reported. At least the CronJob's activeDeadlineSeconds. The values are guesses until a week of job_runs data exists. */
   graceMinutes: number;
   note?: string;
@@ -45,10 +47,12 @@ export const EXPECTED_JOBS: ExpectedJob[] = [
   { cronJob: "horizon-labels", schedule: "45 6 * * 2-6", enabled: true, runJob: "horizon-labels", graceMinutes: 15 },
   { cronJob: "etf-research", schedule: "40 7 * * 1", enabled: false, runJob: null, graceMinutes: 210, note: "scanner script, not in job_runs; optional owner research on the highest rated ETFs, suspended and run on demand" },
   { cronJob: "etf-catalog-sync", schedule: "10 5 * * 0", enabled: true, runJob: null, graceMinutes: 25, note: "Xetra catalog sync; not in job_runs" },
-  { cronJob: "etf-enrich", schedule: "40 5 * * 0", enabled: true, runJob: null, graceMinutes: 1500, note: "pending catalog enrichment; not in job_runs" },
+  { cronJob: "etf-enrich", schedule: "10 10 * * 1-6", enabled: true, runJob: null, graceMinutes: 260, note: "daily pending catalog enrichment drain; scanner script, not in job_runs (prints a JSON call summary)" },
   { cronJob: "etf-outcomes", schedule: "50 6 * * *", enabled: true, runJob: "etf-outcomes", graceMinutes: 20 },
-  { cronJob: "etf-score", schedule: "30 2 * * *", enabled: false, runJob: "etf-score", graceMinutes: 35, note: "suspended; enable only after deploying an image containing the score runner" },
-  { cronJob: "eodhd-etf", schedule: "10 1 * * *", enabled: false, runJob: "eodhd-etf", graceMinutes: 60 },
+  { cronJob: "etf-score", schedule: "30 3 * * *", enabled: false, runJob: "etf-score", graceMinutes: 35, note: "suspended; enable only after deploying an image containing the score runner" },
+  { cronJob: "eodhd-etf", schedule: "35 2 * * 2-6", enabled: true, runJob: "eodhd-etf", graceMinutes: 60, note: "ETF daily bars (--mode bars), before etf-score" },
+  { cronJob: "eodhd-etf-dividends", schedule: "10 9 * * 0", enabled: true, runJob: "eodhd-etf-dividends", jobFile: "eodhd-etf", graceMinutes: 130 },
+  { cronJob: "eodhd-etf-fundamentals", schedule: "10 11 * * *", enabled: true, runJob: "eodhd-etf-fundamentals", jobFile: "eodhd-etf", graceMinutes: 130 },
   { cronJob: "review-calendar", schedule: "0 11 * * 6", enabled: true, runJob: null, graceMinutes: 110, note: "several containers, not one job name" },
   { cronJob: "thirteenf-q3", schedule: "0 8 20 11 *", enabled: false, runJob: null, graceMinutes: 70, note: "yearly, shares the job name thirteenf" },
   { cronJob: "thirteenf-q4", schedule: "0 8 16 2 *", enabled: false, runJob: null, graceMinutes: 70, note: "yearly, shares the job name thirteenf" },

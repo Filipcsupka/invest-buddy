@@ -1,13 +1,13 @@
-# EODHD ETF detail: the stalest seventh of tracked ETFs each night (ETF_Data, dividends, new bars).
-# Suspended until the owner approves; runs after the market bars (00:20-00:30) and before daily scoring (04:00).
+# ETF daily bars, Tuesday to Saturday after the stock jobs and before etf-score (03:30): one bulk EOD request per large exchange.
+# History backfill is a manual mode. EODHD_ACCOUNT_DAILY_BUDGET stops each run before eodhd_call_log reaches it for the day.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: invest-buddy-eodhd-etf
   namespace: invest
 spec:
-  suspend: true
-  schedule: "10 1 * * *"
+  suspend: false
+  schedule: "35 2 * * 2-6"
   timeZone: Europe/Bratislava
   concurrencyPolicy: Forbid
   startingDeadlineSeconds: 300
@@ -16,7 +16,7 @@ spec:
   jobTemplate:
     spec:
       backoffLimit: 0
-      activeDeadlineSeconds: 3600
+      activeDeadlineSeconds: 3000
       template:
         metadata:
           labels:
@@ -37,7 +37,7 @@ spec:
           containers:
             - name: eodhd-etf
               image: ghcr.io/filipcsupka/invest-buddy:latest
-              command: ["node", "dist/jobs/eodhd-etf.js"]
+              command: ["node", "dist/jobs/eodhd-etf.js", "--mode", "bars"]
               securityContext:
                 allowPrivilegeEscalation: false
                 readOnlyRootFilesystem: true
@@ -45,7 +45,143 @@ spec:
                   drop: ["ALL"]
               env:
                 - name: ETF_EODHD_MAX_CALLS
-                  value: "500"
+                  value: "10000"
+                - name: EODHD_ACCOUNT_DAILY_BUDGET
+                  value: "70000"
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-secrets
+                      key: DATABASE_URL
+                - name: EODHD_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-eodhd
+                      key: api-key
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+                limits:
+                  cpu: "1"
+                  memory: 1Gi
+
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: invest-buddy-eodhd-etf-dividends
+  namespace: invest
+spec:
+  suspend: false
+  schedule: "10 9 * * 0"
+  timeZone: Europe/Bratislava
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 7200
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: invest-buddy
+            app.kubernetes.io/component: eodhd-etf-dividends
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          nodeSelector:
+            kubernetes.io/hostname: k8s-worker-01
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            fsGroup: 10001
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: eodhd-etf-dividends
+              image: ghcr.io/filipcsupka/invest-buddy:latest
+              command: ["node", "dist/jobs/eodhd-etf.js", "--mode", "dividends"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              env:
+                - name: ETF_EODHD_MAX_CALLS
+                  value: "10000"
+                - name: EODHD_ACCOUNT_DAILY_BUDGET
+                  value: "70000"
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-secrets
+                      key: DATABASE_URL
+                - name: EODHD_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-eodhd
+                      key: api-key
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+                limits:
+                  cpu: "1"
+                  memory: 1Gi
+
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: invest-buddy-eodhd-etf-fundamentals
+  namespace: invest
+spec:
+  suspend: false
+  schedule: "10 11 * * *"
+  timeZone: Europe/Bratislava
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 7200
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: invest-buddy
+            app.kubernetes.io/component: eodhd-etf-fundamentals
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          nodeSelector:
+            kubernetes.io/hostname: k8s-worker-01
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            fsGroup: 10001
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: eodhd-etf-fundamentals
+              image: ghcr.io/filipcsupka/invest-buddy:latest
+              command: ["node", "dist/jobs/eodhd-etf.js", "--mode", "fundamentals"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              env:
+                - name: ETF_EODHD_MAX_CALLS
+                  value: "10000"
+                - name: EODHD_ACCOUNT_DAILY_BUDGET
+                  value: "70000"
                 - name: DATABASE_URL
                   valueFrom:
                     secretKeyRef:

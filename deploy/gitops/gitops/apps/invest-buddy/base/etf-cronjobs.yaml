@@ -1,4 +1,4 @@
-# Xetra catalog sync precedes enrichment on Sunday; picks run Monday after outcomes.
+# Xetra catalog sync runs Sunday; ETF enrichment drains pending rows Monday to Saturday after stock jobs, off the Sunday universe seed.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -63,7 +63,7 @@ metadata:
   namespace: invest
 spec:
   suspend: false
-  schedule: "40 5 * * 0"
+  schedule: "10 10 * * 1-6"
   timeZone: Europe/Bratislava
   concurrencyPolicy: Forbid
   startingDeadlineSeconds: 300
@@ -72,7 +72,7 @@ spec:
   jobTemplate:
     spec:
       backoffLimit: 1
-      activeDeadlineSeconds: 86400
+      activeDeadlineSeconds: 14400
       template:
         metadata:
           labels:
@@ -93,21 +93,26 @@ spec:
           containers:
             - name: etf-enrich
               image: ghcr.io/filipcsupka/invest-buddy-scanner:latest
-              command: ["node", "/app/scanner/run-etf-enrich.mjs", "--timeout-s", "1200"]
+              command: ["node", "/app/scanner/run-etf-enrich.mjs", "--limit", "1500", "--timeout-s", "1200"]
               securityContext:
                 allowPrivilegeEscalation: false
                 readOnlyRootFilesystem: true
                 capabilities:
                   drop: ["ALL"]
               env:
+                # Kill switch shared with research: RESEARCH_ENABLED=off skips the run.
                 - name: RESEARCH_ENABLED
                   valueFrom:
                     configMapKeyRef:
                       name: invest-buddy-research-config
                       key: RESEARCH_ENABLED
-                # Empty uses the Codex default; set a cheap model for catalog enrichment.
-                - name: RESEARCH_CODEX_MODEL
-                  value: ""
+                - name: ETF_EODHD_DAILY_CALL_BUDGET
+                  value: "15000"
+                - name: EODHD_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: invest-buddy-eodhd
+                      key: api-key
                 - name: INGEST_BASE_URL
                   value: http://web.invest.svc.cluster.local:3000
                 - name: INGEST_TOKEN
@@ -115,11 +120,6 @@ spec:
                     secretKeyRef:
                       name: invest-buddy-secrets
                       key: INGEST_TOKEN
-                - name: CODEX_ACCESS_TOKEN
-                  valueFrom:
-                    secretKeyRef:
-                      name: invest-buddy-codex-token
-                      key: CODEX_ACCESS_TOKEN
               volumeMounts:
                 - name: tmp
                   mountPath: /tmp

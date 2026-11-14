@@ -51,8 +51,8 @@ export async function postDetails(batch, cache, { base, token, request = fetch, 
 }
 export async function execute(opts, { env = process.env, request = fetch, log = console.log } = {}) {
   if (env.RESEARCH_ENABLED === "off") { log("etf-enrich: skipped by RESEARCH_ENABLED=off"); return { batches: 0, failed: 0 }; }
-  const maxCalls = Number(env.ETF_EODHD_MAX_CALLS ?? 500);
-  if (!Number.isInteger(maxCalls) || maxCalls < 10 || maxCalls % 10 !== 0) throw new Error("ETF_EODHD_MAX_CALLS must be a positive multiple of 10");
+  const maxCalls = Number(env.ETF_EODHD_DAILY_CALL_BUDGET ?? env.ETF_EODHD_MAX_CALLS ?? 15_000);
+  if (!Number.isInteger(maxCalls) || maxCalls < 10 || maxCalls > 90_000 || maxCalls % 10 !== 0) throw new Error("ETF_EODHD_DAILY_CALL_BUDGET (or legacy ETF_EODHD_MAX_CALLS) must be a multiple of 10 from 10 to 90000");
   const token = env.INGEST_TOKEN || getToken(); if (!token) throw new Error("INGEST_TOKEN is required");
   const base = opts.baseUrl.replace(/\/$/, "");
   const response = await request(`${base}/api/ingest/etf-catalog/pending?limit=${opts.limit}`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(60_000) });
@@ -66,11 +66,12 @@ export async function execute(opts, { env = process.env, request = fetch, log = 
     if (symbol) symbols.add(symbol);
   }
   if (selected.length < items.length) log(`etf-enrich eodhd: stopped at ${maxCalls}-call cap; ${items.length - selected.length} rows deferred`);
-  let failed = 0; const batches = chunks(selected); const cache = new Map();
+  let failed = 0; let vendorRequests = 0; const batches = chunks(selected); const cache = new Map();
+  const meteredRequest = (url, init) => { vendorRequests++; return request(url, init); };
   mkdirSync(opts.outDir, { recursive: true });
   for (const [index, batch] of batches.entries()) {
     try {
-      const result = await enrichEodhd(batch, { apiKey: env.EODHD_API_KEY, request, dryRun: opts.dryRun, log, cache });
+      const result = await enrichEodhd(batch, { apiKey: env.EODHD_API_KEY, request: meteredRequest, dryRun: opts.dryRun, log, cache });
       if (opts.dryRun) continue;
       const output = { items: result.items };
       const errors = validateBatch(output, batch);
@@ -81,6 +82,6 @@ export async function execute(opts, { env = process.env, request = fetch, log = 
       log(`etf-enrich batch ${index+1}/${batches.length}: ${batch.length} rows, ${details} detail payloads${opts.dryRun ? " (dry run)" : ""}`);
     } catch (error) { failed++; console.error(`etf-enrich batch ${index+1}/${batches.length}: ${error.message}`); if (/HTTP (402|429)/.test(error.message)) throw error; }
   }
-  return { batches: batches.length, failed };
+  return { batches: batches.length, failed, calls: vendorRequests * 10, budget: maxCalls, estimatedCalls: symbols.size * 10, deferred: items.length - selected.length };
 }
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) execute(parseArgs(process.argv.slice(2))).then(({ failed }) => { if (failed) process.exitCode = 1; }).catch((error) => { console.error(error.message); process.exitCode = 1; });
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) execute(parseArgs(process.argv.slice(2))).then((result) => { console.log(JSON.stringify({ job: "etf-enrich", ...result })); if (result.failed) process.exitCode = 1; }).catch((error) => { console.error(error.message); process.exitCode = 1; });
