@@ -33,7 +33,8 @@ export interface ParsedEtfData {
   isin: string | null; tradingCurrency: string | null; type: string | null;
   category: string | null; openFigi: string | null; indexName: string | null;
   averageMktCapMil: number | null; annualHoldingsTurnover: number | null;
-  totalAssetsCurrency: string; terAmbiguous: boolean;
+  /** Explicitly stated asset currency, otherwise null; storeEtfDetail adds the US-venue USD rule. */
+  totalAssetsCurrency: string | null; terAmbiguous: boolean;
   effectiveDuration: number | null; modifiedDuration: number | null; yieldToMaturity: number | null;
   coupon: number | null; effectiveMaturity: number | null;
   week52High: number | null; week52Low: number | null; beta: number | null;
@@ -42,7 +43,7 @@ export interface ParsedEtfData {
   retYtdPct: number | null; ret1yPct: number | null; ret3yPct: number | null; ret5yPct: number | null; ret10yPct: number | null;
   vol1yPct: number | null; vol3yPct: number | null; sharpe3y: number | null;
   holdingsCount: number | null; holdingsListed: number; holdings: ParsedHolding[]; exposure: ParsedExposure[];
-  /** Complete response, including General, Technicals and all holdings. */
+  /** Complete response root, including General, Technicals and all holdings. Rows stored before migration 140 hold bare ETF_Data; read with etfPayloadRoot. */
   payload: Raw;
 }
 
@@ -84,12 +85,36 @@ function expenseRatioPct(value: unknown): number | null {
   return ratio !== null && ratio >= 0 && ratio < 0.01 ? ratio * 100 : null;
 }
 const fundPercent = (value: unknown): number | null => num(obj(value)?.["Fund_%"]);
+const FIXED_INCOME_KEYS = ["EffectiveDuration", "ModifiedDuration", "YieldToMaturity", "Coupon", "EffectiveMaturity"] as const;
+/** Equity funds send every Fixed_Income key as `{"Fund_%": 0}`; an all-zero block is a vendor gap, not data. */
+function fixedIncome(block: Raw): Record<(typeof FIXED_INCOME_KEYS)[number], number | null> {
+  const values = Object.fromEntries(FIXED_INCOME_KEYS.map((key) => [key, fundPercent(block[key])])) as Record<(typeof FIXED_INCOME_KEYS)[number], number | null>;
+  return Object.values(values).some((value) => value !== null && value !== 0) ? values : Object.fromEntries(FIXED_INCOME_KEYS.map((key) => [key, null])) as typeof values;
+}
 const validCurrency = (value: unknown): string | null => {
   const currency = text(value)?.toUpperCase();
   return currency && /^[A-Z]{3}$/.test(currency) ? currency : null;
 };
 
-/** Maps a `General,ETF_Data` fundamentals response. Missing vendor fields stay null and never become zero. */
+/**
+ * Stored etf_fund_stats.payload has two shapes: bare ETF_Data (before migration 140) and the full
+ * response root `{General, Technicals?, ETF_Data}`. Returns the root shape for either, or null.
+ */
+export function etfPayloadRoot(payload: unknown): Raw | null {
+  const value = obj(payload);
+  if (!value) return null;
+  return obj(value.ETF_Data) ? value : { ETF_Data: value };
+}
+
+/**
+ * TotalAssets currency: the explicitly stated one, else USD for a USD listing on the US venue
+ * (vendor symbol `*.US`; General.Exchange holds the venue name such as "NYSE ARCA"), else null.
+ */
+export function totalAssetsCurrency(data: Pick<ParsedEtfData, "totalAssetsCurrency" | "tradingCurrency">, vendorSymbol: string): string | null {
+  return data.totalAssetsCurrency ?? (vendorSymbol.endsWith(".US") && data.tradingCurrency === "USD" ? "USD" : null);
+}
+
+/** Maps a `General,ETF_Data,Technicals` fundamentals response. Missing vendor fields stay null and never become zero. */
 export function parseEtfData(response: unknown): ParsedEtfData | null {
   const root = obj(response);
   const etf = obj(root?.ETF_Data);
@@ -97,26 +122,23 @@ export function parseEtfData(response: unknown): ParsedEtfData | null {
   const general = obj(root.General) ?? {};
   const technicals = obj(root.Technicals) ?? {};
   const performance = obj(etf.Performance) ?? {};
-  const fixedIncome = obj(etf.Fixed_Income) ?? {};
+  const bond = fixedIncome(obj(etf.Fixed_Income) ?? {});
   const { rows, listed } = holdings(etf);
   const count = num(etf.Holdings_Count);
   const ongoing = num(etf.Ongoing_Charge);
   const payload = root;
   const isin = [etf.ISIN, general.ISIN].map(text).find((value) => value && /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(value)) ?? null;
   const currency = validCurrency(general.CurrencyCode);
-  // TotalAssets is USD only for a USD listing on the US venue. Other listings
-  // remain unknown unless the response explicitly names the asset currency.
+  // Neither key was seen in live responses; they are read in case the vendor adds an explicit asset currency.
   const explicitAssetsCurrency = validCurrency(etf.TotalAssetsCurrency) ?? validCurrency(etf.Total_Assets_Currency);
-  const assetsCurrency = explicitAssetsCurrency ?? (currency === "USD" && text(general.Exchange)?.toUpperCase() === "US" ? "USD" : "unknown");
   const rawRatio = num(etf.NetExpenseRatio);
   return {
     isin, tradingCurrency: currency, type: text(general.Type),
     category: text(general.Category), openFigi: text(general.OpenFigi), indexName: text(etf.Index_Name),
     averageMktCapMil: num(etf.Average_Mkt_Cap_Mil), annualHoldingsTurnover: num(etf.AnnualHoldingsTurnover),
-    totalAssetsCurrency: assetsCurrency, terAmbiguous: rawRatio !== null && rawRatio >= 0.01 && rawRatio <= 0.025,
-    effectiveDuration: fundPercent(fixedIncome.EffectiveDuration), modifiedDuration: fundPercent(fixedIncome.ModifiedDuration),
-    yieldToMaturity: fundPercent(fixedIncome.YieldToMaturity), coupon: fundPercent(fixedIncome.Coupon),
-    effectiveMaturity: fundPercent(fixedIncome.EffectiveMaturity),
+    totalAssetsCurrency: explicitAssetsCurrency, terAmbiguous: rawRatio !== null && rawRatio >= 0.01 && rawRatio <= 0.025,
+    effectiveDuration: bond.EffectiveDuration, modifiedDuration: bond.ModifiedDuration,
+    yieldToMaturity: bond.YieldToMaturity, coupon: bond.Coupon, effectiveMaturity: bond.EffectiveMaturity,
     week52High: num(technicals["52WeekHigh"]), week52Low: num(technicals["52WeekLow"]),
     beta: (() => { const value = num(technicals.Beta); return value === 0 ? null : value; })(),
     totalAssets: (() => { const value = num(etf.TotalAssets); return value !== null && value > 0 ? value : null; })(),
@@ -143,7 +165,7 @@ export interface StoreEtfDetailInput { listingKey: string; vendorSymbol: string;
 /** Writes one listing's stats row and replaces its holdings and exposure snapshot in one transaction. */
 export async function storeEtfDetail(db: Pick<pg.Pool, "connect">, input: StoreEtfDetailInput): Promise<{ holdings: number; exposure: number }> {
   const { listingKey, vendorSymbol, asOf, origin, data, ucitsHint = null } = input;
-  const assetsCurrency = data.totalAssetsCurrency !== "unknown" ? data.totalAssetsCurrency : vendorSymbol.endsWith(".US") && data.tradingCurrency === "USD" ? "USD" : "unknown";
+  const assetsCurrency = totalAssetsCurrency(data, vendorSymbol);
   const display = canDisplay("eodhd");
   const client = await db.connect();
   try {
@@ -242,14 +264,14 @@ export async function syncEtfTracking(db: Query, candidates: EtfCandidate[]): Pr
   return { active: candidates.length, deactivated: dropped.rowCount ?? 0 };
 }
 
-export interface DueEtf { listing_key: string; vendor_symbol: string; isin: string | null; currency: string | null; detail_fresh: boolean; last_bar_date: string | null; last_dividend_date: string | null }
+export interface DueEtf { listing_key: string; vendor_symbol: string; isin: string | null; ucits_hint: boolean | null; currency: string | null; detail_fresh: boolean; last_bar_date: string | null; last_dividend_date: string | null }
 
 /**
  * Active listings whose detail is at least seven days old, stalest first. A stats row written by the
  * enrich run within six days counts as fresh, so the job skips that fundamentals request.
  */
 export async function dueEtfs(db: Query, limit: number): Promise<DueEtf[]> {
-  const result = await db.query<DueEtf>(`SELECT t.listing_key, t.vendor_symbol, c.isin, a.currency,
+  const result = await db.query<DueEtf>(`SELECT t.listing_key, t.vendor_symbol, c.isin, c.ucits_hint, a.currency,
       EXISTS (SELECT 1 FROM etf_fund_stats f WHERE f.listing_key=t.listing_key AND f.vendor_symbol=t.vendor_symbol AND f.fetched_at > now() - interval '6 days') AS detail_fresh,
       (SELECT max(bar_date)::text FROM asset_bars b WHERE b.vendor_symbol=t.vendor_symbol) AS last_bar_date,
       (SELECT max(ex_date)::text FROM etf_dividends d WHERE d.vendor_symbol=t.vendor_symbol) AS last_dividend_date

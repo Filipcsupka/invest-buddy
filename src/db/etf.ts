@@ -3,7 +3,8 @@ import { getPool } from "./pool";
 import { sampleEtfPicks, sampleEtfRun, sampleEtfHistory, sampleEtfOutcomes } from "@/data/etf-fixtures";
 
 export type EtfCall = "BUY_ZONE" | "WATCH" | "AVOID";
-export type EtfAssetClass = "equity" | "bond" | "commodity" | "multi_asset" | "other";
+export type EtfAssetClass = "equity" | "bond" | "commodity" | "multi_asset" | "money_market" | "other";
+export const ETF_ASSET_CLASSES: readonly EtfAssetClass[] = ["equity", "bond", "commodity", "multi_asset", "money_market", "other"];
 export type VerificationStatus = "verified" | "partial" | "unverified";
 export interface EtfEvidence { url: string; quote: string; claim: string; verified: boolean }
 export interface EtfPlan { entryZone: string | null; addWhen: string | null; stopAddingWhen: string | null }

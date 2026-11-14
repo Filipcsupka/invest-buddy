@@ -57,6 +57,7 @@
     "e2e:install": "playwright install --with-deps chromium",
     "horizon:labels": "tsx src/jobs/horizon-labels.ts",
     "etf:catalog-sync": "tsx src/jobs/etf-catalog.ts",
+    "etf:catalog-remap": "tsx src/jobs/etf-catalog-remap.ts",
     "symbols:sync": "tsx src/jobs/symbols-sync.ts",
     "fundamentals:eodhd": "tsx src/jobs/eodhd-fundamentals.ts",
     "etf:enrich": "node scanner/run-etf-enrich.mjs",

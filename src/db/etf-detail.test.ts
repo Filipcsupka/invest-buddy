@@ -3,7 +3,7 @@ import type pg from "pg";
 import iwda from "../jobs/fixtures/eodhd-etf/iwda-etf.json";
 import spy from "../jobs/fixtures/eodhd-etf/spy-etf.json";
 import spyDividends from "../jobs/fixtures/eodhd-etf/spy-div.json";
-import { MAX_STORED_HOLDINGS, etfDetailView, etfListStats, mapStats, parseEtfData, storeEtfDetail, upsertEtfDividends } from "./etf-detail";
+import { MAX_STORED_HOLDINGS, etfDetailView, etfListStats, etfPayloadRoot, mapStats, parseEtfData, storeEtfDetail, totalAssetsCurrency, upsertEtfDividends } from "./etf-detail";
 
 describe("parseEtfData (live responses captured 2026-11-06, trimmed)", () => {
   it("maps SPY.US: fraction expense ratio, percent yield, full holdings count and exposure", () => {
@@ -15,7 +15,9 @@ describe("parseEtfData (live responses captured 2026-11-06, trimmed)", () => {
     expect(data.holdings[0]).toMatchObject({ position: 1, key: "NVDA.US", symbol: "NVDA", exchange: "US", weightPct: 7.8879, sector: "Technology" });
     expect(data.exposure.filter((row) => row.kind === "sector")).toHaveLength(11);
     expect(data.exposure.find((row) => row.kind === "asset" && row.label === "Stock US")?.weightPct).toBe(103.7016);
-    expect(data).toMatchObject({ category: "US Equity", openFigi: "BBG000BDTBL9", indexName: "S&P 500 Index", totalAssetsCurrency: "unknown" });
+    expect(data).toMatchObject({ category: "US Equity", openFigi: "BBG000BDTBL9", indexName: "S&P 500 Index", totalAssetsCurrency: null });
+    // Every Fixed_Income key is {"Fund_%": 0} for this equity fund: stored as unknown, not zero.
+    expect(data).toMatchObject({ effectiveDuration: null, modifiedDuration: null, yieldToMaturity: null, coupon: null, effectiveMaturity: null });
     expect(data.payload).toHaveProperty("ETF_Data.Holdings");
     expect(data.payload).toHaveProperty("General.Category", "US Equity");
   });
@@ -58,7 +60,37 @@ describe("parseEtfData (live responses captured 2026-11-06, trimmed)", () => {
       yieldToMaturity: 3.1, coupon: 2.5, effectiveMaturity: 5.8, week52High: 104, week52Low: 92, beta: null });
     expect(data.payload).toHaveProperty("Technicals.52WeekHigh", 104);
   });
+
+  it("keeps a real zero inside a bond block that has other values", () => {
+    const data = parseEtfData({ ETF_Data: { Fixed_Income: { EffectiveDuration: { "Fund_%": 19.5 }, Coupon: { "Fund_%": 0 }, YieldToMaturity: { "Fund_%": "0" } } } })!;
+    expect(data).toMatchObject({ effectiveDuration: 19.5, coupon: 0, yieldToMaturity: 0, modifiedDuration: null, effectiveMaturity: null });
+    expect(parseEtfData({ ETF_Data: { Fixed_Income: { Coupon: { "Fund_%": 0 }, EffectiveDuration: { "Fund_%": null } } } })!.coupon).toBeNull();
+  });
+
+  it("states the AUM currency only when it is known", () => {
+    expect(totalAssetsCurrency(parseEtfData(spy)!, "SPY.US")).toBe("USD");
+    expect(totalAssetsCurrency(parseEtfData(iwda)!, "IWDA.AS")).toBeNull();
+    expect(totalAssetsCurrency({ totalAssetsCurrency: null, tradingCurrency: "EUR" }, "XYZ.US")).toBeNull();
+    expect(totalAssetsCurrency({ totalAssetsCurrency: "GBP", tradingCurrency: "EUR" }, "IWDA.AS")).toBe("GBP");
+  });
+
+  it("reads both stored payload shapes", () => {
+    const bare = { ISIN: "IE00B4L5Y983", Holdings_Count: 10 };
+    expect(etfPayloadRoot(bare)).toEqual({ ETF_Data: bare });
+    expect(etfPayloadRoot(spy)).toBe(spy);
+    expect(etfPayloadRoot(null)).toBeNull();
+    expect(parseEtfData(etfPayloadRoot(bare))?.isin).toBe("IE00B4L5Y983");
+  });
 });
+
+/** Value bound to one etf_fund_stats column, by name rather than position. */
+function statsValue(row: { text: string; values: unknown[] }, column: string): unknown {
+  const columns = /INSERT INTO etf_fund_stats \(([^)]*)\)/.exec(row.text)![1].split(",").map((item) => item.trim());
+  const tokens = /VALUES \(([^]*?)\)\s*ON CONFLICT/.exec(row.text)![1].split(",").map((item) => item.trim());
+  expect(columns).toHaveLength(tokens.length);
+  const token = tokens[columns.indexOf(column)];
+  return /^\$\d+$/.test(token) ? row.values[Number(token.slice(1)) - 1] : token;
+}
 
 function recordingClient() {
   const sql: { text: string; values: unknown[] }[] = [];
@@ -75,9 +107,10 @@ describe("writers", () => {
     expect(sql[1].text).toContain("INSERT INTO etf_fund_stats");
     expect(sql[1].values.at(-1)).toBe(false);
     expect(sql[1].text).toContain("total_assets_currency");
-    expect(sql[1].values[7]).toBe("USD");
+    expect(statsValue(sql[1], "total_assets_currency")).toBe("USD");
+    expect(statsValue(sql[1], "effective_duration")).toBeNull();
     expect(Math.max(...[...sql[1].text.matchAll(/\$(\d+)/g)].map((match) => Number(match[1])))).toBe(sql[1].values.length);
-    expect(sql[1].values[38]).toBeNull();
+    expect(statsValue(sql[1], "ucits_hint")).toBeNull();
     expect(sql.find((row) => row.text.startsWith("DELETE FROM etf_holdings"))?.values).toEqual(["NYSEARCA:SPY"]);
     expect(sql.at(-1)?.text).toBe("COMMIT");
   });
@@ -85,8 +118,8 @@ describe("writers", () => {
   it("keeps a catalog UCITS hint separate from confirmed status", async () => {
     const { sql, db } = recordingClient();
     await storeEtfDetail(db, { listingKey: "IE00B4L5Y983", vendorSymbol: "IWDA.AS", asOf: "2026-11-06", origin: "enrich", data: parseEtfData(iwda)!, ucitsHint: true });
-    expect(sql[1].values[7]).toBe("unknown");
-    expect(sql[1].values[38]).toBe(true);
+    expect(statsValue(sql[1], "total_assets_currency")).toBeNull();
+    expect(statsValue(sql[1], "ucits_hint")).toBe(true);
   });
 
   it("upserts dividends by ex-date and skips invalid dates", async () => {

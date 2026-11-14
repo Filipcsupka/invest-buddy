@@ -36,7 +36,7 @@ export function detailPayload(data) {
   if (!etf || typeof etf !== "object") return null;
   return data;
 }
-/** Stores each fetched fund's ETF_Data through the detail ingest route. A failure is logged and never fails the catalog batch. */
+/** Stores each fetched fund's full response (General, Technicals, ETF_Data) through the detail ingest route. A failure is logged and never fails the catalog batch. */
 export async function postDetails(batch, cache, { base, token, request = fetch, log = console.log }) {
   let posted = 0;
   for (const row of batch) {

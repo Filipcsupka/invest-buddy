@@ -18,7 +18,7 @@
           "exchange": { "type": ["string", "null"], "maxLength": 40 },
           "name": { "type": "string", "minLength": 2, "maxLength": 120 },
           "isin": { "type": ["string", "null"], "pattern": "^[A-Z]{2}[A-Z0-9]{9}[0-9]$" },
-          "assetClass": { "type": "string", "enum": ["equity", "bond", "commodity", "multi_asset", "other"] },
+          "assetClass": { "type": "string", "enum": ["equity", "bond", "commodity", "multi_asset", "money_market", "other"] },
           "region": { "type": ["string", "null"], "maxLength": 60 },
           "call": { "type": "string", "enum": ["BUY_ZONE", "WATCH", "AVOID"] },
           "conviction": { "type": "integer", "minimum": 1, "maximum": 5 },

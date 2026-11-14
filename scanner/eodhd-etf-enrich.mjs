@@ -2,29 +2,38 @@
 const US_EXCHANGES = new Set(["NYSEARCA", "NASDAQ", "NYSE", "BATS", "AMEX", "IEX"]);
 const text = (value) => typeof value === "string" && value.trim() ? value.trim() : null;
 const number = (value) => value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value)) ? Number(value) : null;
+/** Equity_% ranks equity funds; a bond or other fund reports Equity_% 0 and its weights in Fund_%. */
 const regionFrom = (regions) => {
-  const ranked = Object.entries(regions ?? {}).map(([name, value]) => [name, number(value?.["Equity_%"]) ?? number(value?.["Fund_%"]) ?? number(value)]).filter(([, weight]) => weight !== null && weight > 0);
-  if (!ranked.length) return null;
-  ranked.sort((a, b) => b[1] - a[1]);
-  return ranked[0][1] > 60 ? ranked[0][0] : "global";
+  const entries = Object.entries(regions ?? {});
+  const ranked = (field) => entries.map(([name, value]) => [name, field ? number(value?.[field]) : number(value)]).filter(([, weight]) => weight !== null && weight > 0);
+  const weights = [ranked("Equity_%"), ranked("Fund_%"), ranked(null)].find((list) => list.length) ?? [];
+  if (!weights.length) return null;
+  weights.sort((a, b) => b[1] - a[1]);
+  return weights[0][1] > 60 ? weights[0][0] : "global";
 };
+/** The payout label decides. Otherwise a paid dividend in `history` (stored etf_dividends rows) marks a distributing class. */
 const distributionFrom = (frequency, history) => {
   const label = text(frequency)?.toLowerCase() ?? "";
   if (/\b(no|none|non.distribut|not paying|keine|nicht)\b/.test(label)) return null;
   if (/accumulat|thesaurier|reinvest/.test(label)) return "acc";
   if (/annual|year|quarter|month|semi|half|week|daily|jähr|viertel|monat|halb|wöch|ausschütt|distribut/.test(label)) return "dist";
-  const events = Array.isArray(history) ? history : history && typeof history === "object" ? Object.values(history) : [];
-  return events.some((event) => (number(event?.value ?? event?.amount ?? event) ?? 0) > 0) ? "dist" : null;
+  return Array.isArray(history) && history.some((event) => (number(event?.value ?? event?.amount) ?? 0) > 0) ? "dist" : null;
 };
+/**
+ * Whole-word General.Category match. Allocation labels come first because they name an equity share
+ * ("Allocation--50% to 70% Equity"); equity and bond come before the commodity and money market words so
+ * "Equity Precious Metals" stays equity. An unmatched label returns null and Asset_Allocation decides.
+ */
 const categoryClass = (category) => {
   const label = text(category)?.toLowerCase() ?? "";
   if (!label || label === "na" || label === "n/a") return null;
-  if (/money.market|monetary|geldmarkt|cash/.test(label)) return "money_market";
-  if (/multi.asset|mixed.asset|balanced|allocation|multi-asset|mischfonds/.test(label)) return "multi_asset";
-  if (/commodity|commodities|rohstoff|gold|silver|precious.metal/.test(label)) return "commodity";
-  if (/bond|fixed.income|debt|anleihe|obligation/.test(label)) return "bond";
-  if (/equity|stock|aktien/.test(label)) return "equity";
-  return "other";
+  if (/\b(multi[\s-]?asset|mixed[\s-]?asset|balanced|allocation|mischfonds)\b/.test(label)) return "multi_asset";
+  if (/\b(equity|equities|stocks?|aktien)\b/.test(label)) return "equity";
+  if (/\b(bonds?|fixed[\s-]?income|debt|anleihen?|obligations?|government|treasury|municipal)\b/.test(label)) return "bond";
+  if (/\b(money[\s-]?market|monetary|geldmarkt)\b/.test(label)) return "money_market";
+  if (/\b(commodity|commodities|rohstoffe?|gold|silver|precious[\s-]?metals?)\b/.test(label)) return "commodity";
+  if (/^(other|miscellaneous)$/.test(label)) return "other";
+  return null;
 };
 
 function expensePercent(etf) {
@@ -58,15 +67,17 @@ export function mapFundamentals(row, symbol, data) {
   const assetClass = categoryClass(general.Category) ?? Object.entries(totals).find(([, values]) => values.reduce((sum, [, value]) => sum + value, 0) > 50)?.[0] ?? null;
   const region = regionFrom(etf.World_Regions);
   const rawRatio = number(etf.NetExpenseRatio);
+  const hint = typeof row.ucitsHint === "boolean" ? row.ucitsHint : null;
   const count = number(etf.Holdings_Count);
   return {
     listingKey: row.listingKey, isin: [etf.ISIN, general.ISIN, row.isin].map(text).find((value) => value && /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(value)) ?? null,
     issuer: text(etf.Company_Name), assetClass, region, theme: null,
     trackedIndex: text(etf.Index_Name), terPct,
     aumUsdM: US_EXCHANGES.has(row.exchange) && general.CurrencyCode === "USD" && assets !== null && assets >= 0 ? assets / 1_000_000 : null,
-    domicile: text(etf.Domicile), replication: null, distribution: distributionFrom(etf.Dividend_Paying_Frequency, etf.Dividends ?? data?.Dividends ?? row.dividendHistory), ucits: null,
-    ucitsHint: /\bUCITS\b/i.test(row.name ?? "") || /^(IE|LU)/.test(row.isin ?? "") ? true : null,
-    terGap: rawRatio !== null && rawRatio >= 0.01 && rawRatio <= 0.025 ? "ter_ambiguous" : null,
+    domicile: text(etf.Domicile), replication: null, distribution: distributionFrom(etf.Dividend_Paying_Frequency, row.dividendHistory), ucits: null,
+    // The catalog's Xetra hint (etf_catalog.ucits_hint) is echoed, never derived here and never confirmation.
+    ucitsHint: hint,
+    terGap: terPct === null && rawRatio !== null && rawRatio >= 0.01 && rawRatio <= 0.025 ? "ter_ambiguous" : null,
     sourceUrl: symbol ? `https://eodhd.com/api/v1.1/fundamentals/${encodeURIComponent(symbol)}` : null,
     source: "eodhd", holdingsCount: count !== null && Number.isInteger(count) && count >= 0 ? count : null,
   };

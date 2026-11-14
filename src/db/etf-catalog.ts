@@ -1,7 +1,7 @@
 import type pg from "pg";
 import { getPool } from "./pool";
 import { sampleEtfCatalog, sampleEtfScores } from "@/data/etf-fixtures";
-import type { EtfAssetClass } from "./etf";
+import { ETF_ASSET_CLASSES, type EtfAssetClass } from "./etf";
 import { ETF_RULES_VERSION } from "@/engine/etf-score-config";
 
 export type InstrumentType = "ETF" | "ACTIVE_ETF" | "ETC" | "ETN";
@@ -88,7 +88,7 @@ const pageNumber = (value: string | undefined) => Math.max(1, Math.min(100000, N
 export function normalizeCatalogFilters(filters: CatalogFilters) {
   return {
     search: filters.search?.trim().slice(0, 100) || null,
-    assetClass: valid(filters.assetClass, ["equity", "bond", "commodity", "multi_asset", "other"]),
+    assetClass: valid(filters.assetClass, ETF_ASSET_CLASSES),
     region: filters.region?.slice(0, 100) || null, listingRegion: valid(filters.listingRegion, ["EU", "US"]), exchange: filters.exchange?.slice(0, 40) || null, issuer: filters.issuer?.slice(0, 100) || null,
     distribution: valid(filters.distribution, ["acc", "dist"]), ucits: flag(filters.ucits),
     instrumentType: valid(filters.instrumentType, allowedTypes), shortlist: flag(filters.shortlist),

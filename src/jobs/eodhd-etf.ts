@@ -10,7 +10,8 @@ const DAY = 86_400_000;
 const JOB = "eodhd-etf";
 /** Billed calls per request: fundamentals 10, dividends 1, EOD 1 (fundamentals cost per the 2026-11-06 counter checks). */
 export const ETF_COSTS = { fundamentals: 10, dividends: 1, eod: 1 } as const;
-export const ETF_DETAIL_FILTER = "General,ETF_Data";
+/** Same sections as the enrich run, so job and enrich rows for one as_of carry the same fields. */
+export const ETF_DETAIL_FILTER = "General,ETF_Data,Technicals";
 
 export interface EtfJobArgs { dryRun: boolean; maxTracked: number; maxCalls: number; backfill: number }
 export function parseEtfJobArgs(args: string[], env: Record<string, string | undefined> = process.env): EtfJobArgs {
@@ -72,7 +73,7 @@ export async function runEtfJob(db: Db, api: Api | null, options: EtfJobArgs, to
           if (!parsed || (parsed.type && parsed.type.toUpperCase() !== "ETF")) status = "not_etf";
           else if (fund.isin && parsed.isin && fund.isin !== parsed.isin) status = "isin_mismatch";
           else {
-            const stored = await storeEtfDetail(db, { listingKey: fund.listing_key, vendorSymbol: fund.vendor_symbol, asOf: today, origin: "job", data: parsed });
+            const stored = await storeEtfDetail(db, { listingKey: fund.listing_key, vendorSymbol: fund.vendor_symbol, asOf: today, origin: "job", data: parsed, ucitsHint: fund.ucits_hint });
             counts.holdings += stored.holdings; counts.exposure += stored.exposure;
           }
         }

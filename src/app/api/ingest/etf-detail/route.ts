@@ -32,11 +32,11 @@ async function handler(request: Request) {
   const { listingKey, vendorSymbol } = value as EtfDetailIngest;
   const db = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
   try {
-    const listing = await db.query<{ isin: string | null; ucits: boolean | null }>("SELECT isin,ucits FROM etf_catalog WHERE listing_key=$1", [listingKey]);
+    const listing = await db.query<{ isin: string | null; ucits_hint: boolean | null }>("SELECT isin,ucits_hint FROM etf_catalog WHERE listing_key=$1", [listingKey]);
     if (!listing.rows[0]) return Response.json({ error: "Unknown listing" }, { status: 404 });
     const isin = listing.rows[0].isin;
     if (isin && parsed.isin && isin !== parsed.isin) return Response.json({ error: "ISIN mismatch" }, { status: 409 });
-    const stored = await storeEtfDetail(db, { listingKey, vendorSymbol, asOf: new Date().toISOString().slice(0, 10), origin: "enrich", data: parsed, ucitsHint: listing.rows[0].ucits });
+    const stored = await storeEtfDetail(db, { listingKey, vendorSymbol, asOf: new Date().toISOString().slice(0, 10), origin: "enrich", data: parsed, ucitsHint: listing.rows[0].ucits_hint });
     return Response.json({ stored: listingKey, ...stored });
   } catch (error) { recordIngestError(request, error); return Response.json({ error: "Database unavailable" }, { status: 503 }); }
   finally { await db.end(); }
