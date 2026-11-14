@@ -211,7 +211,7 @@ describe("Monday catch-up", () => {
     // Detect writes a gate per date and extract reads one pending gate per run, so a Monday gate would push Tuesday's gate to Wednesday.
     // A Monday extract is judged on Tuesday against Friday's scores, and Tuesday's detect skips filings already extracted.
     // These jobs do not open a stock gate. ETF research runs its own weekly model pass; ETF outcomes reads price bars.
-    const daily = ["pool-bars", "earnings-calendar", "retention", "discovery-auto-promote", "discovery", "etf-research", "etf-outcomes"];
+    const daily = ["pool-bars", "earnings-calendar", "retention", "discovery-auto-promote", "discovery", "etf-research", "etf-outcomes", "eodhd-etf", "eodhd-etf-fundamentals", "etf-enrich"];
     expect(scheduled.filter((job) => job.active && job.days.includes(1) && !daily.includes(job.name)).map((job) => job.name)).toEqual(["collect"]);
     for (const name of ["prices", "watch", "detect", "extract", "macro", "reconcile", "daily", "judge", "digest"]) expect(days(minutes(name).days), name).not.toContain(1);
   });
@@ -285,19 +285,22 @@ describe("GDELT collector proposal", () => {
 });
 
 describe("ETF research and outcomes", () => {
-  it("syncs global listings before enrichment and keeps separate model settings", () => {
+  it("syncs global listings before the daily enrichment run", () => {
     expect(minutes("etf-catalog-sync")).toEqual({ at: 5 * 60 + 10, days: "0" });
-    expect(minutes("etf-enrich")).toEqual({ at: 5 * 60 + 40, days: "0" });
+    expect(minutes("etf-enrich")).toEqual({ at: 10 * 60 + 10, days: "*" });
     expect(minutes("etf-catalog-sync").at + startWindow("etf-catalog-sync") + deadline("etf-catalog-sync")).toBeLessThanOrEqual(minutes("etf-enrich").at);
     expect(job("etf-catalog-sync")).toContain('command: ["node", "dist/jobs/etf-catalog.js"]');
     expect(job("etf-catalog-sync")).not.toContain("CODEX_ACCESS_TOKEN");
     expect(job("etf-enrich")).toContain("run-etf-enrich.mjs");
-    expect(deadline("etf-enrich")).toBeGreaterThanOrEqual(24 * 60);
-    for (const name of ["etf-enrich", "etf-research"]) {
-      expect(job(name)).toContain("name: RESEARCH_CODEX_MODEL");
-      expect(job(name)).toContain('value: ""');
-      expect(job(name)).toContain("name: RESEARCH_ENABLED");
-    }
+    expect(job("etf-enrich")).toContain('"--limit", "3000"');
+    expect(job("etf-enrich")).toContain("name: ETF_EODHD_DAILY_CALL_BUDGET");
+    expect(job("etf-enrich")).toContain('value: "30000"');
+    expect(job("etf-enrich")).toContain("name: EODHD_API_KEY");
+    expect(job("etf-enrich")).not.toContain("CODEX_ACCESS_TOKEN");
+    expect(job("etf-enrich")).toContain("name: RESEARCH_ENABLED");
+    expect(deadline("etf-enrich")).toBeLessThanOrEqual(4 * 60);
+    expect(job("etf-research")).toContain("name: RESEARCH_CODEX_MODEL");
+    expect(job("etf-research")).toContain("name: RESEARCH_ENABLED");
     expect(deadline("etf-research")).toBeGreaterThanOrEqual(6 * 30);
   });
   it("runs ETF research weekly after the daily price outcome pass", () => {
@@ -325,17 +328,22 @@ describe("corporate actions job", () => {
   });
 });
 
-describe("EODHD ETF detail job", () => {
-  it("is suspended, nightly, outside daily scoring, with the ETF call cap and EODHD key", () => {
-    const doc = job("eodhd-etf");
-    const at = minutes("eodhd-etf");
-    expect(doc).toContain("suspend: true");
-    expect(doc).toContain("timeZone: Europe/Bratislava");
-    expect(doc).toContain('command: ["node", "dist/jobs/eodhd-etf.js"]');
-    expect(doc).toContain("name: ETF_EODHD_MAX_CALLS");
-    expect(doc).toContain("name: invest-buddy-eodhd");
-    expect(at.at).toBeGreaterThanOrEqual(15);
-    expect(at.at + deadline("eodhd-etf")).toBeLessThanOrEqual(4 * 60);
-    for (const text of ["runAsNonRoot: true", "automountServiceAccountToken: false", "readOnlyRootFilesystem: true", "concurrencyPolicy: Forbid"]) expect(doc).toContain(text);
+describe("EODHD ETF collection", () => {
+  it("schedules independent bars, dividends and fundamentals outside stock collection hours", () => {
+    const modes = [{ name: "eodhd-etf", mode: "bars", at: 3 * 60 + 10, days: "*" },
+      { name: "eodhd-etf-dividends", mode: "dividends", at: 9 * 60 + 10, days: "0" },
+      { name: "eodhd-etf-fundamentals", mode: "fundamentals", at: 11 * 60 + 10, days: "*" }];
+    for (const mode of modes) {
+      const doc = job(mode.name);
+      expect(minutes(mode.name)).toEqual({ at: mode.at, days: mode.days });
+      expect(doc).toContain("suspend: false");
+      expect(doc).toContain("timeZone: Europe/Bratislava");
+      expect(doc).toContain(`command: ["node", "dist/jobs/eodhd-etf.js", "--mode", "${mode.mode}"]`);
+      expect(doc).toContain("name: ETF_EODHD_MAX_CALLS");
+      expect(doc).toContain('value: "10000"');
+      expect(doc).toContain("name: invest-buddy-eodhd");
+      expect(mode.at).toBeGreaterThan(2 * 60 + 30);
+      for (const text of ["runAsNonRoot: true", "automountServiceAccountToken: false", "readOnlyRootFilesystem: true", "concurrencyPolicy: Forbid"]) expect(doc).toContain(text);
+    }
   });
 });
