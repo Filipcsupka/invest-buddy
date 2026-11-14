@@ -2,7 +2,7 @@
 
 The markers identify sections of a page that belong to the free or the paid tier. `<PaywallSegment id="...">` reads the viewer's tier and applies the entry for that id in `src/config/tiers.ts`. The ids live in `src/paywall/segments.ts`. The full reasoning, the competitor evidence and the free depth numbers are in `docs/tier-map.md`. Decision of 2026-10-08, superseded on 2026-10-16: the markers no longer stand for "candidate" sections, each id has a final tier.
 
-Today no auth exists, so every request resolves to `admin`: all content shows, and a paid segment carries a small "Paid" badge. `?view=free` previews the free tier for an admin. Prices: none in beta (W17).
+The owner sees paid segments with a small "Paid" badge. `?view=free` previews the free tier for the owner.
 
 ## Investor paths and plans
 
@@ -29,9 +29,9 @@ Checked in `src/proxy.ts` and again on each page. Tests: `src/proxy.test.ts` (ro
 | `/indices`, `/economy`, `/calendar` | Sign-in | Plus preview | Open | Open | Open |
 | `/methodology`, `/pricing`, legal pages | Open | Open | Open | Open | Open |
 
-The gates in code: `canUseVendorData` (stock data: owner, Active, or a vendor licence), `canUseFundData` and `canOpenFunds` (adds Passive), and `marketsViewable(viewer, env, section)` in `src/markets/gate.ts`, where `indices`, `economy`, `calendar` and `etf` are the fund sections. The dashboard is no longer refused by the proxy; the page reads no score, portfolio or market data for a viewer without stock access (`dashboardStockAccess`).
+The gates in code: `canSeeStockData` (stock data: owner or Active), `canUseFundData` and `canOpenFunds` (adds Passive), and `marketsViewable(viewer, env, section)` in `src/markets/gate.ts`, where `indices`, `economy`, `calendar` and `etf` are the fund sections. The dashboard is open through the proxy; the page reads no score, portfolio or market data for a viewer without stock access (`dashboardStockAccess`).
 
-The stock gate does not depend on `EODHD_PRIVATE_USE`. Outside fixture mode, the stock routes and the dashboard board always need `canUseVendorData` (`stockRoutesGated`, `canSeeStockData` in `src/viewer/viewer.ts`). With private use off, that means the owner, Active, or `VENDOR_DISPLAY_LICENSE=on`. Only the fixture sample universe with private use off is open to everyone.
+Stock routes and dashboard stock blocks need `canSeeStockData`: the owner or Active (Plus and trial), regardless of `EODHD_PRIVATE_USE` and `VENDOR_DISPLAY_LICENSE`. A display licence only widens fund and index data. The one exception is fixture mode with private use off, which has only the checked-in sample universe and stays open for local runs and the e2e suite (`stockRoutesGated`).
 
 With `VENDOR_DISPLAY_LICENSE=on` and private use off, a signed-in free account also opens indices, economy and calendar, and the sidebar unlocks them for it. The ETF catalog, fund pages and fund data tabs stay Passive and Active, licence or not.
 
@@ -61,7 +61,7 @@ For the paywall segments below, Passive counts as `free`: they are stock depth.
 
 Features that are not page markers yet (ids in `FEATURES` in `src/config/tiers.ts`): `discovery-list` (paid), `saved-screens` (paid, free count), `watchlist` (paid, free count), `alerts-daily` (paid, free count), `alerts-weekly` (free) and `csv-export` (paid).
 
-Everything else needs no marker and is free: landing, methodology, legal pages, dashboard, heat map, the scanner's search, state and sector filters, liquidity floor and basic presets, and the company page's status, score, rules checklist with thresholds, rejection checks, inputs, flags, data status and chart. Owner sections (`/owner-allocation`, `/owner/research`) have no tier and stay behind `OWNER_VIEW`.
+Landing, methodology, legal pages and the dashboard's path cards need no marker. Stock pages require Active or owner access before their internal segments render, including the heat map, scanner filters and company scores. Owner sections (`/owner-allocation`, `/owner/research`) have no tier and stay behind `OWNER_VIEW`.
 
 ## Legal gates come first
 
@@ -69,7 +69,7 @@ Everything else needs no marker and is free: landing, methodology, legal pages, 
 
 ## Pages and routes
 
-- `/scanner` is a public page. It is listed in the sitemap without query strings. The old statement that `/scanner` redirects to the dashboard was wrong: it returned 404 while `PAYWALL` was off, and `PAYWALL` no longer hides it. Filtered URLs and `?view=` previews are not in the sitemap.
+- `/scanner` redirects to `/stocks`. The stock route needs Active or owner access. Filtered URLs and `?view=` previews are not in the sitemap.
 - `/pricing` shows the three plans side by side (Free market overview, Passive, Plus as the Active plan) with prices and the VAT note, a table of what each plan opens, and the stock features by plan built from `src/config/tiers.ts` (Free and Passive: not included; Plus: included or its limit). Paid plans show "Opens soon" and a waitlist form; nothing can be bought.
 - Locked text is not in the HTML for a free viewer, so crawlers see the free version.
 

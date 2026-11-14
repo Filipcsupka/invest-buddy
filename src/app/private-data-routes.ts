@@ -5,7 +5,7 @@ export const PRIVATE_DATA_SECTIONS = ["dashboard", "scanner", "stocks", "company
 export const FUND_DATA_SECTIONS = ["etf"] as const;
 
 /**
- * Private-data sections that every visitor may open because the page itself withholds its vendor content (canUseVendorData). The
+ * Private-data sections that every visitor may open because the page itself withholds its vendor content (canSeeStockData). The
  * dashboard shows the investor paths to everyone and the stock board only to viewers with stock access.
  */
 export const PAGE_GATED_SECTIONS = ["dashboard"] as const;

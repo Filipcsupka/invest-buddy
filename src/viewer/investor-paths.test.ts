@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { canOpenFunds, canUseFundData, canUseVendorData, investorPath, type Viewer } from "./viewer";
+import { canOpenFunds, canSeeStockData, canUseFundData, canUseVendorData, investorPath, type Viewer } from "./viewer";
 import { marketSection, marketsViewable } from "@/markets/gate";
 import { pathCards } from "@/config/investor-paths";
 
@@ -13,6 +13,23 @@ const viewers: Record<string, Viewer> = {
 };
 const prod = { EODHD_PRIVATE_USE: "on", MARKETS_VIEWS: "on" };
 const licensed = { EODHD_PRIVATE_USE: "off", VENDOR_DISPLAY_LICENSE: "on", MARKETS_VIEWS: "on" };
+
+it.each(["on", "off"] as const)("private use %s: stored stock scores stay Active-only with and without a licence", (privateUse) => {
+  for (const licence of ["on", "off"]) {
+    const env = { EODHD_PRIVATE_USE: privateUse, VENDOR_DISPLAY_LICENSE: licence, DATA_MODE: "db" };
+    for (const name of ["anon", "free", "passive"]) expect(canSeeStockData(viewers[name]!, env), `${name} ${licence}`).toBe(false);
+    for (const name of ["plus", "trial", "owner"]) expect(canSeeStockData(viewers[name]!, env), `${name} ${licence}`).toBe(true);
+    expect(canUseVendorData(viewers.anon!, env), `anon vendor ${licence}`).toBe(false);
+  }
+});
+
+it("opens only the fixture sample universe to everyone, and only while private use is off", () => {
+  for (const licence of ["on", "off"])
+    for (const name of ["anon", "free", "passive"]) {
+      expect(canSeeStockData(viewers[name]!, { EODHD_PRIVATE_USE: "off", VENDOR_DISPLAY_LICENSE: licence, DATA_MODE: "fixture" }), name).toBe(true);
+      expect(canSeeStockData(viewers[name]!, { EODHD_PRIVATE_USE: "on", VENDOR_DISPLAY_LICENSE: licence, DATA_MODE: "fixture" }), name).toBe(false);
+    }
+});
 
 // [viewer, stock data, fund data, ETF screen, stock market sections, fund market sections] while EODHD_PRIVATE_USE is on.
 it.each([

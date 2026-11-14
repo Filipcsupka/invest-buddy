@@ -114,25 +114,35 @@ it("sends a signed-in Passive browser from a stock page to the Plus preview, and
   expect(anon.headers.get("location")).toContain("/en/sign-in?mode=sign-in&next=");
 });
 
-it("with private use off, stock routes need a display licence outside fixture mode; the dashboard stays open", async () => {
-  process.env.EODHD_PRIVATE_USE = "off";
+it.each(["on", "off"] as const)("private use %s: stock routes need Active or owner access with and without a display licence, for documents and RSC", async (privateUse) => {
+  process.env.EODHD_PRIVATE_USE = privateUse;
   process.env.AUTH = "on";
-  const routes = ["stocks", "heatmap", "portfolio", "track-record"];
-  process.env.VENDOR_DISPLAY_LICENSE = "on";
-  for (const path of [...routes, "dashboard"]) expect((await proxy(new NextRequest(`https://example.com/en/${path}`))).status, `licensed ${path}`).toBe(200);
-  delete process.env.VENDOR_DISPLAY_LICENSE;
-  for (const path of routes) {
-    for (const who of [undefined, "free", "passive"]) {
-      const headers = who ? { cookie: `__Host-ib_session=${who}` } : undefined;
-      expect((await proxy(new NextRequest(`https://example.com/en/${path}`, { headers }))).status, `${who ?? "anon"} ${path}`).toBe(401);
-      // A client-side navigation (RSC) is refused the same way.
-      expect((await proxy(new NextRequest(`https://example.com/en/${path}`, { headers: { ...headers, rsc: "1" } }))).status, `rsc ${who ?? "anon"} ${path}`).toBe(401);
+  process.env.MARKETS_VIEWS = "on";
+  process.env.INSIDERS_PAGE = "on";
+  universe.mockResolvedValue([{ ticker: "NVDA" }]);
+  const { resetRateLimits } = await import("@/security/rate-limit");
+  const routes = ["stocks", "company/NVDA", "heatmap", "portfolio", "track-record", "insiders", "news", "congress", "screener"];
+  for (const licence of ["on", "off"] as const) {
+    process.env.VENDOR_DISPLAY_LICENSE = licence;
+    for (const path of routes) {
+      resetRateLimits();
+      for (const who of [undefined, "free", "passive"]) {
+        const cookie = who ? { cookie: `__Host-ib_session=${who}` } : undefined;
+        const expected = who ? "/en/opens-soon" : "/en/sign-in";
+        const documentResponse = await proxy(new NextRequest(`https://example.com/en/${path}`, { headers: new Headers({ ...browserDoc, ...cookie }) }));
+        expect(documentResponse.status, `${privateUse} ${licence} ${who ?? "anon"} ${path} document`).toBe(307);
+        expect(documentResponse.headers.get("location"), path).toContain(expected);
+        const rscResponse = await proxy(new NextRequest(`https://example.com/en/${path}`, { headers: new Headers({ rsc: "1", ...cookie }) }));
+        expect(rscResponse.status, `${privateUse} ${licence} ${who ?? "anon"} ${path} RSC`).toBe(401);
+      }
+      for (const who of ["plus", "trial", "owner"]) {
+        const headers = { ...browserDoc, cookie: `__Host-ib_session=${who}` };
+        expect((await proxy(new NextRequest(`https://example.com/en/${path}`, { headers }))).status, `${who} ${path}`).toBe(200);
+      }
     }
-    expect((await proxy(new NextRequest(`https://example.com/en/${path}`, { headers: { cookie: "__Host-ib_session=plus" } }))).status, `plus ${path}`).toBe(200);
+    expect((await proxy(new NextRequest("https://example.com/en/dashboard"))).status).toBe(200);
   }
-  expect((await proxy(new NextRequest("https://example.com/en/dashboard"))).status).toBe(200);
-  process.env.DATA_MODE = "fixture";
-  for (const path of routes) expect((await proxy(new NextRequest(`https://example.com/en/${path}`))).status, `fixture ${path}`).toBe(200);
+  resetRateLimits();
 });
 
 it("keeps market routes private even when the flag is on", async () => {
@@ -162,7 +172,7 @@ it("keeps insiders available when its flag is on and markets are off", async () 
   process.env.EODHD_PRIVATE_USE = "off";
   expect((await proxy(new NextRequest("https://example.com/en/insiders"))).status).toBe(401);
   process.env.VENDOR_DISPLAY_LICENSE = "on";
-  expect((await proxy(new NextRequest("https://example.com/en/insiders"))).status).toBe(200);
+  expect((await proxy(new NextRequest("https://example.com/en/insiders"))).status).toBe(401);
   delete process.env.VENDOR_DISPLAY_LICENSE;
   process.env.EODHD_PRIVATE_USE = "on";
   expect((await proxy(new NextRequest("https://example.com/en/insiders"))).status).toBe(401);
@@ -225,16 +235,17 @@ it("owner session never works while AUTH is off", async () => {
 
 it.each(["en", "sk"])("returns a real 404 for unavailable %s routes", async (locale) => {
   delete process.env.DATA_MODE; delete process.env.IDEAS_PAGE; delete process.env.OWNER_VIEW; delete process.env.PAYWALL; delete process.env.ADVICE_OUTPUT;
-  // A display licence opens the stock routes to visitors, so the company lookup decides.
+  process.env.AUTH = "on";
+  // An unknown company remains a 404 even when stock access is otherwise locked.
   process.env.VENDOR_DISPLAY_LICENSE = "on";
   universe.mockResolvedValue([{ ticker: "NVDA" }]);
   for (const path of ["ideas", "owner-allocation", "sizing", "company/ZZZZ"]) {
-    const response = await proxy(new NextRequest(`https://example.com/${locale}/${path}`));
+    const response = await proxy(new NextRequest(`https://example.com/${locale}/${path}`, { headers: path === "company/ZZZZ" ? ownerCookie : undefined }));
     expect(response.status, path).toBe(404);
     expect(response.headers.get("x-request-id")).toBeTruthy();
     expect(await response.text()).toContain("<h1>");
   }
-  const known = await proxy(new NextRequest(`https://example.com/${locale}/company/NVDA`));
+  const known = await proxy(new NextRequest(`https://example.com/${locale}/company/NVDA`, { headers: ownerCookie }));
   expect(known.status).toBe(200);
   expect(known.headers.get("x-request-id")).toBeTruthy();
 });
@@ -248,11 +259,12 @@ it.each(["en", "sk"])("opens the %s sizing guide only with ADVICE_OUTPUT on", as
 
 it.each(["en", "sk"])("keeps %s ideas unavailable while advice is off", async (locale) => {
   process.env.IDEAS_PAGE = "on";
+  process.env.AUTH = "on";
   process.env.ADVICE_OUTPUT = "off";
   process.env.VENDOR_DISPLAY_LICENSE = "on";
   expect((await proxy(new NextRequest(`https://example.com/${locale}/ideas`))).status).toBe(404);
   process.env.ADVICE_OUTPUT = "on";
-  expect((await proxy(new NextRequest(`https://example.com/${locale}/ideas`))).status).toBe(200);
+  expect((await proxy(new NextRequest(`https://example.com/${locale}/ideas`, { headers: ownerCookie }))).status).toBe(200);
 });
 
 it.each(["en", "sk"])("redirects the %s scanner whatever PAYWALL says", async (locale) => {
@@ -269,7 +281,8 @@ it("marks ?view= previews noindex and drops a client-sent preview header", async
   process.env.AUTH = "on";
   process.env.VENDOR_DISPLAY_LICENSE = "on";
   const plain = await proxy(new NextRequest("https://example.com/en/stocks"));
-  expect(plain.headers.get("x-robots-tag")).toBeNull();
+  expect(plain.status).toBe(401);
+  expect(plain.headers.get("x-robots-tag")).toBe("noindex");
   // AUTH off no longer makes every visitor admin: only the owner gets the free preview.
   const anonymous = await proxy(new NextRequest("https://example.com/en/stocks?view=free"));
   expect(anonymous.headers.get("x-robots-tag")).toBe("noindex");
@@ -340,8 +353,9 @@ it.each(["en", "sk"])("hides the %s design kit page in a production build unless
 
 it("replaces a malformed incoming id", async () => {
   process.env.PAYWALL = "on";
+  process.env.AUTH = "on";
   process.env.VENDOR_DISPLAY_LICENSE = "on";
-  const response = await proxy(new NextRequest("https://example.com/en/stocks", { headers: { "x-request-id": "bad id<script>" } }));
+  const response = await proxy(new NextRequest("https://example.com/en/stocks", { headers: { ...ownerCookie, "x-request-id": "bad id<script>" } }));
   expect(response.headers.get("x-request-id")).toMatch(/^[0-9a-f-]{36}$/);
 });
 

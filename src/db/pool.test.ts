@@ -1,4 +1,10 @@
 import { renderToStaticMarkup } from "react-dom/server";
+// These content tests render through an entitled owner session; access denial is tested separately.
+vi.mock("@/viewer/get-viewer", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@/viewer/get-viewer")>(),
+  getViewer: async () => ({ tier: "admin", preview: false, owner: true, userId: "owner" }),
+}));
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Outside a React server render, cache() does not memoize. Model one request with a resettable memo.

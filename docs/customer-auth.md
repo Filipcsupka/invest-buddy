@@ -47,7 +47,7 @@ Optional:
 - `RESEND_API_KEY`, `MAIL_FROM`: required for `MAIL_PROVIDER=resend`, for example `MAIL_FROM="InvestBuddy <hello@invest.filipcsupka.online>"`.
 - `RATE_LIMIT_TRUSTED_HOPS`: proxies in front of the app that append to `X-Forwarded-For`. Default 1 (Traefik only). Set it per environment: if a CDN is added in front of Traefik, use 2, or every visitor shares the CDN's bucket. The client IP is the entry this many places from the end; entries further left and `X-Real-IP` are ignored because the client can set them. A request with fewer entries than hops counts against one shared `unknown` bucket.
 - `RATE_LIMIT_SECRET`: key for hashing emails and IPs in rate-limit rows. Defaults to `AUTH_SECRET`.
-- `VENDOR_DISPLAY_LICENSE`: set `on` only after a vendor display licence exists. While `EODHD_PRIVATE_USE=on`, `canUseVendorData` is true for the owner session and for a signed-in customer with an active Plus or trial plan (owner decision 2026-11-12), and false for Passive and free accounts and visitors. `canUseFundData` adds the Passive plan for ETF, index, economy and calendar data only (`docs/paywall-segments.md`).
+- `VENDOR_DISPLAY_LICENSE`: set `on` only after a vendor display licence exists. It never opens stock data: `canSeeStockData` is true for the owner session and for a signed-in customer with an active Plus or trial plan, and false for Passive and free accounts and visitors, whatever this flag and `EODHD_PRIVATE_USE` say. With private use off, the licence only lets a signed-in free account open indices, economy and calendar (`marketsViewable`). `canUseFundData` adds the Passive plan for ETF, index, economy and calendar data (`docs/paywall-segments.md`).
 
 Never commit any of these values.
 

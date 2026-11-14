@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { requireStockData } from "@/app/[locale]/(app)/owner/data/access";
 import type { Metadata } from "next";
 import { withPageLog } from "@/app/page-log";
 import { flags } from "@/config/flags";
@@ -116,6 +117,7 @@ function rulesMetCell(locale: Locale, matched: string[] | null, streak: RuleStre
 }
 
 async function Scanner({ params, searchParams }: Props) {
+  await requireStockData();
   const locale = await resolveLocale(params);
   const viewer = await getViewer();
   const m = getMessages(locale);

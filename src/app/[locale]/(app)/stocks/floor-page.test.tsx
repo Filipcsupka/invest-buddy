@@ -1,4 +1,10 @@
 import { renderToStaticMarkup } from "react-dom/server";
+// These content tests render through an entitled owner session; access denial is tested separately.
+vi.mock("@/viewer/get-viewer", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@/viewer/get-viewer")>(),
+  getViewer: async () => ({ tier: "admin", preview: false, owner: true, userId: "owner" }),
+}));
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const shares = vi.fn();
@@ -28,7 +34,7 @@ describe("scanner floor page", () => {
     expect(html).toContain(remove);
     expect(html).toContain(`href="/${locale}/stocks?floor=off"`);
     expect(html).toMatch(hidden);
-    expect(html).not.toContain(noData);
+    expect(html).not.toContain(`>${noData}</span>`);
 
     const off = await render(locale, { floor: "off" });
     expect(rowCount(off)).toBe(Number(total));

@@ -1,13 +1,15 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 // Admin is the owner only (a session user id in OWNER_USER_IDS); AUTH off no longer makes every visitor admin.
-const owner = vi.hoisted(() => ({ on: false }));
+const owner = vi.hoisted(() => ({ on: true, as: null as null | Record<string, unknown> }));
 vi.mock("next/headers", () => ({ headers: async () => new Headers() }));
 vi.mock("@/viewer/get-viewer", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/viewer/get-viewer")>();
-  return { ...real, getViewer: async () => real.resolveViewer(undefined, null, owner.on) };
+  return { ...real, getViewer: async () => owner.as ?? real.resolveViewer(undefined, null, owner.on) };
 });
 import Scanner, { generateMetadata } from "./page";
+
+afterEach(() => { owner.on = true; owner.as = null; });
 
 it.each(["en", "sk"])("shows the restored state tally above stock filters (%s)", async (locale) => {
   const oldMode = process.env.DATA_MODE;
@@ -39,49 +41,48 @@ describe("scanner route", () => {
         expect(markup).not.toContain("data-tier-lock");
       }
     } finally {
-      owner.on = false;
+      owner.on = true;
       for (const [key, value] of Object.entries(saved)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
     }
   });
 
-  describe("free viewer", () => {
-    const saved = { PAYWALL: process.env.PAYWALL, AUTH: process.env.AUTH, DATA_MODE: process.env.DATA_MODE };
-    beforeEach(() => { process.env.PAYWALL = "on"; process.env.AUTH = "on"; process.env.DATA_MODE = "fixture"; });
-    afterEach(() => { for (const [key, value] of Object.entries(saved)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } });
-    const render = async (searchParams: Record<string, string>, locale = "en") => renderToStaticMarkup(await Scanner({ params: Promise.resolve({ locale }), searchParams: Promise.resolve(searchParams) }));
+  it("private use on: a non-owner cannot render fixture stock scores with either licence setting", async () => {
+    const privateUse = "on";
+    const saved = { mode: process.env.DATA_MODE, privateUse: process.env.EODHD_PRIVATE_USE, licence: process.env.VENDOR_DISPLAY_LICENSE };
+    owner.on = false;
+    process.env.DATA_MODE = "fixture";
+    process.env.EODHD_PRIVATE_USE = privateUse;
+    try {
+      for (const licence of ["on", "off"]) {
+        process.env.VENDOR_DISPLAY_LICENSE = licence;
+        await expect(Scanner({ params: Promise.resolve({ locale: "en" }), searchParams: Promise.resolve({}) })).rejects.toThrow(/404|NOT_FOUND/);
+      }
+    } finally {
+      owner.on = true;
+      for (const [key, value] of [["DATA_MODE", saved.mode], ["EODHD_PRIVATE_USE", saved.privateUse], ["VENDOR_DISPLAY_LICENSE", saved.licence]] as const)
+        if (value === undefined) delete process.env[key]; else process.env[key] = value;
+    }
+  });
 
-    it("sees lock cards for advanced filters and streak, and no paid controls", async () => {
-      const markup = await render({});
-      expect(markup).toContain('data-tier-lock="scanner-filters-advanced"');
-      expect(markup).toContain('data-tier-lock="scanner-streak"');
-      expect(markup).not.toContain("data-tier-badge");
-      for (const name of ["min", "max", "source", "held", "sort"]) expect(markup).not.toContain(`name="${name}"`);
-    });
-
-    it("keeps search, state, sector, floor toggle, rule presets and every ticker", async () => {
-      const markup = await render({});
-      for (const name of ["q", "state", "sector"]) expect(markup).toContain(`name="${name}"`);
-      expect(markup).toContain("/en/stocks?floor=off");
-      expect(markup).toContain('href="/en/stocks?preset=trend-volume"');
-      expect(markup).toContain('data-paywall-candidate="scanner-rows-full"');
-      expect(markup).not.toContain("data-tier-lock=\"scanner-rows-full\"");
-      expect(markup).toContain('href="/en/company/NVDA"');
-      expect(await render({ q: "NVDA" })).not.toContain('href="/en/company/AMD"');
-    });
-
-    it("shows the change presets as locked, not as links", async () => {
-      const markup = await render({});
-      expect(markup).not.toContain("preset=newly-meeting");
-      expect(markup).not.toContain("preset=rules-lost");
-      expect(markup).toContain("Newly meeting rules");
-      expect(markup).toContain("In the paid tier");
-    });
-
-    it("ignores paid filters in the URL", async () => {
-      const plain = await render({});
-      const markup = await render({ min: "25", f: "10", source: "discovery", held: "yes", sort: "ticker", preset: "rules-lost" });
-      expect(markup).toBe(plain);
-    });
+  it.each([
+    ["anonymous", { tier: "free", preview: false }],
+    ["free", { tier: "free", preview: false, userId: "6", plan: "free" }],
+    ["passive", { tier: "free", preview: false, userId: "5", plan: "passive" }],
+  ] as const)("db mode: %s never renders stored stock scores, whatever the licence and private-use flags", async (_name, who) => {
+    const saved = { mode: process.env.DATA_MODE, privateUse: process.env.EODHD_PRIVATE_USE, licence: process.env.VENDOR_DISPLAY_LICENSE };
+    owner.as = who;
+    process.env.DATA_MODE = "db";
+    try {
+      for (const privateUse of ["on", "off"])
+        for (const licence of ["on", "off"]) {
+          process.env.EODHD_PRIVATE_USE = privateUse;
+          process.env.VENDOR_DISPLAY_LICENSE = licence;
+          await expect(Scanner({ params: Promise.resolve({ locale: "en" }), searchParams: Promise.resolve({}) }), `${privateUse} ${licence}`).rejects.toThrow(/404|NOT_FOUND/);
+        }
+    } finally {
+      for (const [key, value] of [["DATA_MODE", saved.mode], ["EODHD_PRIVATE_USE", saved.privateUse], ["VENDOR_DISPLAY_LICENSE", saved.licence]] as const)
+        if (value === undefined) delete process.env[key]; else process.env[key] = value;
+    }
   });
 
   it("renders a filtered fixture row and marks query URLs noindex", async () => {
@@ -96,7 +97,8 @@ describe("scanner route", () => {
       expect(markup).toContain('value="NVDA"');
       expect(markup).toContain('data-paywall-candidate="scanner-rows-full"');
       expect(markup).toContain('href="/en/company/NVDA"');
-      expect(markup).not.toContain('href="/en/company/AMD"');
+      const rows = markup.slice(markup.indexOf('data-paywall-candidate="scanner-rows-full"'));
+      expect(rows).not.toContain('href="/en/company/AMD"');
       const metadata = await generateMetadata(props);
       expect(metadata.robots).toEqual({ index: false, follow: true });
       expect(metadata.alternates?.canonical).toBe("/en/stocks");

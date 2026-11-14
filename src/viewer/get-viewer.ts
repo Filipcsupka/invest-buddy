@@ -8,7 +8,7 @@ import { getPool } from "@/db/pool";
 import { customerPlan } from "@/entitlements/plan";
 import { PREVIEW_HEADER, resolveViewer, type Viewer } from "./viewer";
 
-export { baseViewer, canSee, isOwner, canOpenFunds, canUseFundData, canUseVendorData, hasActivePlan, hasPassivePlan, investorPath, limitFor, requireFeature, resolveViewer, PREVIEW_HEADER, type InvestorPath, type Tier, type Viewer } from "./viewer";
+export { baseViewer, canSee, isOwner, canOpenFunds, canSeeStockData, canUseFundData, canUseVendorData, hasActivePlan, hasPassivePlan, investorPath, limitFor, requireFeature, resolveViewer, PREVIEW_HEADER, type InvestorPath, type Tier, type Viewer } from "./viewer";
 
 type SessionReader = (requestHeaders: Headers) => Promise<{ user?: { id?: string | number } } | null>;
 const readCustomerSession: SessionReader = (requestHeaders) => customerAuth().api.getSession({ headers: requestHeaders });

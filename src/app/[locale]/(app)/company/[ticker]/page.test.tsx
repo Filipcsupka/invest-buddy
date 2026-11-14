@@ -313,17 +313,11 @@ describe("company page", () => {
       expect(html).not.toContain("data-tier-note");
       expect(history).toHaveBeenCalledWith(ticker, null);
     });
-    it("gives a free viewer 90 days of history with a note and a lock card instead of the idea card", async () => {
+    it("blocks the owner's free preview from company scores", async () => {
       const ticker = await setup();
       viewHeader.mockReturnValue("free");
-      const html = renderToStaticMarkup(await Company(props(ticker)));
-      expect(history).toHaveBeenCalledWith(ticker, 90);
-      expect(html).toContain('data-tier-note="score-history"');
-      expect(html).toContain("90 days");
-      expect(html).toContain('data-tier-lock="idea-card"');
-      expect(html).not.toContain("data-tier-badge");
-      expect(html).not.toContain("Opportunity cost");
-      expect(html).toContain("Score history");
+      await expect(Company(props(ticker))).rejects.toThrow(/404|NOT_FOUND/);
+      expect(history).not.toHaveBeenCalled();
     });
   });
 

@@ -16,6 +16,7 @@ import { getWelcomeMessages } from "@/i18n/welcome-messages";
 import { resolveLocale, type LocaleParams } from "@/app/[locale]/locale";
 import { PASSIVE_PRICE, PLUS_PRICE, formatEur, yearlyPerMonth } from "@/app/[locale]/pricing/plans";
 import { getPathMessages } from "@/i18n/path-messages";
+import { ACCESS_AREAS, PRICED_PLANS, planAccess, type PlanAccess, type PricedPlan } from "@/config/plan-access";
 import styles from "./pricing.module.css";
 
 /* Same HTML for every visitor: no headers(), no cookies, no query read. Operate mode: plain and fast, no motion layer. */
@@ -53,15 +54,11 @@ export default async function Pricing({ params }: LocaleParams) {
   const yearly = formatEur(locale, PLUS_PRICE.yearlyEur);
   const paths = getPathMessages(locale).paths;
   const a = pm.access;
-  // Free, Passive, Plus per area. "licence" marks the market views a free account gets once a vendor display licence exists.
-  const access: [keyof typeof a.rows, "yes" | "no" | "licence", "yes" | "no", "yes"][] = [
-    ["method", "yes", "yes", "yes"],
-    ["macro", "yes", "yes", "yes"],
-    ["markets", "licence", "yes", "yes"],
-    ["funds", "no", "yes", "yes"],
-    ["stocks", "no", "no", "yes"],
-  ];
-  const cell = (value: "yes" | "no" | "licence") => value === "yes" ? pm.included : value === "no" ? pm.notIncluded : a.withLicence;
+  // Free, Passive, Plus per area, read from the route gates (src/config/plan-access.ts). "licence" marks what a free account gets
+  // only once a vendor display licence exists; canSeeStockData keeps stock scores in Plus regardless of either vendor flag.
+  const access = ACCESS_AREAS.map((area) => [area, ...PRICED_PLANS.map((plan) => planAccess(area, plan))] as const);
+  const cell = (value: PlanAccess) => value === "yes" ? pm.included : value === "no" ? pm.notIncluded : a.withLicence;
+  const stockCell = (plan: PricedPlan) => planAccess("stocks", plan);
   return (
     <article className={`frame page ${styles.page}`}>
       <TrackView events={["pricing_view"]} props={{ locale }} />
@@ -226,7 +223,7 @@ export default async function Pricing({ params }: LocaleParams) {
             </tr>
           </thead>
           <tbody>
-            {/* Every row is a stock feature: Free and Passive do not include the stock area (the access table above). */}
+            {/* Every row is a stock feature: use the same planAccess stock gate as the area table above. */}
             {ids.map((id) => {
               const row = pm.rows[id]!;
               const c = cells(locale, id, pm);
@@ -238,9 +235,8 @@ export default async function Pricing({ params }: LocaleParams) {
                     <span className={styles.detail}>{row.detail}</span>
                     <span className={styles.status} data-live={live ? "" : undefined}>{live ? pm.statusLive : pm.statusPlanned}</span>
                   </th>
-                  <td className={styles.free_cell} data-access="no">{pm.notIncluded}</td>
-                  <td className={styles.free_cell} data-access="no">{pm.notIncluded}</td>
-                  <td className={styles.paid_cell} data-access="yes">{c.paid}</td>
+                  {(["free", "passive"] as const).map((plan) => <td key={plan} className={styles.free_cell} data-access={stockCell(plan)}>{stockCell(plan) === "yes" ? c.paid : pm.notIncluded}</td>)}
+                  <td className={styles.paid_cell} data-access={stockCell("plus")}>{stockCell("plus") === "yes" ? c.paid : pm.notIncluded}</td>
                 </tr>
               );
             })}

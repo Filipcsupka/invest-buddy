@@ -2,7 +2,7 @@ import type { InvestorPath } from "@/viewer/viewer";
 
 /**
  * The three investor paths (owner request 2026-11-13, docs/paywall-segments.md). Pure data: which plan each path is, what it
- * includes, where it leads. Access itself is decided by the server gates (canUseVendorData, canUseFundData, marketsViewable); the
+ * includes, where it leads. Access itself is decided by the server gates (canSeeStockData, canOpenFunds, marketsViewable); the
  * dashboard and the pricing page only read the result.
  */
 export const PATH_ORDER = ["active", "passive", "overview"] as const satisfies readonly InvestorPath[];

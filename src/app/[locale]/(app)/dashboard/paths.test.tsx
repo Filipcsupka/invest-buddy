@@ -45,13 +45,14 @@ describe("dashboard stock access", () => {
   ] as const)("private use on: %s gets the stock board: %s", (name, expected) => {
     expect(dashboardStockAccess(viewers[name]!, { EODHD_PRIVATE_USE: "on" })).toBe(expected);
   });
-  it.each(["anonymous", "free", "passive"] as const)("private use off: %s needs a display licence for stored data; the fixture sample stays open", (name) => {
+  it.each(["anonymous", "free", "passive"] as const)("%s cannot see stored stock scores under either flag", (name) => {
     const viewer = viewers[name]!;
-    expect(dashboardStockAccess(viewer, { EODHD_PRIVATE_USE: "off", DATA_MODE: "db" })).toBe(false);
-    expect(dashboardStockAccess(viewer, { EODHD_PRIVATE_USE: "off" })).toBe(false);
-    expect(dashboardStockAccess(viewer, { EODHD_PRIVATE_USE: "off", DATA_MODE: "db", VENDOR_DISPLAY_LICENSE: "on" })).toBe(true);
-    expect(dashboardStockAccess(viewer, { EODHD_PRIVATE_USE: "off", DATA_MODE: "fixture" })).toBe(true);
-    expect(dashboardStockAccess(viewer, { EODHD_PRIVATE_USE: "on", DATA_MODE: "fixture" })).toBe(false);
+    for (const privateUse of ["on", "off"])
+      for (const licence of ["on", "off"]) {
+        expect(dashboardStockAccess(viewer, { EODHD_PRIVATE_USE: privateUse, DATA_MODE: "db", VENDOR_DISPLAY_LICENSE: licence })).toBe(false);
+        // Fixture mode is the checked-in sample universe: it stays open only while private use is off.
+        expect(dashboardStockAccess(viewer, { EODHD_PRIVATE_USE: privateUse, DATA_MODE: "fixture", VENDOR_DISPLAY_LICENSE: licence })).toBe(privateUse === "off");
+      }
   });
   it.each(["plus", "trial", "owner"] as const)("private use off: %s keeps the board", (name) => {
     expect(dashboardStockAccess(viewers[name]!, { EODHD_PRIVATE_USE: "off", DATA_MODE: "db" })).toBe(true);
@@ -177,24 +178,30 @@ it.each([
   ["anonymous", { tier: "free", preview: false }],
   ["free", { tier: "free", preview: false, userId: "6", plan: "free" }],
   ["passive", { tier: "free", preview: false, userId: "5", plan: "passive" }],
-] as const)("private use off, no licence: %s gets no stored stock data in the HTML", async (_name, who) => {
-  process.env.EODHD_PRIVATE_USE = "off";
+] as const)("%s gets no stored stock data in the HTML with or without a licence", async (_name, who) => {
   process.env.DATA_MODE = "db";
-  delete process.env.VENDOR_DISPLAY_LICENSE;
-  viewer.mockResolvedValue(who);
-  const html = renderToStaticMarkup(await Dashboard(props("en")));
-  expect(html).toContain("data-investor-paths");
-  expect(scores).not.toHaveBeenCalled();
-  expect(portfolio).not.toHaveBeenCalled();
-  expect(changes).not.toHaveBeenCalled();
-  expect(marketData).not.toHaveBeenCalled();
+  for (const privateUse of ["on", "off"])
+    for (const licence of ["on", "off"]) {
+      process.env.EODHD_PRIVATE_USE = privateUse;
+      process.env.VENDOR_DISPLAY_LICENSE = licence;
+      viewer.mockResolvedValue(who);
+      const html = renderToStaticMarkup(await Dashboard(props("en")));
+      expect(html).toContain("data-investor-paths");
+      expect(html).not.toContain('href="/en/company/');
+      expect(html).not.toContain("Highest rule scores");
+      expect(scores).not.toHaveBeenCalled();
+      expect(portfolio).not.toHaveBeenCalled();
+      expect(changes).not.toHaveBeenCalled();
+      expect(marketData).not.toHaveBeenCalled();
+    }
 });
 
-it("private use off with a display licence: a visitor gets the board", async () => {
+it("private use off with a display licence: a visitor still gets only the path cards", async () => {
   process.env.EODHD_PRIVATE_USE = "off";
   process.env.DATA_MODE = "db";
   process.env.VENDOR_DISPLAY_LICENSE = "on";
   viewer.mockResolvedValue({ tier: "free", preview: false });
-  renderToStaticMarkup(await Dashboard(props("en")));
-  expect(scores).toHaveBeenCalled();
+  const html = renderToStaticMarkup(await Dashboard(props("en")));
+  expect(html).toContain("data-investor-paths");
+  expect(scores).not.toHaveBeenCalled();
 });

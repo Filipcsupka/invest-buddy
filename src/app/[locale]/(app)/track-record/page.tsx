@@ -1,4 +1,5 @@
 import { withPageLog } from "@/app/page-log";
+import { requireStockData } from "@/app/[locale]/(app)/owner/data/access";
 import type { Metadata } from "next";
 import { Chart } from "@/components/chart";
 import { Disclaimer } from "@/components/disclaimer";
@@ -36,6 +37,7 @@ function formatMonth(locale: Locale, period: string): string {
 }
 
 async function TrackRecord({ params }: LocaleParams) {
+  await requireStockData();
   const locale = await resolveLocale(params);
   const m = getMessages(locale);
   if (process.env.DATA_MODE !== "fixture") {

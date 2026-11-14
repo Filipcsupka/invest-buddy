@@ -76,37 +76,42 @@ export function investorPath(viewer: Viewer): InvestorPath | null {
   return "overview";
 }
 
-/** A vendor display licence is in place and private use is off: vendor data may be shown to everyone. */
+/**
+ * A vendor display licence is in place and private use is off. It widens fund and index data only (marketsViewable: indices,
+ * economy and calendar for a signed-in free account); it never opens stock data.
+ */
 export function vendorLicensed(env: Record<string, string | undefined> = process.env): boolean {
   return env.EODHD_PRIVATE_USE !== "on" && env.VENDOR_DISPLAY_LICENSE === "on";
 }
 
 /**
- * Vendor-derived stock data (scores, prices, EPS) for this viewer. The owner always gets it. A customer with an active Plus
- * entitlement (paid or trial, not the PAYWALL-off soft tier) gets it too. A Passive customer does not. Everyone else needs VENDOR_DISPLAY_LICENSE=on
- * while EODHD_PRIVATE_USE is off.
+ * Stock score data (scores, prices, EPS, the shortlist, portfolio and track-record score parts) for this viewer: the owner and a
+ * customer with an active Plus entitlement (paid or trial, not the PAYWALL-off soft tier). Product rule of 2026-11-13: this is the
+ * Active path, whatever EODHD_PRIVATE_USE and VENDOR_DISPLAY_LICENSE say. Passive, free accounts and visitors never get it.
+ * `env` is kept for call-site compatibility; no flag widens this permission.
  */
-export function canUseVendorData(viewer: Viewer, env: Record<string, string | undefined> = process.env): boolean {
-  if (isOwner(viewer)) return true;
-  if (hasActivePlan(viewer)) return true;
-  return vendorLicensed(env);
+export function canUseVendorData(viewer: Viewer, _env: Record<string, string | undefined> = process.env): boolean {
+  void _env;
+  return isOwner(viewer) || hasActivePlan(viewer);
 }
 
 /**
- * Stock routes need a stock permission whenever they can show stored data: always outside fixture mode, and in fixture mode while
- * EODHD_PRIVATE_USE is on. Fixture mode with private use off shows only the sample universe, which is open to every visitor.
+ * Stock routes are gated whenever they can show stored data: always outside fixture mode. Fixture mode with private use off has only
+ * the checked-in sample universe (no vendor data), which stays open to every visitor for local runs and the e2e suite.
  */
 export function stockRoutesGated(env: Record<string, string | undefined> = process.env): boolean {
   return env.EODHD_PRIVATE_USE === "on" || env.DATA_MODE !== "fixture";
 }
 
 /**
- * May this viewer see stock data on the dashboard and the stock routes? Whatever EODHD_PRIVATE_USE says, stored stock data needs
- * canUseVendorData: the owner, an Active plan, or a vendor display licence. The owner's free preview counts as a visitor.
+ * May this viewer see stock data on the dashboard and the stock routes (stocks, scanner, shortlist, company, heatmap, portfolio,
+ * track record, insiders)? Stored stock data is the owner or an Active plan (Plus or trial) only, whatever EODHD_PRIVATE_USE and
+ * VENDOR_DISPLAY_LICENSE say. Only the fixture sample universe (stockRoutesGated false) is open. The owner's free preview counts as
+ * a visitor.
  */
 export function canSeeStockData(viewer: Viewer, env: Record<string, string | undefined> = process.env): boolean {
   if (!stockRoutesGated(env)) return true;
-  return !viewer.preview && canUseVendorData(viewer, env);
+  return !viewer.preview && canUseVendorData(viewer);
 }
 
 /**
@@ -119,7 +124,7 @@ export function canOpenFunds(viewer: Viewer, env: Record<string, string | undefi
 
 /**
  * Vendor-derived fund and market data (ETF ratings, fund pages, indices, economy, calendar). Everyone with stock access has it, and
- * so does a Passive customer. It never opens stock routes: those keep using canUseVendorData.
+ * so does a Passive customer. It never opens stock routes: those use canSeeStockData. The licensed free market rule is in marketsViewable.
  */
 export function canUseFundData(viewer: Viewer, env: Record<string, string | undefined> = process.env): boolean {
   return canUseVendorData(viewer, env) || hasPassivePlan(viewer);

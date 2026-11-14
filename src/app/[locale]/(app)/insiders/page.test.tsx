@@ -31,10 +31,11 @@ it("checks the market gate before reading filings when markets are enabled", asy
   expect(events).not.toHaveBeenCalled();
 });
 
-it("keeps the insiders page available when markets are off", async () => {
+it("keeps the insiders page available to the owner when markets are off", async () => {
   process.env.INSIDERS_PAGE = "on";
   process.env.MARKETS_VIEWS = "off";
   process.env.EODHD_PRIVATE_USE = "off";
+  owner.on = true;
   expect(await render()).toContain("NEWR");
   expect(marketGate).not.toHaveBeenCalled();
 });
@@ -48,12 +49,9 @@ it("shows an admin every event with a Paid badge", async () => {
   expect(html).toContain('data-tier-badge="insiders-history"');
 });
 
-it("limits a free viewer to the last 180 days and says so", async () => {
+it("blocks a free viewer before reading insider events", async () => {
   process.env.AUTH = "on";
   process.env.PAYWALL = "on";
-  const html = await render();
-  expect(html).toContain("NEWR");
-  expect(html).not.toContain("OLDR");
-  expect(html).toContain('data-tier-note="insiders-history"');
-  expect(html).toContain("180 days");
+  await expect(render()).rejects.toThrow(/404|NOT_FOUND/);
+  expect(events).not.toHaveBeenCalled();
 });

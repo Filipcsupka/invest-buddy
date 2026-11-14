@@ -1,5 +1,10 @@
 import { readFileSync } from "node:fs";
 import { afterEach, expect, it, vi } from "vitest";
+// Company images carry scores, so image content tests use an entitled owner session.
+vi.mock("@/viewer/get-viewer", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@/viewer/get-viewer")>(),
+  getViewer: async () => ({ tier: "admin", preview: false, owner: true, userId: "owner" }),
+}));
 import { messages } from "@/i18n/messages";
 import { scoredUniverse } from "@/data/scored";
 

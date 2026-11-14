@@ -32,7 +32,8 @@ const privateSections = new Set<string>(PRIVATE_DATA_SECTIONS);
 
 /**
  * The app shell sidebar. It reads no request data, so the shared HTML is the same for everyone. Entries a customer can really use are
- * rendered for all viewers; vendor-derived pages (whenever stockRoutesGated and no display licence) render locked until /api/me says who is signed in.
+ * rendered for all viewers; stock pages (whenever stockRoutesGated) render locked until /api/me confirms an Active plan or owner
+ * session. A display licence never unlocks them.
  * Market and ETF links use the same Plus preview pattern. Server gates in the proxy stay the authority.
  * Docs: docs/app-panel-audit.md.
  */
@@ -43,8 +44,8 @@ export function Nav({ locale }: { locale: Locale }) {
   const f = flags();
   const id = getIdentityMessages(locale);
   const lock = { open: id.open, free: id.plan.free, plus: id.plus, locked: id.locked, owner: m.nav.ownerOnly, passive: id.plan.passive };
-  // Stock items lock whenever the proxy gates them (stockRoutesGated) and no display licence opens them to everyone.
-  const vendorLocked = stockRoutesGated() && !vendorLicensed();
+  // Stock items lock whenever the proxy gates them (stockRoutesGated); a display licence never opens stock data.
+  const vendorLocked = stockRoutesGated();
   // With a vendor display licence a free account opens indices, economy and calendar (marketsViewable); the nav follows that rule.
   const freeMarkets = vendorLicensed();
   const vendor = (items: NavItem[]): NavItem[] => items.map((item) => {

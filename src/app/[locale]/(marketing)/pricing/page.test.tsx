@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, expect, it, vi } from "vitest";
 import { FEATURE_TIERS, TIERS, TIER_LIMITS } from "@/config/tiers";
 import { getPricingMessages } from "@/i18n/pricing-messages";
+import { canSeeStockData } from "@/viewer/viewer";
 import { PASSIVE_PRICE, PLUS_PRICE, formatEur, yearlyPerMonth } from "@/app/[locale]/pricing/plans";
 
 vi.mock("next/navigation", () => ({ notFound: () => { throw new Error("NEXT_NOT_FOUND"); }, usePathname: () => "/en/pricing" }));
@@ -156,4 +157,19 @@ it("tables which areas each plan opens: stocks only in Plus, funds from Passive 
   expect(row("markets")).toEqual(["licence", "yes", "yes"]);
   expect(row("funds")).toEqual(["no", "yes", "yes"]);
   expect(row("stocks")).toEqual(["no", "no", "yes"]);
+});
+
+it.each(["on", "off"] as const)("pricing stock cells match the stock gate with private use %s and either licence value", async (privateUse) => {
+  const html = await render("en");
+  const row = html.match(/<tr data-area="stocks">[\s\S]*?<\/tr>/)?.[0] ?? "";
+  const cells = [...row.matchAll(/data-access="(\w+)"/g)].map((match) => match[1]);
+  for (const licence of ["on", "off"]) {
+    const env = { EODHD_PRIVATE_USE: privateUse, VENDOR_DISPLAY_LICENSE: licence, DATA_MODE: "db" };
+    const viewers = [
+      { tier: "free", preview: false, userId: "free", plan: "free" },
+      { tier: "free", preview: false, userId: "passive", plan: "passive" },
+      { tier: "paid", preview: false, userId: "plus", plan: "plus" },
+    ] as const;
+    expect(cells).toEqual(viewers.map((viewer) => canSeeStockData(viewer, env) ? "yes" : "no"));
+  }
 });
