@@ -37,17 +37,17 @@ it.each([
   expect(html.indexOf("Emerging markets sample fund")).toBeLessThan(html.indexOf("Global aggregate bond sample fund"));
 });
 
-it("adds yield and 1-year return columns and the tab links for the owner", async () => {
+it("adds stored fund statistics columns and the tab links for vendor viewers", async () => {
   process.env.DATA_MODE = "fixture";
   owner.mockReturnValue(true);
   scoreAccess.mockReturnValue(true);
   scores.mockResolvedValue(new Map());
-  listStats.mockResolvedValue(new Map([["DE0000000001", { yieldPct: null, ret1yPct: 12.2351, asOf: "2026-11-06" }]]));
   const list = renderToStaticMarkup(await ListPage({ params: Promise.resolve({ locale: "en" }), searchParams: Promise.resolve({}) }));
-  expect(list).toContain("1y return");
-  expect((list.match(/<table /g) ?? []).length).toBe((list.match(/data-adr-line=""/g) ?? []).length);
-  expect(list).toContain("12.24 %");
-  expect(list).toContain("No data");
+  for (const label of ["1y return", "3y return p.a.", "Volatility 1y", "Yield", "Holdings", "Top 10 weight", "Category"]) expect(list).toContain(`>${label}</th>`);
+  // Every table and every rating block carries the informational line.
+  expect((list.match(/data-adr-line=""/g) ?? []).length).toBeGreaterThanOrEqual((list.match(/<table /g) ?? []).length);
+  expect(list).toMatch(/[+-]?\d+\.\d %/);
+  expect(listStats).not.toHaveBeenCalled();
   const fund = renderToStaticMarkup(await FundPage({ params: Promise.resolve({ locale: "sk", key: "DE0000000001" }) }));
   expect(fund).toContain('href="/sk/etf/fund/DE0000000001/holdings"');
   expect(fund).toContain("Uložené údaje o fonde pre predplatiteľov");
@@ -63,7 +63,11 @@ it.each(["owner", "plus", "trial", "free", "anonymous"])("shows ETF score to %s 
   const fund = renderToStaticMarkup(await FundPage({ params: Promise.resolve({ locale: "en", key: "DE0000000001" }) }));
   if (viewer !== "owner") expect(fund).not.toContain('id="fund-pick"');
   if (["free", "anonymous"].includes(viewer)) { expect(list).not.toContain("Meets 28 of 35"); expect(fund).not.toContain("Meets 28 of 35"); expect(scores).not.toHaveBeenCalled(); }
-  else { expect(list).toContain("80% · Mostly met"); expect(fund).toContain("Meets 28 of 35"); expect(list + fund).not.toMatch(/Buy zone|Avoid|BUY_ZONE|Nákupná zóna|Vyhnúť sa/); }
+  else { expect(list).toMatch(/80%<\/strong><span class="[^"]*" data-band="mostlyMet">Mostly met<\/span>/); expect(list).toContain("0 of 7 groups · Incomplete data"); expect(fund).toContain("Meets 28 of 35"); 
+    // Customers never see a model call. The owner sees calls only in the owner research section below the catalog.
+    const rated = viewer === "owner" ? list.slice(0, list.indexOf('aria-labelledby="etf-picks"')) : list + fund;
+    if (viewer === "owner") expect(list).toContain('aria-labelledby="etf-picks"');
+    expect(rated).not.toMatch(/Buy zone|Avoid|BUY_ZONE|Nákupná zóna|Vyhnúť sa/); }
 });
 
 it("distinguishes missing scores from computed unrated scores", async () => {

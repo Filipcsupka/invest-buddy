@@ -1,5 +1,6 @@
 import { vi } from "vitest";
-vi.mock("@/app/[locale]/(app)/owner/data/access", () => ({ requireEtfDataAccess: async () => undefined }));
+// Owner only (see access.test.tsx for every other viewer); these tests render it as the owner.
+vi.mock("@/viewer/get-viewer", async (original) => ({ ...await original<typeof import("@/viewer/get-viewer")>(), getViewer: async () => ({ tier: "admin", preview: false, owner: true, userId: "owner" }) }));
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, expect, it } from "vitest";
 import Page from "./page";

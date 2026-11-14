@@ -148,7 +148,9 @@ metadata:
   name: invest-buddy-etf-research
   namespace: invest
 spec:
-  suspend: false
+  # Optional owner research on the highest rated funds. Customers see the rule rating; run on demand with
+  # kubectl create job --from=cronjob/invest-buddy-etf-research after owner approval.
+  suspend: true
   schedule: "40 7 * * 1"
   timeZone: Europe/Bratislava
   concurrencyPolicy: Forbid

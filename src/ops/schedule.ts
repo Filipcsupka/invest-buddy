@@ -43,7 +43,7 @@ export const EXPECTED_JOBS: ExpectedJob[] = [
   { cronJob: "discovery-auto-promote", schedule: "30 14 * * *", enabled: true, runJob: "discovery-auto-promote", graceMinutes: 30 },
   { cronJob: "outcomes", schedule: "30 6 * * 2-6", enabled: false, runJob: "outcomes", graceMinutes: 15 },
   { cronJob: "horizon-labels", schedule: "45 6 * * 2-6", enabled: true, runJob: "horizon-labels", graceMinutes: 15 },
-  { cronJob: "etf-research", schedule: "40 7 * * 1", enabled: true, runJob: null, graceMinutes: 210, note: "scanner script, not in job_runs; ETF facts change slowly, so research runs weekly" },
+  { cronJob: "etf-research", schedule: "40 7 * * 1", enabled: false, runJob: null, graceMinutes: 210, note: "scanner script, not in job_runs; optional owner research on the highest rated ETFs, suspended and run on demand" },
   { cronJob: "etf-catalog-sync", schedule: "10 5 * * 0", enabled: true, runJob: null, graceMinutes: 25, note: "Xetra catalog sync; not in job_runs" },
   { cronJob: "etf-enrich", schedule: "40 5 * * 0", enabled: true, runJob: null, graceMinutes: 1500, note: "pending catalog enrichment; not in job_runs" },
   { cronJob: "etf-outcomes", schedule: "50 6 * * *", enabled: true, runJob: "etf-outcomes", graceMinutes: 20 },

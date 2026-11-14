@@ -1,19 +1,28 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { Viewer } from "@/viewer/viewer";
-const state = vi.hoisted(() => ({ viewer: {} as Viewer, vendor: true }));
+const state = vi.hoisted(() => ({ viewer: {} as Viewer, vendor: true, picks: [] as unknown[], lists: [] as unknown[], detail: null as unknown, reads: [] as string[] }));
 vi.mock("@/viewer/get-viewer", async (original) => ({ ...await original<typeof import("@/viewer/get-viewer")>(), getViewer: async () => state.viewer }));
 vi.mock("@/db/pool", () => ({ getPool: () => ({ query: async () => ({ rows: [{ present: state.vendor }] }) }) }));
-vi.mock("@/db/etf", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/db/etf")>()), etfList: async () => ({ picks: [], run: null, sample: false }), etfDetail: async () => null }));
+vi.mock("@/db/etf", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/db/etf")>()), etfList: async () => ({ picks: state.picks, run: null, sample: false }),
+  etfDetail: async (symbol: string) => { state.reads.push(`detail:${symbol}`); return state.detail; },
+  etfOutcomes: async () => { state.reads.push("outcomes"); return { outcomes: [{ symbol: "FTSS", horizonDays: 30, entryDate: "2026-10-21", exitDate: "2026-11-20", returnPct: 4.2, benchmarkSymbol: "SPY", benchmarkReturnPct: 1.1, excessPct: 3.1 }], sample: false }; } }));
 vi.mock("@/db/etf-score", () => ({ latestEtfScores: async () => new Map() }));
 vi.mock("@/db/etf-catalog", () => ({
-  etfCatalogList: async () => ({ funds: [], stats: { size: 0, enriched: 0, shortlist: 0 }, options: { assetClasses: [], regions: [], exchanges: [], issuers: [] } }),
+  RATING_BANDS: ["rulesMet", "mostlyMet", "partlyMet", "fewMet"], TER_RANGES: {}, AUM_RANGES: {},
+  normalizeCatalogFilters: (filters: Record<string, string>) => ({ ...filters, sort: "rating" }),
+  etfCatalogList: async (...args: unknown[]) => { state.lists.push(args); return { funds: [], stats: { size: 0, enriched: 0, shortlist: 0 }, options: { assetClasses: [], regions: [], exchanges: [], issuers: [], categories: [] } }; },
+  etfRatingSummary: async () => ({ asOf: null, inScope: 0, rated: 0, notRated: 0, incomplete: 0, bands: { rulesMet: 0, mostlyMet: 0, partlyMet: 0, fewMet: 0 }, sample: false }),
+  etfTopRated: async () => ({ groups: [], sample: false }),
+  etfCatalogKeyForPick: async () => null,
   etfCatalogDetail: async () => ({ fund: { listingKey: "TEST", name: "Plain fund", instrumentType: "ETF", enrichmentStatus: "pending" } }),
 }));
 vi.mock("@/db/etf-detail", () => ({ etfListStats: async () => new Map(), etfDetailView: async () => ({ stats: null, holdings: [], exposure: { region: [], sector: [], mcap: [], asset: [], credit: [] }, dividends: [], bars: [] }) }));
 import ListPage, { generateMetadata as listMetadata } from "./page";
 import FundPage, { generateMetadata as fundMetadata } from "./fund/[key]/page";
 import TabPage from "./fund/[key]/[tab]/page";
+import PickPage, { generateMetadata as pickMetadata } from "./[symbol]/page";
+import RecordPage, { generateMetadata as recordMetadata } from "./track-record/page";
 import { assertViewable } from "@/markets/gate";
 import { requireEtfScreeningAccess } from "@/components/etf/owner";
 import { ETF_TABS } from "@/components/etf/tabs";
@@ -75,4 +84,68 @@ it("a licensed free account opens no ETF page or fund tab; Passive does", async 
   await expect(assertViewable("eodhd", "etf")).rejects.toThrow(/404|NOT_FOUND/);
   state.viewer = { tier: "free", preview: false, userId: "passive", plan: "passive" };
   for (const tab of ETF_TABS) expect(renderToStaticMarkup(await TabPage({ params: Promise.resolve({ locale: "en", key: "TEST", tab }) }))).toContain("frame page");
+});
+
+const pick = { symbol: "FTSS", exchange: "NYSEARCA", name: "Model pick fund", isin: null, assetClass: "equity", region: "US", call: "AVOID", conviction: 3, thesis: "", whatHappened: [], whyItMatters: "", plan: { entryZone: null, addWhen: null, stopAddingWhen: null }, risks: [],
+  terPct: 0.1, aumUsdM: 10, trackedIndex: null, domicile: null, replication: null, price: null, priceCurrency: null, priceAsOf: null, evidence: [], verificationStatus: "partial", firstSeenAt: "2026-10-21", lastSeenAt: "2026-10-21", benchmarkSymbol: "SPY" };
+it.each(viewers.filter(([, , allowed]) => allowed))("shows model calls and the call filter only to the owner: %s", async (name, viewer) => {
+  vi.stubEnv("DATA_MODE", "db");
+  vi.stubEnv("EODHD_PRIVATE_USE", "on");
+  vi.stubEnv("MARKETS_VIEWS", "on");
+  state.viewer = viewer;
+  state.picks = [pick];
+  state.lists = [];
+  try {
+    const html = renderToStaticMarkup(await ListPage({ params: Promise.resolve({ locale: "en" }), searchParams: Promise.resolve({ call: "AVOID", assetClass: "equity" }) }));
+    // The catalog read never receives the call parameter.
+    expect(state.lists.every((args) => !Object.hasOwn((args as [Record<string, string>])[0], "call"))).toBe(true);
+    if (name === "owner") {
+      expect(html).toContain("Model pick fund");
+      expect(html).toContain('name="call"');
+      expect(html).toContain("Avoid");
+      expect(html).toContain("3/5");
+    } else {
+      expect(html).not.toContain("Model pick fund");
+      expect(html).not.toContain('name="call"');
+      expect(html).not.toMatch(/Avoid|Buy zone|Conviction|3\/5|Partly verified|track-record/);
+    }
+  } finally { state.picks = []; }
+});
+
+it.each(viewers)("opens the pick card and the ETF track record to the owner only: %s", async (name, viewer) => {
+  vi.stubEnv("DATA_MODE", "db");
+  vi.stubEnv("EODHD_PRIVATE_USE", "on");
+  vi.stubEnv("MARKETS_VIEWS", "on");
+  state.viewer = viewer;
+  state.detail = { pick: { ...pick, thesis: "Model thesis text", plan: { entryZone: "Below 5", addWhen: null, stopAddingWhen: null } }, history: [{ asOf: "2026-10-21", call: "AVOID", conviction: 3, price: null, priceCurrency: null }], outcomes: [], sample: false };
+  state.reads = [];
+  const pickProps = { params: Promise.resolve({ locale: "en", symbol: "FTSS" }) };
+  const recordProps = { params: Promise.resolve({ locale: "en" }) };
+  try {
+    if (name === "owner") {
+      const card = renderToStaticMarkup(await PickPage(pickProps));
+      expect(card).toContain("Model thesis text");
+      expect(card).toContain("3/5");
+      expect(card).toContain("Entry zone");
+      expect(renderToStaticMarkup(await RecordPage(recordProps))).toContain("+3.10 %");
+      await expect(pickMetadata(pickProps)).resolves.toBeDefined();
+      await expect(recordMetadata(recordProps)).resolves.toBeDefined();
+    } else {
+      // A 404 before any read: no thesis, call, conviction or outcome reaches the HTML or the RSC payload.
+      await expect(PickPage(pickProps)).rejects.toThrow(/404|NOT_FOUND/);
+      await expect(pickMetadata(pickProps)).rejects.toThrow(/404|NOT_FOUND/);
+      await expect(RecordPage(recordProps)).rejects.toThrow(/404|NOT_FOUND/);
+      await expect(recordMetadata(recordProps)).rejects.toThrow(/404|NOT_FOUND/);
+      expect(state.reads).toEqual([]);
+    }
+  } finally { state.detail = null; }
+});
+
+it("keeps the pick card and track record closed in the owner's free preview", async () => {
+  vi.stubEnv("DATA_MODE", "db");
+  state.viewer = { tier: "free", preview: true, owner: true, userId: null };
+  state.reads = [];
+  await expect(PickPage({ params: Promise.resolve({ locale: "en", symbol: "FTSS" }) })).rejects.toThrow(/404|NOT_FOUND/);
+  await expect(RecordPage({ params: Promise.resolve({ locale: "en" }) })).rejects.toThrow(/404|NOT_FOUND/);
+  expect(state.reads).toEqual([]);
 });

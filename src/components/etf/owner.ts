@@ -9,7 +9,7 @@ export async function etfOwnerView(): Promise<boolean> {
   try { return marketsViewable(await getViewer(), process.env, "etf"); } catch { return false; }
 }
 
-/** Weekly pick records are private to the owner, including on a fund page open to subscribers. */
+/** Weekly pick records are private to the owner, including on a fund page open to subscribers. The one owner check for ETF research. */
 export async function etfPickOwnerView(): Promise<boolean> {
   try { const viewer = await getViewer(); return isOwner(viewer) && !viewer.preview; } catch { return false; }
 }
@@ -22,4 +22,12 @@ export async function etfScoreView(): Promise<boolean> {
 /** ETF screening and records are available to the owner, Active (Plus and trial) and Passive sessions. */
 export const requireEtfScreeningAccess = cache(async (): Promise<void> => {
   if (!await etfScoreView()) notFound();
+});
+
+/**
+ * The model research (pick cards with thesis, call, conviction and plan, and their track record) is the owner's private workflow
+ * (ADR-001). Any other viewer, the owner's free preview included, gets a 404 before a pick is read.
+ */
+export const requireEtfResearchOwner = cache(async (): Promise<void> => {
+  if (!await etfPickOwnerView()) notFound();
 });

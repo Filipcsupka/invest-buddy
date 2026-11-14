@@ -1,10 +1,11 @@
-vi.mock("@/app/[locale]/(app)/owner/data/access", () => ({ requireEtfDataAccess: async () => undefined }));
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, expect, it, vi } from "vitest";
+// The pick card is owner only (see access.test.tsx for every other viewer); these tests render it as the owner.
+vi.mock("@/viewer/get-viewer", async (original) => ({ ...await original<typeof import("@/viewer/get-viewer")>(), getViewer: async () => ({ tier: "admin", preview: false, owner: true, userId: "owner" }) }));
 import { sampleEtfPicks } from "@/data/etf-fixtures";
 const scoreAccess = vi.fn();
 const scores = vi.fn();
-vi.mock("@/components/etf/owner", () => ({ etfScoreView: () => scoreAccess() }));
+vi.mock("@/components/etf/owner", async (original) => ({ ...await original<typeof import("@/components/etf/owner")>(), etfScoreView: () => scoreAccess() }));
 vi.mock("@/db/etf-score", () => ({ latestEtfScores: (...args: unknown[]) => scores(...args) }));
 import Page from "./page";
 
@@ -16,8 +17,7 @@ it.each(["en", "sk"])("shows the ETF card sections and measurement in %s", async
   const html = renderToStaticMarkup(await Page({ params: Promise.resolve({ locale, symbol: "VWRA" }) }));
   expect(html).toContain(locale === "en" ? "SAMPLE DATA" : "UKÁŽKOVÉ ÚDAJE");
   expect(html).toContain(locale === "en" ? "Thesis" : "Téza");
-  // The plan is the owner's note (ADR-001); outside a request the viewer is a visitor. See detail-wording.test.tsx for the owner.
-  expect(html).not.toContain(locale === "en" ? "Entry zone" : "Vstupná zóna");
+  expect(html).toContain(locale === "en" ? "Entry zone" : "Vstupná zóna");
   expect(html).toContain(locale === "en" ? "Evidence" : "Zdroje");
   expect(html).toContain("SPY");
 });
