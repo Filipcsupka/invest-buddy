@@ -7,19 +7,21 @@ vi.mock("@/markets/gate", async () => {
   const { notFound } = await import("next/navigation");
   return { assertViewable: async () => { if (!viewable()) notFound(); }, marketsViewable: () => viewable() };
 });
-vi.mock("@/db/etf-detail", () => ({ etfDetailView: (...args: unknown[]) => detail(...args) }));
+vi.mock("@/db/etf-view", () => ({ readEtfFundView: (...args: unknown[]) => detail(...args) }));
 // The paid fund permission (canOpenFunds) follows the same switch here; detail-wording and access tests cover it with real viewers.
 vi.mock("@/components/etf/owner", async () => {
   const { notFound } = await import("next/navigation");
   return { requireEtfScreeningAccess: async () => { if (!viewable()) notFound(); } };
 });
 import Page, * as route from "./page";
+import type { EtfDetailView } from "@/db/etf-detail";
 
 const originalMode = process.env.DATA_MODE;
 afterEach(() => { process.env.DATA_MODE = originalMode; viewable.mockReset(); detail.mockReset(); });
 const props = (tab: string, locale = "en") => ({ params: Promise.resolve({ locale, key: "DE0000000001", tab }) });
-const empty = { stats: null, vendorSymbol: null, currency: null, holdings: [], exposure: { region: [], sector: [], mcap: [], asset: [], credit: [] }, dividends: [], bars: [] };
-const stats = { asOf: "2026-11-06", vendorSymbol: "IWDA.AS", origin: "job", isin: "IE00B4L5Y983", tradingCurrency: "EUR", totalAssets: 101_700_000_000, totalAssetsCurrency: null, yieldPct: null, dividendFrequency: null, inceptionDate: "2009-09-25", ongoingChargePct: 0.1974, netExpenseRatioPct: null, retYtdPct: 9.9, ret1yPct: 12.2, ret3yPct: null, ret5yPct: 10.7, ret10yPct: 12.7, vol1yPct: 12.6, vol3yPct: 11.7, sharpe3y: 1.39, holdingsCount: 10, holdingsListed: 10, fetchedAt: "2026-11-06T01:10:00Z" };
+const empty: EtfDetailView = { stats: null, vendorSymbol: null, currency: null, holdings: [], exposure: { region: [], sector: [], mcap: [], asset: [], credit: [] }, dividends: [], bars: [] };
+const fundView = (data: EtfDetailView = empty) => ({ detail: data, dates: { stats: data.stats?.asOf ?? null, holdings: null, exposure: null, bars: null, dividends: null, catalog: "2026-11-06" }, category: null, indexName: null, ucitsHint: null, terPct: data.stats?.ongoingChargePct ?? null, duration: null, ytm: null, coupon: null, categoryMedianTer: null, benchmarkSymbol: null, returns: [{ period: "1y", fund: data.stats?.ret1yPct ?? null, benchmark: null }, { period: "3y", fund: data.stats?.ret3yPct ?? null, benchmark: null }, { period: "5y", fund: data.stats?.ret5yPct ?? null, benchmark: null }], maxDrawdown3y: null, trailingYieldPct: null, paymentsLast12m: null, alternatives: [] });
+const stats: NonNullable<EtfDetailView["stats"]> = { asOf: "2026-11-06", vendorSymbol: "IWDA.AS", origin: "job", isin: "IE00B4L5Y983", tradingCurrency: "EUR", totalAssets: 101_700_000_000, totalAssetsCurrency: null, yieldPct: null, dividendFrequency: null, inceptionDate: "2009-09-25", ongoingChargePct: 0.1974, netExpenseRatioPct: null, retYtdPct: 9.9, ret1yPct: 12.2, ret3yPct: null, ret5yPct: 10.7, ret10yPct: 12.7, vol1yPct: 12.6, vol3yPct: 11.7, sharpe3y: 1.39, holdingsCount: 10, holdingsListed: 10, fetchedAt: "2026-11-06T01:10:00Z" };
 
 it("returns 404 before reading data when the owner gate fails", async () => {
   process.env.DATA_MODE = "fixture";
@@ -38,19 +40,19 @@ it("rejects an unknown tab", async () => {
 it("opens a fund tab when its colon listing key arrives percent encoded", async () => {
   process.env.DATA_MODE = "fixture";
   viewable.mockReturnValue(true);
-  detail.mockResolvedValue(empty);
+  detail.mockResolvedValue(fundView());
   const html = renderToStaticMarkup(await Page({ params: Promise.resolve({ locale: "en", key: "NASDAQ%3AS021", tab: "holdings" }) }));
   expect(html).toContain("/en/etf/fund/NASDAQ%3AS021/holdings");
-  expect(detail).toHaveBeenCalledWith("NASDAQ:S021", expect.any(Object));
+  expect(detail).toHaveBeenCalledWith(expect.objectContaining({ listingKey: "NASDAQ:S021" }));
 });
 
 it.each(["en", "sk"])("shows vendor gaps as no data, never zero, in %s", async (locale) => {
   process.env.DATA_MODE = "fixture";
   viewable.mockReturnValue(true);
-  detail.mockResolvedValue({ ...empty, stats, vendorSymbol: "IWDA.AS", currency: "EUR" });
+  detail.mockResolvedValue(fundView({ ...empty, stats, vendorSymbol: "IWDA.AS", currency: "EUR" }));
   const html = renderToStaticMarkup(await Page(props("overview", locale)));
-  expect(html).toContain(locale === "en" ? "No data" : "Bez údajov");
-  expect(html).toContain(locale === "en" ? "Currency not stated by the vendor." : "Dodávateľ neuvádza menu.");
+  expect(html).toContain(locale === "en" ? "Not recorded" : "Nezaznamenané");
+  expect(html).toContain(locale === "en" ? "UCITS hint (unconfirmed)" : "Náznak UCITS (nepotvrdený)");
   expect(html).toContain('aria-current="page"');
   expect(html).not.toMatch(/Buy zone|BUY_ZONE|Watch|Avoid/);
 });
@@ -58,18 +60,34 @@ it.each(["en", "sk"])("shows vendor gaps as no data, never zero, in %s", async (
 it("renders each tab with its empty state", async () => {
   process.env.DATA_MODE = "fixture";
   viewable.mockReturnValue(true);
-  detail.mockResolvedValue({ ...empty, stats: { ...stats, holdingsListed: 10 }, holdings: [{ position: 1, symbol: "NVDA", exchange: "US", name: "NVIDIA Corporation", weightPct: 5.67, sector: "Technology", country: "United States" }] });
-  expect(renderToStaticMarkup(await Page(props("holdings")))).toContain("ten largest");
-  expect(renderToStaticMarkup(await Page(props("exposure")))).toContain("No breakdown stored.");
-  expect(renderToStaticMarkup(await Page(props("performance")))).toContain("+12.20 %");
+  detail.mockResolvedValue(fundView({ ...empty, stats: { ...stats, holdingsListed: 10 }, holdings: [{ position: 1, symbol: "NVDA", exchange: "US", name: "NVIDIA Corporation", weightPct: 5.67, sector: "Technology", country: "United States" }] }));
+  expect(renderToStaticMarkup(await Page(props("holdings")))).toContain("largest holdings");
+  expect(renderToStaticMarkup(await Page(props("exposure")))).toContain("No stored data for this block.");
+  expect(renderToStaticMarkup(await Page(props("performance")))).toContain("12.20 %");
   expect(renderToStaticMarkup(await Page(props("dividends")))).toContain("Accumulating funds pay none.");
 });
 
-it("shows missing multi-year returns as dashes, including stored vendor zeroes", async () => {
+it("shows missing multi-year returns as unavailable", async () => {
   process.env.DATA_MODE = "fixture";
   viewable.mockReturnValue(true);
-  detail.mockResolvedValue({ ...empty, stats: { ...stats, ret3yPct: 0, ret5yPct: null, ret10yPct: 0 } });
+  detail.mockResolvedValue(fundView({ ...empty, stats: { ...stats, ret3yPct: null, ret5yPct: null, ret10yPct: null } }));
   const html = renderToStaticMarkup(await Page(props("performance")));
-  expect(html).not.toContain("0.00 %");
-  expect(html).toMatch(/3 years \(annualised\)<\/th><td class="num">—<\/td>/);
+  expect(html).toContain("Not recorded");
+  expect(html).toContain("3y");
+});
+
+it("renders chart strips, peer comparison, structure and bond facts", async () => {
+  process.env.DATA_MODE = "fixture";
+  viewable.mockReturnValue(true);
+  const bars = Array.from({ length: 260 }, (_, i) => ({ date: new Date(Date.UTC(2025, 0, i + 1)).toISOString().slice(0, 10), open: 100, high: 101, low: 99, close: 100 + i / 10, volume: 1000 + i }));
+  detail.mockResolvedValue({ ...fundView({ ...empty, stats, bars }), category: "World equity", indexName: "World index", ucitsHint: true, duration: 4.2, ytm: 3.1, coupon: 2.5, categoryMedianTer: 0.24, alternatives: [{ listingKey: "OTHER", name: "Other fund", terPct: 0.12, aumUsdM: 500 }], dates: { stats: "2026-11-06", holdings: null, exposure: null, bars: "2026-11-06", dividends: null, catalog: "2026-11-06" } });
+  const html = renderToStaticMarkup(await Page({ params: Promise.resolve({ locale: "en", key: "DE0000000012", tab: "overview" }) }));
+  expect(html).toContain("50-day average");
+  expect(html).toContain("200-day average");
+  expect(html).toContain("Drawdown from peak");
+  expect(html).toContain("Category median TER");
+  expect(html).toContain("Bond facts");
+  expect(html).toContain("UCITS hint (unconfirmed)");
+  expect(html).toContain("Other fund");
+  expect(html).toContain("Data as of");
 });

@@ -5,15 +5,17 @@ import { withPageLog } from "@/app/page-log";
 import { assertViewable } from "@/markets/gate";
 import { requireEtfScreeningAccess } from "@/components/etf/owner";
 import { etfCatalogDetail } from "@/db/etf-catalog";
-import { etfDetailView } from "@/db/etf-detail";
+import { readEtfFundView } from "@/db/etf-view";
 import { getEtfDetailMessages, getEtfMessages } from "@/i18n/etf-messages";
 import { pageMetadata } from "@/i18n/metadata";
 import { RecordHead } from "@/components/record-parts";
 import { AreaChip } from "@/components/kit";
-import { DividendsPanel, EtfTabNav, ExposurePanel, HoldingsPanel, OverviewPanel, PerformancePanel } from "@/components/etf/detail";
+import { EtfTabNav, FundDividends, FundExposure, FundHoldings, FundOverview, FundPerformance } from "@/components/etf/detail";
 import { isEtfTab } from "@/components/etf/tabs";
 import s from "@/components/etf/etf.module.css";
 import { resolveLocale } from "@/app/[locale]/locale";
+import { AdrLine } from "@/components/disclaimer";
+import { getEtfFundMessages } from "@/i18n/etf-fund-messages";
 
 export const dynamic = "force-dynamic";
 type Props = { params: Promise<{ locale: string; key: string; tab: string }> };
@@ -43,19 +45,21 @@ async function EtfFundTabPage({ params }: Props) {
   const result = await etfCatalogDetail(key.toUpperCase());
   if (!result) notFound();
   const { fund } = result;
-  const view = await etfDetailView(fund.listingKey, { holdingsLimit: tab === "holdings" ? 500 : 10, barDays: tab === "overview" ? 400 : 1 });
+  const view = await readEtfFundView(fund);
   const m = getEtfDetailMessages(locale), e = getEtfMessages(locale);
+  const fm = getEtfFundMessages(locale);
   return <div className="frame page">
     <RecordHead area={<AreaChip locale={locale} area="etf" />} title={fund.name} lede={m.vendorLede} stamp={<span className="stamp">{m.ownerOnly}</span>}
-      actions={<Link className="button secondary" href={`/${locale}/etf/fund/${encodeURIComponent(fund.listingKey)}`}>{e.fundDetails}</Link>} />
+      actions={<><Link className="button secondary" href={`/${locale}/etf/fund/${encodeURIComponent(fund.listingKey)}`}>{e.fundDetails}</Link><Link className="button secondary" href={`/${locale}/methodology`}>{fm.methodology}</Link></>} />
     <EtfTabNav locale={locale} listingKey={fund.listingKey} active={tab} />
     <div className={s.stack}>
-      {tab === "overview" ? <OverviewPanel locale={locale} fund={fund} view={view} />
-        : tab === "holdings" ? <HoldingsPanel locale={locale} view={view} />
-        : tab === "exposure" ? <ExposurePanel locale={locale} view={view} />
-        : tab === "performance" ? <PerformancePanel locale={locale} view={view} />
-        : <DividendsPanel locale={locale} view={view} />}
+      {tab === "overview" ? <FundOverview locale={locale} fund={fund} view={view} />
+        : tab === "holdings" ? <FundHoldings locale={locale} view={view} />
+        : tab === "exposure" ? <FundExposure locale={locale} view={view} />
+        : tab === "performance" ? <FundPerformance locale={locale} view={view} />
+        : <FundDividends locale={locale} view={view} />}
     </div>
+    <AdrLine text={fm.informational} />
   </div>;
 }
 export default withPageLog("/etf/fund/[key]/[tab]", EtfFundTabPage);

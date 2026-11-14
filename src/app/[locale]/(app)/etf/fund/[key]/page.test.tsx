@@ -1,12 +1,13 @@
 import { vi } from "vitest";
-vi.mock("@/components/etf/owner", async (original) => ({ ...await original<typeof import("@/components/etf/owner")>(), requireEtfScreeningAccess: async () => undefined }));
+const scoreView = vi.hoisted(() => vi.fn(() => false));
+vi.mock("@/components/etf/owner", async (original) => ({ ...await original<typeof import("@/components/etf/owner")>(), requireEtfScreeningAccess: async () => undefined, etfScoreView: scoreView }));
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, expect, it } from "vitest";
 import Page from "./page";
 import { sampleEtfCatalog } from "@/data/etf-fixtures";
 
 const originalMode = process.env.DATA_MODE;
-afterEach(() => { process.env.DATA_MODE = originalMode; });
+afterEach(() => { process.env.DATA_MODE = originalMode; scoreView.mockReturnValue(false); });
 
 it.each(["en", "sk"])("shows catalog facts, source and linked pick in %s", async (locale) => {
   process.env.DATA_MODE = "fixture";
@@ -41,4 +42,15 @@ it("opens a US listing without an ISIN", async () => {
   expect(html).toContain("NASDAQ:S021");
   expect(html).toContain("United States");
   expect(html).toContain("Not recorded");
+});
+
+it.each(["en", "sk"])("shows the scored rules and methodology in %s", async (locale) => {
+  process.env.DATA_MODE = "fixture";
+  scoreView.mockReturnValue(true);
+  const html = renderToStaticMarkup(await Page({ params: Promise.resolve({ locale, key: "DE0000000001" }) }));
+  expect(html).toContain('id="fund-rules"');
+  expect(html).toContain(locale === "en" ? "How the rating was calculated" : "Výpočet hodnotenia");
+  expect(html).toContain(locale === "en" ? "Total expense ratio" : "Celkové náklady");
+  expect(html).toContain(`href="/${locale}/methodology"`);
+  expect(html).toContain(locale === "en" ? "UCITS hint (unconfirmed)" : "Náznak UCITS (nepotvrdený)");
 });
