@@ -2,7 +2,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import type { Viewer } from "@/viewer/viewer";
 const state = vi.hoisted(() => ({ viewer: { tier: "free", preview: false } as Viewer }));
 vi.mock("@/viewer/get-viewer", async (original) => ({ ...await original<typeof import("@/viewer/get-viewer")>(), getViewer: async () => state.viewer }));
-import { etfScoreView } from "./owner";
+import { etfPickOwnerView, etfScoreView } from "./owner";
 
 afterEach(() => vi.unstubAllEnvs());
 
@@ -18,6 +18,7 @@ it.each([
   vi.stubEnv("EODHD_PRIVATE_USE", "on");
   state.viewer = viewer;
   expect(await etfScoreView()).toBe(expected);
+  expect(await etfPickOwnerView()).toBe(_name === "owner");
 });
 
 it("a plan without a signed-in user id opens nothing", async () => {

@@ -13,14 +13,20 @@ export function EtfRuleBreakdown({ locale, score }: { locale: Locale; score: Etf
     if (typeof raw === "boolean") return raw ? locale === "sk" ? "Áno" : "Yes" : locale === "sk" ? "Nie" : "No";
     if (typeof raw === "string") return raw;
     if (id === "aum" || id === "liquidity") return `${formatNumber(locale, raw, 0)} EUR`;
-    if (["return12to1m", "benchmark6m", "drawdown3y"].includes(id)) return `${formatNumber(locale, raw * 100, 2)} %`;
-    if (["ter", "peerTer", "dailyRange", "topTen", "largestSector", "largestRegion", "volatility1y", "yield"].includes(id)) return `${formatNumber(locale, raw, 2)} %`;
+    if (id === "age" || id === "holdingsCount" || id === "payoutRegularity") return formatNumber(locale, raw, 0);
+    if (id === "peerTer") return `${formatNumber(locale, raw, 0)} ${m.percentile}`;
+    if (id === "sma200") return `${m.closeValue}: ${formatNumber(locale, raw, 2)}`;
+    if (id === "sma50") return `${m.sma50Value}: ${formatNumber(locale, raw, 2)}`;
+    if (id === "benchmark6m") return `${m.fundReturnValue}: ${formatNumber(locale, raw * 100, 2)} %`;
+    if (["return12to1m", "drawdown3y"].includes(id)) return `${formatNumber(locale, raw * 100, 2)} %`;
+    if (["ter", "dailyRange", "topTen", "largestSector", "largestRegion", "volatility1y", "yield"].includes(id)) return `${formatNumber(locale, raw, 2)} %`;
     return formatNumber(locale, raw, 2);
   };
   const gap = (reason: string | undefined, id: string): string => {
     if (!reason) return "—";
+    if (reason in m.gapLabels) return m.gapLabels[reason as keyof typeof m.gapLabels];
     if (reason.startsWith("missing_")) return `${m.gapLabels.missing}: ${m.rules[id as keyof typeof m.rules] ?? reason.slice(8)}`;
-    return m.gapLabels[reason as keyof typeof m.gapLabels] ?? reason.replaceAll("_", " ");
+    return reason.replaceAll("_", " ");
   };
   if (!score?.rules.length) return null;
   return <RecordCard id="fund-rules" title={m.breakdown} meta={<Link href={`/${locale}/methodology`}>{m.methodology}</Link>}>

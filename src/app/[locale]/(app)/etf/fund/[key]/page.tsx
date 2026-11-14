@@ -9,7 +9,7 @@ import { pageMetadata } from "@/i18n/metadata";
 import { RecordCard, RecordHead } from "@/components/record-parts";
 import { AreaChip } from "@/components/kit";
 import { CallBadge, displayedDate, percent, amount, signedPercent } from "@/components/etf/format";
-import { etfOwnerView, etfScoreView, requireEtfScreeningAccess } from "@/components/etf/owner";
+import { etfOwnerView, etfPickOwnerView, etfScoreView, requireEtfScreeningAccess } from "@/components/etf/owner";
 import { latestEtfScores } from "@/db/etf-score";
 import { EtfStoredScore } from "@/components/etf/score";
 import { isVendorSourceUrl } from "@/components/etf/source-url";
@@ -42,9 +42,10 @@ async function EtfFundPage({ params }: Props) {
   const result = await etfCatalogDetail(key.toUpperCase());
   if (!result) notFound();
   const { fund, sample } = result;
-  const detail = fund.pickSymbol ? await etfDetail(fund.pickSymbol) : null;
-  const m = getEtfMessages(locale);
   const owner = await etfOwnerView();
+  const pickOwner = await etfPickOwnerView();
+  const detail = pickOwner && fund.pickSymbol ? await etfDetail(fund.pickSymbol) : null;
+  const m = getEtfMessages(locale);
   const canScore = await etfScoreView();
   const score = canScore ? (await latestEtfScores([fund.listingKey])).get(fund.listingKey) : null;
   const d = getEtfDetailMessages(locale);
@@ -67,8 +68,8 @@ async function EtfFundPage({ params }: Props) {
       {owner ? <RecordCard id="fund-vendor" title={d.vendorData} lede={d.ownerOnly}>
         <nav className="kit-tabs" aria-label={d.tabsLabel}>{ETF_TABS.map((tab) => <Link key={tab} href={etfTabHref(locale, fund.listingKey, tab)}>{d[tab]}</Link>)}</nav>
       </RecordCard> : null}
-      <RecordCard id="fund-pick" title={m.picksTitle} meta={freshness(detail?.pick.lastSeenAt ?? null)}>{detail ? <p><Link href={`/${locale}/etf/${encodeURIComponent(detail.pick.symbol)}`}>{m.pickLink}: {detail.pick.symbol}</Link> {!canScore ? <CallBadge call={detail.pick.call} locale={locale} /> : null} · {m.conviction}: {detail.pick.conviction === null ? m.noValue : `${detail.pick.conviction}/5`}</p> : <p>{m.noPick}</p>}</RecordCard>
-      {detail ? <>
+      {pickOwner ? <RecordCard id="fund-pick" title={m.picksTitle} meta={freshness(detail?.pick.lastSeenAt ?? null)}>{detail ? <p><Link href={`/${locale}/etf/${encodeURIComponent(detail.pick.symbol)}`}>{m.pickLink}: {detail.pick.symbol}</Link> {!canScore ? <CallBadge call={detail.pick.call} locale={locale} /> : null} · {m.conviction}: {detail.pick.conviction === null ? m.noValue : `${detail.pick.conviction}/5`}</p> : <p>{m.noPick}</p>}</RecordCard> : null}
+      {pickOwner && detail ? <>
         <RecordCard id="fund-history" title={m.history} meta={freshness(detail.history.map((item) => item.asOf).sort().at(-1) ?? null)}>{detail.history.length ? <div className={s.tableWrap}><table className={s.table}><thead><tr><th scope="col">{m.lastSeen}</th>{!canScore ? <th scope="col">{m.call}</th> : null}<th scope="col">{m.conviction}</th></tr></thead><tbody>{detail.history.map((item) => <tr key={item.asOf}><td>{displayedDate(locale, item.asOf)}</td>{!canScore ? <td><CallBadge call={item.call} locale={locale} /></td> : null}<td>{item.conviction === null ? m.noValue : `${item.conviction}/5`}</td></tr>)}</tbody></table></div> : <p>{m.noHistory}</p>}</RecordCard>
         <RecordCard id="fund-outcomes" title={m.outcomes} meta={freshness(detail.outcomes.map((item) => item.exitDate).sort().at(-1) ?? null)}>{detail.outcomes.length ? <div className={s.tableWrap}><table className={s.table}><thead><tr><th scope="col">{m.horizon}</th><th scope="col">{m.fundReturn}</th><th scope="col">{m.benchmark}</th><th scope="col">{m.benchmarkReturn}</th><th scope="col">{m.excess}</th></tr></thead><tbody>{detail.outcomes.map((item) => <tr key={item.horizonDays}><td>{item.horizonDays} {m.days}</td><td>{signedPercent(locale, item.returnPct)}</td><td>{item.benchmarkSymbol}</td><td>{signedPercent(locale, item.benchmarkReturnPct)}</td><td>{signedPercent(locale, item.excessPct)}</td></tr>)}</tbody></table></div> : <p>{m.noDetailOutcomes}</p>}</RecordCard>
       </> : null}

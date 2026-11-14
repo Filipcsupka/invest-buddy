@@ -136,7 +136,7 @@ const valueOr = (locale: Locale, value: string | null) => value?.trim() || getEt
 
 function PriceStrips({ locale, view }: { locale: Locale; view: FundView }) {
   const m = getEtfFundMessages(locale);
-  const bars = view.detail.bars.slice(-100);
+  const bars = view.detail.bars.slice(-260);
   if (bars.length < 2) return null;
   const maxVolume = Math.max(1, ...bars.map((b) => b.volume));
   const drawdown = bars.map((bar, i) => { const peak = Math.max(...bars.slice(0, i + 1).map((item) => item.close)); return peak > 0 ? (bar.close / peak - 1) * 100 : 0; });
@@ -170,13 +170,20 @@ function WeightBars({ locale, title, rows, date }: { locale: Locale; title: stri
   const m = getEtfFundMessages(locale);
   return <RecordCard id={`fund-${title.replaceAll(" ", "-")}`} title={title} meta={stamp(locale, date)}>{rows.length ? <ul className={f.barList}>{rows.slice(0, 10).map((row) => <li key={row.label}><span>{row.label}</span><div className={f.barTrack}><i style={{ width: `${Math.max(0, Math.min(100, row.weightPct))}%` }} /></div><b>{moneyPct(locale, row.weightPct)}</b></li>)}</ul> : <p>{m.insufficient}</p>}</RecordCard>;
 }
-export function FundHoldings({ locale, view }: { locale: Locale; view: FundView }) {
+export function FundHoldings({ locale, view, listingKey }: { locale: Locale; view: FundView; listingKey: string }) {
   const m = getEtfFundMessages(locale);
   const top = view.detail.holdings.slice(0, 10);
-  const sum = top.length === 10 && top.every((h) => h.weightPct !== null) ? top.reduce((acc, h) => acc + h.weightPct!, 0) : null;
+  const total = view.holdingsTotal ?? view.detail.holdings.length;
+  const page = view.holdingsPage ?? 1;
+  const sum = page === 1 && top.length === 10 && top.every((h) => h.weightPct !== null) ? top.reduce((acc, h) => acc + h.weightPct!, 0) : null;
+  const href = (next: number) => `${etfTabHref(locale, listingKey, "holdings")}?page=${next}`;
   return <div className={s.stack}>
-    <RecordCard id="fund-top-holdings" title={m.holdings} meta={stamp(locale, view.dates.holdings)}><p className={f.note}>{m.topOnly}</p><dl className={f.facts}><div><dt>{m.concentration}</dt><dd>{moneyPct(locale, sum)}</dd></div></dl>
-      <div className={f.tableScroll}><table className={f.ruleTable}><thead><tr><th scope="col">{m.holdings}</th><th scope="col" className="num">{getEtfDetailMessages(locale).weight}</th><th scope="col">{m.sector}</th><th scope="col">{m.region}</th></tr></thead><tbody>{top.map((h) => <tr key={h.position}><th scope="row">{h.name ?? h.symbol ?? m.none}</th><td className="num">{moneyPct(locale, h.weightPct)}</td><td>{valueOr(locale, h.sector)}</td><td>{valueOr(locale, h.country)}</td></tr>)}</tbody></table></div>
+    <RecordCard id="fund-top-holdings" title={m.holdings} meta={stamp(locale, view.dates.holdings)}>
+      {(view.detail.stats?.holdingsListed ?? total) > 0 && (view.detail.stats?.holdingsListed ?? total) <= 10 ? <p className={f.note}>{fill(m.topOnly, { listed: String(view.detail.stats?.holdingsListed ?? total) })}</p> : null}
+      {(view.detail.stats?.holdingsListed ?? total) > total && total > 0 ? <p className={f.note}>{fill(m.capped, { shown: String(total), listed: String(view.detail.stats?.holdingsListed) })}</p> : null}
+      {page === 1 ? <dl className={f.facts}><div><dt>{m.concentration}</dt><dd>{moneyPct(locale, sum)}</dd></div></dl> : null}
+      <div className={f.tableScroll}><table className={f.ruleTable}><thead><tr><th scope="col">{m.holdings}</th><th scope="col" className="num">{getEtfDetailMessages(locale).weight}</th><th scope="col">{m.sector}</th><th scope="col">{m.region}</th></tr></thead><tbody>{view.detail.holdings.length ? view.detail.holdings.map((h) => <tr key={h.position}><th scope="row">{h.name ?? h.symbol ?? m.none}</th><td className="num">{moneyPct(locale, h.weightPct)}</td><td>{valueOr(locale, h.sector)}</td><td>{valueOr(locale, h.country)}</td></tr>) : <tr><td colSpan={4}>{m.insufficient}</td></tr>}</tbody></table></div>
+      {total > 50 ? <nav className="kit-tabs" aria-label={m.holdingsPage}><span>{fill(m.holdingsPage, { page: String(page), pages: String(Math.ceil(total / 50)) })}</span>{page > 1 ? <Link href={href(page - 1)}>{m.previous}</Link> : null}{page * 50 < total ? <Link href={href(page + 1)}>{m.next}</Link> : null}</nav> : null}
     </RecordCard>
     <div className={f.grid}><WeightBars locale={locale} title={m.sector} rows={view.detail.exposure.sector} date={view.dates.exposure} /><WeightBars locale={locale} title={m.region} rows={view.detail.exposure.region} date={view.dates.exposure} /><WeightBars locale={locale} title={m.marketCap} rows={view.detail.exposure.mcap} date={view.dates.exposure} /></div>
   </div>;
@@ -193,9 +200,10 @@ export function FundExposure({ locale, view }: { locale: Locale; view: FundView 
 }
 export function FundPerformance({ locale, view }: { locale: Locale; view: FundView }) {
   const m = getEtfFundMessages(locale), st = view.detail.stats;
+  const proxyNames: Record<string, string> = { "GSPC.INDX": "S&P 500", "N225.INDX": "Nikkei 225", "HSI.INDX": "Hang Seng", "SSMI.INDX": "Swiss Market Index", "GDAXI.INDX": "DAX", "FCHI.INDX": "CAC 40", "AEX.INDX": "AEX", "IBEX.INDX": "IBEX 35", "STOXX50E.INDX": "EURO STOXX 50" };
   return <div className={s.stack}>
-    <RecordCard id="fund-performance" title={m.performance} meta={stamp(locale, view.dates.stats)}><p className={f.note}>{m.benchmarkNote}</p>{!view.benchmarkSymbol ? <p>{m.benchmarkUnavailable}</p> : <p className={f.note}>{m.proxy}: {view.benchmarkSymbol}</p>}
-      <div className={f.tableScroll}><table className={f.ruleTable}><thead><tr><th scope="col">{getEtfDetailMessages(locale).period}</th><th scope="col" className="num">{m.fund}</th><th scope="col" className="num">{m.proxy}</th></tr></thead><tbody>{view.returns.map((r) => <tr key={r.period}><th scope="row">{r.period}</th><td className="num">{moneyPct(locale, r.fund)}</td><td className="num">{moneyPct(locale, r.benchmark)}</td></tr>)}</tbody></table></div>
+    <RecordCard id="fund-performance" title={m.performance} meta={stamp(locale, view.dates.stats)}><p className={f.note}>{m.benchmarkNote}</p>{!view.benchmarkSymbol ? <p>{m.benchmarkUnavailable}</p> : <p className={f.note}>{m.proxy}: {proxyNames[view.benchmarkSymbol] ?? view.benchmarkSymbol.replace(/\.INDX$/, "")}</p>}
+      <div className={f.tableScroll}><table className={f.ruleTable}><thead><tr><th scope="col">{getEtfDetailMessages(locale).period}</th><th scope="col" className="num">{m.fund}</th><th scope="col" className="num">{m.proxy}</th></tr></thead><tbody>{view.returns.map((r) => <tr key={r.period}><th scope="row">{r.period}</th><td className="num">{moneyPct(locale, r.fund)}{r.fund !== null ? <small> {r.fundSource === "reported" ? m.reportedReturn : m.priceReturn}</small> : null}</td><td className="num">{moneyPct(locale, r.benchmark)}{r.benchmark !== null ? <small> {m.priceReturn}</small> : null}</td></tr>)}</tbody></table></div>
     </RecordCard>
     <RecordCard id="fund-risk" title={m.risk} meta={<>{stamp(locale, view.dates.stats)} · {stamp(locale, view.dates.bars)}</>}><dl className={f.facts}>
       <div><dt>{m.volatility}</dt><dd>{moneyPct(locale, st?.vol1yPct ?? null)}</dd></div><div><dt>{m.sharpe}</dt><dd>{st?.sharpe3y == null ? m.none : formatNumber(locale, st.sharpe3y, 2)}</dd></div><div><dt>{m.maxDrawdown}</dt><dd>{moneyPct(locale, view.maxDrawdown3y)}</dd></div>

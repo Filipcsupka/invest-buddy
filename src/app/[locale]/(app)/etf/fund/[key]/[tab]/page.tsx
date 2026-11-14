@@ -18,7 +18,7 @@ import { AdrLine } from "@/components/disclaimer";
 import { getEtfFundMessages } from "@/i18n/etf-fund-messages";
 
 export const dynamic = "force-dynamic";
-type Props = { params: Promise<{ locale: string; key: string; tab: string }> };
+type Props = { params: Promise<{ locale: string; key: string; tab: string }>; searchParams?: Promise<{ page?: string }> };
 const validKey = (key: string) => /^[A-Za-z0-9:._-]{1,80}$/.test(key);
 const decodedKey = (key: string) => {
   try { return decodeURIComponent(key); } catch { return ""; }
@@ -34,7 +34,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 /** Owner-only vendor fund data, rendered from stored rows. Facts only: no calls, scores or states. */
-async function EtfFundTabPage({ params }: Props) {
+async function EtfFundTabPage({ params, searchParams }: Props) {
   // The market gate for the ETF section, then the paid fund permission: a licensed free account never opens fund tabs.
   await assertViewable("eodhd", "etf");
   await requireEtfScreeningAccess();
@@ -45,7 +45,10 @@ async function EtfFundTabPage({ params }: Props) {
   const result = await etfCatalogDetail(key.toUpperCase());
   if (!result) notFound();
   const { fund } = result;
-  const view = await readEtfFundView(fund);
+  const rawPage = tab === "holdings" ? (await searchParams)?.page : undefined;
+  const holdingsPage = rawPage && /^[1-9]\d{0,2}$/.test(rawPage) ? Number(rawPage) : 1;
+  const view = await readEtfFundView(fund, tab, undefined, holdingsPage);
+  if (tab === "holdings" && holdingsPage > Math.max(1, Math.ceil(view.holdingsTotal / 50))) notFound();
   const m = getEtfDetailMessages(locale), e = getEtfMessages(locale);
   const fm = getEtfFundMessages(locale);
   return <div className="frame page">
@@ -54,7 +57,7 @@ async function EtfFundTabPage({ params }: Props) {
     <EtfTabNav locale={locale} listingKey={fund.listingKey} active={tab} />
     <div className={s.stack}>
       {tab === "overview" ? <FundOverview locale={locale} fund={fund} view={view} />
-        : tab === "holdings" ? <FundHoldings locale={locale} view={view} />
+        : tab === "holdings" ? <FundHoldings locale={locale} view={view} listingKey={fund.listingKey} />
         : tab === "exposure" ? <FundExposure locale={locale} view={view} />
         : tab === "performance" ? <FundPerformance locale={locale} view={view} />
         : <FundDividends locale={locale} view={view} />}

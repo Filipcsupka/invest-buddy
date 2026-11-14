@@ -132,6 +132,15 @@ describe("writers", () => {
 });
 
 describe("read models", () => {
+  it("skips unused datasets for an exposure-only tab", async () => {
+    const queries: string[] = [];
+    const db = { query: async (sql: string) => { queries.push(sql); return { rows: [{ kind: "sector", label: "Technology", weight_pct: 30 }] }; } } as unknown as Pick<pg.Pool, "query">;
+    const view = await etfDetailView("NYSEARCA:SPY", { stats: false, holdings: false, exposure: true, dividends: false, bars: false }, db);
+    expect(queries).toHaveLength(1);
+    expect(queries[0]).toContain("FROM etf_exposure");
+    expect(view.exposure.sector).toEqual([{ label: "Technology", weightPct: 30 }]);
+  });
+
   it("returns an empty view without a database", async () => {
     expect(await etfDetailView("X:Y", {}, null)).toMatchObject({ stats: null, holdings: [], dividends: [], bars: [] });
     expect((await etfListStats(["X:Y"], null)).size).toBe(0);
