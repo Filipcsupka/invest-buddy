@@ -85,8 +85,8 @@ export type MarketsMessages = typeof en;
 const sk: MarketsMessages = {
   owner: "Trhové údaje",
   noValue: "—",
-  source: "Zdroj: denné trhové údaje uložené nočnými úlohami. Dostupné predplatiteľom.",
-  factsOnly: "Iba fakty. Stránka neobsahuje skóre, stavy ani odporúčania.",
+  source: "Zdroj: trhové údaje ku koncu dňa, ktoré ukladajú nočné úlohy. Dostupné pre predplatiteľov.",
+  factsOnly: "Iba fakty. Stránka neobsahuje skóre, stavy ani signály.",
   back: "Späť na zoznam",
   lastClose: "Posledná uzávierka",
   date: "Dátum",
@@ -99,10 +99,10 @@ const sk: MarketsMessages = {
   sparkLabel: "{name}: posledných {count} uzávierok, {first} až {last}",
   currency: "Mena",
   name: "Názov",
-  bars: "Uložené seansy",
+  bars: "Uložené obchodné dni",
   chart: "Vývoj ceny",
   price: "Uzávierka",
-  noBars: "Zatiaľ nie sú uložené žiadne údaje. Úloha pre trhové údaje pre toto aktívum ešte nebežala.",
+  noBars: "Zatiaľ nie sú uložené žiadne denné ceny. Úloha, ktorá ich zbiera, pre toto aktívum ešte nebežala.",
   indices: {
     title: "Indexy",
     lede: "Posledná uložená uzávierka a zmena sledovaných akciových indexov.",
@@ -119,7 +119,7 @@ const sk: MarketsMessages = {
   },
   screener: {
     title: "Skener trhu",
-    lede: "Desať pevných filtrov z jednoduchých faktov, ktoré raz denne spúšťa úloha. Stránka zobrazuje uložené výsledky a dodávateľa sa nepýta.",
+    lede: "Desať pevných filtrov nad jednoduchými faktami. Úloha ich spúšťa raz denne. Stránka zobrazuje uložené výsledky a u dodávateľa nič nenačítava.",
     presets: "Filtre",
     noRun: "Tento filter ešte nie je uložený.",
     empty: "Dňa {date} filtru nezodpovedal žiadny titul.",
@@ -137,7 +137,7 @@ const sk: MarketsMessages = {
     marketCap: "Trhová kapitalizácia",
     dividendYield: "Dividendový výnos",
     avgVolume: "Priem. objem (200 dní)",
-    note: "Údaje sú hodnoty dodávateľa za posledný obchodný deň. Trhová kapitalizácia nie je k historickému dátumu. Zaradenie do filtra je iba výsledok filtra.",
+    note: "Čísla sú hodnoty dodávateľa za posledný obchodný deň. Trhová kapitalizácia nie je viazaná na historický dátum. Výskyt titulu vo filtri je len výsledok filtra.",
     names: {
       "us-mega-cap": "USA, kapitalizácia nad 200 mld.",
       "us-large-cap": "USA, kapitalizácia 10 až 200 mld.",
@@ -153,7 +153,7 @@ const sk: MarketsMessages = {
   },
   marketCap: {
     title: "Vývoj trhovej kapitalizácie",
-    lede: "Týždenná trhová kapitalizácia z trhových dát, len pre vlastníka.",
+    lede: "Týždenná trhová kapitalizácia z trhových údajov, len pre vlastníka.",
     chartName: "Kapitalizácia (mld.)",
     chartAria: "{name} týždenná kapitalizácia: {count} týždňov, {first} až {last}",
     latest: "Posledný týždeň",

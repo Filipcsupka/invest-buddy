@@ -13,14 +13,14 @@ const messages = {
     families: { "Symbols": "Symbols", "Daily bars": "Daily bars", "Revenue and shares": "Revenue and shares", "EPS history": "EPS history", "Earnings calendar": "Earnings calendar", "Catalyst facts": "Catalyst facts", "Insider lines": "Insider lines", "News documents": "News documents", "Regional macro": "Regional macro", "ETF catalog": "ETF catalog", "Market asset bars": "Market asset bars", "Vendor splits": "Vendor splits", "Fundamentals refresh": "Fundamentals refresh" },
   },
   sk: {
-    title: "Súkromné údaje", lede: "Uložené pozorovania trhových dát, ich dátumy a stav zberu. Len pre vlastníka.",
-    tickerTitle: "Údaje o akcii", tickerHint: "Otvorte ticker a pozrite si uložené záznamy so zdrojom.", tickerLabel: "Ticker", open: "Otvoriť údaje",
+    title: "Súkromné údaje", lede: "Uložené trhové údaje, ich dátumy a stav zberu. Len pre vlastníka.",
+    tickerTitle: "Údaje o akcii", tickerHint: "Otvorte ticker a pozrite si jeho uložené zdrojové záznamy.", tickerLabel: "Ticker", open: "Otvoriť údaje",
     source: "Zdroj", records: "Riadky", latest: "Posledný dátum", usage: "Využitie API za sedem dní", day: "Deň", job: "Úloha", requests: "Požiadavky", credits: "Odhad volaní",
     exchanges: "Register symbolov podľa burzy", exchange: "Burza", active: "Aktívne", total: "Spolu", universe: "Vybraný okruh podľa burzy", list: "Zoznam", tickers: "Tickery", scored: "Hodnotené", scoredOn: "Dátum skóre",
-    etfs: "Katalóg ETF z trhových dát", region: "Región", ter: "TER", aum: "AUM, mil. USD", holdings: "Pozície", status: "Stav", enriched: "Obohatené", currency: "Mena",
+    etfs: "Katalóg ETF z trhových dát", region: "Región", ter: "TER", aum: "AUM, mil. USD", holdings: "Pozície", status: "Stav", enriched: "Doplnené", currency: "Mena",
     macro: "Regionálne makro", jobs: "Spustenia zberu", started: "Začiatok", ended: "Koniec", details: "Počty", assets: "Trhové aktíva", assetClass: "Trieda aktíva", close: "Posledná cena", callLog: "Záznam volaní trhových dát", calls: "Volania",
     identity: "Kotácia a zaradenie", bars: "Denné ceny", fundamentals: "Tržby a počet akcií", eps: "História EPS", calendar: "Kalendár výsledkov", catalysts: "Fakty o katalyzátoroch", insiders: "Obchody insiderov", documents: "Správy", actions: "Splity od dodávateľa", refresh: "Stav obnovy fundamentov",
-    empty: "Zatiaľ nie sú uložené trhové údaje.", back: "Všetky súkromné údaje", noTicker: "Ticker sa nenašiel.",
+    empty: "Zatiaľ tu nie sú žiadne uložené trhové údaje.", back: "Všetky súkromné údaje", noTicker: "Ticker sa nenašiel.",
     families: { "Symbols": "Symboly", "Daily bars": "Denné ceny", "Revenue and shares": "Tržby a počet akcií", "EPS history": "História EPS", "Earnings calendar": "Kalendár výsledkov", "Catalyst facts": "Fakty o katalyzátoroch", "Insider lines": "Obchody insiderov", "News documents": "Správy", "Regional macro": "Regionálne makro", "ETF catalog": "Katalóg ETF", "Market asset bars": "Ceny trhových aktív", "Vendor splits": "Splity od dodávateľa", "Fundamentals refresh": "Obnova fundamentov" },
   },
 } as const;

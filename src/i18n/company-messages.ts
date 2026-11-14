@@ -31,7 +31,7 @@ const sk: CompanyMessages = {
   checkColumns: { check: "Kontrola", triggers: "Spustí sa, keď", value: "Hodnota", result: "Výsledok" },
   rejectionTable: "Vyraďovacie kontroly pre {ticker}",
   rulesTable: "Pravidlá pre {ticker}",
-  dataStatusTitle: "Údaje za touto stránkou",
+  dataStatusTitle: "Z akých údajov stránka vychádza",
   zoneTag: "Pásmo poklesu",
   tabsLabel: "Sekcie tejto stránky",
   tabs: { overview: "Prehľad", rules: "Pravidlá", flags: "Príznaky", evidence: "Dôkazy", history: "História" },

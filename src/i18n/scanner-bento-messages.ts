@@ -21,9 +21,9 @@ const sk: typeof en = {
   tickerFew: "tickery",
   tickerMany: "tickerov",
   setup: "Aspoň 72 %; pokrytie aspoň 80 %",
-  watch: "60 – 71,9 %; alebo viac pri nižšom pokrytí",
-  wait: "48 – 59,9 % dostupných hlavných bodov",
-  ignore: "Menej ako 48 % dostupných hlavných bodov",
+  watch: "60 až 71,9 %, alebo viac pri neúplnom pokrytí",
+  wait: "48 až 59,9 % hlavných bodov s údajmi",
+  ignore: "Menej ako 48 % hlavných bodov s údajmi",
   broken: "Platí vylučovacie pravidlo",
   insufficient: "Nedostatok vstupných údajov na hodnotenie",
 };

@@ -8,8 +8,8 @@ const en = {
   ariaItem: "{ticker}, {state}, {score}",
 };
 const sk = {
-  title: "Najvyššie skóre na prvý pohľad",
-  note: "{n} najlepšie hodnotených z {total} spoločností v poslednom skene, zafarbených podľa stavu pravidiel. Skóre je podiel splnených bodov pravidiel, nie predpoveď.",
+  title: "Prehľad najvyšších skóre",
+  note: "{n} najlepšie hodnotených z {total} spoločností v poslednom skene, farebne odlíšených podľa stavu pravidiel. Skóre je podiel splnených bodov pravidiel, nie predpoveď.",
   all: "Všetky spoločnosti sú v tabuľke nižšie",
   ariaItem: "{ticker}, {state}, {score}",
 };

@@ -14,11 +14,11 @@ export const profileCopy = {
     title: "Profil spoločnosti", notComputed: "Profily ešte nie sú vypočítané", noData: "Bez údajov",
     names: { sustained: "Stabilný rast", event_driven: "Vyššia volatilita, viazané na udalosti", mixed: "Zmiešaný profil", no_data: "Bez údajov" },
     tags: { event_driven: "Krátkodobý profil", mixed: "Zmiešaný profil", note: "Profil viazaný na udalosti: väčšie cenové výkyvy spojené so správami o spoločnosti. Kladný stav pravidiel tu opisuje kratší horizont, nie dlhodobé držanie. Len informatívne." },
-    shortNote: "Profil viazaný na udalosti: kladný stav pravidiel pri tejto spoločnosti opisuje kratší horizont, nie dlhodobé držanie. Zmiešaný profil môže mať obe vlastnosti. Len informatívne, nie je to poradenstvo.",
+    shortNote: "Profil viazaný na udalosti: kladný stav pravidiel pri tejto spoločnosti opisuje kratší horizont, nie dlhodobé držanie. Zmiešaný profil môže mať obe vlastnosti. Len informatívne, nie poradenstvo.",
     growers: "Stabilne rastúce spoločnosti", events: "Vyššia volatilita, viazané na udalosti",
     description: "Zoznamy zoskupujú uložené profily spoločností. Profil viazaný na udalosti môže vykazovať väčšie cenové výkyvy a výsledky súvisiace so správami o spoločnosti. Stav sa v oboch zoznamoch riadi rovnakými pravidlami.",
     empty: "Dnes v tomto profile nie je žiadna spoločnosť.", ticker: "Spoločnosť", status: "Stav", profile: "Profil", risk: "Rizikové údaje",
     revenue: "Rast tržieb", cap: "Trhová kapitalizácia", atr: "ATR", drawdown: "Pokles od maxima", move: "5-dňový pohyb", volume: "Pomer objemu", billions: "mld. USD",
-    methodTitle: "Profily spoločností", methodBody: "Profily opisujú uložený rast tržieb, veľkosť a pohyb ceny. Stabilný rast vyžaduje štyri štvrťroky rastu tržieb, veľkú trhovú kapitalizáciu, likvidné obchodovanie a nižšie ATR. Vyššia volatilita viazaná na udalosti zahŕňa menšie spoločnosti, väčšie výkyvy alebo nezvyčajný nedávny pohyb. Zmiešaný profil a Bez údajov sa zobrazia, keď sa neuplatní ani jeden profil alebo chýbajú vstupy. Profil nemení stav ani skóre tickeru.",
+    methodTitle: "Profily spoločností", methodBody: "Profily opisujú uložený rast tržieb, veľkosť a pohyb ceny. Stabilný rast vyžaduje štyri štvrťroky rastu tržieb, veľkú trhovú kapitalizáciu, likvidné obchodovanie a nižšie ATR. Vyššia volatilita viazaná na udalosti zahŕňa menšie spoločnosti, väčšie výkyvy alebo nezvyčajný nedávny pohyb. Zmiešaný profil a Bez údajov sa zobrazia, keď nesedí ani jeden profil alebo chýbajú vstupné údaje. Profil nemení stav ani skóre tickeru.",
   },
 } as const;
