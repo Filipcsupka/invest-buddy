@@ -6,26 +6,8 @@
  * ADR-001, not a forecast or an instruction. Methodology: docs/index-rating.md.
  */
 
-// TODO(merge): writer I1 owns `IndexRatingInputs` in src/markets/index-types.ts.
-// This is the identical shape, declared locally until that branch lands.
-export interface IndexRatingInputs {
-  symbol: string;
-  /** ISO date (YYYY-MM-DD). Bars after this date are ignored. */
-  asOf: string;
-  /** Daily closes, any order. Duplicate dates keep the last entry. */
-  bars: { date: string; close: number }[];
-  /** Index members matched to our instruments, out of all current members. */
-  components?: { matched: number; total: number };
-  /** Percent values 0-100. `coveragePct` is the share of members with data. */
-  breadth?: { date: string; aboveMa50Pct: number; aboveMa200Pct: number; coveragePct: number };
-  /** Percent values 0-100. */
-  earnings?: { date: string; positiveGrowthPct: number; acceleratingPct: number; coveragePct: number };
-  /** No valuation history is stored yet; always not assessed. */
-  valuation?: null;
-  /** Percent values 0-100 of scored members in each stored state. */
-  scoreDistribution?: { date: string; setupMetPct: number; criteriaBrokenPct: number; coveragePct: number };
-  isVolatilityIndex: boolean;
-}
+import type { IndexRatingInputs } from "./index-types";
+export type { IndexRatingInputs } from "./index-types";
 
 export const INDEX_RATING_VERSION = "index-v1-2026-11-13";
 

@@ -341,7 +341,7 @@ export async function componentGrowthFacts(tickers: string[], asOf: string, db: 
   return rows.map((row) => ({ ticker: row.ticker, source: row.source_id, concept: row.concept, period: row.period, periodEnd: row.period_end, value: Number(row.value) }));
 }
 
-export interface IndexRatingReadModel { snapshot: IndexSnapshot | null; analytics: IndexAnalytics; inputs: IndexRatingInputs; bars: IndexBar[] }
+export interface IndexRatingReadModel { snapshot: IndexSnapshot | null; analytics: IndexAnalytics; inputs: IndexRatingInputs | null; bars: IndexBar[] }
 
 /**
  * Everything the index rating and the index pages need for one tracked index, or null when it is not a tracked index.
@@ -352,8 +352,12 @@ export async function indexRatingReadModel(vendorSymbol: string, db: Query | nul
   const tracked = (await db.query("SELECT 1 FROM tracked_assets WHERE vendor_symbol=$1 AND asset_class='index'", [vendorSymbol])).rows.length > 0;
   if (!tracked) return null;
   const bars = await indexBars(vendorSymbol, db);
-  const asOf = bars.at(-1)?.date ?? null;
   const volatility = isVolatilityIndex(vendorSymbol);
+  // A weekly list can arrive on a weekend after Friday's latest bar. Keep that list and date the rating on the newer day.
+  const componentDate = volatility ? null : (await db.query<{ as_of: string | null }>(
+    "SELECT max(as_of)::text AS as_of FROM index_components WHERE index_symbol=$1", [vendorSymbol])).rows[0]?.as_of ?? null;
+  const barDate = bars.at(-1)?.date ?? null;
+  const asOf = [barDate, componentDate].filter((date): date is string => date !== null).sort().at(-1) ?? null;
   const list = asOf && !volatility ? await indexComponentFacts(vendorSymbol, asOf, db) : { asOf: null, rows: [] };
   const tickers = [...new Set(list.rows.flatMap((row) => row.ticker ? [row.ticker] : []))];
   const [growthFacts, peers, snapshot] = await Promise.all([
@@ -362,5 +366,5 @@ export async function indexRatingReadModel(vendorSymbol: string, db: Query | nul
     latestIndexSnapshot(vendorSymbol, db),
   ]);
   const analytics = indexAnalytics({ symbol: vendorSymbol, bars, componentsAsOf: list.asOf, components: list.rows, growthFacts, peers });
-  return { snapshot, analytics, inputs: toRatingInputs(analytics, bars), bars };
+  return { snapshot, analytics, inputs: barDate ? toRatingInputs(analytics, bars) : null, bars };
 }

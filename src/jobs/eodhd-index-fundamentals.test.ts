@@ -45,6 +45,37 @@ describe("index fundamentals options", () => {
 });
 
 describe("index fundamentals job (PGlite)", () => {
+  it("builds dated rating inputs and constituent analytics from canonical matches", () => withDb(async (pool) => {
+    await pool.query("UPDATE instrument_ids SET vendor_symbols='{\"eodhd\":\"AAPL.US\"}'::jsonb WHERE ticker='AAPL' AND valid_to IS NULL");
+    await pool.query(`INSERT INTO asset_bars(vendor_symbol,bar_date,close)
+      SELECT 'GSPC.INDX',DATE '2026-11-12'-g,6000-g FROM generate_series(0,300) g`);
+    await pool.query(`INSERT INTO index_components(index_symbol,as_of,code,exchange,sector,weight) VALUES
+      ('GSPC.INDX','2026-11-14','AAPL','US','Technology',0.6),
+      ('GSPC.INDX','2026-11-14','UNKNOWN','US','Other',0.4)`);
+    await pool.query(`INSERT INTO daily_bars(ticker,bar_date,open,high,low,close,volume)
+      SELECT 'AAPL',DATE '2026-11-12'-g,101,102,99,CASE WHEN g=0 THEN 101 ELSE 100 END,1000 FROM generate_series(0,199) g`);
+    await pool.query(`INSERT INTO score_results(ticker,as_of,technical,fundamentals,macro,total,state,audit)
+      VALUES ('AAPL','2026-11-12',5,5,5,15,'Criteria broken','{"scanRunId":"test"}')`);
+    await pool.query(`INSERT INTO fundamentals_pit(ticker,concept,taxonomy,unit,period_start,period_end,form,filed,accession,value)
+      VALUES ('AAPL','Revenues','us-gaap','USD','2025-04-01','2025-06-30','10-Q','2025-08-01','rev1',90),
+             ('AAPL','Revenues','us-gaap','USD','2025-07-01','2025-09-30','10-Q','2025-11-01','rev2',100),
+             ('AAPL','Revenues','us-gaap','USD','2026-04-01','2026-06-30','10-Q','2026-08-01','rev3',100),
+             ('AAPL','Revenues','us-gaap','USD','2026-07-01','2026-09-30','10-Q','2026-11-01','rev4',120),
+             ('AAPL','NetIncomeLoss','us-gaap','USD','2025-07-01','2025-09-30','10-Q','2025-11-01','inc1',10),
+             ('AAPL','NetIncomeLoss','us-gaap','USD','2026-07-01','2026-09-30','10-Q','2026-11-01','inc2',12)`);
+    const model = await indexRatingReadModel("GSPC.INDX", pool);
+    expect(model?.bars).toHaveLength(301);
+    expect(model?.analytics.breadth?.aboveMa200).toMatchObject({ value: 100, n: 1, of: 2, asOf: "2026-11-12" });
+    expect(model?.analytics.sectors?.rows).toEqual([{ sector: "Technology", count: 1, weightPct: 60 }, { sector: "Other", count: 1, weightPct: 40 }]);
+    expect(model?.analytics.earnings?.weightedRevenueYoyPct).toMatchObject({ value: 20, n: 1, of: 2, asOf: "2026-09-30" });
+    expect(model?.analytics.scores?.criteriaBroken).toMatchObject({ value: 100, n: 1, of: 2, asOf: "2026-11-12" });
+    expect(model?.analytics.matched).toMatchObject({ n: 1, of: 2, asOf: "2026-11-14" });
+    expect(model?.inputs).toMatchObject({ asOf: "2026-11-14", components: { matched: 1, total: 2 },
+      breadth: { date: "2026-11-12", coveragePct: 50 }, earnings: { date: "2026-11-14", coveragePct: 50 },
+      scoreDistribution: { date: "2026-11-12", coveragePct: 50 } });
+    expect((await indexRatingReadModel("VIX.INDX", pool))?.inputs).toBeNull();
+  }), 60_000);
+
   it("maps constituents through current vendor symbols without a bare ticker collision", () => withDb(async (pool) => {
     await pool.query(`INSERT INTO index_components(index_symbol,as_of,code,exchange) VALUES
       ('GSPC.INDX','2026-11-12','SQ','US'),('GSPC.INDX','2026-11-12','XYZ','US')`);

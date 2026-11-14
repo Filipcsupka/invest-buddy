@@ -130,9 +130,11 @@ export interface RelativeStrength {
 /** Relative strength of `symbol` against the other non-volatility indices, by period return in local currency. */
 export function relativeStrength(symbol: string, peers: readonly PeerSeries[], period: "m3" | "y1" = "m3"): RelativeStrength {
   const n = SESSIONS[period];
+  const referenceDate = peers.find((peer) => peer.symbol === symbol)?.bars.at(-1)?.date ?? null;
   const rows = peers.filter((peer) => !isVolatilityIndex(peer.symbol))
     .map((peer) => ({ symbol: peer.symbol, value: sessionReturn(peer.bars.map((bar) => bar.close), n), asOf: peer.bars.at(-1)?.date ?? null }))
-    .filter((row): row is { symbol: string; value: number; asOf: string | null } => row.value !== null);
+    .filter((row): row is { symbol: string; value: number; asOf: string } => row.value !== null && row.asOf !== null
+      && referenceDate !== null && Math.abs(daysBetween(row.asOf, referenceDate)) <= 7);
   const own = rows.find((row) => row.symbol === symbol);
   const others = rows.filter((row) => row.symbol !== symbol).map((row) => row.value).sort((a, b) => a - b);
   const median = others.length ? (others.length % 2 ? others[(others.length - 1) / 2] : (others[others.length / 2 - 1] + others[others.length / 2]) / 2) : null;
@@ -384,14 +386,15 @@ export function indexAnalytics(source: IndexAnalyticsSource): IndexAnalytics {
   const components = vol ? [] : source.components;
   const hasList = components.length > 0;
   const matchedCount = components.filter((c) => c.ticker).length;
+  const asOf = [price.asOf, hasList ? source.componentsAsOf : null].filter((date): date is string => date !== null).sort().at(-1) ?? null;
   return {
-    symbol: source.symbol, asOf: price.asOf, isVolatilityIndex: vol, price,
+    symbol: source.symbol, asOf, isVolatilityIndex: vol, price,
     relativeStrength: !vol && source.peers?.length ? { m3: relativeStrength(source.symbol, source.peers, "m3"), y1: relativeStrength(source.symbol, source.peers, "y1") } : null,
     matched: hasList ? { value: round(pct(matchedCount, components.length)), n: matchedCount, of: components.length, asOf: source.componentsAsOf } : null,
-    breadth: hasList ? breadth(components, price.asOf) : null,
+    breadth: hasList ? breadth(components, asOf) : null,
     sectors: hasList ? sectors(components, source.componentsAsOf) : null,
-    earnings: hasList ? earningsSummary(components, componentGrowth(source.growthFacts), price.asOf) : null,
-    scores: hasList ? scoreDistribution(components, price.asOf) : null,
+    earnings: hasList ? earningsSummary(components, componentGrowth(source.growthFacts), asOf) : null,
+    scores: hasList ? scoreDistribution(components, asOf) : null,
     volatility: vol ? volatilityContext(source.symbol, source.bars) : null,
   };
 }
@@ -403,6 +406,7 @@ const coverage = (covered: Covered<unknown>) => round(pct(covered.n, covered.of)
  * volatility indices carry bars only.
  */
 export function toRatingInputs(analytics: IndexAnalytics, bars: readonly IndexBar[]): IndexRatingInputs {
+  if (!analytics.asOf) throw new Error("Index rating inputs require a dated index bar");
   const out: IndexRatingInputs = {
     symbol: analytics.symbol, asOf: analytics.asOf, bars: bars.map((bar) => ({ date: bar.date, close: bar.close })),
     valuation: null, isVolatilityIndex: analytics.isVolatilityIndex,
@@ -411,16 +415,21 @@ export function toRatingInputs(analytics: IndexAnalytics, bars: readonly IndexBa
   if (analytics.matched) out.components = { matched: analytics.matched.n, total: analytics.matched.of };
   const b = analytics.breadth;
   if (b && b.aboveMa50.value !== null && b.aboveMa200.value !== null) {
-    out.breadth = { aboveMa50Pct: b.aboveMa50.value, aboveMa200Pct: b.aboveMa200.value, coveragePct: coverage(b.aboveMa200) };
+    const date = b.aboveMa50.asOf && b.aboveMa200.asOf ? (b.aboveMa50.asOf < b.aboveMa200.asOf ? b.aboveMa50.asOf : b.aboveMa200.asOf) : null;
+    if (date) out.breadth = { date, aboveMa50Pct: b.aboveMa50.value, aboveMa200Pct: b.aboveMa200.value,
+      coveragePct: Math.min(coverage(b.aboveMa50), coverage(b.aboveMa200)) };
   }
   const e = analytics.earnings;
   // Both shares are needed; the coverage is the smaller of the two denominators (acceleration needs one more stored period).
   if (e && e.positiveGrowth.value !== null && e.accelerating.value !== null) {
-    out.earnings = { positiveGrowthPct: e.positiveGrowth.value, acceleratingPct: e.accelerating.value, coveragePct: Math.min(coverage(e.positiveGrowth), coverage(e.accelerating)) };
+    // `date` is the PIT assessment day; each Covered figure retains the underlying reporting-period end.
+    out.earnings = { date: analytics.asOf, positiveGrowthPct: e.positiveGrowth.value, acceleratingPct: e.accelerating.value,
+      coveragePct: Math.min(coverage(e.positiveGrowth), coverage(e.accelerating)) };
   }
   const s = analytics.scores;
   if (s && s.setupMet.value !== null && s.criteriaBroken.value !== null) {
-    out.scoreDistribution = { setupMetPct: s.setupMet.value, criteriaBrokenPct: s.criteriaBroken.value, coveragePct: coverage(s.scored) };
+    if (s.scored.asOf) out.scoreDistribution = { date: s.scored.asOf, setupMetPct: s.setupMet.value,
+      criteriaBrokenPct: s.criteriaBroken.value, coveragePct: coverage(s.scored) };
   }
   return out;
 }

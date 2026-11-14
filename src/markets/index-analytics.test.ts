@@ -85,6 +85,8 @@ describe("relative strength", () => {
     expect(rs.spread).toBeCloseTo(0.025);
     expect(relativeStrength("NEW.INDX", peers, "m3")).toMatchObject({ value: null, rank: null, spread: null });
     expect(relativeStrength("GSPC.INDX", peers, "y1")).toMatchObject({ value: null, of: 0 });
+    const stale = { symbol: "OLD.INDX", currency: "USD", bars: flat(200).map((bar) => ({ ...bar, date: `${Number(bar.date.slice(0, 4)) - 1}${bar.date.slice(4)}` })) };
+    expect(relativeStrength("GSPC.INDX", [...peers, stale], "m3")).toMatchObject({ rank: 1, of: 3 });
   });
 });
 
@@ -199,15 +201,15 @@ describe("index analytics and rating inputs", () => {
     expect(inputs).toEqual({
       symbol: "GSPC.INDX", asOf, bars: bars.map(({ date, close }) => ({ date, close })), valuation: null, isVolatilityIndex: false,
       components: { matched: 2, total: 4 },
-      breadth: { aboveMa50Pct: 50, aboveMa200Pct: 50, coveragePct: 50 },
-      earnings: { positiveGrowthPct: 50, acceleratingPct: 50, coveragePct: 50 },
-      scoreDistribution: { setupMetPct: 50, criteriaBrokenPct: 50, coveragePct: 50 },
+      breadth: { date: asOf, aboveMa50Pct: 50, aboveMa200Pct: 50, coveragePct: 50 },
+      earnings: { date: asOf, positiveGrowthPct: 50, acceleratingPct: 50, coveragePct: 50 },
+      scoreDistribution: { date: asOf, setupMetPct: 50, criteriaBrokenPct: 50, coveragePct: 50 },
     });
   });
 
   it("omits constituent blocks without data and keeps a volatility index to price context", () => {
     const bare = toRatingInputs(indexAnalytics({ symbol: "N225.INDX", bars, componentsAsOf: "2026-11-06", components: [component({ code: "7203" })], growthFacts: [] }), bars);
-    expect(bare).toEqual({ symbol: "N225.INDX", asOf, bars: expect.any(Array), valuation: null, isVolatilityIndex: false, components: { matched: 0, total: 1 } });
+    expect(bare).toEqual({ symbol: "N225.INDX", asOf: "2026-11-06", bars: expect.any(Array), valuation: null, isVolatilityIndex: false, components: { matched: 0, total: 1 } });
     expect(isVolatilityIndex("vix.indx")).toBe(true);
     const vix = indexAnalytics({ symbol: "VIX.INDX", bars, componentsAsOf: null, components: [component({ code: "A", ticker: "A" })], growthFacts: [], peers: [{ symbol: "VIX.INDX", currency: "USD", bars }] });
     expect(vix).toMatchObject({ isVolatilityIndex: true, matched: null, breadth: null, scores: null, relativeStrength: null });
