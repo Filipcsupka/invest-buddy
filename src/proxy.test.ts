@@ -324,6 +324,29 @@ it("passes api requests through and limits a caller over the cap", async () => {
   resetRateLimits();
 });
 
+it("limits invalid ingest credentials at the proxy but exempts the valid token", async () => {
+  const previousToken = process.env.INGEST_TOKEN;
+  const previousLimit = process.env.RATE_LIMIT_API_PER_MIN;
+  const { resetRateLimits } = await import("@/security/rate-limit");
+  process.env.INGEST_TOKEN = "ingest-secret";
+  process.env.RATE_LIMIT_API_PER_MIN = "2";
+  resetRateLimits();
+  try {
+    const call = (authorization?: string) => proxy(new NextRequest("https://example.com/api/ingest/scan", {
+      headers: { "x-forwarded-for": "10.0.0.2", ...(authorization ? { authorization } : {}) },
+    }));
+    expect((await call("Bearer invalid")).status).toBe(200);
+    expect((await call()).status).toBe(200);
+    expect((await call("Bearer invalid")).status).toBe(429);
+    expect((await call("Bearer ingest-secret")).status).toBe(200);
+    expect((await call("Bearer ingest-secret")).status).toBe(200);
+  } finally {
+    if (previousToken === undefined) delete process.env.INGEST_TOKEN; else process.env.INGEST_TOKEN = previousToken;
+    if (previousLimit === undefined) delete process.env.RATE_LIMIT_API_PER_MIN; else process.env.RATE_LIMIT_API_PER_MIN = previousLimit;
+    resetRateLimits();
+  }
+});
+
 it("shows the SK title and the request id on the /sk/sizing 404, and keeps a valid incoming id", async () => {
   delete process.env.ADVICE_OUTPUT;
   const response = await proxy(new NextRequest("https://example.com/sk/sizing", { headers: { "x-request-id": "abc-12345678" } }));
