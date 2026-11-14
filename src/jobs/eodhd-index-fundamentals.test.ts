@@ -1,0 +1,158 @@
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
+import { PGlite } from "@electric-sql/pglite";
+import type pg from "pg";
+import { describe, expect, it } from "vitest";
+import { EodhdHttpError } from "../data-providers/eodhd/client";
+import { indexComponentFacts, indexComponents, indexRatingReadModel, latestIndexSnapshot, parseIndexFundamentals, parseIndexGeneral } from "../db/markets";
+import { DEFAULT_MAX_CALLS, parseIndexFundamentalsArgs, runIndexFundamentals, SNAPSHOT_FILTER } from "./eodhd-index-fundamentals";
+
+async function withDb(fn: (pool: pg.Pool) => Promise<void>) {
+  const db = new PGlite();
+  const dir = join(process.cwd(), "migrations");
+  for (const file of readdirSync(dir).filter((name) => name.endsWith(".sql")).sort()) await db.exec(readFileSync(join(dir, file), "utf8"));
+  try { await fn({ query: (sql: string, params?: unknown[]) => db.query(sql, params) } as unknown as pg.Pool); } finally { await db.close(); }
+}
+
+const GSPC = {
+  General: { Code: "GSPC", Type: "INDEX", Name: "S&P 500 Index", Exchange: "INDX", CurrencyCode: "USD", CountryName: "USA", Nested: { x: 1 } },
+  Components: { "0": { Code: "AAPL", Exchange: "US", Name: "Apple Inc", Sector: "Technology", Industry: "Consumer Electronics", Weight: 0.07 },
+    "1": { Code: "AIZ", Exchange: "US", Name: "Assurant", Sector: "Financial Services", Industry: "Insurance", Weight: 0.0002 } },
+};
+const GDAXI = { General: { Code: "GDAXI", Name: "DAX Index", CurrencyCode: "EUR" }, Components: { "0": { Code: "SAP", Exchange: "XETRA", Weight: null } } };
+const VIX = { General: { Code: "VIX", Name: "CBOE Volatility Index", CurrencyCode: "USD" }, Components: [] };
+
+describe("index fundamentals options", () => {
+  it("bounds the call budget, with an env override", () => {
+    expect(parseIndexFundamentalsArgs([], {})).toEqual({ dryRun: false, staleDays: 6, maxCalls: DEFAULT_MAX_CALLS });
+    expect(parseIndexFundamentalsArgs([], { INDEX_FUNDAMENTALS_MAX_CALLS: "120" }).maxCalls).toBe(120);
+    expect(parseIndexFundamentalsArgs(["--max-calls", "30", "--only", "gspc.indx"], { INDEX_FUNDAMENTALS_MAX_CALLS: "120" })).toMatchObject({ maxCalls: 30, only: ["GSPC.INDX"] });
+    expect(() => parseIndexFundamentalsArgs([], { INDEX_FUNDAMENTALS_MAX_CALLS: "5" })).toThrow();
+    expect(() => parseIndexFundamentalsArgs(["--stale-days", "0"], {})).toThrow();
+    expect(() => parseIndexFundamentalsArgs(["--bogus"], {})).toThrow();
+  });
+
+  it("parses the General block and both response blocks", () => {
+    expect(parseIndexGeneral(GSPC.General)).toEqual({ name: "S&P 500 Index", currency: "USD", country: "USA",
+      raw: { Code: "GSPC", Type: "INDEX", Name: "S&P 500 Index", Exchange: "INDX", CurrencyCode: "USD", CountryName: "USA", Nested: { x: 1 } } });
+    expect(parseIndexGeneral([])).toBeNull();
+    expect(parseIndexGeneral({ Nested: {} })?.raw).toEqual({ Nested: {} });
+    expect(parseIndexFundamentals(GSPC)?.components).toHaveLength(2);
+    expect(parseIndexFundamentals(VIX)).toEqual({ general: expect.objectContaining({ name: "CBOE Volatility Index" }), components: [] });
+    expect(parseIndexFundamentals([])).toBeNull();
+    expect(parseIndexFundamentals({ Other: 1 })).toBeNull();
+  });
+});
+
+describe("index fundamentals job (PGlite)", () => {
+  it("builds dated rating inputs and constituent analytics from canonical matches", () => withDb(async (pool) => {
+    await pool.query("UPDATE instrument_ids SET vendor_symbols='{\"eodhd\":\"AAPL.US\"}'::jsonb WHERE ticker='AAPL' AND valid_to IS NULL");
+    await pool.query(`INSERT INTO asset_bars(vendor_symbol,bar_date,close)
+      SELECT 'GSPC.INDX',DATE '2026-11-12'-g,6000-g FROM generate_series(0,300) g`);
+    await pool.query(`INSERT INTO index_components(index_symbol,as_of,code,exchange,sector,weight) VALUES
+      ('GSPC.INDX','2026-11-14','AAPL','US','Technology',0.6),
+      ('GSPC.INDX','2026-11-14','UNKNOWN','US','Other',0.4)`);
+    await pool.query(`INSERT INTO daily_bars(ticker,bar_date,open,high,low,close,volume)
+      SELECT 'AAPL',DATE '2026-11-12'-g,101,102,99,CASE WHEN g=0 THEN 101 ELSE 100 END,1000 FROM generate_series(0,199) g`);
+    await pool.query(`INSERT INTO score_results(ticker,as_of,technical,fundamentals,macro,total,state,audit)
+      VALUES ('AAPL','2026-11-12',5,5,5,15,'Criteria broken','{"scanRunId":"test"}')`);
+    await pool.query(`INSERT INTO fundamentals_pit(ticker,concept,taxonomy,unit,period_start,period_end,form,filed,accession,value)
+      VALUES ('AAPL','Revenues','us-gaap','USD','2025-04-01','2025-06-30','10-Q','2025-08-01','rev1',90),
+             ('AAPL','Revenues','us-gaap','USD','2025-07-01','2025-09-30','10-Q','2025-11-01','rev2',100),
+             ('AAPL','Revenues','us-gaap','USD','2026-04-01','2026-06-30','10-Q','2026-08-01','rev3',100),
+             ('AAPL','Revenues','us-gaap','USD','2026-07-01','2026-09-30','10-Q','2026-11-01','rev4',120),
+             ('AAPL','NetIncomeLoss','us-gaap','USD','2025-07-01','2025-09-30','10-Q','2025-11-01','inc1',10),
+             ('AAPL','NetIncomeLoss','us-gaap','USD','2026-07-01','2026-09-30','10-Q','2026-11-01','inc2',12)`);
+    const model = await indexRatingReadModel("GSPC.INDX", pool);
+    expect(model?.bars).toHaveLength(301);
+    expect(model?.analytics.breadth?.aboveMa200).toMatchObject({ value: 100, n: 1, of: 2, asOf: "2026-11-12" });
+    expect(model?.analytics.sectors?.rows).toEqual([{ sector: "Technology", count: 1, weightPct: 60 }, { sector: "Other", count: 1, weightPct: 40 }]);
+    expect(model?.analytics.earnings?.weightedRevenueYoyPct).toMatchObject({ value: 20, n: 1, of: 2, asOf: "2026-09-30" });
+    expect(model?.analytics.scores?.criteriaBroken).toMatchObject({ value: 100, n: 1, of: 2, asOf: "2026-11-12" });
+    expect(model?.analytics.matched).toMatchObject({ n: 1, of: 2, asOf: "2026-11-14" });
+    expect(model?.inputs).toMatchObject({ asOf: "2026-11-14", components: { matched: 1, total: 2 },
+      breadth: { date: "2026-11-12", coveragePct: 50 }, earnings: { date: "2026-11-14", oldestPeriodEnd: "2026-09-30", medianPeriodEnd: "2026-09-30", coveragePct: 50 },
+      scoreDistribution: { date: "2026-11-12", coveragePct: 50 } });
+    expect((await indexRatingReadModel("VIX.INDX", pool))?.inputs).toBeNull();
+  }), 60_000);
+
+  it("maps constituents through current vendor symbols without a bare ticker collision", () => withDb(async (pool) => {
+    await pool.query(`INSERT INTO index_components(index_symbol,as_of,code,exchange) VALUES
+      ('GSPC.INDX','2026-11-12','SQ','US'),('GSPC.INDX','2026-11-12','XYZ','US')`);
+    const list = await indexComponentFacts("GSPC.INDX", "2026-11-12", pool);
+    expect(list.rows.map((row) => [row.vendorSymbol, row.ticker])).toEqual([["SQ.US", null], ["XYZ.US", "SQ"]]);
+    await pool.query("INSERT INTO asset_bars(vendor_symbol,bar_date,close) VALUES ('GSPC.INDX','2026-11-12',6000)");
+    const model = await indexRatingReadModel("GSPC.INDX", pool);
+    expect(model?.inputs).toMatchObject({ symbol: "GSPC.INDX", asOf: "2026-11-12", components: { matched: 1, total: 2 } });
+    expect(model?.analytics.matched).toMatchObject({ n: 1, of: 2, asOf: "2026-11-12" });
+  }), 60_000);
+
+  it("ranks a stored vendor symbol over a suffixed ticker over a US bare code, and never matches a bare code abroad", () => withDb(async (pool) => {
+    await pool.query(`INSERT INTO instruments(ticker,name,sector,source) VALUES
+      ('SAP','SAP US listing','Technology','sample extension'),('ASML.AS','ASML','Technology','sample extension'),
+      ('ASMLX','ASML vendor-mapped','Technology','sample extension') ON CONFLICT (ticker) DO NOTHING`);
+    await pool.query(`INSERT INTO instrument_ids(ticker,instrument_type,vendor_symbols,valid_from)
+      VALUES ('ASMLX','equity','{"eodhd":"ASML.AS"}'::jsonb,'2020-01-01')`);
+    await pool.query(`INSERT INTO index_components(index_symbol,as_of,code,exchange) VALUES
+      ('GDAXI.INDX','2026-11-12','SAP','XETRA'),('GDAXI.INDX','2026-11-12','ASML','AS'),('GDAXI.INDX','2026-11-12','SAP2',NULL)`);
+    const list = await indexComponentFacts("GDAXI.INDX", "2026-11-12", pool);
+    expect(list.rows.map((row) => [row.code, row.ticker]).sort()).toEqual([["ASML", "ASMLX"], ["SAP", null], ["SAP2", null]]);
+    await pool.query("UPDATE instrument_ids SET valid_to='2026-01-01' WHERE ticker='ASMLX'");
+    expect((await indexComponentFacts("GDAXI.INDX", "2026-11-12", pool)).rows.find((row) => row.code === "ASML")?.ticker).toBe("ASML.AS");
+  }), 60_000);
+
+  it("stores General and constituents with provenance, records empty lists, respects the budget and logs calls", () => withDb(async (pool) => {
+    let calls = 0;
+    const requests: string[] = [];
+    const bodies: Record<string, unknown> = { "GSPC.INDX": GSPC, "NDX.INDX": GSPC, "DJI.INDX": GSPC, "VIX.INDX": VIX, "GDAXI.INDX": GDAXI };
+    const api = { fundamentals: async <T>(symbol: string, filter?: string) => {
+      calls += 10; requests.push(`${symbol}:${filter}`);
+      return (bodies[symbol] ?? []) as T;
+    }, getCallCosts: () => ({ fundamentals: calls }) };
+    const options = parseIndexFundamentalsArgs(["--max-calls", "50"], {});
+    const result = await runIndexFundamentals(pool, api, options, "2026-11-15");
+    expect(result).toMatchObject({ due: 25, estimatedCalls: 250, budget: 50, refreshed: 4, empty: 1, capped: 20, components: 7, weighted: 6, calls: 50, failures: 0 });
+    expect(requests).toEqual(["GSPC.INDX", "NDX.INDX", "DJI.INDX", "VIX.INDX", "GDAXI.INDX"].map((symbol) => `${symbol}:${SNAPSHOT_FILTER}`));
+    expect(await latestIndexSnapshot("GSPC.INDX", pool)).toMatchObject({
+      asOf: "2026-11-15", name: "S&P 500 Index", currency: "USD", country: "USA", componentCount: 2, weightedCount: 2,
+      sourceId: "eodhd", displayAllowed: false, general: { Code: "GSPC", CurrencyCode: "USD" },
+    });
+    expect((await latestIndexSnapshot("GSPC.INDX", pool))?.weightSum).toBeCloseTo(0.0702);
+    expect(await latestIndexSnapshot("GDAXI.INDX", pool)).toMatchObject({ componentCount: 1, weightedCount: 0, weightSum: null });
+    expect(await latestIndexSnapshot("VIX.INDX", pool)).toMatchObject({ componentCount: 0, name: "CBOE Volatility Index" });
+    expect((await indexComponents("GSPC.INDX", pool)).rows.map((row) => [row.code, row.weight])).toEqual([["AAPL", 0.07], ["AIZ", 0.0002]]);
+    const refresh = (await pool.query("SELECT index_symbol,status,component_count FROM index_snapshot_refresh ORDER BY index_symbol")).rows;
+    expect(refresh).toContainEqual({ index_symbol: "VIX.INDX", status: "empty", component_count: 0 });
+    expect((await pool.query("SELECT calls FROM eodhd_call_log WHERE job='eodhd-index-fundamentals'")).rows).toEqual([{ calls: 50 }]);
+
+    // A second run the same week asks only for the indices the budget skipped, oldest attempt first.
+    requests.length = 0; calls = 0;
+    const again = await runIndexFundamentals(pool, api, parseIndexFundamentalsArgs(["--max-calls", "10"], {}), "2026-11-15");
+    expect(again).toMatchObject({ due: 20, refreshed: 0, empty: 1, capped: 19 });
+    expect(requests).toEqual([`FCHI.INDX:${SNAPSHOT_FILTER}`]);
+    // A rerun of the same day is idempotent: one snapshot row per index and day.
+    await runIndexFundamentals(pool, api, parseIndexFundamentalsArgs(["--only", "GSPC.INDX", "--stale-days", "1"], {}), "2026-11-16");
+    await runIndexFundamentals(pool, api, parseIndexFundamentalsArgs(["--only", "GSPC.INDX", "--stale-days", "1"], {}), "2026-11-17");
+    expect((await pool.query("SELECT count(*)::int AS n FROM index_snapshots WHERE index_symbol='GSPC.INDX'")).rows[0]).toEqual({ n: 3 });
+  }), 60_000);
+
+  it("stops on a rate limit without recording an attempt, so the index stays due", () => withDb(async (pool) => {
+    let requests = 0;
+    const api = { fundamentals: async () => { requests++; throw new EodhdHttpError(429, "fundamentals"); }, getCallCosts: () => ({ fundamentals: 10 * requests }) };
+    const result = await runIndexFundamentals(pool, api, parseIndexFundamentalsArgs([], {}), "2026-11-15");
+    expect(result).toMatchObject({ due: 25, failures: 1, failedSymbols: "GSPC.INDX", refreshed: 0, capped: 24, calls: 10 });
+    expect(requests).toBe(1);
+    expect((await pool.query("SELECT count(*)::int AS n FROM index_snapshot_refresh")).rows[0]).toEqual({ n: 0 });
+    expect((await runIndexFundamentals(pool, null, parseIndexFundamentalsArgs(["--dry-run"], {}), "2026-11-15")).due).toBe(25);
+  }), 60_000);
+
+  it("records a failed attempt, stops on an access error and makes no requests on a dry run", () => withDb(async (pool) => {
+    const api = { fundamentals: async () => { throw new EodhdHttpError(403, "fundamentals"); }, getCallCosts: () => ({ fundamentals: 10 }) };
+    const result = await runIndexFundamentals(pool, api, parseIndexFundamentalsArgs([], {}), "2026-11-15");
+    expect(result).toMatchObject({ failures: 1, failedSymbols: "GSPC.INDX", refreshed: 0 });
+    expect((await pool.query("SELECT status FROM index_snapshot_refresh WHERE index_symbol='GSPC.INDX'")).rows).toEqual([{ status: "failed" }]);
+    expect((await pool.query("SELECT count(*)::int AS n FROM index_snapshots")).rows[0]).toEqual({ n: 0 });
+    const dry = await runIndexFundamentals(pool, null, parseIndexFundamentalsArgs(["--dry-run"], {}), "2026-11-15");
+    expect(dry).toMatchObject({ due: 24, estimatedCalls: 240, calls: 0 });
+  }), 60_000);
+});
