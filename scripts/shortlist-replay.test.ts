@@ -72,6 +72,11 @@ describe("shortlist replay", () => {
     expect(sql.some((text) => /\b(INSERT|UPDATE|DELETE|TRUNCATE|ALTER|CREATE)\b/i.test(text))).toBe(false);
   });
 
+  it("skips a stored sample snapshot", async () => {
+    const { db } = fakeDb({ asOf: "2026-11-07", weights: [{ symbol: "NVDA", weightPercent: 100 }], sample: true } as never);
+    expect(await runReplay(db, parseArgs([]))).toContain("| 2026-11-10 | 1 | none | no lens |");
+  });
+
   it("formats an empty replay", () => {
     expect(formatReplay([])).toContain("| Date | Scored |");
   });

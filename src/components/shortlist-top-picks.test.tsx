@@ -75,6 +75,15 @@ describe("top picks block", () => {
     expect(html).toContain('data-lens-summary="off"');
   });
 
+  it("labels an Other name with its true weight and no cap", () => {
+    const other = { asOf: "2026-11-13", holdings: [{ symbol: "BANK", weightPercent: 40, theme: "other" as const, sector: "Financial Services" as const }, { symbol: "NVDA", weightPercent: 60, theme: "ai-semis" as const, sector: "Technology" as const }] };
+    const rows = [row(1, "INS", "other", "Financial Services")];
+    const data = { ...base, shortlist: { ...base.shortlist, kept: rows }, lens: applyModelLens(rows, other), exactWeights: false };
+    const plain = text(renderToStaticMarkup(<ShortlistTopPicks locale="en" data={data} limit={6} variant="dashboard" />));
+    expect(plain).toContain("Other: 40% of the model portfolio, a mixed group with no cap");
+    expect(plain).not.toContain("cap 25%");
+  });
+
   it("shows exact weights to the owner", () => {
     const html = renderToStaticMarkup(<ShortlistTopPicks locale="en" data={{ ...base, lens: applyModelLens(kept, model), exactWeights: true }} limit={6} variant="dashboard" />);
     expect(text(html)).toContain("Model portfolio: 45.4% AI and semiconductors and 34.4% Cybersecurity.");

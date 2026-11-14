@@ -1,8 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ruleGroups } from "@/i18n/rules";
 import type { StoreRow } from "./store";
 import type { Viewer } from "@/viewer/viewer";
-import { evidencedPoints, modelHoldings, quoteCurrency, shortlistAccess, shortlistInputs, shortlistTopN, shortlistViewEnabled } from "./shortlist";
+import { evidencedPoints, modelHoldings, readModelPortfolio, quoteCurrency, shortlistAccess, shortlistInputs, shortlistTopN, shortlistViewEnabled } from "./shortlist";
 
 const hits = (...met: string[]) => ruleGroups.flatMap((group) => group.rules).map((rule) => ({ id: rule.id, label: rule.id, detail: "", points: rule.points, matched: met.includes(rule.id), unknown: rule.id === "catalyst" }));
 const setupHits = hits("revenue-acceleration", "earnings", "above-ma", "uptrend", "green-volume", "dip");
@@ -81,6 +81,41 @@ describe("model portfolio", () => {
 
   it("uses the listing label when no facts were read", () => {
     expect(modelHoldings({ weights: [{ symbol: "NVDA", weightPercent: 34 }] }, new Map(), () => "AI & semiconductors")[0]).toMatchObject({ theme: "ai-semis", sector: "Technology" });
+  });
+
+  /** Fake read-only client: the snapshot query returns `snapshot`; the classification query returns `facts` or throws. */
+  const fakeDb = (snapshot: Record<string, unknown> | null, facts: "ok" | "fail" = "ok") => {
+    const sql: string[] = [];
+    return { sql, db: { query: async (text: string) => {
+      sql.push(text);
+      if (text.includes("FROM portfolio_snapshots")) return { rows: snapshot ? [{ snapshot }] : [] };
+      if (facts === "fail") throw new Error("classification read failed");
+      return { rows: [{ ticker: "SNOW", instrument_sector: "Cloud & SaaS", vendor_sector: "Technology", vendor_industry: "Software - Application", currency: "USD" }] };
+    } } as never };
+  };
+  const real = { asOf: "2026-11-13", publishOn: "2026-11-16", sample: false, weights: [{ symbol: "SNOW", weightPercent: 100 }], series: [] };
+
+  it("reads the newest stored snapshot for the owner and the newest published one for everyone else", async () => {
+    const owner = fakeDb(real);
+    expect(await readModelPortfolio(owner.db, "owner", "2026-11-14")).toEqual({ asOf: "2026-11-13", holdings: [{ symbol: "SNOW", weightPercent: 100, theme: "cloud-software", sector: "Technology" }] });
+    expect(owner.sql[0]).not.toContain("publish_on");
+    const visitor = fakeDb(real);
+    await readModelPortfolio(visitor.db, "public", "2026-11-14");
+    expect(visitor.sql[0]).toContain("publish_on <= $1");
+  });
+
+  it("skips a stored sample snapshot, as latestPortfolio does", async () => {
+    const { db, sql } = fakeDb({ ...real, sample: true });
+    expect(await readModelPortfolio(db, "owner", "2026-11-14")).toBeNull();
+    expect(sql.some((text) => text.includes("FROM instruments"))).toBe(false);
+  });
+
+  it("throws and logs when the classification read fails, so the lens is switched off", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      await expect(readModelPortfolio(fakeDb(real, "fail").db, "public", "2026-11-14")).rejects.toThrow("classification read failed");
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("model_lens_read_failed"));
+    } finally { warn.mockRestore(); }
   });
 
   it("reads SHORTLIST_TOP_N with a default of 6", () => {

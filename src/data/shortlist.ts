@@ -127,10 +127,29 @@ export const latestShortlist = cache(webCached(latestShortlistUncached, "latest-
 /** Names in the top picks block: SHORTLIST_TOP_N within the config bounds, default 6. */
 export const shortlistTopN = (env: Record<string, string | undefined> = process.env): number => topNFrom(env.SHORTLIST_TOP_N);
 
+type Query = Parameters<typeof readListingFacts>[0];
+
 /**
  * Model portfolio from the stored IBKR Flex snapshot (portfolio_snapshots, weights only). The owner gets the newest stored snapshot;
- * everyone else the newest published one, the same snapshot the public portfolio page shows. Read only. Null when none is stored.
+ * everyone else the newest published one, the same snapshot the public portfolio page shows. A stored sample snapshot is skipped,
+ * as in `latestPortfolio`. Read only. Null when no real snapshot is stored. A failed read throws, so the lens is switched off for
+ * that request (the shortlist order stays) instead of running with every holding Unknown; the failure is logged.
  */
+export async function readModelPortfolio(db: Query, audience: "owner" | "public", today: string): Promise<ModelPortfolio | null> {
+  try {
+    const result = await db.query<{ snapshot: PortfolioSnapshot }>(audience === "owner"
+      ? "SELECT snapshot FROM portfolio_snapshots ORDER BY as_of DESC LIMIT 1"
+      : "SELECT snapshot FROM portfolio_snapshots WHERE publish_on <= $1 ORDER BY as_of DESC LIMIT 1", audience === "owner" ? [] : [today]);
+    const snapshot = result.rows[0]?.snapshot;
+    if (!snapshot?.weights?.length || snapshot.sample) return null;
+    const facts = await readListingFacts(db, snapshot.weights.map((w) => w.symbol), snapshot.asOf);
+    return { asOf: snapshot.asOf, holdings: modelHoldings(snapshot, facts) };
+  } catch (error) {
+    console.warn(JSON.stringify({ event: "model_lens_read_failed", audience, error: error instanceof Error ? error.name : "unknown" }));
+    throw error;
+  }
+}
+
 async function modelPortfolioUncached(audience: "owner" | "public"): Promise<ModelPortfolio | null> {
   if (process.env.DATA_MODE === "fixture") {
     const scores = await latestScores();
@@ -138,22 +157,12 @@ async function modelPortfolioUncached(audience: "owner" | "public"): Promise<Mod
     return { asOf: samplePortfolio.asOf, holdings: modelHoldings(samplePortfolio, new Map(), (symbol) => listing.get(symbol) ?? null) };
   }
   const db = getPool();
-  if (!db) return null;
-  try {
-    const today = new Date().toISOString().slice(0, 10);
-    const result = await db.query<{ snapshot: PortfolioSnapshot }>(audience === "owner"
-      ? "SELECT snapshot FROM portfolio_snapshots ORDER BY as_of DESC LIMIT 1"
-      : "SELECT snapshot FROM portfolio_snapshots WHERE publish_on <= $1 ORDER BY as_of DESC LIMIT 1", audience === "owner" ? [] : [today]);
-    const snapshot = result.rows[0]?.snapshot;
-    if (!snapshot?.weights?.length) return null;
-    const facts = await readListingFacts(db, snapshot.weights.map((w) => w.symbol), snapshot.asOf).catch(() => new Map<string, ListingFacts>());
-    return { asOf: snapshot.asOf, holdings: modelHoldings(snapshot, facts) };
-  } catch { return null; }
+  return db ? readModelPortfolio(db, audience, new Date().toISOString().slice(0, 10)) : null;
 }
 
 export const latestModelPortfolio = cache(webCached(modelPortfolioUncached, "model-portfolio", [CACHE_TAGS.portfolio], { bypass: () => !getPool() }));
 
-/** The shortlist with the model portfolio lens for this viewer. Without a snapshot the lens is null and the order stays. */
+/** The shortlist with the model portfolio lens for this viewer. Without a snapshot, or when the read fails, the lens is null and the order stays. */
 export async function withModelLens(data: ShortlistData, viewer: Viewer): Promise<ShortlistData> {
   const owner = isOwner(viewer) && !viewer.preview;
   const model = await latestModelPortfolio(owner ? "owner" : "public").catch(() => null);

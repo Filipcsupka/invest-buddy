@@ -62,11 +62,11 @@ export async function scoreRowsOn(db: Query, asOf: string): Promise<StoreRow[]> 
   return result.rows.map((row) => ({ instrument: { ticker: row.ticker, name: row.name, sector: row.sector, tier: row.tier, source: row.source, list: row.list }, result: row.audit }));
 }
 
-/** The newest stored portfolio snapshot on or before the date, with theme and sector group per holding. Null when none is stored. */
+/** The newest stored portfolio snapshot on or before the date, with theme and sector group per holding. Null when none is stored or it is a sample. */
 export async function modelPortfolioOn(db: Query, asOf: string): Promise<ModelPortfolio | null> {
   const result = await db.query<{ snapshot: PortfolioSnapshot }>("SELECT snapshot FROM portfolio_snapshots WHERE as_of <= $1::date ORDER BY as_of DESC LIMIT 1", [asOf]);
   const snapshot = result.rows[0]?.snapshot;
-  if (!snapshot?.weights?.length) return null;
+  if (!snapshot?.weights?.length || snapshot.sample) return null;
   const facts = await readListingFacts(db, snapshot.weights.map((w) => w.symbol), snapshot.asOf);
   return { asOf: snapshot.asOf, holdings: modelHoldings(snapshot, facts) };
 }

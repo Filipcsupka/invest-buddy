@@ -26,8 +26,11 @@ export interface WeightShare<K extends string> {
 }
 export interface ModelWeights { asOf: string; holdings: number; themes: WeightShare<Theme>[]; sectors: WeightShare<SectorGroup>[]; themeCapPercent: number; sectorGroupCapPercent: number }
 
-/** new: the model has none of the theme; below: at or under the cap; over: above the cap; unknown: no theme for the name. */
-export type LensStatus = "new" | "below" | "over" | "unknown";
+/**
+ * new: the model has none of the theme; below: at or under the cap; over: above the cap; uncapped: the name is in "other", a mixed
+ * bucket with no cap whatever its weight; unknown: no theme for the name.
+ */
+export type LensStatus = "new" | "below" | "over" | "uncapped" | "unknown";
 export interface RowLens { status: LensStatus; themeWeightPercent: number; sectorWeightPercent: number; sectorOverCap: boolean }
 export interface LensedRow extends ShortlistRow {
   /** Rank before the lens moved anything. */
@@ -81,7 +84,7 @@ export function rowLens(row: Pick<ShortlistRow, "theme" | "sector">, weights: Mo
   const theme = weights.themes.find((share) => share.key === row.theme);
   const sector = weights.sectors.find((share) => share.key === row.sector);
   const themeWeightPercent = theme?.weightPercent ?? 0;
-  const status: LensStatus = row.theme === "unknown" ? "unknown" : theme?.overCap ? "over" : themeWeightPercent > 0 ? "below" : "new";
+  const status: LensStatus = row.theme === "unknown" ? "unknown" : row.theme === "other" ? "uncapped" : theme?.overCap ? "over" : themeWeightPercent > 0 ? "below" : "new";
   return { status, themeWeightPercent, sectorWeightPercent: sector?.weightPercent ?? 0, sectorOverCap: sector?.overCap ?? false };
 }
 

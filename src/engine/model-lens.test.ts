@@ -68,6 +68,16 @@ describe("row lens", () => {
     expect(rowLens({ theme: "ai-semis", sector: "Technology" }, weights)).toMatchObject({ status: "over", sectorOverCap: true });
     expect(rowLens({ theme: "unknown", sector: "Unknown" }, weights).status).toBe("unknown");
   });
+  it("labels a name in an above-25% Other bucket as uncapped, never below the cap, and does not move it", () => {
+    counter = 0;
+    const heavyOther: ModelPortfolio = { asOf: "2026-11-13", holdings: [holding("BANK", 40, "other", "Financial Services"), holding("NVDA", 60, "ai-semis", "Technology")] };
+    const w = modelWeights(heavyOther)!;
+    expect(rowLens({ theme: "other", sector: "Financial Services" }, w)).toMatchObject({ status: "uncapped", themeWeightPercent: 40 });
+    const lens = applyModelLens(ranked([row("CHIP", "ai-semis"), row("INS", "other", "Financial Services")]), heavyOther)!;
+    expect(lens.rows.map((r) => [r.ticker, r.lens?.status])).toEqual([["INS", "uncapped"], ["CHIP", "over"]]);
+    expect(widenedThemes(lens.rows)).toEqual([]);
+  });
+
   it("notes a sector group above its cap without changing the theme status", () => {
     expect(rowLens({ theme: "robotics", sector: "Technology" }, weights)).toMatchObject({ status: "below", sectorOverCap: true });
   });
