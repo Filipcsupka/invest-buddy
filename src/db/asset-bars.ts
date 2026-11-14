@@ -28,7 +28,7 @@ export async function upsertAssetBars(db: Pick<pg.Pool, "query">, asset: Tracked
   return saved;
 }
 
-export async function logEodhdCalls(db: Pick<pg.Pool, "query">, job: string, calls: number): Promise<void> {
+export async function logEodhdCalls(db: Pick<pg.Pool, "query">, job: string, calls: number, cumulative = false): Promise<void> {
   await db.query(`INSERT INTO eodhd_call_log (job,run_date,calls) VALUES ($1,CURRENT_DATE,$2)
-    ON CONFLICT (job,run_date) DO UPDATE SET calls=eodhd_call_log.calls+EXCLUDED.calls`, [job, calls]);
+    ON CONFLICT (job,run_date) DO UPDATE SET calls=${cumulative ? "GREATEST(eodhd_call_log.calls,EXCLUDED.calls)" : "eodhd_call_log.calls+EXCLUDED.calls"}`, [job, calls]);
 }

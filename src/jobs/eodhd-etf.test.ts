@@ -8,11 +8,11 @@ import { ETF_DETAIL_FILTER, etfJobName, missedWeekday, parseEtfJobArgs, runEtfJo
 
 type Due = { listing_key: string; vendor_symbol: string; isin: string | null; currency: string | null; exchange: string; detail_fresh: boolean; last_bar_date: string | null; last_close: number | null; last_dividend_date: string | null };
 const row = (over: Partial<Due> = {}): Due => ({ listing_key: "NYSEARCA:SPY", vendor_symbol: "SPY.US", isin: "US78462F1030", currency: "USD", exchange: "US", detail_fresh: false, last_bar_date: null, last_close: null, last_dividend_date: null, ...over });
-function fakeDb(due: Due[], candidates = due.length, callsToday = 0) {
+function fakeDb(due: Due[], candidates = due.length, callsToday: number | { job: string; calls: number }[] = 0) {
   const writes: string[] = []; const selects: string[] = [];
   const query = async (sql: string, params: unknown[] = []) => {
     if (sql.includes("WITH resolved AS")) return { rows: Array.from({ length: candidates }, (_, i) => ({ listing_key: `K${i}`, vendor_symbol: `E${i}.US`, name: `Fund ${i}`, currency: "USD", exchange: "US", rank: i + 1 })) };
-    if (sql.includes("FROM eodhd_call_log WHERE run_date")) return { rows: [{ calls: String(callsToday) }] };
+    if (sql.includes("FROM eodhd_call_log WHERE run_date")) return { rows: [{ calls: String(Array.isArray(callsToday) ? callsToday.reduce((sum, row) => sum + row.calls, 0) : callsToday) }] };
     if (sql.includes("count(*)::text AS n FROM etf_tracked")) return { rows: [{ n: String(due.length) }] };
     if (sql.includes("FROM etf_tracked t JOIN etf_catalog")) { selects.push(String(params[0])); return { rows: due.slice(0, Number(params[1]) || due.length) }; }
     if (/^\s*(INSERT|UPDATE|DELETE|BEGIN|COMMIT|ROLLBACK)/.test(sql)) writes.push(sql.trim().split(/\s+/).slice(0, 3).join(" "));
@@ -111,6 +111,14 @@ describe("runEtfJob", () => {
     const result = await runEtfJob(db, api, parseEtfJobArgs(["--mode", "dividends"], {}), "2026-11-06");
     expect(result).toMatchObject({ accountCallsToday: 69_999, cap: 1, calls: 1, processed: 1, deferred: 1 });
     expect(seen).toHaveLength(1);
+  });
+
+  it("counts ETF enrich rows against the shared account budget", async () => {
+    const rows = [{ job: "eodhd-etf", calls: 69_980 }, { job: "etf-enrich", calls: 20 }];
+    const { db } = fakeDb([row()], 1, rows); const { api, seen } = fakeApi();
+    const result = await runEtfJob(db, api, parseEtfJobArgs(["--mode", "dividends"], {}), "2026-11-06");
+    expect(result).toMatchObject({ accountCallsToday: 70_000, cap: 0, calls: 0, processed: 0, deferred: 1 });
+    expect(seen).toHaveLength(0);
   });
 
   it("finds a missed weekday but not a weekend", () => {

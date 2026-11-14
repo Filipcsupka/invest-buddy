@@ -17,9 +17,13 @@ test("enrichment schema requires every listing and an HTTPS source", () => {
 });
 
 test("failed enrichment batch leaves it pending and later batch posts", async () => {
-  const outDir = mkdtempSync(join(tmpdir(), "etf-enrich-test-")); let vendorCalls = 0; const posts = [];
+  const outDir = mkdtempSync(join(tmpdir(), "etf-enrich-test-")); let vendorCalls = 0; const posts = []; const reports = [];
   const items = Array.from({ length: 21 }, (_, i) => ({ ...first, listingKey: `NYSEARCA:E${i}`, symbol: `E${i}` }));
   const request = async (url, init = {}) => {
+    if (String(url).endsWith("/calls")) {
+      if (init.method === "POST") { reports.push(JSON.parse(init.body).totalCalls); return { ok: true }; }
+      return { ok: true, json: async () => ({ accountCallsToday: 0, enrichCallsToday: 0, accountBudget: 70000 }) };
+    }
     if (init.method === "POST") { (String(url).endsWith("/etf-detail") ? details : posts).push(JSON.parse(init.body)); return { ok: true }; }
     if (String(url).includes("/pending?")) return { ok: true, json: async () => ({ items }) };
     return ++vendorCalls === 1 ? { ok: false, status: 500 } : { ok: true, json: async () => fixture };
@@ -34,12 +38,15 @@ test("failed enrichment batch leaves it pending and later batch posts", async ()
     assert.equal(details.length, 1);
     assert.deepEqual(Object.keys(details[0]), ["listingKey", "vendorSymbol", "data"]);
     assert.equal(details[0].vendorSymbol, "E20.US");
+    assert.deepEqual(reports, [10, 20]);
   } finally { rmSync(outDir, { recursive: true, force: true }); }
 });
 
 test("a missing EODHD key fails the batch without an ingest write", async () => {
   const outDir = mkdtempSync(join(tmpdir(), "etf-enrich-test-")); const posts = [];
-  const request = async (url, init = {}) => init.method === "POST" ? (posts.push(init.body), { ok: true }) : { ok: true, json: async () => ({ items: [first] }) };
+  const request = async (url, init = {}) => String(url).endsWith("/calls")
+    ? { ok: true, json: async () => ({ accountCallsToday: 0, enrichCallsToday: 0, accountBudget: 70000 }) }
+    : init.method === "POST" ? (posts.push(init.body), { ok: true }) : { ok: true, json: async () => ({ items: [first] }) };
   try {
     const result = await execute(parseArgs(["--out-dir", outDir]), { env: { INGEST_TOKEN: "test" }, request, log: () => {} });
     assert.deepEqual(result, { batches: 1, failed: 1, calls: 0, budget: 15000, estimatedCalls: 10, deferred: 0 });
@@ -73,6 +80,7 @@ test("daily call budget stops at unique symbols and leaves remaining rows pendin
   const items = Array.from({ length: 5 }, (_, i) => ({ ...first, listingKey: `NYSEARCA:E${i}`, symbol: `E${i}` }));
   const request = async (url, init = {}) => {
     urls.push(String(url));
+    if (String(url).endsWith("/calls")) return init.method === "POST" ? { ok: true } : { ok: true, json: async () => ({ accountCallsToday: 0, enrichCallsToday: 0, accountBudget: 70000 }) };
     if (String(url).includes("/pending?")) return { ok: true, json: async () => ({ items }) };
     if (init.method === "POST") return { ok: true };
     return { ok: true, json: async () => fixture };
@@ -82,5 +90,31 @@ test("daily call budget stops at unique symbols and leaves remaining rows pendin
     const result = await execute(opts, { env: { INGEST_TOKEN: "test", EODHD_API_KEY: "test", ETF_EODHD_DAILY_CALL_BUDGET: "20" }, request, log: () => {} });
     assert.deepEqual(result, { batches: 1, failed: 0, calls: 20, budget: 20, estimatedCalls: 20, deferred: 3 });
     assert.equal(urls.filter((url) => url.includes("eodhd.com")).length, 2);
+  } finally { rmSync(outDir, { recursive: true, force: true }); }
+});
+
+test("account budget limits enrich and an exhausted account sends no vendor requests", async () => {
+  const outDir = mkdtempSync(join(tmpdir(), "etf-enrich-account-"));
+  const items = Array.from({ length: 3 }, (_, i) => ({ ...first, listingKey: `NYSEARCA:E${i}`, symbol: `E${i}` }));
+  let remaining = 10; const vendorUrls = []; const reports = [];
+  const request = async (url, init = {}) => {
+    if (String(url).endsWith("/calls")) {
+      if (init.method === "POST") { reports.push(JSON.parse(init.body).totalCalls); return { ok: true }; }
+      return { ok: true, json: async () => ({ accountCallsToday: 70_000 - remaining, enrichCallsToday: 50, accountBudget: 70_000 }) };
+    }
+    if (String(url).includes("/pending?")) return { ok: true, json: async () => ({ items }) };
+    if (init.method === "POST") return { ok: true };
+    vendorUrls.push(String(url)); return { ok: true, json: async () => fixture };
+  };
+  try {
+    const opts = parseArgs(["--limit", "3", "--out-dir", outDir]);
+    const firstRun = await execute(opts, { env: { INGEST_TOKEN: "test", EODHD_API_KEY: "test" }, request, log: () => {} });
+    assert.deepEqual(firstRun, { batches: 1, failed: 0, calls: 10, budget: 10, estimatedCalls: 10, deferred: 2 });
+    assert.deepEqual(reports, [60]);
+    remaining = 0;
+    const secondRun = await execute(opts, { env: { INGEST_TOKEN: "test", EODHD_API_KEY: "test" }, request, log: () => {} });
+    assert.deepEqual(secondRun, { batches: 0, failed: 0, calls: 0, budget: 0, estimatedCalls: 0, deferred: 3 });
+    assert.equal(vendorUrls.length, 1);
+    assert.deepEqual(reports, [60]);
   } finally { rmSync(outDir, { recursive: true, force: true }); }
 });
