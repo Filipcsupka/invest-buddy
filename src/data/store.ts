@@ -14,6 +14,11 @@ import { PostgresNavHistoryRepository } from "../db/portfolio-history";
 import { buildIndexedSeries, type IndexedSeries } from "../portfolio/history";
 import { score } from "../engine";
 import { fixtureProvider } from "./fixtures";
+import { ruleStreaks } from "../db/rules-streak";
+import { publicHorizons } from "./public-horizons";
+import { latestShareCounts } from "./flag-facts";
+import { latestShortlist, latestModelPortfolio, shortlistViewEnabled } from "./shortlist";
+import { assembleCrossMarket, latestCrossMarketData, latestPeriodPrices } from "./cross-market-dashboard";
 
 export interface StoreRow { instrument: Instrument; result: ScoreResult }
 export interface StoreData<T> { rows: T; sample: boolean; lastUpdated: string | null; stale: boolean }
@@ -128,13 +133,30 @@ export const scoreHistory = cache(webCached(scoreHistoryUncached, "score-history
 export const latestPortfolio = cache(webCached(latestPortfolioUncached, "latest-portfolio", [CACHE_TAGS.portfolio], { bypass: noPool }));
 
 /**
- * Fills the hot listing caches at server start (instrumentation). Fire and forget: never throws, never blocks readiness.
+ * Fills shared page caches at server start (instrumentation). Fire and forget: never throws, never blocks readiness.
  * Per-ticker reads (company page, dataset freshness) fill on first visit; warming 500 of them would delay the listing reads.
  */
 export async function warmWebCaches(): Promise<void> {
   if (fixtureMode() || noPool()) return;
   const started = Date.now();
-  const results = await Promise.allSettled([latestScores(), instrumentUniverse(), latestPortfolio()]);
+  const scores = latestScores();
+  const shortlist = latestShortlist();
+  const market = latestCrossMarketData();
+  const periodPrices = Promise.all([shortlist, market]).then(([list, crossMarket]) => {
+    const structure = assembleCrossMarket(shortlistViewEnabled() ? list : null, crossMarket.funds, crossMarket.indices, crossMarket.sample);
+    const seenIndices = new Set<string>();
+    const symbols = [...crossMarket.funds].sort((a, b) => b.scorePercent - a.scorePercent || a.key.localeCompare(b.key))
+      .filter((fund) => {
+        const index = fund.trackedIndex?.trim().toLowerCase();
+        if (!index) return true;
+        if (seenIndices.has(index)) return false;
+        seenIndices.add(index);
+        return true;
+      }).slice(0, 5).flatMap((fund) => fund.vendorSymbol ? [fund.vendorSymbol] : []);
+    return latestPeriodPrices(structure.stocks.map((stock) => stock.ticker), symbols);
+  });
+  const results = await Promise.allSettled([scores, instrumentUniverse(), latestPortfolio(), ruleStreaks(), publicHorizons(), shortlist,
+    scores.then((data) => latestShareCounts(data.rows.map((row) => row.instrument.ticker))), latestModelPortfolio("public"), latestModelPortfolio("owner"), market, periodPrices]);
   const failed = results.filter((result) => result.status === "rejected").length;
   console.log(JSON.stringify({ event: "web_cache_warm", durationMs: Date.now() - started, failed }));
 }
