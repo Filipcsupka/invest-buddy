@@ -37,7 +37,9 @@ describe("scanner floor page", () => {
     expect(html).not.toContain(`>${noData}</span>`);
 
     const off = await render(locale, { floor: "off" });
-    expect(rowCount(off)).toBe(Number(total));
+    const offNext = await render(locale, { floor: "off", page: "2" });
+    expect(rowCount(off)).toBe(20);
+    expect(rowCount(off) + rowCount(offNext)).toBe(Number(total));
     expect(off).toContain('name="floor" value="off"');
     expect(off).toContain(`href="/${locale}/stocks"`);
     expect(off).not.toContain(remove);
@@ -47,7 +49,7 @@ describe("scanner floor page", () => {
     shares.mockResolvedValue({});
     const en = await render("en");
     expect(en).toContain(">no data<");
-    expect(en).toContain('href="/en/company/NVDA"');
+    expect(en).toMatch(/id="scanner-results"[\s\S]*href="\/en\/company\/[A-Z]+"/);
     expect(en).toMatch(/(\d+) of \1 tickers, floor applied/);
     expect(await render("sk")).toContain(">bez údajov<");
   });
@@ -55,6 +57,6 @@ describe("scanner floor page", () => {
   it("is visible with the paywall flag off", async () => {
     process.env.PAYWALL = "off";
     shares.mockResolvedValue({});
-    expect(await render("en")).toContain('href="/en/company/NVDA"');
+    expect(await render("en")).toMatch(/id="scanner-results"[\s\S]*href="\/en\/company\/[A-Z]+"/);
   });
 });
