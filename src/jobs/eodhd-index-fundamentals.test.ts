@@ -131,8 +131,10 @@ describe("index fundamentals job (PGlite)", () => {
     expect(again).toMatchObject({ due: 20, refreshed: 0, empty: 1, capped: 19 });
     expect(requests).toEqual([`FCHI.INDX:${SNAPSHOT_FILTER}`]);
     // A rerun of the same day is idempotent: one snapshot row per index and day.
-    await runIndexFundamentals(pool, api, parseIndexFundamentalsArgs(["--only", "GSPC.INDX", "--stale-days", "1"], {}), "2026-11-16");
-    await runIndexFundamentals(pool, api, parseIndexFundamentalsArgs(["--only", "GSPC.INDX", "--stale-days", "1"], {}), "2026-11-17");
+    // attempted_at comes from the database clock, so the follow-up runs use days after the real current date.
+    const day = (offset: number) => new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
+    await runIndexFundamentals(pool, api, parseIndexFundamentalsArgs(["--only", "GSPC.INDX", "--stale-days", "1"], {}), day(1));
+    await runIndexFundamentals(pool, api, parseIndexFundamentalsArgs(["--only", "GSPC.INDX", "--stale-days", "1"], {}), day(2));
     expect((await pool.query("SELECT count(*)::int AS n FROM index_snapshots WHERE index_symbol='GSPC.INDX'")).rows[0]).toEqual({ n: 3 });
   }), 60_000);
 
