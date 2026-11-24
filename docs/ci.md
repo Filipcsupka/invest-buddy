@@ -8,7 +8,7 @@ GitHub Actions minutes are limited (free allowance used up, capped budget; owner
 | --- | --- | --- |
 | Pull request (code) | Build | `quality` (lint, typecheck, migrate, tests with the runner PostgreSQL, build, `npm audit`, manifest check), `e2e` (Playwright smoke tests, fixture mode, own build), `secret-scan` |
 | Pull request touching `Dockerfile`, `scanner/Dockerfile`, `package.json`, `package-lock.json` or `deploy/` | Build | the above plus `docker-build` (both images, buildx with GHA cache, no push, no scan) |
-| Pull request touching only `docs/*`, `docs/roadmap/**`, root `*.md` or `.github/ISSUE_TEMPLATE/**` | none | workflow skipped |
+| Pull request touching only `docs/*`, `docs/roadmap/**`, root `*.md` or `.github/ISSUE_TEMPLATE/**` | Build | `changes` and `secret-scan` run; `quality` and `e2e` are skipped and count as passed |
 | Pull request touching `package.json` or `package-lock.json` | Security | `dependency-review` (only when `GHAS_ENABLED=true`) |
 | Push to `main` | Build | `quality`, `secret-scan`, then `publish-images` (build once, push `sha-<7>` and `latest`), then `deploy-gitops` (only when `INFRA_BUMP=true`) |
 | Nightly 03:15 UTC, manual | Security | `trivy` on the published `latest` web and scanner images, no rebuild |
@@ -16,7 +16,7 @@ GitHub Actions minutes are limited (free allowance used up, capped budget; owner
 
 Notes:
 - `docs/design` is not skipped because `src/i18n/status-copy.test.ts` reads `docs/design/status-slider.md`.
-- The repository is private on the free plan, so branch protection and required checks are not available (GitHub returns 403). A skipped workflow therefore cannot block a merge. If branch protection is enabled later, a required check from a skipped workflow stays pending; use a path-aware summary job or do not require it.
+- The `main` ruleset requires a pull request with passing `quality`, `e2e`, `docker-build` and `secret-scan`. Every pull request starts Build so those checks always report; the `changes` job skips the heavy jobs on docs-only pull requests.
 - Migration lint (`scripts/migration-lint.ts`) checks only the migration files a PR adds. It fails on a duplicate number, a bad name, DROP TABLE or COLUMN, TRUNCATE, ALTER COLUMN TYPE, `CREATE INDEX CONCURRENTLY` and `CREATE INDEX` without `IF NOT EXISTS`. Gaps and out-of-order numbers are allowed because lanes reserve number ranges.
 - `npm run migration:lint -- --all` reports 47 old `index-if-not-exists` problems by design: those files predate the rule and CI lints only changed files.
 - PR runs cancel earlier runs of the same PR (`cancel-in-progress`).
@@ -27,7 +27,7 @@ Notes:
 - Trivy and the image build were the longest jobs and ran on every PR and every main push. Now images are built once, on main, and PRs only build them when the inputs change.
 - The scan reads the image already pushed to GHCR, so it costs scan time only, once a day.
 - CodeQL runs weekly instead of on every PR and push.
-- Docs-only PRs cost nothing.
+- Docs-only PRs run only the `changes` job and `secret-scan`.
 - Trade-off: a vulnerable base image or dependency can reach `main` and be deployed up to a day before the scan reports it. `npm audit --audit-level=high` still runs in `quality` on every PR.
 
 ## Local security scan (SEC1)
