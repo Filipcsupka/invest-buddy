@@ -9,25 +9,15 @@ import type { AssetSummary } from "@/db/markets";
 import type { IndexPriceAnalytics } from "@/markets/index-analytics";
 import type { IndexListRating } from "@/data/index-list";
 import { day, level, signedRatio } from "./format";
+import type { IndexRegion } from "./index-region";
 import s from "./index-pages.module.css";
 
 export type IndexListRow = {
   summary: AssetSummary;
   price: IndexPriceAnalytics | null;
   rating: IndexListRating | null;
-  region: "americas" | "europe" | "asiaPacific" | "other";
+  region: IndexRegion;
 };
-
-export function indexRegion(code: string, country: string | null): IndexListRow["region"] {
-  const c = (country ?? "").toLowerCase();
-  if (/united states|canada|brazil|mexico|argentina/.test(c)) return "americas";
-  if (/japan|china|hong kong|india|taiwan|korea|australia/.test(c)) return "asiaPacific";
-  if (/germany|france|netherlands|switzerland|spain|united kingdom|europe/.test(c)) return "europe";
-  if (["GSPC", "NDX", "DJI", "DJT", "DJU", "IXIC", "VIX", "GSPTSE", "BVSP", "MXX"].includes(code)) return "americas";
-  if (["GDAXI", "FCHI", "STOXX50E", "AEX", "IBEX", "SSMI", "N100"].includes(code)) return "europe";
-  if (["N225", "AXJO", "BSESN", "HSI", "KS11", "NSEI", "SSEC", "TWII"].includes(code)) return "asiaPacific";
-  return "other";
-}
 
 const pct = (locale: Locale, value: number | null, digits = 0) => value === null ? null : `${formatNumber(locale, value, digits)} %`;
 

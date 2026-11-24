@@ -11,7 +11,8 @@ import { resolveLocale, type LocaleParams } from "@/app/[locale]/locale";
 import { AreaChip } from "@/components/kit";
 import { RecordHead } from "@/components/record-parts";
 import { OperatorDisclosure } from "@/components/operator-disclosure";
-import { IndexList, indexRegion, type IndexListRow } from "./_components/index-list";
+import { IndexList, type IndexListRow } from "./_components/index-list";
+import { indexRegion } from "./_components/index-region";
 import s from "./_components/index-pages.module.css";
 
 export const dynamic = "force-dynamic";
