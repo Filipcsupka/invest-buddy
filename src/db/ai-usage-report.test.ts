@@ -12,6 +12,7 @@ it("counts a rolling five-hour peak, UTC periods, cutoffs, and calls by job and 
   ]);
   expect(report.rolling5hPeak).toEqual({ tokens: 30, endedAt: "2026-10-05T01:00:00.000Z" });
   expect(report.tokensPerDayUtc).toEqual({ "2026-10-04": 10, "2026-10-05": 25 });
+  expect(report.tokensPerDayUtcByKind).toEqual({ extract: { "2026-10-04": 10, "2026-10-05": 25 }, judge: { "2026-10-05": 0 } });
   expect(report.tokensPerIsoWeekUtc).toEqual({ "2026-W40": 10, "2026-W41": 25 });
   expect(report.callsByJobAndModel).toEqual({ "extract/haiku": 3, "judge/sonnet": 1 });
   expect(report.cutoffCount).toBe(1);

@@ -177,4 +177,4 @@ With a configured database and key, `--dry-run` fetches and parses due symbols w
 
 ## Judge gates with stored facts
 
-With `EODHD_PRIVATE_USE=on`, the judge reads stored EODHD facts without waiting for extraction. It takes pending gates oldest first and processes up to 12 symbols per page by default. A successful page removes only its completed symbols from the gate; failed or omitted symbols remain pending. The monthly token cap is checked before each model call, so a run can stop partway through a large gate without closing the remaining work. Without private use, the judge still waits for extraction.
+With `EODHD_PRIVATE_USE=on`, the judge reads stored EODHD facts without waiting for extraction. It takes pending gates oldest first and processes up to 12 symbols per page by default. A successful page removes only its completed symbols from the gate; failed or omitted symbols remain pending. The monthly token cap counts judge and ETF research tokens, not extraction, and is checked before each model call, so a run can stop partway through a large gate without closing the remaining work. Without private use, the judge still waits for extraction.

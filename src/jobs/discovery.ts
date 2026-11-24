@@ -258,6 +258,9 @@ export async function manager13fCandidates(get: (url: string) => Promise<string>
   return result;
 }
 
+/** The move needs 21 sessions (the newest bar and the 20 before it for volume; the price move looks 5 back). 60 calendar days covers them with holidays; a series with fewer bars in that span is too sparse to count as a mover. */
+const MOVER_LOOKBACK_DAYS = 60;
+
 /** Movers come from stored tracked and discovery price bars. The source link is for private review; no third-party price figure is published. */
 export async function moverCandidates(db: Pick<pg.Pool, "query">, date: string): Promise<DiscoveryCandidate[]> {
   const result = await db.query<{ ticker: string; name: string; sector: string; move_pct: number; volume_multiple: number }>(`WITH ranked AS (
@@ -268,14 +271,14 @@ export async function moverCandidates(db: Pick<pg.Pool, "query">, date: string):
       row_number() OVER (PARTITION BY b.ticker ORDER BY b.bar_date DESC) AS rn
     FROM (
       SELECT p.ticker,i.name,i.sector,p.bar_date,p.close,p.volume FROM daily_bars p JOIN instruments i ON i.ticker=p.ticker
-        WHERE p.bar_date <= $1::date AND i.source <> 'benchmark'
+        WHERE p.bar_date <= $1::date AND p.bar_date > $1::date - $2::int AND i.source <> 'benchmark'
       UNION ALL
       SELECT p.symbol AS ticker,p.name,p.sector,p.bar_date,p.close,p.volume FROM discovery_price_bars p
-        WHERE p.bar_date <= $1::date AND NOT EXISTS (SELECT 1 FROM instruments i WHERE i.ticker=p.symbol)
+        WHERE p.bar_date <= $1::date AND p.bar_date > $1::date - $2::int AND NOT EXISTS (SELECT 1 FROM instruments i WHERE i.ticker=p.symbol)
     ) b)
     SELECT ticker,name,sector,((close/NULLIF(close_5,0)-1)*100)::float8 AS move_pct,
       (volume/NULLIF(avg_volume,0))::float8 AS volume_multiple FROM ranked
-    WHERE rn=1 AND close_5 IS NOT NULL AND prior_count >= 20 AND avg_volume > 0`, [date]);
+    WHERE rn=1 AND close_5 IS NOT NULL AND prior_count >= 20 AND avg_volume > 0`, [date, MOVER_LOOKBACK_DAYS]);
   return result.rows.filter((r) => Math.abs(r.move_pct) >= DISCOVERY.priceMovePct && r.volume_multiple >= DISCOVERY.volumeMultiple)
     .map((r) => ({ symbol: r.ticker, name: r.name, sector: r.sector, theme: null, score: 2,
       sources: [{ kind: "price_volume", url: `https://www.nasdaq.com/market-activity/stocks/${r.ticker.toLowerCase()}`, detail: "Stored five-session price and volume move" }] }));

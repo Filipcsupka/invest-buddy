@@ -387,7 +387,7 @@ function mockWeb({ skipDay = false, skipHash = false, inputOverride = null } = {
       seen.auth.push(req.headers.authorization);
       const send = (o, status = 200) => { res.writeHead(status, { "content-type": "application/json" }); res.end(JSON.stringify(o)); };
       if (req.method === "POST" && req.url === "/api/ingest/ideas") { seen.posts.push(JSON.parse(body)); return send({ recorded: true, stored: 1 }); }
-      if (req.method === "GET" && req.url === "/api/ingest/ai-budget") return send({ tokensPerDayUtc: {} });
+      if (req.method === "GET" && req.url === "/api/ingest/ai-budget") return send({ tokensPerDayUtcByKind: {} });
       if (req.method === "POST" && req.url === "/api/ingest/ai-budget") { seen.budgets.push(JSON.parse(body)); return send({ allowed: true }); }
       if (req.url.startsWith("/api/ingest/judge-input")) { seen.gets.push(req.url); return send(inputOverride ?? input()); }
       if (req.url.startsWith("/api/ingest/ideas?")) { seen.gets.push(req.url); return send({ skip: req.url.includes("inputHash") ? skipHash : skipDay }); }
@@ -749,7 +749,7 @@ for (const mode of ["partial", "all-fail", "omitted", "partial-omitted", "hard-e
         const page = url.searchParams.get("symbols").split(",");
         return send(input({ symbols: page.map((symbol) => ctx(symbol, [U1, U2])), signals: page.map((symbol) => sig(symbol)) }));
       }
-      if (url.pathname === "/api/ingest/ai-budget" && req.method === "GET") return send({ tokensPerDayUtc: {} });
+      if (url.pathname === "/api/ingest/ai-budget" && req.method === "GET") return send({ tokensPerDayUtcByKind: {} });
       if (url.pathname === "/api/ingest/ai-budget") return send({ recorded: true });
       if (url.pathname === "/api/ingest/ideas") { posts.push(JSON.parse(body)); return send({ recorded: true, stored: posts.at(-1).ideas.length }); }
       send({ error: "not found" });
@@ -785,7 +785,7 @@ for (const invalid of [false, true]) test(`a failed ideas POST (${invalid ? "all
     if (url.pathname === "/api/ingest/gate" && req.method === "GET") return res.end(JSON.stringify({ asOf: "2026-10-05", symbols: ["NVDA"], reasons: {}, accessions: {}, revision: 1, consumed: false }));
     if (url.pathname === "/api/ingest/gate" && req.method === "POST") consumed = true;
     if (url.pathname === "/api/ingest/judge-input") return res.end(JSON.stringify(input({ symbols: [ctx("NVDA", [U1, U2])], signals: [sig("NVDA")] })));
-    if (url.pathname === "/api/ingest/ai-budget" && req.method === "GET") return res.end(JSON.stringify({ tokensPerDayUtc: {} }));
+    if (url.pathname === "/api/ingest/ai-budget" && req.method === "GET") return res.end(JSON.stringify({ tokensPerDayUtcByKind: {} }));
     if (url.pathname === "/api/ingest/ideas") { res.statusCode = 500; return res.end(JSON.stringify({ error: "unavailable" })); }
     res.end(JSON.stringify({ recorded: true }));
   });
@@ -823,7 +823,7 @@ test("a 69-symbol gate advances one page at a time and stops at the monthly cap"
         requested.push(page);
         return send(input({ symbols: page.map((symbol) => ctx(symbol, [U1, U2])), signals: page.map((symbol) => sig(symbol)), previousIdeas: unchanged ? page.map((symbol) => ({ symbol, signature: sig(symbol).signature })) : [] }));
       }
-      if (url.pathname === "/api/ingest/ai-budget" && req.method === "GET") return send({ tokensPerDayUtc: { [new Date().toISOString().slice(0, 10)]: completed.length ? 49000 : 0 } });
+      if (url.pathname === "/api/ingest/ai-budget" && req.method === "GET") return send({ tokensPerDayUtcByKind: { judge: { [new Date().toISOString().slice(0, 10)]: completed.length ? 49000 : 0 } } });
       if (url.pathname === "/api/ingest/ai-budget") return send({ recorded: true });
       if (url.pathname === "/api/ingest/ideas") return send({ recorded: true });
       send({ error: "not found" });
