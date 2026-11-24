@@ -23,9 +23,12 @@ test.describe("dashboard", () => {
     const showing = page.locator("[aria-live=polite]").filter({ hasText: /\d/ }).first();
     const before = await showing.innerText();
 
-    const radio = page.locator("input[type=radio][name=state]:not([value=all]):not([disabled])").first();
-    await radio.check({ force: true });
-    await expect(showing).not.toHaveText(before);
+    // The radio is visually hidden inside its chip label; click the chip and retry until the client has hydrated.
+    const chip = page.locator("label:has(input[type=radio][name=state]:not([value=all]):not([disabled]))").first();
+    await expect(async () => {
+      await chip.click();
+      await expect(showing).not.toHaveText(before, { timeout: 1_000 });
+    }).toPass();
 
     await page.getByRole("button", { name: /clear|reset/i }).first().click();
     await expect(showing).toHaveText(before);
