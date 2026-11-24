@@ -1,0 +1,269 @@
+ticker,name,sector,reason
+AAME,ATLANTIC AMERICAN CORP,Discovery,filer_unknown
+AAMI,Acadian Asset Management Inc.,Unclassified,below_cut
+ABX,"Abacus Global Management, Inc.",Unclassified,volume_below_floor
+ACMR,"ACM Research, Inc.",AI & semiconductors,below_cut
+ACRE,Ares Commercial Real Estate Corp,Discovery,filer_unknown
+ACTG,Acacia Research Corporation,Growth,filer_unknown
+AD,"ARRAY DIGITAL INFRASTRUCTURE, INC.",Unclassified,volume_below_floor
+ADI,"Analog Devices, Inc.",AI & semiconductors,below_cut
+ADTX,"Aditxt, Inc.",Discovery,filer_unknown
+AEBI,Aebi Schmidt Holding AG,Unclassified,volume_below_floor
+AEIS,"ADVANCED ENERGY INDUSTRIES, INC.",Unclassified,below_cut
+AGIO,"Agios Pharmaceuticals, Inc.",Biotech,filer_unknown
+AIBT,"AIBOTICS, INC.",Discovery,filer_unknown
+AII,"American Integrity Insurance Group, Inc.",Unclassified,volume_below_floor
+AJG,ARTHUR J. GALLAGHER & CO.,Unclassified,below_cut
+ALB,ALBEMARLE CORPORATION,Unclassified,below_cut
+ALEC,"Alector, Inc.",Discovery,filer_unknown
+ALHC,"ALIGNMENT HEALTHCARE, INC.",Unclassified,below_cut
+ALKS,Alkermes plc.,Biotech,below_cut
+ALXO,ALX ONCOLOGY HOLDINGS INC,Discovery,filer_unknown
+AMKR,"AMKOR TECHNOLOGY, INC.",AI & semiconductors,below_cut
+AMZE,"AMAZE HOLDINGS, INC.",Discovery,filer_unknown
+ANET,"Arista Networks, Inc.",AI & semiconductors,below_cut
+ANGO,ANGIODYNAMICS INC,Discovery,filer_unknown
+ANGX,"ANGEL STUDIOS, INC.",Unclassified,price_below_min
+AQB,AQUABOUNTY TECHNOLOGIES INC,Discovery,filer_unknown
+ARAI,Arrive AI Inc.,Discovery,filer_unknown
+ARDX,"ARDELYX, INC.",Biotech,price_below_min
+ARES,ARES MANAGEMENT CORPORATION,Unclassified,below_cut
+ARTW,ARTS WAY MANUFACTURING CO INC,Discovery,filer_unknown
+ARVN,"ARVINAS, INC.",Growth,filer_unknown
+ARW,"ARROW ELECTRONICS, INC.",Unclassified,below_cut
+ARWR,"ARROWHEAD PHARMACEUTICALS, INC.",Growth,filer_unknown
+ASIC,ATEGRITY SPECIALTY INSURANCE COMPANY HOLDINGS,Unclassified,volume_below_floor
+ASTH,"Astrana Health, Inc.",Unclassified,below_cut
+ASUR,ASURE SOFTWARE INC,Discovery,filer_unknown
+ATO,ATMOS ENERGY CORP,Discovery,filer_unknown
+ATOS,"ATOSSA THERAPEUTICS, INC.",Discovery,filer_unknown
+AUID,authID Inc.,Discovery,filer_unknown
+AVT,AVNET INC,Discovery,filer_unknown
+AXGN,"Axogen, Inc.",Unclassified,below_cut
+AXON,"Axon Enterprise, Inc.",Unclassified,below_cut
+AXSM,"AXSOME THERAPEUTICS, INC.",Biotech,below_cut
+BDCO,BLUE DOLPHIN ENERGY CO,Growth,filer_unknown
+BETRW,Better Home & Finance Holding Co,Discovery,filer_unknown
+BHF,"Brighthouse Financial, Inc.",Growth,filer_unknown
+BHVN,Biohaven Ltd.,Discovery,filer_unknown
+BLK,"BlackRock, Inc.",Unclassified,below_cut
+BOW,Bowhead Specialty Holdings Inc.,Unclassified,below_cut
+BRCB,"Black Rock Coffee Bar, Inc.",Unclassified,volume_below_floor
+BRO,"BROWN & BROWN, INC.",Unclassified,below_cut
+BROS,DUTCH BROS INC.,Unclassified,below_cut
+BRZE,"Braze, Inc.",Cloud & SaaS,below_cut
+BTSG,"BrightSpring Health Services, Inc.",Unclassified,below_cut
+BW,"BABCOCK & WILCOX ENTERPRISES, INC",Unclassified,price_below_min
+BWIN,"The Baldwin Insurance Group, Inc.",Unclassified,below_cut
+CAI,"CARIS LIFE SCIENCES, INC.",Unclassified,below_cut
+CAVA,"CAVA Group, Inc.",Unclassified,below_cut
+CCC,CCC Intelligent Solutions Holdings Inc.,Discovery,filer_unknown
+CCO,"Clear Channel Outdoor Holdings, Inc.",Discovery,filer_unknown
+CDNA,"CAREDX, INC.",Unclassified,below_cut
+CDTTW,CDT Equity Inc.,Discovery,filer_unknown
+CEG,CONSTELLATION ENERGY CORPORATION,Energy & EV,below_cut
+CENN,Cenntro Inc.,Discovery,filer_unknown
+CHYM,"Chime Financial, Inc.",Fintech,below_cut
+CIA,"CITIZENS, INC.",Discovery,filer_unknown
+CIEN,Ciena Corp,Unclassified,below_cut
+CIFR,Cipher Digital Inc.,Discovery,filer_unknown
+CIIT,"Tianci International, Inc.",Discovery,filer_unknown
+CIRC,CIRCLE8 GROUP INC.,Unclassified,price_below_min
+CLGN,CollPlant Biotechnologies Ltd,Discovery,filer_unknown
+CLOV,"CLOVER HEALTH INVESTMENTS, CORP. /DE",Unclassified,price_below_min
+CMLSQ,CUMULUS MEDIA INC,Discovery,filer_unknown
+CNDT,CONDUENT Inc,Discovery,filer_unknown
+COCO,"The Vita Coco Company, Inc.",Unclassified,below_cut
+COF,CAPITAL ONE FINANCIAL CORP,Unclassified,below_cut
+COHU,"COHU, INC.",AI & semiconductors,below_cut
+COLAU,Columbus Acquisition Corp/Cayman Islands,Discovery,filer_unknown
+CR,CRANE COMPANY,Unclassified,below_cut
+CRC,California Resources Corp,Growth,filer_unknown
+CRCW,Crypto Co,Discovery,filer_unknown
+CRMD,CORMEDIX INC.,Biotech,volume_below_floor
+CRMT,AMERICAS CARMART INC,Discovery,filer_unknown
+CRON,Cronos Group Inc.,Discovery,price_below_min
+CSTM,Constellium SE,Unclassified,below_cut
+CTNT,CHEETAH NET SUPPLY CHAIN SERVICE INC.,Discovery,filer_unknown
+CTRE,"CareTrust REIT, Inc.",Unclassified,below_cut
+CTRI,"Centuri Holdings, Inc.",Energy & EV,below_cut
+CTRVP,"Hepion Pharmaceuticals, Inc.",Discovery,filer_unknown
+CWCO,Consolidated Water Co. Ltd.,Discovery,filer_unknown
+CXW,"CORECIVIC, INC.",Unclassified,below_cut
+DASH,"DOORDASH, INC.",Unclassified,below_cut
+DAVE,Dave Inc./DE,Fintech,below_cut
+DCH,DAUCH CORPORATION,Unclassified,price_below_min
+DEC,Diversified Energy Company,Growth,filer_unknown
+DGII,DIGI INTERNATIONAL INC.,AI & semiconductors,below_cut
+DMLP,"Dorchester Minerals, L.P.",Energy & EV,volume_below_floor
+DSP,Viant Technology Inc.,Cloud & SaaS,volume_below_floor
+DTI,Drilling Tools International Corp,Discovery,filer_unknown
+DVLT,Datavault AI Inc.,Discovery,filer_unknown
+DY,"DYCOM INDUSTRIES, INC.",Unclassified,below_cut
+EBS,EMERGENT BIOSOLUTIONS INC.,Growth,filer_unknown
+ECG,"Everus Construction Group, Inc.",Unclassified,below_cut
+ECVT,Ecovyst Inc.,Unclassified,below_cut
+EDVA,"Endovia Health Sciences, Inc.",Discovery,filer_unknown
+ELF,"e.l.f. Beauty, Inc.",Unclassified,below_cut
+ENVA,"Enova International, Inc.",Discovery,filer_unknown
+EOSE,"EOS ENERGY ENTERPRISES, INC.",Energy & EV,price_below_min
+EQPT,EquipmentShare.com Inc,Unclassified,below_cut
+ESTA,ESTABLISHMENT LABS HOLDINGS INC.,Discovery,below_cut
+EVFM,"Evofem Biosciences, Inc.",Discovery,filer_unknown
+EZPW,"EZCORP, INC.",Unclassified,below_cut
+EZRA,"Reliance Global Group, Inc.",Discovery,filer_unknown
+FBLG,"FibroBiologics, Inc.",Discovery,filer_unknown
+FBRT,"FRANKLIN BSP REALTY TRUST, INC.",Unclassified,not_common_stock
+FCFS,"FIRSTCASH HOLDINGS, INC.",Unclassified,below_cut
+FF,FUTUREFUEL CORP.,Unclassified,volume_below_floor
+FICO,FAIR ISAAC CORP,Unclassified,below_cut
+FIEE,"FiEE, Inc.",Discovery,filer_unknown
+FIG,"FIGMA, INC.",Cloud & SaaS,below_cut
+FIGS,"FIGS, Inc.",Unclassified,below_cut
+FIP,FTAI INFRASTRUCTURE INC.,Unclassified,price_below_min
+FIS,"Fidelity National Information Services, Inc.",Unclassified,below_cut
+FIVE,"Five Below, Inc.",Unclassified,below_cut
+FIX,"COMFORT SYSTEMS USA, INC.",Unclassified,below_cut
+FLYW,FLYWIRE CORPORATION,Unclassified,below_cut
+FORM,"FormFactor, Inc.",AI & semiconductors,below_cut
+FOUR,"SHIFT4 PAYMENTS, INC.",Unclassified,below_cut
+FROG,JFrog Ltd.,Cloud & SaaS,below_cut
+FTAI,FTAI AVIATION LTD.,Unclassified,below_cut
+GAP,GAP INC,Discovery,filer_unknown
+GATX,GATX Corporation,Unclassified,below_cut
+GCT,GIGACLOUD TECHNOLOGY INC,Unclassified,below_cut
+GEO,GEO GROUP INC,Discovery,filer_unknown
+GH,"GUARDANT HEALTH, INC.",Unclassified,below_cut
+GKOS,GLAUKOS Corp,Unclassified,below_cut
+GRND,Grindr Inc.,Cloud & SaaS,below_cut
+GVA,GRANITE CONSTRUCTION INC,Unclassified,below_cut
+HALO,"HALOZYME THERAPEUTICS, INC.",Biotech,below_cut
+HASI,"HA SUSTAINABLE INFRASTRUCTURE CAPITAL, INC.",Unclassified,below_cut
+HBAN,Huntington Bancshares Incorporated,Unclassified,below_cut
+HCXY,"Hercules Capital, Inc.",Discovery,filer_unknown
+HEI,HEICO CORPORATION,Unclassified,below_cut
+HERZ,"Herzfeld Credit Income Fund, Inc",Discovery,filer_unknown
+HESM,Hess Midstream LP,Discovery,filer_unknown
+HGIT,"Hines Global Income Trust, Inc.",Unclassified,not_common_stock
+HHH,HOWARD HUGHES HOLDINGS INC.,Growth,filer_unknown
+HNRG,HALLADOR ENERGY CO,Discovery,filer_unknown
+HPE,HEWLETT PACKARD ENTERPRISE COMPANY,Unclassified,below_cut
+HTFL,"Heartflow, Inc.",Unclassified,below_cut
+HUM,HUMANA INC,Unclassified,below_cut
+INR,"INFINITY NATURAL RESOURCES, INC.",Energy & EV,volume_below_floor
+IOT,SAMSARA INC.,Cloud & SaaS,below_cut
+IQST,IQSTEL Inc.,Unclassified,price_below_min
+IRWD,"IRONWOOD PHARMACEUTICALS, INC.",Biotech,price_below_min
+ITT,ITT INC.,Unclassified,below_cut
+J,JACOBS SOLUTIONS INC.,Unclassified,below_cut
+JAN,"Janus Living, Inc.",Unclassified,below_cut
+KEYS,"KEYSIGHT TECHNOLOGIES, INC.",Unclassified,below_cut
+KOS,Kosmos Energy Ltd.,Energy & EV,price_below_min
+KRYS,"Krystal Biotech, Inc.",Biotech,below_cut
+KTOS,"KRATOS DEFENSE & SECURITY SOLUTIONS, INC.",Unclassified,below_cut
+KVYO,"Klaviyo, Inc.",Cloud & SaaS,below_cut
+LASR,"NLIGHT, INC.",AI & semiconductors,below_cut
+LHAI,Linkhome Holdings Inc.,Discovery,filer_unknown
+LIF,"Life360, Inc.",Cloud & SaaS,below_cut
+LLY,Eli Lilly and Company,Biotech,below_cut
+LOAR,Loar Holdings Inc.,Unclassified,below_cut
+LPLA,LPL Financial Holdings Inc.,Unclassified,below_cut
+LRN,"Stride, Inc.",Discovery,filer_unknown
+LWAY,"LIFEWAY FOODS, INC.",Unclassified,volume_below_floor
+LYV,"Live Nation Entertainment, Inc.",Discovery,filer_unknown
+MAZE,"Maze Therapeutics, Inc.",Discovery,filer_unknown
+MEDS,"DataMeds AI, Inc.",Discovery,filer_unknown
+MGTX,MeiraGTx Holdings plc,Growth,filer_unknown
+MIRM,"Mirum Pharmaceuticals, Inc.",Biotech,below_cut
+MLCIL,Mount Logan Capital Inc.,Discovery,filer_unknown
+MNR,Mach Natural Resources LP,Energy & EV,volume_below_floor
+MPWR,"Monolithic Power Systems, Inc.",AI & semiconductors,below_cut
+MRP,"Millrose Properties, Inc.",Unclassified,below_cut
+MRVL,"MARVELL TECHNOLOGY, INC",AI & semiconductors,below_cut
+MTRN,MATERION CORPORATION,Unclassified,below_cut
+MTSI,"MACOM Technology Solutions Holdings, Inc.",AI & semiconductors,below_cut
+MTZ,"MasTec, Inc.",Unclassified,below_cut
+MUX,McEWEN INC.,Unclassified,below_cut
+NAVN,"NAVAN, INC.",Cloud & SaaS,below_cut
+NBIX,"NEUROCRINE BIOSCIENCES, INC.",Biotech,below_cut
+NCLH,Norwegian Cruise Line Holdings Ltd.,Discovery,filer_unknown
+NHI,"National Health Investors, Inc.",Unclassified,below_cut
+NP,Neptune Insurance Holdings Inc.,Unclassified,below_cut
+NTRA,"NATERA, INC.",Unclassified,below_cut
+NTSK,"Netskope, Inc.",Cloud & SaaS,below_cut
+NTST,NETSTREIT Corp.,Unclassified,below_cut
+ODC,Oil-Dri Corp of America,Discovery,filer_unknown
+OFRM,"Once Upon a Farm, PBC",Unclassified,volume_below_floor
+OMDA,"Omada Health, Inc.",Unclassified,below_cut
+ONC,BEONE MEDICINES LTD.,Biotech,below_cut
+OOMA,"Ooma, Inc.",Cloud & SaaS,volume_below_floor
+OSG,"OCTAVE SPECIALTY GROUP, INC.",Unclassified,price_below_min
+P,"Everpure, Inc.",AI & semiconductors,below_cut
+PAG,"PENSKE AUTOMOTIVE GROUP, INC.",Discovery,filer_unknown
+PAXGU,Pine Tree Acquisition Corp.,Discovery,filer_unknown
+PAY,"Paymentus Holdings, Inc.",Unclassified,below_cut
+PGC,PEAPACK-GLADSTONE FINANCIAL CORPORATION,Unclassified,volume_below_floor
+PHXE-P,"PHOENIX ENERGY ONE, LLC",Energy & EV,not_common_stock
+PIPR,PIPER SANDLER COMPANIES,Unclassified,below_cut
+PNTG,"THE PENNANT GROUP, INC.",Unclassified,below_cut
+PODD,INSULET CORPORATION,Unclassified,below_cut
+PRM,"PERIMETER SOLUTIONS, INC.",Unclassified,below_cut
+PROP,Prairie Operating Co.,Energy & EV,price_below_min
+PTCT,"PTC Therapeutics, Inc.",Growth,filer_unknown
+PTRN,Pattern Group Inc.,Unclassified,below_cut
+PWR,"Quanta Services, Inc.",Unclassified,below_cut
+RAIL,"FreightCar America, Inc.",Discovery,filer_unknown
+RBLX,Roblox Corporation,Cloud & SaaS,below_cut
+RBRK,"RUBRIK, INC.",Cloud & SaaS,below_cut
+RGNX,REGENXBIO Inc.,Growth,filer_unknown
+RJET,Republic Airways Holdings Inc.,Unclassified,volume_below_floor
+ROAD,"Construction Partners, Inc.",Unclassified,below_cut
+RSI,"Rush Street Interactive, Inc.",Unclassified,below_cut
+RTSN,"Retension Pharmaceuticals, Inc.",Discovery,filer_unknown
+RYTM,"RHYTHM PHARMACEUTICALS, INC.",Biotech,below_cut
+SCCO,SOUTHERN COPPER CORP/,Unclassified,below_cut
+SDSYA,SOUTH DAKOTA SOYBEAN PROCESSORS LLC,Unclassified,volume_below_floor
+SEI,"SOLARIS ENERGY INFRASTRUCTURE, INC.",Unclassified,below_cut
+SEZL,SEZZLE INC.,Unclassified,below_cut
+SHLS,"Shoals Technologies Group, Inc.",AI & semiconductors,below_cut
+SLDE,"Slide Insurance Holdings, Inc.",Unclassified,below_cut
+SND,"SMART SAND, INC.",Unclassified,volume_below_floor
+SNPS,SYNOPSYS INC,Cloud & SaaS,below_cut
+SOUN,"SOUNDHOUND AI, INC.",Cloud & SaaS,price_below_min
+SRTA,"STRATA CRITICAL MEDICAL, INC.",Unclassified,price_below_min
+STC,STEWART INFORMATION SERVICES CORP,Unclassified,below_cut
+STLN,"Starling Oncology, Inc.",Unclassified,volume_below_floor
+STRR,"STAR EQUITY HOLDINGS, INC.",Unclassified,volume_below_floor
+SUNC,SUNOCOCORP LLC,Energy & EV,duplicate_filer
+SUPN,"SUPERNUS PHARMACEUTICALS, INC.",Biotech,below_cut
+SWKS,"SKYWORKS SOLUTIONS, INC.",Discovery,filer_unknown
+TCRT,"Alaunos Therapeutics, Inc.",Discovery,filer_unknown
+TE,T1 Energy Inc.,AI & semiconductors,price_below_min
+TEX,Terex Corporation,Unclassified,below_cut
+TFX,TELEFLEX INCORPORATED,Unclassified,below_cut
+TPG,TPG Inc.,Growth,filer_unknown
+TREE,"LendingTree, Inc.",Unclassified,below_cut
+TRXB,"TRex Bio, Inc.",Discovery,filer_unknown
+TTMI,"TTM TECHNOLOGIES, INC.",Unclassified,below_cut
+TVTX,"TRAVERE THERAPEUTICS, INC.",Biotech,below_cut
+TWFG,"TWFG, Inc.",Unclassified,volume_below_floor
+TXO,"TXO Partners, L.P.",Growth,filer_unknown
+UPST,"Upstart Holdings, Inc.",Fintech,below_cut
+USAC,"USA Compression Partners, LP",Energy & EV,volume_below_floor
+VATE,INNOVATE CORP.,Unclassified,volume_below_floor
+VCTR,"Victory Capital Holdings, Inc.",Unclassified,below_cut
+VG,"VENTURE GLOBAL, INC.",Energy & EV,below_cut
+VIA,"VIA TRANSPORTATION, INC.",Cloud & SaaS,below_cut
+VKTX,"Viking Therapeutics, Inc.",Biotech,filer_unknown
+VMD,"Viemed Healthcare, Inc.",Unclassified,volume_below_floor
+VREOF,VIREO GROWTH INC.,Biotech,volume_below_floor
+VRT,Vertiv Holdings Co,Unclassified,below_cut
+VVV,VALVOLINE INC.,Unclassified,below_cut
+WELL,WELLTOWER INC.,Unclassified,below_cut
+WSKEF,WISeQey Corp.,Discovery,filer_unknown
+XERS,"XERIS BIOPHARMA HOLDINGS, INC.",Biotech,below_cut
+XFOR,"X4 Pharmaceuticals, Inc",Discovery,filer_unknown
+XMTR,"XOMETRY, INC.",Unclassified,below_cut
+XNCR,"Xencor, Inc",Growth,filer_unknown
+ZARE,ARES REAL ESTATE INCOME TRUST INC.,Unclassified,not_common_stock
+ZETA,ZETA GLOBAL HOLDINGS CORP.,Cloud & SaaS,below_cut
