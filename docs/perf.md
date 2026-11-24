@@ -125,10 +125,11 @@ The filter detoasted every stored audit (about 13 kB compressed each), and the l
 Changes:
 
 - Migration 137 adds generated columns to `score_results`: `has_scan_run`, `has_agreement` (the two key tests) and `listing_audit` (the audit with the last 64 bars). `pageScoreRow` uses the booleans, and partial indexes on `(ticker, as_of DESC)` match both modes. The listing reads use `listing_audit`; only `scoreForTicker` (one company) reads the full audit.
+- Migration 146 adds `streak_hits` (rule id, matched and unknown for each rule hit) to `score_results`. `ruleStreaks` reads it instead of the full audit.
 - `latestScores` keeps 64 bars per name, enough for the heatmap 3m change and the scanner floor. `latestScoreSummaries` is the same cached read with the bars removed, so one query serves both. `scoreHistory` (track record) is now cached too.
 - In the Next server, `webCached` keeps entries in process memory (64 MB serialized budget, oldest dropped first). Concurrent misses share one loader call. An entry older than 300 s, or purged, is served once more while one background read replaces it. A failed background read keeps the old entry.
 - `purgeWebCache` marks entries stale instead of dropping them, so the post-daily purge does not send every visitor to Postgres at once.
-- `register()` in `src/instrumentation.ts` starts `warmWebCaches()` (scores, instrument universe, portfolio) in the background at server start. It is not awaited and logs `web_cache_warm` or `web_cache_warm_failed`. `WEB_CACHE_WARM=off` skips it. Per-ticker reads (company page, dataset freshness) fill on first visit.
+- `register()` in `src/instrumentation.ts` starts `warmWebCaches()` in the background at server start. It fills scores, instrument universe, portfolio, rule streaks, public horizons, shortlist, share counts for current tickers, public and owner model portfolios, cross-market dashboard data, and dashboard period prices. It is not awaited and logs `web_cache_warm` or `web_cache_warm_failed`. `WEB_CACHE_WARM=off` skips it. Per-ticker reads (company page, dataset freshness) fill on first visit.
 
 Same SQL on a local PGlite copy of the production rows (median of 3, PGlite is single-process WASM, so compare the ratio, not the absolute numbers):
 
