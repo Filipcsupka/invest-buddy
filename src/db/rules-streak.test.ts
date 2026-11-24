@@ -1,6 +1,9 @@
+import { readFileSync } from "node:fs";
+import { PGlite } from "@electric-sql/pglite";
 import { describe, expect, it } from "vitest";
 import { ruleStreak, ruleStreaksFromDb, streaksFromRows, type RuleDay } from "./rules-streak";
 import type { Queryable } from "./history";
+import { HITS } from "./rule-changes";
 
 const hit = (id: string, matched: boolean, unknown = false) => ({ id, matched, unknown });
 const day = (asOf: string, ...hits: ReturnType<typeof hit>[]): RuleDay => ({ asOf, hits });
@@ -91,8 +94,49 @@ describe("ruleStreaksFromDb", () => {
     expect(Object.keys(out)).toEqual(["AMD"]);
     expect(calls).toHaveLength(1);
     expect(calls[0].params).toEqual([90]);
-    expect(calls[0].text).toContain("jsonb_to_recordset");
+    expect(calls[0].text).toContain("s.streak_hits AS hits");
     expect(calls[0].text).toMatch(/s\.ticker IN \(SELECT c\.ticker FROM score_results c WHERE c\.as_of = /);
-    expect(calls[0].text).not.toMatch(/s\.audit\s*,|s\.audit AS/);
+    expect(calls[0].text).not.toContain("s.audit");
+  });
+
+  it("matches the audit-based streaks in public and private modes", async () => {
+    const db = new PGlite();
+    const privateUse = process.env.EODHD_PRIVATE_USE;
+    try {
+      await db.exec(`CREATE TABLE score_results (
+        ticker text NOT NULL, as_of date NOT NULL, audit jsonb NOT NULL,
+        has_scan_run boolean GENERATED ALWAYS AS (audit ? 'scanRunId') STORED,
+        has_agreement boolean GENERATED ALWAYS AS (audit ? 'agreement') STORED,
+        PRIMARY KEY (ticker, as_of));`);
+      await db.exec(readFileSync("migrations/146_score_results_streak_hits.sql", "utf8"));
+      const bars = Array.from({ length: 300 }, (_, n) => ({ date: n, close: n + 1, volume: 1000 + n }));
+      const insert = (ticker: string, asOf: string, hits: unknown, marker: "scanRunId" | "agreement" | "none" = "scanRunId") =>
+        db.query("INSERT INTO score_results (ticker, as_of, audit) VALUES ($1, $2, $3)", [ticker, asOf, JSON.stringify({ ruleHits: hits, inputs: { bars }, ...(marker === "none" ? {} : { [marker]: "run" }) })]);
+      await insert("AMD", "2026-10-14", [hit("a", true), hit("b", false), hit("c", false, true)]);
+      await insert("AMD", "2026-10-07", [hit("a", false), hit("b", true), hit("c", true)]);
+      await insert("AMD", "2026-10-06", [hit("a", false), hit("b", true), hit("c", true)]);
+      await insert("NVDA", "2026-10-14", [hit("a", true)], "agreement");
+      await insert("NVDA", "2026-10-07", [hit("a", false)], "agreement");
+      await insert("OLD", "2026-10-07", [hit("a", true)]);
+      await insert("AMD", "2026-10-13", [], "none");
+      const queryable = { query: (sql: string, params?: unknown[]) => db.query(sql, params) } as unknown as Queryable;
+      for (const privateMode of [false, true]) {
+        if (privateMode) process.env.EODHD_PRIVATE_USE = "on";
+        else delete process.env.EODHD_PRIVATE_USE;
+        const predicate = privateMode ? "(s.has_scan_run OR s.has_agreement)" : "s.has_scan_run";
+        const old = await db.query<{ ticker: string; asOf: string; hits: RuleDay["hits"] }>(`WITH latest AS (SELECT max(as_of) AS d FROM score_results WHERE ${privateMode ? "(has_scan_run OR has_agreement)" : "has_scan_run"})
+          SELECT s.ticker, s.as_of::text AS "asOf", ${HITS} AS hits FROM score_results s
+          WHERE ${predicate} AND s.as_of >= (SELECT d FROM latest) - 90
+            AND s.ticker IN (SELECT c.ticker FROM score_results c WHERE c.as_of = (SELECT d FROM latest) AND ${privateMode ? "(c.has_scan_run OR c.has_agreement)" : "c.has_scan_run"})
+          ORDER BY s.ticker, s.as_of DESC`);
+        expect(await ruleStreaksFromDb(queryable)).toEqual(streaksFromRows(old.rows));
+      }
+      const size = await db.query<{ full: number; slim: number }>("SELECT sum(pg_column_size(audit))::int AS full, sum(pg_column_size(streak_hits))::int AS slim FROM score_results");
+      expect(size.rows[0].slim).toBeLessThan(size.rows[0].full / 10);
+    } finally {
+      if (privateUse === undefined) delete process.env.EODHD_PRIVATE_USE;
+      else process.env.EODHD_PRIVATE_USE = privateUse;
+      await db.close();
+    }
   });
 });

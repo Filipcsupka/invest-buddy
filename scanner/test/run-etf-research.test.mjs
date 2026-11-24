@@ -47,7 +47,7 @@ test("ETF run posts each validated chunk under the monthly guard", async () => {
   try {
     const opts = parseArgs(["--as-of", "2026-10-21", "--out-dir", outDir], { INGEST_BASE_URL: "http://localhost" });
     const adapter = { name: "codex", available: () => ({ ok: true }), run: async (args) => { assert.equal(args.schemaName, "root"); assert.equal(args.allowSearch, false); return { text: JSON.stringify(output), usage: { inputTokens: 100 }, webSearches: 0, model: "test-model" }; } };
-    const request = async (url, init) => url.endsWith("/top-rated?limit=25") ? { ok: true, json: async () => ({ items: [{ ...item, ratingPercent: 78, ratingBand: "rulesMet", evidencedPoints: 90 }] }) } : url.endsWith("/ai-budget") && !init?.method ? { ok: true, json: async () => ({ tokensPerDayUtc: {} }) } : (url.endsWith("/etf") && posts.push(JSON.parse(init.body)), { ok: true, json: async () => ({ recorded: true }) });
+    const request = async (url, init) => url.endsWith("/top-rated?limit=25") ? { ok: true, json: async () => ({ items: [{ ...item, ratingPercent: 78, ratingBand: "rulesMet", evidencedPoints: 90 }] }) } : url.endsWith("/ai-budget") && !init?.method ? { ok: true, json: async () => ({ tokensPerDayUtcByKind: {} }) } : (url.endsWith("/etf") && posts.push(JSON.parse(init.body)), { ok: true, json: async () => ({ recorded: true }) });
     const result = await execute(opts, { adapter, env: { INGEST_TOKEN: "token", RESEARCH_ENABLED: "on", EODHD_PRIVATE_USE: "on", RESEARCH_MONTHLY_USD: "0", AI_DAILY_TOKEN_CEILING: "0" },
       template: "ETF prompt {{shortlist}}", request, log: () => {} });
     assert.equal(result.status, "ok"); assert.equal(posts.length, 1);
@@ -62,7 +62,7 @@ test("a failed chunk does not prevent later chunks from posting", async () => {
   let calls = 0;
   try {
     const adapter = { name: "codex", run: async () => { if (++calls === 1) throw new Error("temporary model error"); return { text: JSON.stringify({ ...output, candidates: [{ ...candidate, symbol: "E25" }] }), usage: {} }; } };
-    const request = async (url, init) => url.endsWith("/shortlist") ? { ok: true, json: async () => ({ items }) } : url.endsWith("/ai-budget") && !init?.method ? { ok: true, json: async () => ({ tokensPerDayUtc: {} }) } : (url.endsWith("/etf") && posts.push(JSON.parse(init.body)), { ok: true, json: async () => ({ recorded: true }) });
+    const request = async (url, init) => url.endsWith("/shortlist") ? { ok: true, json: async () => ({ items }) } : url.endsWith("/ai-budget") && !init?.method ? { ok: true, json: async () => ({ tokensPerDayUtcByKind: {} }) } : (url.endsWith("/etf") && posts.push(JSON.parse(init.body)), { ok: true, json: async () => ({ recorded: true }) });
     const result = await execute(parseArgs(["--as-of", "2026-10-21", "--out-dir", outDir, "--selection", "shortlist", "--limit", "26"]), { adapter, env: { INGEST_TOKEN: "token", EODHD_PRIVATE_USE: "on" }, request, log: () => {} });
     assert.deepEqual({ batches: result.batches, failed: result.failed }, { batches: 2, failed: 1 });
     assert.equal(posts.length, 1); assert.equal(posts[0].output.candidates[0].symbol, "E25");

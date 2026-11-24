@@ -22,8 +22,23 @@ describe("EODHD subject mapping", () => {
         ? { rows: [{ ticker: "SAP.XETRA", name: "SAP", sector: "Tech", tier: null }] }
         : { rows: [{ ticker: "SAP.XETRA", vendor_symbol: "SAP.XETRA" }] };
     } } as never;
-    expect(await loadSubjects(db)).toEqual([{ ticker: "SAP.XETRA", vendorSymbol: "SAP.XETRA" }]);
+    expect(await loadSubjects(db)).toEqual({ subjects: [{ ticker: "SAP.XETRA", vendorSymbol: "SAP.XETRA" }], unresolved: [] });
     expect(sql[1]).toContain("vendor_symbol=i.ticker");
+  });
+  it("records a ticker without an active listing as a failure and refreshes the others", async () => {
+    const db = { query: async (statement: string) => statement.includes("FROM universe_membership")
+      ? { rows: [{ ticker: "AAPL", name: "Apple", sector: "Tech", tier: null }, { ticker: "ROKU", name: "Roku", sector: "Tech", tier: null }] }
+      : statement.includes("FROM instruments i") ? { rows: [{ ticker: "AAPL", vendor_symbol: "AAPL.US" }, { ticker: "ROKU", vendor_symbol: null }] }
+      : { rows: [] } } as never;
+    const calls: string[] = [];
+    const api = {
+      earningsCalendar: async () => ({ earnings: [] }),
+      fundamentals: async (symbol: string) => { calls.push(symbol); return fundamentals; },
+      getCallCosts: () => ({ fundamentals: 10, calendar: 1 }),
+    };
+    const result = await runEodhdFundamentals(db, api, { dryRun: true, now: new Date("2025-10-21T12:00:00Z") });
+    expect(calls).toEqual(["AAPL.US"]);
+    expect(result).toMatchObject({ refreshed: 1, failures: 1, failedSymbols: "ROKU" });
   });
 });
 

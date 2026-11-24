@@ -48,6 +48,20 @@ import styles from "../scanner/scanner.module.css";
 
 export const dynamic = "force-dynamic";
 type Props = LocaleParams & { searchParams: Promise<Query> };
+const PAGE_SIZE = 20;
+
+function requestedPage(value: Query["page"]): number {
+  const raw = Array.isArray(value) ? value[0] : value;
+  if (!raw || !/^[1-9]\d*$/.test(raw)) return 1;
+  const page = Number(raw);
+  return Number.isSafeInteger(page) ? page : 1;
+}
+
+function pageHref(locale: Locale, filters: ScannerFilters, page: number): string {
+  const href = filtersHref(locale, filters, filters.floor);
+  if (page === 1) return href;
+  return `${href}${href.includes("?") ? "&" : "?"}page=${page}`;
+}
 
 export async function generateMetadata({ params, searchParams }: Props): Promise<Metadata> {
   const locale = await resolveLocale(params);
@@ -123,7 +137,8 @@ async function Scanner({ params, searchParams }: Props) {
   const viewer = await getViewer();
   const m = getMessages(locale);
   const c = copy[locale];
-  const filters = limitFiltersFor(viewer, parseFilters(await searchParams));
+  const query = await searchParams;
+  const filters = limitFiltersFor(viewer, parseFilters(query));
   const access = shortlistAccess(viewer);
   const [data, portfolio, streakData, horizons, shortlist] = await Promise.all([latestScores(), latestPortfolio(), ruleStreaks(), publicHorizons(), access === "full" ? latestShortlist().then((list) => list && withModelLens(list, viewer)) : null]);
   // A free viewer gets no streak data, neither in the column nor in the change presets.
@@ -143,6 +158,10 @@ async function Scanner({ params, searchParams }: Props) {
     const first = a[key], second = b[key];
     return (typeof first === "number" && typeof second === "number" ? second - first : String(first).localeCompare(String(second), locale)) || a.ticker.localeCompare(b.ticker);
   });
+  const pages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+  const page = Math.min(requestedPage(query.page), pages);
+  const start = (page - 1) * PAGE_SIZE;
+  const pageRows = visible.slice(start, start + PAGE_SIZE);
   const presetCounts = Object.fromEntries(presets.map((preset) => [preset.id, data.rows.filter(({ result }) => matchesPreset(preset, result.ruleHits, streaks[result.ticker], horizons[result.ticker])).length]));
   const s = m.scanner;
   const sc = getScreenMessages(locale);
@@ -151,9 +170,9 @@ async function Scanner({ params, searchParams }: Props) {
   const stateLabels = Object.fromEntries(stateOrder.map((state) => [state, statusLabel(m, state, flags().ADVICE_OUTPUT)])) as Record<(typeof stateOrder)[number], string>;
   const stateRows = stateBase.map((row) => toRow(locale, row));
   const stateCounts = Object.fromEntries(stateOrder.map((state) => [state, stateRows.filter((row) => row.state === state).length])) as Record<(typeof stateOrder)[number], number>;
-  const nonEmptyStates = stateOrder.filter((state) => visible.some((row) => row.state === state));
+  const nonEmptyStates = stateOrder.filter((state) => pageRows.some((row) => row.state === state));
   const shownStates = filters.state ? [filters.state] : nonEmptyStates.length ? nonEmptyStates : [stateOrder[0]];
-  const firstNonEmpty = shownStates.find((state) => visible.some((row) => row.state === state));
+  const firstNonEmpty = shownStates.find((state) => pageRows.some((row) => row.state === state));
   return <div className={appPageClass}>
     <AppPageHead area={<AreaChip locale={locale} area="stocks" />} title={getNavSectionsMessages(locale).stocksTitle} sample={data.sample} sampleText={m.common.sample} lede={m.meta.scannerDescription}
       meta={<DataStatus locale={locale} lastUpdated={data.lastUpdated} stale={data.stale} />}
@@ -175,10 +194,11 @@ async function Scanner({ params, searchParams }: Props) {
         <PaywallSegment id="scanner-streak" viewer={viewer} locale={locale}><p>{getTierListsMessages(locale).streakNote}</p></PaywallSegment>
       </div>
     </div>
-    <PaywallSegment id="scanner-rows-full" viewer={viewer} locale={locale}><section className={styles.groups} aria-label={m.scanner.title}>
+    <PaywallSegment id="scanner-rows-full" viewer={viewer} locale={locale}><section id="scanner-results" className={styles.groups} aria-label={m.scanner.title}>
       {shownStates.map((state) => {
-        const groupRows = visible.filter((row) => row.state === state);
-        return <ScannerGroup key={state} state={state} label={stateLabels[state]} count={groupRows.length} range={bento[state]} first={state === firstNonEmpty} selected={filters.state === state}>
+        const groupRows = pageRows.filter((row) => row.state === state);
+        const groupOffset = visible.slice(0, start).filter((row) => row.state === state).length;
+        return <ScannerGroup key={state} state={state} label={stateLabels[state]} count={stateCounts[state]} range={bento[state]} first={state === firstNonEmpty} selected={filters.state === state}>
           <DataTable label={`${stateLabels[state]} · ${m.scanner.title}`} density="compact" describedBy="scanner-disclaimer" stickyFirst className={styles.groupTable}>
         <caption className="visually-hidden">{stateLabels[state]}</caption>
         <colgroup><col className={styles.companyCol} /><col className={styles.sectorCol} /><col className={styles.scoreCol} /><col className={styles.rulesCol} /><col className={styles.stateCol} /></colgroup>
@@ -187,7 +207,7 @@ async function Scanner({ params, searchParams }: Props) {
           const chipState = kitState(row.state, Boolean(row.pullbackLabel));
           const stateText = row.pullbackLabel ?? row.stateLabel;
           return <tr key={row.ticker} data-state={row.state}>
-            <th scope="row" className={`col-company ${styles.company}`}><span className={styles.rank} aria-label={`${sc.rank} ${index + 1}`}>{index + 1}</span><span className={styles.who}><Link className="ticker" href={`/${locale}/company/${row.ticker}`}>{row.ticker}</Link><span className="company-name">{row.name}{row.collectOnly ? <span className="tag">{m.common.extended}</span> : null}{held.has(row.ticker) ? <span className="tag">{m.portfolio.held}</span> : null}{floorState(floorData[row.ticker]) === "unknown" ? <span className="tag" title={fl.noDataNote}>{fl.noData}</span> : null}</span></span></th>
+            <th scope="row" className={`col-company ${styles.company}`}><span className={styles.rank} aria-label={`${sc.rank} ${groupOffset + index + 1}`}>{groupOffset + index + 1}</span><span className={styles.who}><Link className="ticker" href={`/${locale}/company/${row.ticker}`}>{row.ticker}</Link><span className="company-name">{row.name}{row.collectOnly ? <span className="tag">{m.common.extended}</span> : null}{held.has(row.ticker) ? <span className="tag">{m.portfolio.held}</span> : null}{floorState(floorData[row.ticker]) === "unknown" ? <span className="tag" title={fl.noDataNote}>{fl.noData}</span> : null}</span></span></th>
             <td className={`col-sector muted ${styles.colSector}`}><span className={styles.mobileLabel}>{m.table.sector}</span>{row.sector}</td>
             <td className={styles.score}>
               <span className={styles.mobileLabel}>{m.table.score}</span>
@@ -200,7 +220,11 @@ async function Scanner({ params, searchParams }: Props) {
         }) : <DataTableEmpty colSpan={5}>{filters.preset && presetById(filters.preset)?.kind === "profile" && !Object.keys(horizons).length ? profileCopy[locale].notComputed : c.empty}</DataTableEmpty>}</tbody>
       </DataTable></ScannerGroup>;
       })}
-    </section></PaywallSegment>
+    </section>{pages > 1 && <nav aria-label={s.paginationLabel} className={styles.actions}>
+      {page > 1 ? <Link className="button secondary" href={`${pageHref(locale, filters, page - 1)}#scanner-results`}>{s.previousPage}</Link> : null}
+      <span>{fill(s.pageOf, { page, pages })}</span>
+      {page < pages ? <Link className="button secondary" href={`${pageHref(locale, filters, page + 1)}#scanner-results`}>{s.nextPage}</Link> : null}
+    </nav>}</PaywallSegment>
     <p className="disclaimer is-compact" id="scanner-disclaimer">{m.common.disclaimer}</p>
     </div></div></div>
   </div>;

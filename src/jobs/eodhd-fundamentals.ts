@@ -33,9 +33,10 @@ export function dueForRefresh(expected: string | null, state: RefreshState | und
   return state.attemptedAt.slice(0, 10) <= shift(today, -14);
 }
 
-export async function loadSubjects(db: Pick<pg.Pool, "query">, only?: string[]): Promise<Subject[]> {
+/** A ticker with no EODHD mapping and no active listing is returned in `unresolved`; the run records it as a failure and continues. */
+export async function loadSubjects(db: Pick<pg.Pool, "query">, only?: string[]): Promise<{ subjects: Subject[]; unresolved: string[] }> {
   const universe = (await loadUniverse(db, undefined, { collect: true })).map((row) => row.symbol).filter((ticker) => !only || only.includes(ticker));
-  if (!universe.length) return [];
+  if (!universe.length) return { subjects: [], unresolved: [] };
   const result = await db.query<{ ticker: string; vendor_symbol: string | null }>(`SELECT i.ticker,
     COALESCE(ids.vendor_symbols->>'eodhd', s.vendor_symbol) AS vendor_symbol
     FROM instruments i
@@ -44,9 +45,8 @@ export async function loadSubjects(db: Pick<pg.Pool, "query">, only?: string[]):
       (vendor_symbol=i.ticker OR (exchange='US' AND code=i.ticker))
       ORDER BY CASE WHEN vendor_symbol=i.ticker THEN 0 ELSE 1 END, exchange LIMIT 1) s ON true
     WHERE i.ticker=ANY($1::text[]) ORDER BY i.ticker`, [universe]);
-  const missing = result.rows.filter((row) => !row.vendor_symbol);
-  if (missing.length) throw new Error(`Missing EODHD symbol for ${missing.map((row) => row.ticker).join(", ")}; run symbols:sync or set instrument_ids.vendor_symbols.eodhd`);
-  return result.rows.map((row) => ({ ticker: row.ticker, vendorSymbol: row.vendor_symbol! }));
+  return { subjects: result.rows.filter((row) => row.vendor_symbol).map((row) => ({ ticker: row.ticker, vendorSymbol: row.vendor_symbol! })),
+    unresolved: result.rows.filter((row) => !row.vendor_symbol).map((row) => row.ticker) };
 }
 
 async function states(db: Pick<pg.Pool, "query">): Promise<Map<string, RefreshState>> {
@@ -74,8 +74,11 @@ export async function runEodhdFundamentals(db: pg.Pool | null, api: Fundamentals
   const now = options.now ?? new Date();
   const today = now.toISOString().slice(0, 10);
   const from = shift(today, -14), to = shift(today, 90);
-  const subjects = options.subjects ?? (db ? await loadSubjects(db, options.only) : []);
-  if (!subjects.length) return { calendarRows: 0, due: 0, refreshed: 0, facts: 0, eps: 0, calls: 0, failures: 0, failedSymbols: "", stoppedEarly: false };
+  const { subjects, unresolved } = options.subjects ? { subjects: options.subjects, unresolved: [] as string[] }
+    : db ? await loadSubjects(db, options.only) : { subjects: [], unresolved: [] as string[] };
+  for (const ticker of unresolved)
+    process.stderr.write(`${JSON.stringify({ event: "eodhd_fundamentals_symbol_unresolved", ticker, reason: "no EODHD mapping or active listing" })}\n`);
+  if (!subjects.length) return { calendarRows: 0, due: 0, refreshed: 0, facts: 0, eps: 0, calls: 0, failures: unresolved.length, failedSymbols: unresolved.join(","), stoppedEarly: false };
   const byVendor = new Map(subjects.map((row) => [row.vendorSymbol, row.ticker]));
   const calendar = await api.earningsCalendar({ from, to }); // One bulk call for the whole window.
   const observations = parseEodhdCalendar(calendar, from, to).flatMap((row) => {
@@ -96,7 +99,7 @@ export async function runEodhdFundamentals(db: pg.Pool | null, api: Fundamentals
   const due = subjects.filter((row) => dueForRefresh(expected.get(row.ticker) ?? last.get(row.ticker)?.lastExpectedReportDate ?? null, last.get(row.ticker), today));
   const picked = due.slice(0, options.maxSymbols ?? 25);
   let facts = 0, eps = 0, refreshed = 0, stoppedEarly = false;
-  const failed: string[] = [];
+  const failed: string[] = [...unresolved];
   const repo = db ? new PostgresCollectorRepository(db) : null;
   for (const row of picked) {
     try {

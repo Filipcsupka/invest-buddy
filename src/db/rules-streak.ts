@@ -3,12 +3,12 @@ import { CACHE_TAGS, webCached } from "../data/web-cache";
 import { getPool } from "./pool";
 import { isIsoDate } from "./iso-date";
 import { pageScoreRow } from "./universe";
-import { HITS, ruleState, type RuleHit } from "./rule-changes";
+import { ruleState, type RuleHit } from "./rule-changes";
 import type { Queryable } from "./history";
 
 /**
  * Rules-met streak per ticker, derived on read from the daily `score_results` snapshots (no table). Only rule id,
- * matched and unknown are read from the audit (see HITS in rule-changes), so vendor inputs stay in the database.
+ * matched and unknown are read from the generated streak projection, so vendor inputs stay in the database.
  */
 export interface RuleDay { asOf: string; hits: readonly Pick<RuleHit, "id" | "matched" | "unknown">[] }
 export interface RuleStreak {
@@ -80,7 +80,7 @@ export function streaksFromRows(rows: readonly { ticker: string; asOf: string; h
 export async function ruleStreaksFromDb(db: Queryable, window = STREAK_WINDOW_DAYS): Promise<Record<string, RuleStreak>> {
   const result = await db.query<{ ticker: string; asOf: string; hits: RuleDay["hits"] }>(
     `WITH latest AS (SELECT max(as_of) AS d FROM score_results l WHERE ${pageScoreRow("l")})
-     SELECT s.ticker, s.as_of::text AS "asOf", ${HITS} AS hits FROM score_results s
+     SELECT s.ticker, s.as_of::text AS "asOf", s.streak_hits AS hits FROM score_results s
      WHERE ${pageScoreRow()} AND s.as_of >= (SELECT d FROM latest) - $1::int
        AND s.ticker IN (SELECT c.ticker FROM score_results c WHERE c.as_of = (SELECT d FROM latest) AND ${pageScoreRow("c")})
      ORDER BY s.ticker, s.as_of DESC`, [window]);
