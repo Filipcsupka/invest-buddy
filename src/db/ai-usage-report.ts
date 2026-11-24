@@ -31,6 +31,7 @@ function weekKey(date: Date) {
 
 export function summarizeUsage(rows: Call[]) {
   const days: Record<string, number> = {}, weeks: Record<string, number> = {}, callsByJobAndModel: Record<string, number> = {};
+  const daysByKind: Record<string, Record<string, number>> = {};
   const cutoffs: { at: string; window: string | null; resetAt: string | null; resetHint: string | null; job: string; model: string | null }[] = [];
   const window: { at: number; tokens: number }[] = [];
   let rollingTokens = 0, peakTokens = 0, peakAt: string | null = null, start = 0;
@@ -43,11 +44,13 @@ export function summarizeUsage(rows: Call[]) {
     if (rollingTokens > peakTokens) { peakTokens = rollingTokens; peakAt = row.created_at.toISOString(); }
     const day = row.created_at.toISOString().slice(0, 10), week = weekKey(row.created_at);
     days[day] = (days[day] ?? 0) + tokens; weeks[week] = (weeks[week] ?? 0) + tokens;
+    const kindDays = daysByKind[row.kind] ??= {};
+    kindDays[day] = (kindDays[day] ?? 0) + tokens;
     const key = `${row.kind}/${row.model ?? "unknown"}`;
     callsByJobAndModel[key] = (callsByJobAndModel[key] ?? 0) + 1;
     if (row.status === "cutoff") cutoffs.push({ at: (row.completed_at ?? row.created_at).toISOString(), window: row.cutoff_window, resetAt: row.reset_at?.toISOString() ?? null, resetHint: row.reset_hint, job: row.kind, model: row.model });
   }
-  return { rolling5hPeak: { tokens: peakTokens, endedAt: peakAt }, tokensPerDayUtc: days, tokensPerIsoWeekUtc: weeks, cutoffCount: cutoffs.length, cutoffs, callsByJobAndModel };
+  return { rolling5hPeak: { tokens: peakTokens, endedAt: peakAt }, tokensPerDayUtc: days, tokensPerDayUtcByKind: daysByKind, tokensPerIsoWeekUtc: weeks, cutoffCount: cutoffs.length, cutoffs, callsByJobAndModel };
 }
 
 export async function usageReport(db: Pick<pg.Pool, "query">) {
