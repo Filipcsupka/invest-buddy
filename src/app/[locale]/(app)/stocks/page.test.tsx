@@ -25,6 +25,40 @@ it.each(["en", "sk"])("shows the restored state tally above stock filters (%s)",
 });
 
 describe("scanner route", () => {
+  it.each(["en", "sk"])("paginates sorted rows and keeps URL filters and full-set counts (%s)", async (locale) => {
+    const saved = process.env.DATA_MODE;
+    process.env.DATA_MODE = "fixture";
+    try {
+      const query = { floor: "off", source: "guide", sort: "ticker" };
+      const render = async (page?: string) => renderToStaticMarkup(await Scanner({ params: Promise.resolve({ locale }), searchParams: Promise.resolve({ ...query, page }) }));
+      const first = await render();
+      const second = await render("2");
+      const tickers = (html: string) => {
+        const start = html.indexOf('id="scanner-results"');
+        const results = html.slice(start, html.indexOf("</section>", start));
+        return [...results.matchAll(/class="ticker" href="[^\"]*\/company\/([^\"]+)"/g)].map((match) => match[1]);
+      };
+      expect(tickers(first)).toHaveLength(20);
+      expect(tickers(second).length).toBeGreaterThan(0);
+      expect(new Set([...tickers(first), ...tickers(second)]).size).toBe(tickers(first).length + tickers(second).length);
+      expect(first).toContain(`href="/${locale}/stocks?source=guide&amp;sort=ticker&amp;floor=off&amp;page=2#scanner-results"`);
+      expect(second).toContain(`href="/${locale}/stocks?source=guide&amp;sort=ticker&amp;floor=off#scanner-results"`);
+      expect(second).toContain(locale === "en" ? "Page 2 of 2" : "Strana 2 z 2");
+      const presets = (html: string) => html.match(/<nav class="[^"]*presets[^"]*"[^>]*>[\s\S]*?<\/nav>/)?.[0];
+      expect(presets(first)).toBeDefined();
+      expect(presets(first)).toBe(presets(second));
+      for (const state of ["setup", "watch", "wait", "ignore", "broken"]) {
+        const count = (html: string) => html.match(new RegExp(`data-state="${state}"[^>]*>.*?kit-count-final">(\\d+)`))?.[1];
+        expect(count(first)).toMatch(/^\d+$/);
+        expect(count(first)).toBe(count(second));
+      }
+      expect(await render("999")).toContain(locale === "en" ? "Page 2 of 2" : "Strana 2 z 2");
+      expect(tickers(await render("invalid"))).toEqual(tickers(first));
+    } finally {
+      if (saved === undefined) delete process.env.DATA_MODE; else process.env.DATA_MODE = saved;
+    }
+  });
+
   it("is visible without the paywall flag, with Paid badges for admin on the advanced filters and the streak", async () => {
     const saved = { PAYWALL: process.env.PAYWALL, AUTH: process.env.AUTH, DATA_MODE: process.env.DATA_MODE };
     process.env.PAYWALL = "off";
@@ -126,13 +160,17 @@ describe("scanner route", () => {
     process.env.DATA_MODE = "fixture";
     try {
       const markup = renderToStaticMarkup(await Scanner({ params: Promise.resolve({ locale: "en" }), searchParams: Promise.resolve({}) }));
+      let groups = 0;
       for (const state of ["setup", "watch", "wait", "ignore", "broken"]) {
         const tile = markup.match(new RegExp(`<a[^>]+data-state="${state}"[^>]*>(.*?)</a>`))?.[1];
         const group = markup.match(new RegExp(`id="scanner-group-${state}".*?</summary>`))?.[0];
         expect(tile).toBeDefined();
-        expect(group).toBeDefined();
-        expect(tile?.match(/kit-count-final">(\d+)/)?.[1]).toBe(group?.match(/groupCount_[^\"]*">(\d+)/)?.[1]);
+        if (group) {
+          groups += 1;
+          expect(tile?.match(/kit-count-final">(\d+)/)?.[1]).toBe(group.match(/groupCount_[^\"]*">(\d+)/)?.[1]);
+        }
       }
+      expect(groups).toBeGreaterThan(0);
     } finally {
       if (saved === undefined) delete process.env.DATA_MODE; else process.env.DATA_MODE = saved;
     }
