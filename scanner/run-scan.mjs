@@ -15,7 +15,6 @@ import { validateTicker, validateMacro, validatePayload } from "./validate.mjs";
 const here = dirname(fileURLToPath(import.meta.url));
 const OUT = process.env.SCAN_OUT_DIR || join(here, "out");
 const KEYCHAIN_SERVICE = "investbuddy-ingest";
-const MAX_FAIL_RATIO = 0.2;
 
 // ---------- args ----------
 function parseArgs(argv) {
@@ -239,7 +238,8 @@ async function main() {
       log(`${label}: ok in ${Math.round((Date.now() - t0) / 1000)}s`);
       return { job, value };
     } catch (e) {
-      log(`${label}: FAILED ${e.message}`);
+      if (/\b(?:HTTP|status) (?:401|402|403)\b/.test(e.message)) throw e;
+      log(`${label}: WARN ${e.message}`);
       return { job, error: e.message };
     }
   });
@@ -287,10 +287,9 @@ async function main() {
   }
 
   const total = selected.length + 1;
-  const ratio = failed.length / total;
   if (failed.length) log(`failed (${failed.length}/${total}): ${failed.map((f) => f.symbol).join(", ")}`);
   log(`done ok=${total - failed.length} failed=${failed.length}`);
-  if (ratio > MAX_FAIL_RATIO) { log(`failure ratio ${(ratio * 100).toFixed(0)}% exceeds ${MAX_FAIL_RATIO * 100}%`); process.exit(1); }
+  if (!tickers.length) { log("all tickers failed"); process.exit(1); }
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main().catch((e) => { console.error(`fatal: ${e.stack || e.message}`); process.exit(1); });

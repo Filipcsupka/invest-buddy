@@ -31,8 +31,9 @@ export async function runMarketBars(db: Pick<pg.Pool, "query">, api: Pick<EodhdC
         rows += await upsertAssetBars(db, asset, await api.eod(asset.vendor_symbol, { from, to: today }));
         refreshed++;
       } catch (error) {
+        if (error instanceof EodhdHttpError && [401, 402, 403].includes(error.status) || error && typeof error === "object" && "code" in error && typeof error.code === "string" && /^[0-9A-Z]{5}$/.test(error.code)) throw error;
         failures.push(asset.vendor_symbol);
-        if (error instanceof EodhdHttpError && [401, 402, 403].includes(error.status)) break;
+        process.stderr.write(`WARN ${asset.vendor_symbol}: ${error instanceof Error ? error.message : "request failed"}\n`);
       }
     }
   } finally {
@@ -46,7 +47,7 @@ if (process.argv[1]?.endsWith("eodhd-market-bars.ts") || process.argv[1]?.endsWi
   const options = parseMarketBarsArgs(process.argv.slice(2));
   const db = new pg.Pool({ connectionString: process.env.DATABASE_URL });
   void runLoggedJob("eodhd-market-bars", async () => {
-    try { const result = await runMarketBars(db, options.dryRun ? null : new EodhdClient(), options); if (result.failures) process.exitCode = 1; return result; }
+    try { const result = await runMarketBars(db, options.dryRun ? null : new EodhdClient(), options); if (result.failures && result.refreshed === 0) process.exitCode = 1; return result; }
     finally { await db.end(); }
   }, options.dryRun ? { store: null } : {});
 }

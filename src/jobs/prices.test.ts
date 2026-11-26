@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { OHLCV } from "../engine";
 import { MemoryPriceRepository, PostgresPriceRepository } from "../db/prices";
 import type { MarketDataProvider } from "../data/providers";
-import { DailyLimitError } from "../data/twelvedata";
+import { DailyLimitError, TwelveDataError } from "../data/twelvedata";
 import { priceTickers, runPrices } from "./prices";
 
 const bar = (date: string, close = 100): OHLCV => ({ date, open: close, high: close + 1, low: close - 1, close, volume: 1000 });
@@ -46,13 +46,14 @@ describe("runPrices", () => {
     expect(r.failures[0].reason).toMatch(/kept stored bars/);
     expect(repo.bars.get("NVDA")?.size).toBe(10);
   });
-  it("exits non-zero when more than 10 percent of tickers fail", async () => {
+  it("keeps a mixed ticker run successful and fails when all tickers fail", async () => {
     const tickers = Array.from({ length: 20 }, (_, i) => `T${i}`);
     const failing = (n: number) => provider(async (t) => { if (Number(t.slice(1)) < n) throw new Error("boom"); return series(3); });
     expect((await runPrices(failing(2), new MemoryPriceRepository(), tickers)).exitCode).toBe(0);
     const bad = await runPrices(failing(3), new MemoryPriceRepository(), tickers);
-    expect(bad.exitCode).toBe(1);
+    expect(bad.exitCode).toBe(0);
     expect(bad.failures).toHaveLength(3);
+    expect((await runPrices(failing(20), new MemoryPriceRepository(), tickers)).exitCode).toBe(1);
   });
   it("records the daily-limit stop and marks the rest as not fetched", async () => {
     const repo = new MemoryPriceRepository();
@@ -63,6 +64,12 @@ describe("runPrices", () => {
     expect(r.exitCode).toBe(1);
     expect(r.stoppedReason).toMatch(/daily/i);
     expect(repo.runs[0].failures.map((f) => f.ticker)).toEqual(["B", "C", "D"]);
+  });
+  it("fails immediately when the vendor rejects authorization", async () => {
+    const repo = new MemoryPriceRepository();
+    const denied = provider(async (ticker) => ticker === "B" ? Promise.reject(new TwelveDataError("authorization rejected", 401)) : series(3));
+    await expect(runPrices(denied, repo, ["A", "B", "C"])).rejects.toMatchObject({ status: 401 });
+    expect(repo.bars.has("C")).toBe(false);
   });
   it("writes nothing in dry-run", async () => {
     const repo = new MemoryPriceRepository();

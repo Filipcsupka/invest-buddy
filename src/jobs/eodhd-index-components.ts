@@ -39,9 +39,10 @@ export async function runIndexComponents(db: Db, api: Api | null, options: Index
       let parsed;
       try { parsed = parseComponents(await api.fundamentals<unknown>(symbol, "Components")); }
       catch (error) {
+        if (error instanceof EodhdHttpError && [401, 402, 403].includes(error.status) || error && typeof error === "object" && "code" in error && typeof error.code === "string" && /^[0-9A-Z]{5}$/.test(error.code)) throw error;
         failures.push(symbol);
+        process.stderr.write(`WARN ${symbol}: ${error instanceof Error ? error.message : "request failed"}\n`);
         await saveComponents(db, symbol, today, null);
-        if (error instanceof EodhdHttpError && [401, 402, 403].includes(error.status)) break;
         continue;
       }
       const saved = await saveComponents(db, symbol, today, parsed);
@@ -58,7 +59,7 @@ if (process.argv[1]?.endsWith("eodhd-index-components.ts") || process.argv[1]?.e
   const options = parseIndexComponentsArgs(process.argv.slice(2));
   const db = new pg.Pool({ connectionString: process.env.DATABASE_URL });
   void runLoggedJob("eodhd-index-components", async () => {
-    try { const result = await runIndexComponents(db, options.dryRun ? null : new EodhdClient(), options); if (result.failures) process.exitCode = 1; return result; }
+    try { const result = await runIndexComponents(db, options.dryRun ? null : new EodhdClient(), options); if (result.failures && result.refreshed + result.empty === 0) process.exitCode = 1; return result; }
     finally { await db.end(); }
   }, options.dryRun ? { store: null } : {});
 }

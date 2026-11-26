@@ -94,7 +94,7 @@ export async function runEodhdCatalyst(db: pg.Pool | null, api: CatalystClient, 
   let requests = 0, articles = 0, documents = 0, facts = 0;
   const failed: string[] = [...loaded.unresolved];
   for (const ticker of loaded.unresolved)
-    process.stderr.write(`${JSON.stringify({ event: "eodhd_catalyst_symbol_unresolved", symbols: [ticker], reason: "no EODHD mapping or home listing" })}\n`);
+    process.stderr.write(`WARN ${ticker}: no EODHD mapping or home listing\n`);
   let stoppedEarly = false;
   const seen = new Map<string, Set<string>>();
   for (const row of shortlisted) {
@@ -128,9 +128,10 @@ export async function runEodhdCatalyst(db: pg.Pool | null, api: CatalystClient, 
         articles++;
       }
     } catch (error) {
+      if (error && typeof error === "object" && "code" in error && typeof error.code === "string" && /^[0-9A-Z]{5}$/.test(error.code)) throw error;
       failed.push(row.ticker);
-      const reason = error instanceof EodhdHttpError ? `HTTP ${error.status}` : error instanceof Error ? error.name : "error";
-      process.stderr.write(`${JSON.stringify({ event: "eodhd_catalyst_news_failed", symbols: [row.ticker], reason })}\n`);
+      const reason = error instanceof EodhdHttpError ? `HTTP ${error.status}` : error instanceof Error ? error.message : "error";
+      process.stderr.write(`WARN ${row.ticker}: ${reason}\n`);
       if (error instanceof EodhdHttpError && [401, 402, 403].includes(error.status)) { stoppedEarly = true; break; }
     }
   }
@@ -143,6 +144,7 @@ export async function runEodhdCatalyst(db: pg.Pool | null, api: CatalystClient, 
       documentIds: fact.documentIds, sourceId: SOURCE, expiresAt: shift(today, fact.kind === "earnings_revision" ? 15 : 8) });
   }
   const result = { subjects: subjects.length, shortlisted: shortlisted.length, newsSymbols: shortlisted.length,
+    requested: shortlisted.length + loaded.unresolved.length, succeeded: requests - failed.length + loaded.unresolved.length,
     scoreMissing: scoreDistribution.missing, scoreBelow15: scoreDistribution.below15,
     scoreFrom15To19: scoreDistribution.from15To19, scoreAtLeast20: scoreDistribution.atLeast20,
     newsRequests: requests, newsArticles: articles,
@@ -151,6 +153,8 @@ export async function runEodhdCatalyst(db: pg.Pool | null, api: CatalystClient, 
   process.stderr.write(`${JSON.stringify({ event: "eodhd_catalyst_result", ...result })}\n`);
   return result;
 }
+
+export const catalystRunFailed = (result: { stoppedEarly: boolean; newsRequests: number; succeeded: number }) => result.stoppedEarly || result.newsRequests > 0 && result.succeeded === 0;
 
 export function parseArgs(args: string[]): CatalystOptions {
   const out: CatalystOptions = { dryRun: false, maxNewsSymbols: MAX_NEWS_SYMBOLS };
@@ -186,7 +190,7 @@ async function main() {
   try {
     const result = await runEodhdCatalyst(db, api, options);
     process.stdout.write(`eodhd-catalyst: ${JSON.stringify(result)}${options.dryRun ? " (dry run)" : ""}\n`);
-    if (result.failures) process.exitCode = 1;
+    if (catalystRunFailed(result)) process.exitCode = 1;
     return result;
   } finally { await db?.end(); }
 }

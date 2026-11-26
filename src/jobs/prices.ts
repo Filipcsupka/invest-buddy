@@ -2,7 +2,7 @@ import { runLoggedJob } from "./job-log";
 import pg from "pg";
 import universe from "../../scanner/universe.json";
 import type { MarketDataProvider } from "../data/providers";
-import { DEFAULT_SYMBOL_MAP, DailyLimitError, SymbolNotFoundError, TwelveDataProvider } from "../data/twelvedata";
+import { DEFAULT_SYMBOL_MAP, DailyLimitError, SymbolNotFoundError, TwelveDataError, TwelveDataProvider } from "../data/twelvedata";
 import { MemoryPriceRepository, PostgresPriceRepository, type PriceRepository, type PriceRunRecord } from "../db/prices";
 import { loadUniverse } from "../db/universe";
 import { loadVendorSymbols } from "../data/security-master";
@@ -10,7 +10,6 @@ import { CapReached, PostgresUsageLedger } from "../data/usage";
 import { randomUUID } from "node:crypto";
 
 export const BENCHMARK = "SPY";
-export const FAILURE_LIMIT = 0.1;
 
 export function priceTickers(instruments: { symbol: string }[] = universe.instruments): string[] {
   return [...new Set([...instruments.map((item) => item.symbol), BENCHMARK])];
@@ -42,13 +41,15 @@ export async function runPrices(provider: MarketDataProvider, repository: PriceR
         for (const rest of tickers.slice(index)) failures.push({ ticker: rest, reason: rest === ticker ? error.message : "not fetched: daily limit reached" });
         break;
       }
+      if (error instanceof TwelveDataError && [401, 402, 403].includes(error.status ?? 0)) throw error;
+      if (error && typeof error === "object" && "code" in error && typeof error.code === "string" && /^[0-9A-Z]{5}$/.test(error.code)) throw error;
       if (error instanceof SymbolNotFoundError) unmapped.push(ticker);
       failures.push({ ticker, reason: error instanceof Error ? error.message : "unknown error" });
     }
   }
   const run: PriceRunRecord = { provider: options.provider ?? "twelvedata", startedAt, requested: tickers.length, succeeded, failed: failures.length, barsWritten, barsRevised, failures, stoppedReason };
   if (!options.dryRun) await repository.recordRun(run);
-  const exitCode = tickers.length > 0 && failures.length / tickers.length > FAILURE_LIMIT ? 1 : 0;
+  const exitCode = stoppedReason || tickers.length > 0 && succeeded === 0 ? 1 : 0;
   return { ...run, exitCode, unmapped };
 }
 
@@ -76,7 +77,7 @@ async function main() {
     const result = await runPrices(new TwelveDataProvider({ apiKey, reserve, ...(pool ? { symbolMap: await loadVendorSymbols(pool, "twelvedata") } : {}) }), repository, tickers, { dryRun });
     process.stdout.write(`Prices: ${result.succeeded}/${result.requested} tickers, ${result.barsWritten} bars written, ${result.barsRevised} revised${dryRun ? " (dry run, nothing stored)" : ""}\n`);
     if (result.unmapped.length) process.stderr.write(`Unmapped symbols: ${result.unmapped.join(", ")}\n`);
-    for (const failure of result.failures) process.stderr.write(`Failed ${failure.ticker}\n`);
+    for (const failure of result.failures) process.stderr.write(`WARN ${failure.ticker}: ${failure.reason}\n`);
     if (result.stoppedReason) process.stderr.write("Stopped: source limit reached\n");
     process.exitCode = result.exitCode;
     return { requested: result.requested, succeeded: result.succeeded, failures: result.failed, barsWritten: result.barsWritten, barsRevised: result.barsRevised };

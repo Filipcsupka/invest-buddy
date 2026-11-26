@@ -8,7 +8,7 @@ import { loadUniverse } from "../db/universe";
 import { loadVendorSymbols } from "../data/security-master";
 import { insertCorporateActions } from "../db/corporate-actions";
 import type { CorporateAction } from "../data/corporate-actions";
-import { EodhdClient, type BulkLastDayBar, type BulkSplit, type EodBar, type Split } from "../data-providers/eodhd/client";
+import { EodhdClient, EodhdHttpError, type BulkLastDayBar, type BulkSplit, type EodBar, type Split } from "../data-providers/eodhd/client";
 import { runLoggedJob } from "./job-log";
 import { instrumentRegion, loadRegions, REGION_BENCHMARKS, type Region } from "../universe/region";
 
@@ -26,6 +26,7 @@ type EodhdPricesClient = Pick<EodhdClient, "eod" | "splits" | "getCallCosts"> & 
 export type PriceMode = "daily" | "backfill";
 export interface EodhdPriceOptions { mode: PriceMode; dryRun?: boolean; now?: () => Date; unmapped?: string[]; recordActions?: (actions: CorporateAction[]) => Promise<void> }
 export interface EodhdPriceResult extends PriceRunRecord { callCost: number; insufficientHistory: string[] }
+const fatal = (error: unknown) => error instanceof EodhdHttpError && [401, 402, 403].includes(error.status) || Boolean(error && typeof error === "object" && "code" in error && typeof error.code === "string" && /^[0-9A-Z]{5}$/.test(error.code));
 
 /** EODHD's adjusted_close includes dividends and must not be used for price history. */
 export function rawBar(row: EodBar, volumeFactor = 1): OHLCV {
@@ -104,7 +105,7 @@ export async function runEodhdPrices(client: EodhdPricesClient, repository: Pric
         barsRevised += result.revised;
       }
       succeeded++;
-    } catch (error) { failures.push({ ticker: symbol.ticker, reason: error instanceof Error ? error.message : "invalid bars" }); }
+    } catch (error) { if (fatal(error)) throw error; failures.push({ ticker: symbol.ticker, reason: error instanceof Error ? error.message : "invalid bars" }); }
   };
   const single = async (symbol: PriceSymbol) => {
     try {
@@ -113,7 +114,7 @@ export async function runEodhdPrices(client: EodhdPricesClient, repository: Pric
       const day = rows[0]?.date;
       if (!day) throw new Error("empty EODHD daily response");
       await save(symbol, [rows[0]], await client.splits(symbol.vendorSymbol, { from: day, to: day }));
-    } catch (error) { failures.push({ ticker: symbol.ticker, reason: error instanceof Error ? error.message : "daily request failed" }); }
+    } catch (error) { if (fatal(error)) throw error; failures.push({ ticker: symbol.ticker, reason: error instanceof Error ? error.message : "daily request failed" }); }
   };
   if (options.mode === "daily") {
     const exchanges = [...new Set(symbols.map((symbol) => symbol.exchange))];
@@ -141,12 +142,12 @@ export async function runEodhdPrices(client: EodhdPricesClient, repository: Pric
         }
         // The bulk file can omit a listed symbol; its own EOD and splits requests (2 calls) fill the gap.
         for (const symbol of missing) await single(symbol);
-      } catch (error) { for (const symbol of group) failures.push({ ticker: symbol.ticker, reason: error instanceof Error ? error.message : "bulk request failed" }); }
+      } catch (error) { if (fatal(error)) throw error; for (const symbol of group) failures.push({ ticker: symbol.ticker, reason: error instanceof Error ? error.message : "bulk request failed" }); }
     }
   } else {
     for (const symbol of symbols) {
       try { await save(symbol, await client.eod(symbol.vendorSymbol, { period: "d", order: "a" }), await client.splits(symbol.vendorSymbol)); }
-      catch (error) { failures.push({ ticker: symbol.ticker, reason: error instanceof Error ? error.message : "history request failed" }); }
+      catch (error) { if (fatal(error)) throw error; failures.push({ ticker: symbol.ticker, reason: error instanceof Error ? error.message : "history request failed" }); }
     }
   }
   const run: PriceRunRecord = { provider: "eodhd", startedAt, requested: symbols.length + (options.unmapped?.length ?? 0), succeeded, failed: failures.length, barsWritten, barsRevised, failures, stoppedReason: null };
@@ -184,7 +185,7 @@ async function main() {
     const fixtureClient: EodhdPricesClient = { eod: async () => history, splits: async () => [], eodBulkLastDay: fixtureBulk, getCallCosts: () => ({ "exchanges-list": 0, "exchange-symbol-list": 0, eod: 0, splits: 0, "eod-bulk-last-day": 0, fundamentals: 0, "calendar/earnings": 0, news: 0, "sec-filings/form4": 0 }) };
     const result = await runEodhdPrices(fixtureClient, new MemoryPriceRepository(), [{ ticker: "MSFT", vendorSymbol: "MSFT.US", exchange: "US", code: "MSFT", currency: "USD" }], args);
     process.stdout.write(`${JSON.stringify({ mode: args.mode, ...result, fixture: true, dryRun: true })}\n`);
-    if (result.failed) process.exitCode = 1;
+    if (result.requested > 0 && result.succeeded === 0) process.exitCode = 1;
     return { requested: result.requested, succeeded: result.succeeded, failures: result.failed, callCost: 0 };
   }
   if (!process.env.DATABASE_URL || !process.env.EODHD_API_KEY) throw new Error("DATABASE_URL and EODHD_API_KEY are required; no request was made");
@@ -197,8 +198,8 @@ async function main() {
     const { symbols, unmapped } = await loadEodhdPriceSymbols(db, args.only ?? universe);
     const result = await runEodhdPrices(new EodhdClient(), new PostgresPriceRepository(db), symbols, { ...args, unmapped, recordActions: (actions) => insertCorporateActions(db, actions).then(() => undefined) });
     process.stdout.write(`${JSON.stringify({ mode: args.mode, requested: result.requested, succeeded: result.succeeded, failed: result.failed, barsWritten: result.barsWritten, barsRevised: result.barsRevised, insufficientHistory: result.insufficientHistory, estimatedCalls: result.callCost, dryRun: args.dryRun })}\n`);
-    for (const failure of result.failures) process.stderr.write(`Failed ${failure.ticker}: ${failure.reason}\n`);
-    if (result.failed) process.exitCode = 1;
+    for (const failure of result.failures) process.stderr.write(`WARN ${failure.ticker}: ${failure.reason}\n`);
+    if (result.requested > 0 && result.succeeded === 0) process.exitCode = 1;
     return { requested: result.requested, succeeded: result.succeeded, failures: result.failed, estimatedCalls: result.callCost };
   } finally { await db.end(); }
 }

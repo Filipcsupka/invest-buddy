@@ -14,6 +14,17 @@ describe("parseSubmissions", () => {
   });
 });
 
+it("fails the refresh when a database write fails", async () => {
+  const db = { query: async (sql: string) => {
+    if (sql.startsWith("SELECT")) return { rows: [{ id: 1, ticker: "A", instrument_type: "equity", cik: 1, sic: null,
+      sic_description: null, fiscal_year_end: null, state_of_incorporation: null, exchange: null, vendor_symbols: {} }] };
+    throw Object.assign(new Error("database unavailable"), { code: "08006" });
+  } } as unknown as pg.Pool;
+  const get = async (url: string) => url.endsWith("company_tickers.json")
+    ? JSON.stringify({ "0": { ticker: "A", cik_str: 1 } }) : JSON.stringify({ sic: "1234" });
+  await expect(refreshMaster(db, { get, today: "2026-10-12" })).rejects.toMatchObject({ code: "08006" });
+});
+
 const TODAY = "2026-10-12";
 /** One connection, so BEGIN and ROLLBACK wrap everything. Needs a migrated TEST_DATABASE_URL. */
 async function inRollback(fn: (pool: pg.Pool) => Promise<void>) {

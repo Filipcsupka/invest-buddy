@@ -1,7 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { parseArgs, parseClaudeEnvelope, addUsage, postTicker, materialChange, loadRuntimeUniverse, callAgentNoTools } from "../run-extract.mjs";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
+import http from "node:http";
 import { chmodSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -93,7 +94,7 @@ test("haiku escalation is limited to material changes", () => {
   assert.equal(materialChange({ fundamentals: { guidanceCut: false, narrativeChanged: false }, evidence: [] }), false);
 });
 
-test("three gated tickers make three model calls", () => {
+test("three gated tickers make three model calls and a partial database gate stays pending", async () => {
   const dir = mkdtempSync(join(tmpdir(), "extract-three-"));
   const bundles = join(dir, "bundles"); mkdirSync(bundles);
   const symbols = ["NVDA", "AMD", "AVGO"];
@@ -111,6 +112,81 @@ process.stdout.write(JSON.stringify({ is_error:false, result:JSON.stringify({ sy
   assert.equal(run.status, 0, run.stderr);
   assert.deepEqual(readFileSync(join(dir, "calls"), "utf8").trim().split("\n"), symbols);
   assert.match(run.stderr, /totals: 3 model calls/);
+  let consumed = 0;
+  const server = http.createServer((req, res) => {
+    const url = new URL(req.url, "http://local");
+    res.setHeader("content-type", "application/json");
+    if (url.pathname === "/api/ingest/gate" && req.method === "GET") return res.end(JSON.stringify({ asOf: "2026-10-05", symbols: ["NVDA", "MISSING", "ROKU"], revision: 1, reasons: {}, accessions: {}, consumed: false }));
+    if (url.pathname === "/api/ingest/gate" && req.method === "POST") { consumed++; return res.end(JSON.stringify({ recorded: true })); }
+    if (url.pathname === "/api/ingest/universe") return res.end(JSON.stringify({ instruments: [{ symbol: "NVDA", name: "Nvidia", sector: "Tech" }, { symbol: "MISSING", name: "Missing", sector: "Tech" }] }));
+    if (url.pathname === "/api/ingest/extraction-runs") return res.end(JSON.stringify(req.method === "GET" ? { skip: false } : { recorded: true }));
+    if (url.pathname === "/api/ingest/ai-budget" || url.pathname === "/api/ingest/scan") return res.end(JSON.stringify({ recorded: true }));
+    res.statusCode = 404;
+    res.end(JSON.stringify({ error: "not found" }));
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const partial = await new Promise((resolve) => {
+      const child = spawn(process.execPath, [new URL("../run-extract.mjs", import.meta.url).pathname, "--gate-from-db", "--bundle-dir", bundles, "--base-url", base, "--as-of", "2026-10-05"], { env: { ...process.env, PATH: `${dir}:${process.env.PATH}`, INGEST_TOKEN: "test", ANTHROPIC_API_KEY: "test", SCAN_OUT_DIR: dir } });
+      let stderr = "";
+      child.stderr.on("data", (chunk) => { stderr += chunk; });
+      child.on("close", (code) => resolve({ code, stderr }));
+    });
+    assert.equal(partial.code, 0, partial.stderr);
+    assert.equal(consumed, 0);
+    assert.match(partial.stderr, /WARN ROKU: not in instruments table/);
+    assert.match(partial.stderr, /MISSING: WARN/);
+    assert.match(partial.stderr, /ok 1, skipped 0, failed 2/);
+  } finally { await new Promise((resolve) => server.close(resolve)); }
+});
+
+test("an all-stale gate warns, counts the symbol and exits cleanly", () => {
+  const dir = mkdtempSync(join(tmpdir(), "extract-stale-"));
+  const bundles = join(dir, "bundles"); mkdirSync(bundles);
+  const args = [new URL("../run-extract.mjs", import.meta.url).pathname, "--dry-run", "--bundle-dir", bundles, "--as-of", "2026-10-05"];
+  const env = { ...process.env, INGEST_TOKEN: "", SCAN_OUT_DIR: dir };
+  const allFailed = spawnSync(process.execPath, [...args, "--only", "ZZZZ"], { env, encoding: "utf8" });
+  assert.equal(allFailed.status, 0, allFailed.stderr);
+  assert.match(allFailed.stderr, /WARN ZZZZ: not in instruments table/);
+  assert.match(allFailed.stderr, /ok 0, skipped 0, failed 1/);
+});
+
+test("the database extract gate stays pending after a real symbol failure and clears stale-only work", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "extract-db-gate-"));
+  const bundles = join(dir, "bundles"); mkdirSync(bundles);
+  writeFileSync(join(bundles, "AMD.json"), JSON.stringify({ symbol: "AMD", documents: [], facts: [] }));
+  let gateSymbols = ["AMD", "NVDA", "ROKU"], consumed = 0;
+  const server = http.createServer((req, res) => {
+    const url = new URL(req.url, "http://local");
+    res.setHeader("content-type", "application/json");
+    if (url.pathname === "/api/ingest/gate" && req.method === "GET") return res.end(JSON.stringify({ asOf: "2026-10-05", symbols: gateSymbols, revision: 1, reasons: {}, accessions: {}, consumed: false }));
+    if (url.pathname === "/api/ingest/gate" && req.method === "POST") { consumed++; return res.end(JSON.stringify({ recorded: true })); }
+    if (url.pathname === "/api/ingest/universe") return res.end(JSON.stringify({ instruments: [{ symbol: "AMD", name: "AMD", sector: "Tech" }, { symbol: "NVDA", name: "Nvidia", sector: "Tech" }] }));
+    if (url.pathname === "/api/ingest/extraction-runs") return res.end(JSON.stringify({ skip: true }));
+    res.statusCode = 404;
+    res.end(JSON.stringify({ error: "not found" }));
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const args = [new URL("../run-extract.mjs", import.meta.url).pathname, "--gate-from-db", "--agent", "codex", "--bundle-dir", bundles, "--base-url", base, "--as-of", "2026-10-05"];
+    const run = () => new Promise((resolve) => {
+      const child = spawn(process.execPath, args, { env: { ...process.env, INGEST_TOKEN: "test", SCAN_OUT_DIR: dir } });
+      let stderr = "";
+      child.stderr.on("data", (chunk) => { stderr += chunk; });
+      child.on("close", (code) => resolve({ code, stderr }));
+    });
+    const partial = await run();
+    assert.equal(partial.code, 0, partial.stderr);
+    assert.equal(consumed, 0);
+    assert.match(partial.stderr, /WARN ROKU: not in instruments table/);
+    assert.match(partial.stderr, /NVDA: WARN/);
+    gateSymbols = ["ROKU"];
+    const stale = await run();
+    assert.equal(stale.code, 0, stale.stderr);
+    assert.equal(consumed, 1);
+  } finally { await new Promise((resolve) => server.close(resolve)); }
 });
 
 test("a fake Claude five-hour cutoff stops extraction with exit 5 and no retry", () => {

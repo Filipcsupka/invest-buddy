@@ -47,8 +47,9 @@ export async function runScreener(db: Db, api: Api | null, options: ScreenerArgs
         rows += await transact((tx) => saveScreenerRun(tx, preset, today, mapped));
         stored++;
       } catch (error) {
+        if (error instanceof EodhdHttpError && [401, 402, 403].includes(error.status) || error && typeof error === "object" && "code" in error && typeof error.code === "string" && /^[0-9A-Z]{5}$/.test(error.code)) throw error;
         failures.push(preset.id);
-        if (error instanceof EodhdHttpError && [401, 402, 403].includes(error.status)) break;
+        process.stderr.write(`WARN ${preset.id}: ${error instanceof Error ? error.message : "request failed"}\n`);
       }
     }
   } finally {
@@ -67,7 +68,7 @@ if (process.argv[1]?.endsWith("eodhd-screener.ts") || process.argv[1]?.endsWith(
     finally { client.release(); }
   };
   void runLoggedJob("eodhd-screener", async () => {
-    try { const result = await runScreener(pool, options.dryRun ? null : new EodhdClient(), options, undefined, transact); if (result.failures) process.exitCode = 1; return result; }
+    try { const result = await runScreener(pool, options.dryRun ? null : new EodhdClient(), options, undefined, transact); if (result.failures && result.stored === 0) process.exitCode = 1; return result; }
     finally { await pool.end(); }
   }, options.dryRun ? { store: null } : {});
 }

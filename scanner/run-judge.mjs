@@ -381,10 +381,17 @@ async function main() {
   const input = await loadInput(o, token, asOf, page);
   if (!input.portfolio) log("no portfolio baseline: signals come from data alone; owner EUR bands stay 0");
   const gatedSignals = (input.signals ?? []).filter((s) => !page || page.symbols.includes(s.symbol));
-  if (o.gateFromDb && gatedSignals.length !== page.symbols.length) {
-    log(`gate remains pending: judge input omitted ${page.symbols.filter((symbol) => !gatedSignals.some((s) => s.symbol === symbol)).join(", ")}`);
-    process.exitCode = 1;
-    return { hadHardError: true };
+  const missingSignals = o.gateFromDb && page ? page.symbols.filter((symbol) => !gatedSignals.some((s) => s.symbol === symbol)) : [];
+  for (const symbol of missingSignals) log(`WARN ${symbol}: absent from judge input`);
+  if (page && missingSignals.length === page.symbols.length) {
+    if (!input.signals?.length) {
+      log(`judge input has no signals; ${page.symbols.length} requested symbols remain pending`);
+      process.exitCode = 1;
+      return { hadHardError: true };
+    }
+    log(`all ${missingSignals.length} requested symbols are absent from judge input`);
+    if (!o.dryRun) await consumeGate(o.baseUrl, token, "judge", gate.asOf, gate.revision, page.symbols);
+    return;
   }
   const news = o.force ? gatedSignals : changedSignals(gatedSignals, input.previousIdeas);
   log(`signals ${input.signals?.length ?? 0} (rules ${input.ruleConfigVersion}), changed ${news.length}${news.length ? `: ${news.map((s) => `${s.symbol} ${s.action} ${s.sizeTier}`).join(", ")}` : ""}`);
@@ -487,7 +494,7 @@ async function main() {
   const secs = Math.round((Date.now() - t0) / 1000);
   const totals = `${calls} model call(s), ${text.length} input chars, tokens in ${spent.inputTokens ?? "?"} out ${spent.outputTokens ?? "?"} cache read ${spent.cacheReadTokens ?? "?"} cache created ${spent.cacheCreationTokens ?? "?"}, turns ${spent.turns ?? "?"}${cost ? `, cost $${cost.toFixed(4)}` : ""}, ${secs}s${skipped.size ? `; skipped ${[...skipped.keys()].join(", ")}` : ""}`;
   const runBase = { asOf, runId, agent: o.agent, model, inputHash: hash, usage: spent, costUsd: cost || null, ruleConfigVersion: input.ruleConfigVersion };
-  const skipReasons = [...skipped].map(([sym, why]) => `${sym}: ${why}`).join("; ").slice(0, 2000);
+  const skipReasons = [...skipped, ...missingSignals.map((symbol) => [symbol, "absent from judge input"])].map(([sym, why]) => `${sym}: ${why}`).join("; ").slice(0, 2000);
   if (!result && !o.gateFromDb) {
     log(`FAILED ${error}; ${totals}`);
     if (record) await postRun(o, token, { run: { ...runBase, status: "failed", error: String(error).slice(0, 2000), ideaCount: 0 }, ideas: [] }).catch((e) => log(`could not record run: ${e.message}`));
@@ -495,6 +502,7 @@ async function main() {
   }
   // Gate pages with no valid ideas still record their outcome before advancing.
   const status = result ? "ok" : "failed";
+  if (!result && o.gateFromDb) process.exitCode = 1;
   const finalResult = result ?? { ideas: [], notes: [] };
   for (const n of finalResult.notes) log(n);
   const downgraded = finalResult.ideas.filter((i) => i.downgradedFrom).length, conflicts = finalResult.ideas.filter((i) => i.conflictNote).length;
@@ -507,9 +515,10 @@ async function main() {
     const res = await postRun(o, token, { run: { ...runBase, status, ideaCount: finalResult.ideas.length, output: rawOutput, ...(skipReasons ? { error: skipReasons } : {}) }, ideas: finalResult.ideas });
     log(`POST ok: ${JSON.stringify(res)}; ${totals}`);
     const completedSymbols = page?.symbols.filter((symbol) => !hardSkipped.includes(symbol));
-    if (o.gateFromDb && completedSymbols.length) await consumeGate(o.baseUrl, token, "judge", gate.asOf, gate.revision, completedSymbols);
-    if (skipped.size) log(`WARN skipped ${[...skipped.keys()].join(", ")}; full reasons logged above; summary recorded in the judge run${o.gateFromDb ? hardSkipped.length ? `; ${hardSkipped.join(", ")} remain pending after a hard error` : "; gate symbols consumed after two validation attempts" : ""}`);
-    if (o.gateFromDb && hardSkipped.length) { process.exitCode = 1; return { hadHardError: true }; }
+    if (o.gateFromDb && completedSymbols.length && result) await consumeGate(o.baseUrl, token, "judge", gate.asOf, gate.revision, completedSymbols);
+    if (skipped.size || missingSignals.length) log(`WARN skipped ${[...skipped.keys(), ...missingSignals].join(", ")}; reasons recorded in the judge run`);
+    if (o.gateFromDb && hardSkipped.length) return { hadHardError: true };
+    if (o.gateFromDb && !result) return { hadHardError: true };
   } catch (e) { log(`POST failed: ${e.message}; ${totals}`); process.exit(3); }
 }
 /** With --gate-from-db one run advances pending gates in pages, oldest first, until the queue or budget stops it. */

@@ -108,28 +108,46 @@ export async function enrichEodhd(items, { apiKey, request = fetch, dryRun = fal
   const mapped = items.map((row) => ({ row, symbol: vendorSymbol(row) }));
   const unique = [...new Set(mapped.map(({ symbol }) => symbol).filter((symbol) => symbol && !cache.has(symbol)))];
   const calls = unique.length * 10;
-  if (dryRun) { log(`etf-enrich eodhd: ${items.length} rows, ${unique.length} unique symbols, ${calls} estimated calls (dry run)`); return { items: [], calls }; }
+  if (dryRun) { log(`etf-enrich eodhd: ${items.length} rows, ${unique.length} unique symbols, ${calls} estimated calls (dry run)`); return { items: [], calls, failedSymbols: [] }; }
   if (!apiKey) throw new Error("EODHD_API_KEY is required");
+  const failedSymbols = new Set();
   for (const symbol of unique) {
     const url = new URL(`https://eodhd.com/api/v1.1/fundamentals/${encodeURIComponent(symbol)}`);
     url.searchParams.set("api_token", apiKey); url.searchParams.set("fmt", "json");
-    const response = await request(url, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(60_000) });
-    if (response.status === 402) throw new Error("EODHD fundamentals: HTTP 402, allowance exhausted or plan access denied");
-    if (!response.ok) throw new Error(`EODHD fundamentals ${symbol}: HTTP ${response.status}`);
-    cache.set(symbol, await response.json());
+    try {
+      const response = await request(url, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(60_000) });
+      if ([401, 402, 403].includes(response.status)) throw new Error(`EODHD fundamentals: HTTP ${response.status}`);
+      if (!response.ok) throw new Error(`EODHD fundamentals ${symbol}: HTTP ${response.status}`);
+      cache.set(symbol, await response.json());
+    } catch (error) {
+      if (/HTTP (401|402|403)\b/.test(error.message)) throw error;
+      failedSymbols.add(symbol);
+      log(`WARN ${symbol}: ${error.message}`);
+    }
   }
-  const results = mapped.map(({ row, symbol }) => {
-    const returned = text(cache.get(symbol)?.ETF_Data?.ISIN) ?? text(cache.get(symbol)?.General?.ISIN);
-    const type = text(cache.get(symbol)?.General?.Type);
-    if (row.isin && returned && row.isin !== returned) {
-      log(`etf-enrich ${row.listingKey}: vendor ISIN mismatch; marked incomplete`);
-      return mapFundamentals(row, symbol, undefined);
+  const results = mapped.filter(({ row, symbol }) => {
+    if (symbol && !failedSymbols.has(symbol)) return true;
+    failedSymbols.add(symbol ?? row.listingKey);
+    if (!symbol) log(`WARN ${row.listingKey}: no EODHD vendor symbol`);
+    return false;
+  }).flatMap(({ row, symbol }) => {
+    try {
+      const returned = text(cache.get(symbol)?.ETF_Data?.ISIN) ?? text(cache.get(symbol)?.General?.ISIN);
+      const type = text(cache.get(symbol)?.General?.Type);
+      if (row.isin && returned && row.isin !== returned) {
+        log(`etf-enrich ${row.listingKey}: vendor ISIN mismatch; marked incomplete`);
+        return [mapFundamentals(row, symbol, undefined)];
+      }
+      if (type && type.toUpperCase() !== "ETF") {
+        log(`etf-enrich ${row.listingKey}: vendor type ${type}; marked incomplete`);
+        return [mapFundamentals(row, symbol, undefined)];
+      }
+      return [mapFundamentals(row, symbol, cache.get(symbol))];
+    } catch (error) {
+      failedSymbols.add(symbol ?? row.listingKey);
+      log(`WARN ${row.listingKey}: ${error instanceof Error ? error.message : "invalid vendor response"}`);
+      return [];
     }
-    if (type && type.toUpperCase() !== "ETF") {
-      log(`etf-enrich ${row.listingKey}: vendor type ${type}; marked incomplete`);
-      return mapFundamentals(row, symbol, undefined);
-    }
-    return mapFundamentals(row, symbol, cache.get(symbol));
   });
-  return { items: results, calls };
+  return { items: results, calls, failedSymbols: [...failedSymbols] };
 }

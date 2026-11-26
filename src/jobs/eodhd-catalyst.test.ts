@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type pg from "pg";
-import type { NewsItem } from "../data-providers/eodhd/client";
-import { catalystScoreDistribution, loadCatalystCalendar, loadCatalystSubjects, parseArgs, runEodhdCatalyst, type CatalystSubject } from "./eodhd-catalyst";
+import { EodhdHttpError, type NewsItem } from "../data-providers/eodhd/client";
+import { catalystRunFailed, catalystScoreDistribution, loadCatalystCalendar, loadCatalystSubjects, parseArgs, runEodhdCatalyst, type CatalystSubject } from "./eodhd-catalyst";
 import { loadCatalyst } from "../data/catalyst";
 
 const now = new Date("2026-10-21T12:00:00Z");
@@ -39,6 +39,22 @@ describe("EODHD catalyst job", () => {
     expect(api.news.mock.calls[0][0]).toMatchObject({ from: "2026-10-14", to: "2026-10-21", limit: 25 });
     expect(result).toMatchObject({ shortlisted: 2, newsRequests: 2, newsArticles: 2, facts: 1, documents: 0, baseCalls: 10 });
     expect(result).not.toHaveProperty("possibleTickerSurcharge");
+  });
+
+  it("warns for one failed news symbol and stops on vendor authorization", async () => {
+    const output = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    try {
+      const api = { news: vi.fn(async ({ symbol }: { symbol: string }) => {
+        if (symbol === "ASML.AS") throw new Error("invalid news body");
+        return [] as NewsItem[];
+      }), getCallCosts: () => ({ news: 10 }) };
+      const result = await runEodhdCatalyst(null, api, { dryRun: true, now, subjects: rows, calendarRows: [] });
+      expect(result).toMatchObject({ requested: 2, succeeded: 1, failures: 1, failedSymbols: "ASML" });
+      expect(catalystRunFailed(result)).toBe(false);
+      expect(output.mock.calls.map((call) => String(call[0])).join("\n")).toContain("ASML");
+      const denied = { news: async () => { throw new EodhdHttpError(401, "news"); }, getCallCosts: () => ({ news: 5 }) };
+      expect(await runEodhdCatalyst(null, denied, { dryRun: true, now, subjects: rows, calendarRows: [] })).toMatchObject({ stoppedEarly: true });
+    } finally { output.mockRestore(); }
   });
 
   it("lets a busy name fill only its own request and ignores articles for other symbols", async () => {
@@ -112,6 +128,7 @@ describe("EODHD catalyst job", () => {
     const result = await runEodhdCatalyst(db, api, { dryRun: true, now });
     expect(api.news.mock.calls.map((call) => call[0].symbol)).not.toContain("AI.PA");
     expect(result).toMatchObject({ failures: 1, failedSymbols: "GHOST" });
+    expect(catalystRunFailed(result)).toBe(false);
   });
 
   it("reads the extended list only under SCORE_EXTENDED in private mode", async () => {
@@ -136,6 +153,11 @@ describe("EODHD catalyst job", () => {
       return { rows: [] };
     } } as unknown as pg.Pool;
     expect(await loadCatalystSubjects(db, "2026-10-21")).toEqual({ subjects: [], unresolved: ["AI"] });
+    const api = { news: vi.fn().mockResolvedValue([]), getCallCosts: () => ({ news: 0 }) };
+    const result = await runEodhdCatalyst(db, api, { dryRun: true, now });
+    expect(result).toMatchObject({ requested: 1, newsRequests: 0, succeeded: 0, failures: 1, failedSymbols: "AI" });
+    expect(catalystRunFailed(result)).toBe(false);
+    expect(api.news).not.toHaveBeenCalled();
   });
 
   it("reads the best of the SEC and EODHD facts, so neither source hides the other", async () => {

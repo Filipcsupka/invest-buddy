@@ -15,9 +15,9 @@ async function main() {
     const dryRun = args.includes("--dry-run");
     const result = await refreshMaster(pool, { get: (url) => getText(url), today: new Date().toISOString().slice(0, 10), dryRun });
     for (const c of result.changes) process.stdout.write(`${c.ticker}: ${c.kind} ${c.field} ${c.from ?? "null"} -> ${c.to ?? "null"}${dryRun ? " (dry run)" : ""}\n`);
-    for (const f of result.failures) process.stderr.write(`${f.ticker}: ${f.reason}\n`);
+    for (const f of result.failures) process.stderr.write(`WARN ${f.ticker}: ${f.reason}\n`);
     process.stdout.write(`master-refresh: ${result.checked} checked, ${result.changes.length} changes, ${result.failures.length} failures\n`);
-    if (result.failures.length) process.exitCode = 1;
+    if (result.checked > 0 && result.failures.length === result.checked) process.exitCode = 1;
     return { requested: result.checked, changes: result.changes.length, failures: result.failures.length };
   } finally { await pool.end(); }
 }

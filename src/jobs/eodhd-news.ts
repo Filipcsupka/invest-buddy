@@ -65,9 +65,9 @@ export async function runNews(db: Pick<pg.Pool, "query"> | null, api: NewsClient
         counts.fetched += parsed.rows.length;
         counts.written += await upsertNews(db, parsed.rows);
       } catch (error) {
+        if (fatal(error) || error && typeof error === "object" && "code" in error && typeof error.code === "string" && /^[0-9A-Z]{5}$/.test(error.code)) throw error;
         counts.failedRequests++;
-        process.stderr.write(`${JSON.stringify({ event: "eodhd_news_request_failed", request: Object.values(request)[0] ?? "general", reason: reason(error) })}\n`);
-        if (fatal(error)) break;
+        process.stderr.write(`WARN ${Object.values(request)[0] ?? "general"}: ${reason(error)}\n`);
       }
     }
     counts.pruned = await pruneNews(db, options.retentionDays);
@@ -96,7 +96,7 @@ export async function sentimentCandidates(db: pg.Pool, options: NewsArgs, today:
  */
 export async function runSentiment(db: Pick<pg.Pool, "query"> | null, api: NewsClient | null, options: NewsArgs, candidates: string[], now = new Date()) {
   const today = now.toISOString().slice(0, 10);
-  const counts = { candidates: candidates.length, requests: 0, symbolsFetched: 0, written: 0, skippedRows: 0, failedRequests: 0, capped: false as boolean };
+  const counts = { candidates: candidates.length, requests: 0, symbolsFetched: 0, written: 0, skippedRows: 0, failedRequests: 0, failedSymbols: 0, capped: false as boolean };
   if (!options.dryRun && (!api || !db)) throw new Error("A live sentiment run needs DATABASE_URL and EODHD_API_KEY");
   if (options.dryRun || !api || !db) return { ...counts, dryRun: true, estimatedCalls: candidates.length * SENTIMENT_COST_PER_SYMBOL, failures: 0, calls: 0 };
   const queue = await sentimentQueue(db, candidates);
@@ -117,9 +117,29 @@ export async function runSentiment(db: Pick<pg.Pool, "query"> | null, api: NewsC
         await markSentimentFetched(db, batch.map((row) => row.symbol));
         counts.symbolsFetched += batch.length;
       } catch (error) {
+        if (fatal(error) || error && typeof error === "object" && "code" in error && typeof error.code === "string" && /^[0-9A-Z]{5}$/.test(error.code)) throw error;
         counts.failedRequests++;
-        process.stderr.write(`${JSON.stringify({ event: "eodhd_sentiment_request_failed", symbols: batch.length, reason: reason(error) })}\n`);
-        if (fatal(error)) break;
+        for (const row of batch) {
+          if (batch.length > 1 && budget.allow(SENTIMENT_COST_PER_SYMBOL)) {
+            counts.requests++;
+            try {
+              const parsed = parseSentiments(await api.sentiments([row.symbol], { from, to: today }));
+              counts.skippedRows += parsed.skipped;
+              counts.written += await upsertSentiment(db, parsed.rows);
+              await markSentimentFetched(db, [row.symbol]);
+              counts.symbolsFetched++;
+              continue;
+            } catch (retryError) {
+              if (fatal(retryError) || retryError && typeof retryError === "object" && "code" in retryError && typeof retryError.code === "string" && /^[0-9A-Z]{5}$/.test(retryError.code)) throw retryError;
+              counts.failedRequests++;
+              counts.failedSymbols++;
+              process.stderr.write(`WARN ${row.symbol}: ${reason(retryError)}\n`);
+              continue;
+            }
+          }
+          counts.failedSymbols++;
+          process.stderr.write(`WARN ${row.symbol}: ${reason(error)}${batch.length > 1 ? "; retry deferred by call cap" : ""}\n`);
+        }
       }
     }
   } finally {
@@ -127,7 +147,7 @@ export async function runSentiment(db: Pick<pg.Pool, "query"> | null, api: NewsC
     if (calls > 0) await logEodhdCalls(db, SENTIMENT_JOB, calls);
   }
   counts.capped = budget.capped;
-  return { ...counts, dryRun: false, estimatedCalls: candidates.length * SENTIMENT_COST_PER_SYMBOL, failures: counts.failedRequests + counts.skippedRows, calls: totalCalls(api.getCallCosts()) };
+  return { ...counts, dryRun: false, estimatedCalls: candidates.length * SENTIMENT_COST_PER_SYMBOL, failures: counts.failedSymbols + counts.skippedRows, calls: totalCalls(api.getCallCosts()) };
 }
 
 if (process.argv[1]?.endsWith("eodhd-news.ts") || process.argv[1]?.endsWith("eodhd-news.js")) {
@@ -138,7 +158,7 @@ if (process.argv[1]?.endsWith("eodhd-news.ts") || process.argv[1]?.endsWith("eod
       const api = options.dryRun ? null : new EodhdClient();
       const result = options.mode === "news" ? await runNews(db, api, options)
         : await runSentiment(db, api, options, db ? await sentimentCandidates(db, options, new Date().toISOString().slice(0, 10)) : options.symbols);
-      if (result.failedRequests) process.exitCode = 1;
+      if ("failedSymbols" in result ? result.failedSymbols > 0 && result.symbolsFetched === 0 : result.failedRequests > 0 && result.requests === result.failedRequests) process.exitCode = 1;
       return result;
     } finally { await db?.end(); }
   }, options.dryRun ? { store: null } : {});

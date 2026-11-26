@@ -50,9 +50,10 @@ export async function runMarketCap(db: Db, api: Api | null, options: MarketCapAr
         points += await saveMarketCap(db, subject, series);
         refreshed++;
       } catch (error) {
+        if (error instanceof EodhdHttpError && [401, 402, 403].includes(error.status) || error && typeof error === "object" && "code" in error && typeof error.code === "string" && /^[0-9A-Z]{5}$/.test(error.code)) throw error;
         failures.push(subject.ticker);
+        process.stderr.write(`WARN ${subject.ticker}: ${error instanceof Error ? error.message : "request failed"}\n`);
         await saveMarketCap(db, subject, null);
-        if (error instanceof EodhdHttpError && [401, 402, 403].includes(error.status)) break;
       }
     }
   } finally {
@@ -65,7 +66,7 @@ if (process.argv[1]?.endsWith("eodhd-market-cap.ts") || process.argv[1]?.endsWit
   const options = parseMarketCapArgs(process.argv.slice(2));
   const db = new pg.Pool({ connectionString: process.env.DATABASE_URL });
   void runLoggedJob("eodhd-market-cap", async () => {
-    try { const result = await runMarketCap(db, options.dryRun ? null : new EodhdClient(), options); if (result.failures) process.exitCode = 1; return result; }
+    try { const result = await runMarketCap(db, options.dryRun ? null : new EodhdClient(), options); if (result.failures && result.refreshed === 0) process.exitCode = 1; return result; }
     finally { await db.end(); }
   }, options.dryRun ? { store: null } : {});
 }

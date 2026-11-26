@@ -84,6 +84,7 @@ export function splitAdjust(rows: EodBar[], splits: Split[]): EodBar[] {
 }
 const yearsBack = (today: string, years: number) => new Date(Date.parse(`${today}T00:00:00Z`) - Math.round(years * 365.25) * DAY).toISOString().slice(0, 10);
 const stopping = (error: unknown) => error instanceof EodhdHttpError && [401, 402, 403, 429].includes(error.status);
+const fatal = (error: unknown) => error instanceof EodhdHttpError && [401, 402, 403].includes(error.status) || Boolean(error && typeof error === "object" && "code" in error && typeof error.code === "string" && /^[0-9A-Z]{5}$/.test(error.code));
 type Api = Pick<EodhdClient, "fundamentals" | "dividends" | "eod" | "splits" | "getCallCosts"> & { eodBulkLastDay(exchange: string): Promise<BulkLastDayBar[]> };
 type Db = Pick<pg.Pool, "query" | "connect">;
 const spentCalls = (api: Api) => Object.values(api.getCallCosts()).reduce((sum, calls) => sum + calls, 0);
@@ -157,7 +158,9 @@ export async function runEtfJob(db: Db, api: Api | null, options: EtfJobArgs, to
             byCode = new Map();
             for (const row of rows) if (row.code && /^\d{4}-\d{2}-\d{2}$/.test(row.date)) byCode.set(row.code, row);
           } catch (error) {
+            if (fatal(error)) throw error;
             failed.push(exchange); visited += funds.length;
+            process.stderr.write(`WARN ${exchange}: ${error instanceof Error ? error.message : "bulk request failed"}\n`);
             if (stopping(error)) { counts.deferred = due.length - visited; break; }
             continue;
           }
@@ -171,7 +174,9 @@ export async function runEtfJob(db: Db, api: Api | null, options: EtfJobArgs, to
             else if (!fund.last_bar_date || bar.date > fund.last_bar_date) counts.bars += await storeBars(fund, [bar], false);
             counts.processed++;
           } catch (error) {
+            if (fatal(error)) throw error;
             failed.push(fund.vendor_symbol);
+            process.stderr.write(`WARN ${fund.vendor_symbol}: ${error instanceof Error ? error.message : "request failed"}\n`);
             if (stopping(error)) { counts.deferred = due.length - visited - 1; break exchanges; }
           }
           visited++;
@@ -206,7 +211,9 @@ export async function runEtfJob(db: Db, api: Api | null, options: EtfJobArgs, to
           }
           counts.processed++;
         } catch (error) {
+          if (fatal(error)) throw error;
           failed.push(fund.vendor_symbol);
+          process.stderr.write(`WARN ${fund.vendor_symbol}: ${error instanceof Error ? error.message : "request failed"}\n`);
           if (error instanceof EodhdHttpError && error.status === 404 && options.mode === "fundamentals") await markEtfFetched(db, fund.listing_key, "fundamentals", "failed");
           if (options.mode === "backfill" && !stopping(error)) await markEtfFetched(db, fund.listing_key, "backfill", "failed");
           if (stopping(error)) { counts.deferred = due.length - index - 1; break; }
@@ -227,7 +234,7 @@ if (process.argv[1]?.endsWith("eodhd-etf.ts") || process.argv[1]?.endsWith("eodh
   const options = parseEtfJobArgs(process.argv.slice(2));
   const db = new pg.Pool({ connectionString: process.env.DATABASE_URL });
   void runLoggedJob(etfJobName(options.mode), async () => {
-    try { const result = await runEtfJob(db, options.dryRun ? null : new EodhdClient(), options); if (result.failures) process.exitCode = 1; return result; }
+    try { const result = await runEtfJob(db, options.dryRun ? null : new EodhdClient(), options); if (result.failures && result.processed === 0) process.exitCode = 1; return result; }
     finally { await db.end(); }
   }, options.dryRun ? { store: null } : {});
 }

@@ -76,6 +76,7 @@ export async function runUniverseSeed(client: SeedClient, store: SeedStore, list
     catch (error) {
       used(100); failures++;
       if (fatal(error)) { stoppedReason = `vendor_http_${(error as EodhdHttpError).status}`; break; }
+      process.stderr.write(`WARN ${exchange}: ${error instanceof Error ? error.message : "bulk request failed"}\n`);
       continue;
     }
     used(100);
@@ -95,15 +96,15 @@ export async function runUniverseSeed(client: SeedClient, store: SeedStore, list
         const actions = splitActions(listing.vendorSymbol, splits as Split[]);
         const bars = barsFromHistory(history as EodBar[], actions);
         const facts = parseEodhdFundamentals(payload, seedTicker(listing), options.today ?? new Date().toISOString().slice(0, 10)).rows;
-        if (!facts.length) { failures++; continue; }
+        if (!facts.length) { failures++; process.stderr.write(`WARN ${listing.vendorSymbol}: no parsed fundamentals\n`); continue; }
         await store.save(listing, bars, facts, payload, options.today ?? new Date().toISOString().slice(0, 10));
         saved++;
         ready.add(listing.vendorSymbol);
       } catch (error) {
+        if (error && typeof error === "object" && "code" in error && typeof error.code === "string" && /^[0-9A-Z]{5}$/.test(error.code)) throw error;
         reserved = Math.max(reserved, total(client.getCallCosts()));
         failures++;
-        process.stderr.write(`${JSON.stringify({ event: "eodhd_universe_seed_symbol_failed", symbol: listing.vendorSymbol,
-          reason: error instanceof EodhdHttpError ? `HTTP ${error.status}` : error instanceof Error ? error.name : "error" })}\n`);
+        process.stderr.write(`WARN ${listing.vendorSymbol}: ${error instanceof EodhdHttpError ? `HTTP ${error.status}` : error instanceof Error ? error.message : "error"}\n`);
         if (fatal(error)) { stoppedReason = `vendor_http_${(error as EodhdHttpError).status}`; break; }
       }
     }
@@ -176,7 +177,7 @@ async function main() {
     const listings = result.rows.map((row) => ({ vendorSymbol: row.vendor_symbol, code: row.code, exchange: row.exchange,
       name: row.name, currency: row.currency, type: row.type }));
     const counts = await runUniverseSeed(new EodhdClient({ maxRetries: 0 }), new PgSeedStore(db), listings, options);
-    if (counts.stoppedReason?.startsWith("vendor_http_")) process.exitCode = 1;
+    if (counts.stoppedReason?.startsWith("vendor_http_") || counts.failures > 0 && counts.saved === 0) process.exitCode = 1;
     return counts;
   } finally { await db.end(); }
 }

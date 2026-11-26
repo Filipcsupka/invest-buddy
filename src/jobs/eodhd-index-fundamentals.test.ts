@@ -150,11 +150,10 @@ describe("index fundamentals job (PGlite)", () => {
 
   it("records a failed attempt, stops on an access error and makes no requests on a dry run", () => withDb(async (pool) => {
     const api = { fundamentals: async () => { throw new EodhdHttpError(403, "fundamentals"); }, getCallCosts: () => ({ fundamentals: 10 }) };
-    const result = await runIndexFundamentals(pool, api, parseIndexFundamentalsArgs([], {}), "2026-11-15");
-    expect(result).toMatchObject({ failures: 1, failedSymbols: "GSPC.INDX", refreshed: 0 });
-    expect((await pool.query("SELECT status FROM index_snapshot_refresh WHERE index_symbol='GSPC.INDX'")).rows).toEqual([{ status: "failed" }]);
+    await expect(runIndexFundamentals(pool, api, parseIndexFundamentalsArgs([], {}), "2026-11-15")).rejects.toMatchObject({ status: 403 });
+    expect((await pool.query("SELECT status FROM index_snapshot_refresh WHERE index_symbol='GSPC.INDX'")).rows).toEqual([]);
     expect((await pool.query("SELECT count(*)::int AS n FROM index_snapshots")).rows[0]).toEqual({ n: 0 });
     const dry = await runIndexFundamentals(pool, null, parseIndexFundamentalsArgs(["--dry-run"], {}), "2026-11-15");
-    expect(dry).toMatchObject({ due: 24, estimatedCalls: 240, calls: 0 });
+    expect(dry).toMatchObject({ due: 25, estimatedCalls: 250, calls: 0 });
   }), 60_000);
 });

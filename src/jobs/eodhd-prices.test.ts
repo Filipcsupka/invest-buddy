@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import bulkFixture from "../data-providers/eodhd/fixtures/bulk-eod.json";
 import historyFixture from "../data-providers/eodhd/fixtures/eod.json";
-import type { BulkLastDayBar, BulkSplit, EodBar, Split } from "../data-providers/eodhd/client";
+import { EodhdHttpError, type BulkLastDayBar, type BulkSplit, type EodBar, type Split } from "../data-providers/eodhd/client";
 import { insertMemoryCorporateActions } from "../db/corporate-actions";
 import type { CorporateAction } from "../data/corporate-actions";
 import { MemoryPriceRepository } from "../db/prices";
@@ -113,6 +113,17 @@ describe("EODHD prices", () => {
     expect(result.failures).toEqual([{ ticker: "MSFT", reason: "splits unavailable" }]);
     expect(repo.bars.has("MSFT")).toBe(false);
     expect(repo.bars.has("NVDA")).toBe(true);
+  });
+
+  it("skips an invalid OHLC bar and fails on vendor authorization", async () => {
+    const row = bulkFixture[0] as EodBar;
+    const client = { eod: async (symbol: string) => [symbol === "MSFT.US" ? { ...row, high: 1, low: 2 } : row],
+      splits: async () => [] as Split[], eodBulkLastDay: noBulk, getCallCosts: () => costs(2, 2) };
+    const result = await runEodhdPrices(client, new MemoryPriceRepository(), symbols, { mode: "daily" });
+    expect(result).toMatchObject({ requested: 2, succeeded: 1, failed: 1 });
+    expect(result.failures[0]).toMatchObject({ ticker: "MSFT", reason: expect.stringMatching(/invalid raw OHLC/) });
+    const denied = { ...client, eod: async () => { throw new EodhdHttpError(403, "eod"); } };
+    await expect(runEodhdPrices(denied, new MemoryPriceRepository(), symbols, { mode: "daily" })).rejects.toMatchObject({ status: 403 });
   });
 
   it("resolves exchange collisions by explicit mapping, home hint, then US and continues past unresolved names", async () => {
