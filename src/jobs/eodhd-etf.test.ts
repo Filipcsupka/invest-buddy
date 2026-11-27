@@ -151,7 +151,6 @@ describe("runEtfJob", () => {
   it("stops on vendor access failure and records attempted calls", async () => {
     const { db } = fakeDb([row(), row({ listing_key: "Y", vendor_symbol: "Y.US" })]);
     const { api } = fakeApi({ fundamentals: new EodhdHttpError(403, "fundamentals") });
-    const result = await runEtfJob(db, api, parseEtfJobArgs(["--mode", "fundamentals"], {}), "2026-11-06");
-    expect(result).toMatchObject({ failures: 1, deferred: 1, calls: 10, processed: 0 });
+    await expect(runEtfJob(db, api, parseEtfJobArgs(["--mode", "fundamentals"], {}), "2026-11-06")).rejects.toMatchObject({ status: 403 });
   });
 });

@@ -761,11 +761,11 @@ for (const mode of ["partial", "all-fail", "omitted", "partial-omitted", "hard-e
     const r = await runJudge(["--gate-from-db", "--max-symbols", "2", "--base-url", base], { s });
     const hard = mode === "hard-error" || extra;
     const empty = mode === "all-fail" || mode === "omitted";
-    assert.equal(r.code, hard ? 1 : 0, r.err);
-    assert.equal(s.calls().length, hard ? 2 : 3);
-    assert.deepEqual(completed, hard ? [["AMD"]] : [["NVDA", "AMD"], ["TST"]]);
-    assert.deepEqual(remaining, hard ? ["NVDA", "TST"] : []);
-    assert.deepEqual(posts.map((p) => p.ideas.map((i) => i.symbol)), hard ? [["AMD"]] : [empty ? [] : ["AMD"], ["TST"]]);
+    assert.equal(r.code, empty ? 1 : 0, r.err);
+    assert.equal(s.calls().length, empty || hard ? 2 : 3);
+    assert.deepEqual(completed, empty ? [] : hard ? [["AMD"]] : [["NVDA", "AMD"], ["TST"]]);
+    assert.deepEqual(remaining, empty ? ["NVDA", "AMD", "TST"] : hard ? ["NVDA", "TST"] : []);
+    assert.deepEqual(posts.map((p) => p.ideas.map((i) => i.symbol)), empty ? [[]] : hard ? [["AMD"]] : [["AMD"], ["TST"]]);
     assert.equal(posts[0].run.status, empty ? "failed" : "ok");
     assert.match(posts[0].run.error, omission ? /NVDA: no idea in the output/ : extra ? /which is not an item/ : hard ? /JSON/ : /NVDA: schema: .*longer than 300/);
     assert.match(r.err, /SKIPPED NVDA:/);

@@ -71,6 +71,7 @@ async function runLegacyCollect(repository: CollectorRepository, symbols: string
       }
       return { ...run, requested: 1, succeeded: 1, documentsParsed, factsComputed, missingCiks: 0, exitCode: 0 };
     } catch (error) {
+      if (error && typeof error === "object" && "code" in error && typeof error.code === "string" && /^[0-9A-Z]{5}$/.test(error.code)) throw error;
       const reason = error instanceof Error ? error.message : String(error);
       const failed = { ...run, requested: 1, failures: [{ ticker: "FRED", reason }], stoppedReason: reason };
       if (!options.dryRun) await repository.recordRun(failed);
@@ -176,6 +177,7 @@ async function runLegacyCollect(repository: CollectorRepository, symbols: string
       if (!options.dryRun && sources.includes("edgar") && cik) await repository.markSecInsiderChecked?.(symbol, now.toISOString());
       run.succeeded++;
     } catch (error) {
+      if (error && typeof error === "object" && "code" in error && typeof error.code === "string" && /^[0-9A-Z]{5}$/.test(error.code)) throw error;
       const reason = error instanceof Error ? error.message : String(error);
       run.failures.push({ ticker: symbol, reason });
       if (error instanceof RateLimitLockout) {
@@ -191,7 +193,7 @@ async function runLegacyCollect(repository: CollectorRepository, symbols: string
 }
 
 /** A lockout or any other stop is always a failed run, whatever share of tickers had already finished. */
-export const collectExitCode = (stoppedReason: string | null, failed: number, requested: number) => stoppedReason || (requested && failed / requested > 0.1) ? 1 : 0;
+export const collectExitCode = (stoppedReason: string | null, failed: number, requested: number) => stoppedReason || requested > 0 && failed >= requested ? 1 : 0;
 
 export async function deriveFacts(symbol: string, docs: CollectedDocument[], ids: Map<string, number>, repository: CollectorRepository, asOf: string): Promise<Fact[]> {
   const facts: Fact[] = [];
@@ -285,7 +287,7 @@ export async function runCollectJob(signal: AbortSignal) {
     const checkedAt = pool && (!names || names.includes("edgar")) ? new Map((await pool.query<{ ticker: string; checked_at: Date }>("SELECT ticker,checked_at FROM sec_insider_refresh")).rows.map((row) => [row.ticker, row.checked_at.toISOString()])) : undefined;
     const result = await runCollect(repository, symbols, { since, sources: names as SourceName[] | undefined, dryRun, refetch, cusips: pool ? new PostgresCusipStore(pool) : new MemoryCusipStore(), companies: activeCompanies, secSymbols: pool ? await loadVendorSymbols(pool, "sec") : undefined, storedCiks: pool ? await loadStoredCiks(pool) : undefined, checkedAt, usage: pool ? new PostgresUsageLedger(pool) : undefined, signal });
     process.stdout.write(`Collect: ${result.succeeded}/${result.requested} tickers, ${result.missingCiks ?? 0} missing CIKs skipped, ${result.documentsParsed} documents parsed, ${result.factsComputed} facts computed, ${result.documentsWritten} documents written, ${result.factsWritten} facts written${dryRun ? " (dry run, nothing stored)" : ""}\n`);
-    for (const failure of result.failures) process.stderr.write(`Failed ${failure.ticker}: ${safeReason(failure.reason)}\n`);
+    for (const failure of result.failures) process.stderr.write(`WARN ${failure.ticker}: ${safeReason(failure.reason)}\n`);
     const missing = "missingCikSymbols" in result ? result.missingCikSymbols as string[] : [];
     if (missing.length) process.stderr.write(`Missing CIK: ${missing.join(", ")}\n`);
     if (result.stoppedReason) process.stderr.write(`Stopped: ${safeReason(result.stoppedReason)}\n`);

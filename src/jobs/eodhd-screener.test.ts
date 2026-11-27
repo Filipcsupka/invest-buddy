@@ -52,8 +52,7 @@ it("stores each preset once a day, sends filters and signals, and logs billed ca
 it("stops before the call cap and on an access error", async () => {
   const capped = await runScreener(recordingDb().db, api(), parseScreenerArgs(["--max-calls", "10"]), "2026-11-07");
   expect(capped).toMatchObject({ stored: 2, capped: 8, calls: 10 });
-  const denied = await runScreener(recordingDb().db, api(() => new EodhdHttpError(402, "screener")), parseScreenerArgs([]), "2026-11-07");
-  expect(denied).toMatchObject({ stored: 0, failures: 1 });
+  await expect(runScreener(recordingDb().db, api(() => new EodhdHttpError(402, "screener")), parseScreenerArgs([]), "2026-11-07")).rejects.toMatchObject({ status: 402 });
   const flaky = await runScreener(recordingDb().db, api((filters) => filters.includes("xetra") ? new Error("boom") : null), parseScreenerArgs([]), "2026-11-07");
   expect(flaky).toMatchObject({ stored: 8, failures: 2, failedPresets: "xetra-large-cap,xetra-dividend" });
 });

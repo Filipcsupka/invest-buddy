@@ -48,11 +48,12 @@ export async function runIndexFundamentals(db: Db, api: Api | null, options: Ind
       let parsed;
       try { parsed = parseIndexFundamentals(await api.fundamentals<unknown>(symbol, SNAPSHOT_FILTER)); }
       catch (error) {
+        if (error instanceof EodhdHttpError && [401, 402, 403].includes(error.status) || error && typeof error === "object" && "code" in error && typeof error.code === "string" && /^[0-9A-Z]{5}$/.test(error.code)) throw error;
         failures.push(symbol);
+        process.stderr.write(`WARN ${symbol}: ${error instanceof Error ? error.message : "request failed"}\n`);
         // A rate limit says nothing about this index: leave it and the rest unattempted so the next run retries them first.
         if (error instanceof EodhdHttpError && error.status === 429) { capped = due.length - index - 1; break; }
         await saveIndexSnapshot(db, symbol, today, null, SNAPSHOT_FILTER);
-        if (error instanceof EodhdHttpError && [401, 402, 403].includes(error.status)) break;
         continue;
       }
       // An empty array or an unexpected body is an empty snapshot, not a failure: the vendor answered.
@@ -73,7 +74,7 @@ if (process.argv[1]?.endsWith("eodhd-index-fundamentals.ts") || process.argv[1]?
   const db = new pg.Pool({ connectionString: process.env.DATABASE_URL });
   void runLoggedJob("eodhd-index-fundamentals", async () => {
     // A retry is another billed request; disable automatic retries so the configured call cap is strict.
-    try { const result = await runIndexFundamentals(db, options.dryRun ? null : new EodhdClient({ maxRetries: 0 }), options); if (result.failures) process.exitCode = 1; return result; }
+    try { const result = await runIndexFundamentals(db, options.dryRun ? null : new EodhdClient({ maxRetries: 0 }), options); if (result.failures && result.refreshed + result.empty === 0) process.exitCode = 1; return result; }
     finally { await db.end(); }
   }, options.dryRun ? { store: null } : {});
 }

@@ -24,7 +24,6 @@ import { createUsageMonitor, earlyStopLine } from "./claude-usage.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const OUT = process.env.SCAN_OUT_DIR || join(here, "out");
-const MAX_FAIL_RATIO = 0.2;
 
 function usage(msg) {
   if (msg) console.error(`error: ${msg}`);
@@ -165,8 +164,13 @@ async function main() {
     : await loadRuntimeUniverse(opts.baseUrl, token);
   const selected = wanted ? universe.filter((u) => wanted.includes(u.symbol)) : universe;
   const unknown = (wanted ?? []).filter((s) => !universe.some((u) => u.symbol === s));
-  if (unknown.length) usage(`not in instruments table: ${unknown.join(", ")}`);
-  if (!selected.length) { console.error("nothing to extract"); return; }
+  for (const symbol of unknown) console.error(`WARN ${symbol}: not in instruments table`);
+  if (!selected.length) {
+    console.error(`totals: ok 0, skipped 0, failed ${unknown.length}`);
+    if (unknown.length && opts.gateFromDb && !opts.dryRun) await consumeGate(opts.baseUrl, token, "extract", gate.asOf, gate.revision);
+    console.error("nothing to extract");
+    return;
+  }
   const asOf = opts.asOf || (opts.gateFromDb ? gateTradingDay(gate.asOf) : lastUsTradingDay());
   const runId = randomUUID();
   mkdirSync(OUT, { recursive: true });
@@ -178,7 +182,7 @@ async function main() {
   const prompt = readFileSync(join(here, "prompts", "ticker-extract.md"), "utf8");
   const work = mkdtempSync(join(tmpdir(), "investbuddy-extract-"));
   let model = opts.model || "default";
-  const failed = [], tickers = [], droppedAll = {}, skippedSymbols = [], postFailed = [], deferredSymbols = [];
+  const failed = unknown.map((symbol) => ({ symbol, reason: "not in instruments table" })), tickers = [], droppedAll = {}, skippedSymbols = [], postFailed = [], deferredSymbols = [];
   let totals = emptyUsage(), totalCost = 0, calls = 0, inputChars = 0, cutoff = null, softStop = null, ceilingStop = null, unknownLocalTokens = 0;
   const ceiling = dailyTokenCeiling();
   if (ceiling && opts.concurrency > 1) throw new Error("AI_DAILY_TOKEN_CEILING requires --concurrency 1");
@@ -253,7 +257,8 @@ async function main() {
       totals = addUsage(totals, spent);
       if (ceilingStop) { deferredSymbols.push(u.symbol); return; }
       if (e.exitCode === CUTOFF_EXIT_CODE) { cutoff ??= e.cutoff; return; }
-      log(`${u.symbol}: ${e.skip ? "SKIPPED" : "FAILED"} ${e.message}`);
+      if (/\b(?:HTTP|status) (?:401|402|403)\b/.test(e.message)) throw e;
+      log(`${u.symbol}: ${e.skip ? "SKIPPED" : "WARN"} ${e.message}`);
       if (!e.skip || opts.gateFromDb) {
         failed.push({ symbol: u.symbol, reason: e.message });
         if (logRuns && hash) await recordRun(opts.baseUrl, token, { symbol: u.symbol, asOf, agent: opts.agent, model: tickerModel, inputHash: hash, accessions: gate?.accessions?.[u.symbol] ?? [], status: "failed", usage: spent, costUsd: tickerCost, error: e.message.slice(0, 2000), applied: false }, log);
@@ -276,12 +281,11 @@ async function main() {
   log(`payload written ${payloadFile} (${tickers.length} tickers)`);
   const logTotals = () => log(`totals: ${calls} model calls, ${inputChars} input chars, tokens in ${totals.inputTokens ?? "?"} out ${totals.outputTokens ?? "?"} cache read ${totals.cacheReadTokens ?? "?"} cache created ${totals.cacheCreationTokens ?? "?"}, turns ${totals.turns ?? "?"}${totalCost ? `, cost $${totalCost.toFixed(4)}` : ""}; ok ${tickers.length}, skipped ${skippedSymbols.length}, failed ${failed.length}`);
   if (!opts.dryRun) {
-    if (!tickers.length) { logTotals(); log("no valid tickers; not posting"); if (opts.gateFromDb && !failed.length) await consumeGate(opts.baseUrl, token, "extract", gate.asOf, gate.revision); process.exit(failed.length ? 1 : 0); }
+    if (!tickers.length) { logTotals(); log("no valid tickers; not posting"); if (opts.gateFromDb && failed.every((failure) => unknown.includes(failure.symbol))) await consumeGate(opts.baseUrl, token, "extract", gate.asOf, gate.revision); process.exit(failed.length && !skippedSymbols.length ? 1 : 0); }
     if (postFailed.length) { logTotals(); log(`not stored: ${postFailed.join(", ")}`); process.exit(3); }
   } else log("dry run: nothing posted, nothing recorded");
   logTotals();
-  if (opts.gateFromDb && failed.length) { log("gate remains pending after failed extraction"); process.exit(1); }
-  if (failed.length / selected.length > MAX_FAIL_RATIO) { log(`failure ratio exceeds ${MAX_FAIL_RATIO * 100}%: ${failed.map((f) => f.symbol).join(", ")}`); process.exit(1); }
-  if (opts.gateFromDb && !opts.dryRun) await consumeGate(opts.baseUrl, token, "extract", gate.asOf, gate.revision);
+  if (failed.length && !tickers.length && !skippedSymbols.length) process.exit(1);
+  if (opts.gateFromDb && !opts.dryRun && failed.every((failure) => unknown.includes(failure.symbol))) await consumeGate(opts.baseUrl, token, "extract", gate.asOf, gate.revision);
 }
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main().catch((e) => { console.error(`fatal: ${e.stack || e.message}`); process.exit(1); });

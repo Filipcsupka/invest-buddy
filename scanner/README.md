@@ -37,7 +37,7 @@ Two agents on two subscriptions need no extra paid account. Each agent runs as i
 3. Pull the JSON object out of the reply and check it against the schema. A `true` without an https evidence item that names the field counts as a failure and gets the retry.
 4. Assemble the payload with a new `runId` and `schemaVersion` 2, validate it again, write a copy to `out/` (the file name includes the agent).
 5. Post it, unless `--dry-run`. Tickers the server rejects are logged with the reason.
-6. Exit 0 if at most 20 percent of the calls (macro included) failed, otherwise exit 1. Exit 2 means a setup problem such as a missing token. Exit 3 means the POST failed.
+6. Exit 0 when at least one requested ticker succeeds, with warnings and counts for failed tickers. Exit 1 when every requested ticker fails, exit 2 for a setup problem such as a missing token, and exit 3 when the POST fails.
 
 If the macro call fails, the payload carries a macro object with all values null, which the server scores as zero. Failed tickers are left out of the payload and listed in the log.
 
@@ -182,7 +182,7 @@ Run the command from the repo root. The Keychain item is readable from a login s
 
 ### Change gate and monthly budget
 
-Run `npm run watch` to poll EDGAR submissions. It records each CIK and accession once, using the collector's four requests per second SEC limiter. Run `npm run detect -- --output /work/gate.json` after collection, then pass the file to both `run-extract.mjs --symbols-file /work/gate.json` and `run-judge.mjs --symbols-file /work/gate.json`. An empty `symbols` array ends both AI steps without a model call. A full manual review uses `--force`.
+Run `npm run watch` to poll EDGAR submissions. It records each CIK and accession once, using the collector's four requests per second SEC limiter. Run `npm run detect -- --output /work/gate.json` after collection, then pass the file to both `run-extract.mjs --symbols-file /work/gate.json` and `run-judge.mjs --symbols-file /work/gate.json`. An empty `symbols` array ends both AI steps without a model call. The database extract gate stays pending when a real ticker extraction fails, even if other tickers succeed; stale symbols alone do not hold the gate. A full manual review uses `--force`.
 
 ### Weekly discovery
 

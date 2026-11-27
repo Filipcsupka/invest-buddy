@@ -16,7 +16,7 @@ test("enrichment schema requires every listing and an HTTPS source", () => {
   assert.deepEqual(chunks(Array.from({ length: 41 }, (_, i) => i)).map((batch) => batch.length), [20,20,1]);
 });
 
-test("failed enrichment batch leaves it pending and later batch posts", async () => {
+test("a failed ETF symbol is skipped while the batch posts the others", async () => {
   const outDir = mkdtempSync(join(tmpdir(), "etf-enrich-test-")); let vendorCalls = 0; const posts = []; const reports = [];
   const items = Array.from({ length: 21 }, (_, i) => ({ ...first, listingKey: `NYSEARCA:E${i}`, symbol: `E${i}` }));
   const request = async (url, init = {}) => {
@@ -31,14 +31,14 @@ test("failed enrichment batch leaves it pending and later batch posts", async ()
   const details = [];
   try {
     const result = await execute(parseArgs(["--limit", "21", "--out-dir", outDir]), { env: { INGEST_TOKEN: "test", EODHD_API_KEY: "test" }, request, log: () => {} });
-    assert.deepEqual(result, { batches: 2, failed: 1, calls: 20, budget: 15000, estimatedCalls: 210, deferred: 0 });
-    assert.equal(posts.length, 1);
-    assert.equal(posts[0].items[0].listingKey, "NYSEARCA:E20");
-    // The paid ETF_Data payload is stored once per fetched fund; the failed batch sends none.
-    assert.equal(details.length, 1);
+    assert.deepEqual(result, { batches: 2, failed: 1, calls: 210, budget: 15000, estimatedCalls: 210, deferred: 0 });
+    assert.equal(posts.length, 2);
+    assert.equal(posts[0].items.length, 19);
+    assert.equal(posts[1].items[0].listingKey, "NYSEARCA:E20");
+    assert.equal(details.length, 20);
     assert.deepEqual(Object.keys(details[0]), ["listingKey", "vendorSymbol", "data"]);
-    assert.equal(details[0].vendorSymbol, "E20.US");
-    assert.deepEqual(reports, [10, 20]);
+    assert.equal(details[0].vendorSymbol, "E1.US");
+    assert.deepEqual(reports, [200, 210]);
   } finally { rmSync(outDir, { recursive: true, force: true }); }
 });
 
@@ -48,8 +48,7 @@ test("a missing EODHD key fails the batch without an ingest write", async () => 
     ? { ok: true, json: async () => ({ accountCallsToday: 0, enrichCallsToday: 0, accountBudget: 70000 }) }
     : init.method === "POST" ? (posts.push(init.body), { ok: true }) : { ok: true, json: async () => ({ items: [first] }) };
   try {
-    const result = await execute(parseArgs(["--out-dir", outDir]), { env: { INGEST_TOKEN: "test" }, request, log: () => {} });
-    assert.deepEqual(result, { batches: 1, failed: 1, calls: 0, budget: 15000, estimatedCalls: 10, deferred: 0 });
+    await assert.rejects(execute(parseArgs(["--out-dir", outDir]), { env: { INGEST_TOKEN: "test" }, request, log: () => {} }), /EODHD_API_KEY/);
     assert.equal(posts.length, 0);
   } finally { rmSync(outDir, { recursive: true, force: true }); }
 });

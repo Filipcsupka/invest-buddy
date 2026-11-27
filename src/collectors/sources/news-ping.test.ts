@@ -70,7 +70,7 @@ describe("GDELT DOC 2.0", () => {
     const result = await runExtraSources(new MemoryCollectorRepository(), ["gdelt", "treasury"], { since: "2026-09-05", now: new Date("2026-10-05T12:00:00Z"), http, companies: COMPANIES, symbols: ["NVDA"] });
     expect(result.failures).toEqual([{ ticker: "NVDA", reason: "HTTP 429 at https://api.gdeltproject.org/api/v2/doc/doc" }]);
     expect(result.succeeded).toBe(2);
-    expect(result.exitCode).toBe(1);
+    expect(result.exitCode).toBe(0);
     expect(result.documentsWritten).toBe(1);
   });
 });

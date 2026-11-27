@@ -36,7 +36,7 @@ it("stores lists, records empty ones, respects the cap and logs calls", async ()
 
 it("stops on an access error and skips requests on a dry run", async () => {
   const api = { fundamentals: async () => { throw new EodhdHttpError(401, "fundamentals"); }, getCallCosts: () => ({ fundamentals: 10 }) };
-  expect(await runIndexComponents(recordingDb(["GSPC.INDX", "NDX.INDX"]).db, api, parseIndexComponentsArgs([]), "2026-11-08")).toMatchObject({ failures: 1, failedSymbols: "GSPC.INDX" });
+  await expect(runIndexComponents(recordingDb(["GSPC.INDX", "NDX.INDX"]).db, api, parseIndexComponentsArgs([]), "2026-11-08")).rejects.toMatchObject({ status: 401 });
   const dry = recordingDb(["GSPC.INDX"]);
   expect(await runIndexComponents(dry.db, null, parseIndexComponentsArgs(["--dry-run"]), "2026-11-08")).toMatchObject({ due: 1, estimatedCalls: 10, calls: 0 });
   expect(dry.sql).toHaveLength(1);

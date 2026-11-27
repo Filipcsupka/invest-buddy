@@ -173,7 +173,7 @@ describe("collectors", () => {
     };
     const missing = Array.from({ length: 20 }, (_, i) => `OTHER${i}`);
     const result = await runCollect(new MemoryCollectorRepository(), ["GOOD", "FAIL", ...missing], { sources: ["edgar"], get, now: () => new Date("2026-10-05T12:00:00Z") });
-    expect(result).toMatchObject({ requested: 22, succeeded: 1, missingCiks: 20, exitCode: 1 });
+    expect(result).toMatchObject({ requested: 22, succeeded: 1, missingCiks: 20, exitCode: 0 });
     expect(result.failures).toEqual([{ ticker: "FAIL", reason: "SEC unavailable" }]);
   });
 

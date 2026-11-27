@@ -82,7 +82,7 @@ export async function runExtraSources(repository: CollectorRepository, names: So
         for (const batch of output.epsHistory ?? []) {
           if (!universe.has(batch.symbol)) continue;
           try { await repository.upsertEpsHistory?.(batch); }
-          catch (error) { run.failures.push({ ticker: batch.symbol, reason: `eps history not stored: ${error instanceof Error ? error.message : String(error)}` }); }
+          catch (error) { if (error && typeof error === "object" && "code" in error && typeof error.code === "string" && /^[0-9A-Z]{5}$/.test(error.code)) throw error; run.failures.push({ ticker: batch.symbol, reason: `eps history not stored: ${error instanceof Error ? error.message : String(error)}` }); }
         }
         for (const fact of facts) {
           const documentIds = fact.documentUrls.map((url) => ids.get(url)).filter((id): id is number => id !== undefined);
@@ -91,13 +91,15 @@ export async function runExtraSources(repository: CollectorRepository, names: So
       }
       run.succeeded++;
     } catch (error) {
+      if (error && typeof error === "object" && "code" in error && typeof error.code === "string" && /^[0-9A-Z]{5}$/.test(error.code)) throw error;
       const reason = error instanceof Error ? error.message : String(error);
       run.failures.push({ ticker: name, reason });
       if (error instanceof RateLimitLockout && source.sec) { secLocked = true; run.stoppedReason = reason; }
     }
   }
   if (!options.dryRun || Object.keys(run.apiRequests!).length) await repository.recordRun(run);
-  return { ...run, documentsParsed, factsComputed, exitCode: run.stoppedReason === "collection time budget reached" || run.stoppedReason === "SIGTERM received" ? 0 : run.failures.length ? 1 : 0 };
+  const allSymbolsFailed = names.length === 1 && options.symbols.length > 0 && options.symbols.every((symbol) => run.failures.some((failure) => failure.ticker === symbol));
+  return { ...run, documentsParsed, factsComputed, exitCode: run.stoppedReason === "collection time budget reached" || run.stoppedReason === "SIGTERM received" ? 0 : run.stoppedReason || run.requested > 0 && run.succeeded === 0 || allSymbolsFailed ? 1 : 0 };
 }
 
 /** Pings sources one at a time so a host's spacing is respected. Writes nothing. */

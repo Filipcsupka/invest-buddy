@@ -36,16 +36,13 @@ export function detailPayload(data) {
   if (!etf || typeof etf !== "object") return null;
   return data;
 }
-/** Stores each fetched fund's full response (General, Technicals, ETF_Data) through the detail ingest route. A failure is logged and never fails the catalog batch. */
-export async function postDetails(batch, cache, { base, token, request = fetch, log = console.log }) {
+export async function postDetails(batch, cache, { base, token, request = fetch }) {
   let posted = 0;
   for (const row of batch) {
     const symbol = vendorSymbol(row); const data = detailPayload(symbol ? cache.get(symbol) : null);
     if (!symbol || !data) continue;
-    try {
-      const response = await request(`${base}/api/ingest/etf-detail`, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ listingKey: row.listingKey, vendorSymbol: symbol, data }), signal: AbortSignal.timeout(60_000) });
-      if (response.ok) posted++; else log(`etf-enrich ${row.listingKey}: detail ingest HTTP ${response.status}`);
-    } catch (error) { log(`etf-enrich ${row.listingKey}: detail ingest failed (${error.name})`); }
+    const response = await request(`${base}/api/ingest/etf-detail`, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ listingKey: row.listingKey, vendorSymbol: symbol, data }), signal: AbortSignal.timeout(60_000) });
+    if (response.ok) posted++; else throw new Error(`etf-enrich ${row.listingKey}: detail ingest HTTP ${response.status}`);
   }
   return posted;
 }
@@ -56,6 +53,7 @@ export async function execute(opts, { env = process.env, request = fetch, log = 
   const maxCalls = Number(env.ETF_EODHD_DAILY_CALL_BUDGET ?? env.ETF_EODHD_MAX_CALLS ?? 15_000);
   if (!Number.isInteger(maxCalls) || maxCalls < 10 || maxCalls > 90_000 || maxCalls % 10 !== 0) throw new Error("ETF_EODHD_DAILY_CALL_BUDGET (or legacy ETF_EODHD_MAX_CALLS) must be a multiple of 10 from 10 to 90000");
   const token = env.INGEST_TOKEN || getToken(); if (!token) throw new Error("INGEST_TOKEN is required");
+  if (!opts.dryRun && !env.EODHD_API_KEY) throw new Error("EODHD_API_KEY is required");
   const base = opts.baseUrl.replace(/\/$/, "");
   const headers = { Authorization: `Bearer ${token}` };
   const callsUrl = `${base}/api/ingest/etf-catalog/calls`;
@@ -98,16 +96,20 @@ export async function execute(opts, { env = process.env, request = fetch, log = 
     try {
       const result = await enrichEodhd(batch, { apiKey: env.EODHD_API_KEY, request: meteredRequest, dryRun: opts.dryRun, log, cache });
       if (opts.dryRun) continue;
+      failed += batch.length - result.items.length;
+      if (!result.items.length) continue;
       const output = { items: result.items };
-      const errors = validateBatch(output, batch);
+      const completed = batch.filter((row) => !result.failedSymbols.includes(vendorSymbol(row) ?? row.listingKey));
+      const errors = validateBatch(output, completed);
       if (errors.length) throw new Error(errors.join("; "));
       const file = join(opts.outDir, `etf-enrich-${Date.now()}-${index}.json`); writeFileSync(file, `${JSON.stringify(output, null, 2)}\n`);
       if (!opts.dryRun) { const posted = await request(`${base}/api/ingest/etf-catalog`, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(output), signal: AbortSignal.timeout(120_000) }); if (!posted.ok) throw new Error(`ETF enrichment ingest HTTP ${posted.status}`); }
-      const details = await postDetails(batch, cache, { base, token, request, log });
+      const details = await postDetails(completed, cache, { base, token, request, log });
       log(`etf-enrich batch ${index+1}/${batches.length}: ${batch.length} rows, ${details} detail payloads${opts.dryRun ? " (dry run)" : ""}`);
-    } catch (error) { failed++; console.error(`etf-enrich batch ${index+1}/${batches.length}: ${error.message}`); if (/HTTP (402|429)/.test(error.message)) throw error; }
+    } catch (error) { throw new Error(`etf-enrich batch ${index+1}/${batches.length}: ${error.message}`); }
     finally { if (!opts.dryRun && vendorRequests) await reportCalls(); }
   }
+  if (selected.length && failed === selected.length) throw new Error("all ETF symbols failed");
   return { batches: batches.length, failed, calls: vendorRequests * 10, budget: callBudget, estimatedCalls: symbols.size * 10, deferred: items.length - selected.length };
 }
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) execute(parseArgs(process.argv.slice(2))).then((result) => { console.log(JSON.stringify({ job: "etf-enrich", ...result })); if (result.failed) process.exitCode = 1; }).catch((error) => { console.error(error.message); process.exitCode = 1; });
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) execute(parseArgs(process.argv.slice(2))).then((result) => { console.log(JSON.stringify({ job: "etf-enrich", ...result })); }).catch((error) => { console.error(error.message); process.exitCode = 1; });

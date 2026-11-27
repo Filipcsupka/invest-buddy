@@ -50,8 +50,8 @@ it("records a failed attempt, stops on an access error and makes no request on a
   subjects.rows = [{ ticker: "AAPL", vendorSymbol: "AAPL.US", attemptedAt: null, latestWeek: null }, { ticker: "MSFT", vendorSymbol: "MSFT.US", attemptedAt: null, latestWeek: null }];
   const denied = { historicalMarketCap: async () => { throw new EodhdHttpError(403, "historical-market-cap"); }, getCallCosts: () => ({ "historical-market-cap": 10 }) };
   const { db, params } = recordingDb();
-  expect(await runMarketCap(db, denied, parseMarketCapArgs([]), "2026-11-08")).toMatchObject({ refreshed: 0, failures: 1, failedTickers: "AAPL" });
-  expect(params).toContainEqual(["AAPL.US", "AAPL", null, "failed"]);
+  await expect(runMarketCap(db, denied, parseMarketCapArgs([]), "2026-11-08")).rejects.toMatchObject({ status: 403 });
+  expect(params).not.toContainEqual(["AAPL.US", "AAPL", null, "failed"]);
   const dry = recordingDb();
   expect(await runMarketCap(dry.db, null, parseMarketCapArgs(["--dry-run"]), "2026-11-08")).toMatchObject({ due: 2, estimatedCalls: 20, calls: 0 });
   expect(dry.params).toEqual([]);

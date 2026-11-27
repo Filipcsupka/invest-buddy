@@ -132,9 +132,13 @@ export async function execute(opts, { adapter = codexResearchAdapter, env = proc
       writeFileSync(file, `${JSON.stringify(payload, null, 2)}\n`);
       if (!opts.dryRun) { const posted = await send(`${base}/api/ingest/etf`, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(payload), signal: AbortSignal.timeout(120_000) }); if (!posted.ok) throw new Error(`ETF ingest HTTP ${posted.status}; file kept at ${file}`); }
       log(`${file}: ${batch.length} ${opts.selection} funds${opts.dryRun ? " (dry run)" : " (posted)"}`);
-    } catch (error) { failed++; console.error(`etf-research batch ${index+1}/${batches.length}: ${error.message}`); }
+    } catch (error) {
+      if (/HTTP (401|402|403)\b|ETF ingest HTTP|AI budget|requires /.test(error.message)) throw error;
+      failed++;
+      console.error(`WARN ${batch.map((row) => row.listingKey ?? row.symbol).join(",")}: ${error.message}`);
+    }
     finally { rmSync(workDir, { recursive: true, force: true }); }
   }
-  return { status: failed ? "failed" : "ok", batches: batches.length, failed };
+  return { status: failed && failed === batches.length ? "failed" : "ok", batches: batches.length, failed };
 }
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) execute(parseArgs(process.argv.slice(2))).then(({ failed }) => { if (failed) process.exitCode = 1; }).catch((error) => { console.error(error.message); process.exitCode = 1; });
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) execute(parseArgs(process.argv.slice(2))).then(({ status }) => { if (status === "failed") process.exitCode = 1; }).catch((error) => { console.error(error.message); process.exitCode = 1; });

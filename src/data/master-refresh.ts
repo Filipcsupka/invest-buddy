@@ -109,7 +109,11 @@ export async function refreshMaster(db: Db, deps: { get: (url: string) => Promis
         const columns = Object.keys(fills);
         await db.query(`UPDATE instrument_ids SET ${columns.map((c, i) => `${c} = $${i + 2}`).join(", ")} WHERE id = $1`, [row.id, ...columns.map((c) => fills[c])]);
       }
-    } catch (error) { result.failures.push({ ticker: row.ticker, reason: error instanceof Error ? error.message : String(error) }); }
+    } catch (error) {
+      if (error && typeof error === "object" && "code" in error && typeof error.code === "string" && /^[0-9A-Z]{5}$/.test(error.code)) throw error;
+      if (error instanceof Error && /\b(?:HTTP|status) (?:401|402|403)\b/.test(error.message)) throw error;
+      result.failures.push({ ticker: row.ticker, reason: error instanceof Error ? error.message : String(error) });
+    }
   }
   return result;
 }

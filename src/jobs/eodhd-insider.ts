@@ -139,8 +139,8 @@ export async function runEodhdInsider(db: Pick<pg.Pool, "query"> | null, api: In
       }
       failures.push(subject.ticker);
       const reason = error instanceof EodhdHttpError ? `HTTP ${error.status}` : error instanceof Error ? error.message : "error";
-      process.stderr.write(`${JSON.stringify({ event: "eodhd_insider_symbol_failed", ticker: subject.ticker, reason })}\n`);
-      if (error instanceof EodhdHttpError && [401, 402, 403].includes(error.status)) break;
+      if (error instanceof EodhdHttpError && [401, 402, 403].includes(error.status) || error && typeof error === "object" && "code" in error && typeof error.code === "string" && /^[0-9A-Z]{5}$/.test(error.code)) throw error;
+      process.stderr.write(`WARN ${subject.ticker}: ${reason}\n`);
     }
   }
   return { universe: subjects.length, due: due.length, planned: picked.length,
@@ -174,7 +174,7 @@ async function main() {
     const subjects = !db && page ? [{ ticker: "AAPL", vendorSymbol: "AAPL.US", secCheckedAt: null, vendorCheckedAt: null, secFailed: true }] : undefined;
     const result = await runEodhdInsider(db, api, { ...options, subjects });
     process.stdout.write(`eodhd-insider: ${JSON.stringify(result)}${options.dryRun ? " (dry run)" : ""}\n`);
-    if (result.failures.length) process.exitCode = 1;
+    if (result.failures.length && result.refreshed === 0) process.exitCode = 1;
     if (result.incomplete?.length) process.stderr.write(`${JSON.stringify({ event: "eodhd_insider_incomplete", tickers: result.incomplete })}\n`);
   } finally { await db?.end(); }
 }

@@ -6,7 +6,7 @@ import { parseEodhdCalendar, parseEodhdFundamentals } from "../data-providers/eo
 import type { EarningsCalendar, Fundamentals } from "../data-providers/eodhd/client";
 import pg from "pg";
 import { revenueFromCompanyFacts } from "../data/sec";
-import { dueForRefresh, loadSubjects, parseArgs, runEodhdFundamentals, storeClassification } from "./eodhd-fundamentals";
+import { dueForRefresh, fundamentalsRunFailed, loadSubjects, parseArgs, runEodhdFundamentals, storeClassification } from "./eodhd-fundamentals";
 
 const fixture = (name: string) => JSON.parse(readFileSync(join(process.cwd(), "src/data-providers/eodhd/fixtures/offline", name), "utf8"));
 const fundamentals = fixture("AAPL.US.json") as Fundamentals;
@@ -38,7 +38,19 @@ describe("EODHD subject mapping", () => {
     };
     const result = await runEodhdFundamentals(db, api, { dryRun: true, now: new Date("2025-10-21T12:00:00Z") });
     expect(calls).toEqual(["AAPL.US"]);
-    expect(result).toMatchObject({ refreshed: 1, failures: 1, failedSymbols: "ROKU" });
+    expect(result).toMatchObject({ attempted: 1, refreshed: 1, failures: 1, failedSymbols: "ROKU" });
+    expect(fundamentalsRunFailed(result)).toBe(false);
+  });
+  it("keeps an unresolved symbol with no due refresh successful", async () => {
+    const db = { query: async (statement: string) => statement.includes("FROM universe_membership")
+      ? { rows: [{ ticker: "AAPL", name: "Apple", sector: "Tech", tier: null }, { ticker: "ROKU", name: "Roku", sector: "Tech", tier: null }] }
+      : statement.includes("FROM instruments i") ? { rows: [{ ticker: "AAPL", vendor_symbol: "AAPL.US" }, { ticker: "ROKU", vendor_symbol: null }] }
+      : statement.includes("FROM eodhd_fundamentals_refresh") ? { rows: [{ ticker: "AAPL", attempted_at: "2025-10-20T00:00:00Z", latest_report_date: null, last_expected_report_date: null }] }
+      : { rows: [] } } as never;
+    const api = { earningsCalendar: async () => ({ earnings: [] }), fundamentals: async () => { throw new Error("not due"); }, getCallCosts: () => ({ calendar: 1 }) };
+    const result = await runEodhdFundamentals(db, api, { dryRun: true, now: new Date("2025-10-21T12:00:00Z") });
+    expect(result).toMatchObject({ due: 0, attempted: 0, refreshed: 0, failures: 1, failedSymbols: "ROKU" });
+    expect(fundamentalsRunFailed(result)).toBe(false);
   });
 });
 
@@ -209,15 +221,23 @@ describe("EODHD refresh scheduling", () => {
     ] });
     expect(calls).toEqual(["BAD.US"]);
     expect(result).toMatchObject({ failures: 1, refreshed: 0, failedSymbols: "BAD", stoppedEarly: true });
+    expect(fundamentalsRunFailed(result)).toBe(true);
   });
-  it("exits nonzero with a failure summary after continuing past a bad fixture", () => {
+  it("exits zero with a warning and failure summary after continuing past a bad fixture", () => {
     const result = spawnSync(process.execPath, ["--import", "tsx", "src/jobs/eodhd-fundamentals.ts", "--dry-run",
       "--fixture-dir", "src/data-providers/eodhd/fixtures/offline", "--only", "MISSING.US,AAPL.US", "--as-of", "2025-10-21"],
     { cwd: process.cwd(), encoding: "utf8" });
-    expect(result.status).toBe(1);
+    expect(result.status).toBe(0);
     expect(result.stdout).toContain('"refreshed":1');
     expect(result.stdout).toContain('"failures":1');
     expect(result.stdout).toContain('"failedSymbols":"MISSING"');
+    expect(result.stderr).toContain("WARN MISSING: Error");
+    expect(result.stdout).toContain('"status":"partial"');
+    const allFailed = spawnSync(process.execPath, ["--import", "tsx", "src/jobs/eodhd-fundamentals.ts", "--dry-run",
+      "--fixture-dir", "src/data-providers/eodhd/fixtures/offline", "--only", "MISSING.US", "--as-of", "2025-10-21"],
+    { cwd: process.cwd(), encoding: "utf8" });
+    expect(allFailed.status).toBe(1);
+    expect(allFailed.stdout).toContain('"status":"failed"');
   });
 });
 

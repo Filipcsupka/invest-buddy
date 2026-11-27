@@ -77,8 +77,8 @@ export async function runEodhdFundamentals(db: pg.Pool | null, api: Fundamentals
   const { subjects, unresolved } = options.subjects ? { subjects: options.subjects, unresolved: [] as string[] }
     : db ? await loadSubjects(db, options.only) : { subjects: [], unresolved: [] as string[] };
   for (const ticker of unresolved)
-    process.stderr.write(`${JSON.stringify({ event: "eodhd_fundamentals_symbol_unresolved", ticker, reason: "no EODHD mapping or active listing" })}\n`);
-  if (!subjects.length) return { calendarRows: 0, due: 0, refreshed: 0, facts: 0, eps: 0, calls: 0, failures: unresolved.length, failedSymbols: unresolved.join(","), stoppedEarly: false };
+    process.stderr.write(`WARN ${ticker}: no EODHD mapping or active listing\n`);
+  if (!subjects.length) return { calendarRows: 0, due: 0, attempted: 0, refreshed: 0, facts: 0, eps: 0, calls: 0, failures: unresolved.length, failedSymbols: unresolved.join(","), stoppedEarly: false };
   const byVendor = new Map(subjects.map((row) => [row.vendorSymbol, row.ticker]));
   const calendar = await api.earningsCalendar({ from, to }); // One bulk call for the whole window.
   const observations = parseEodhdCalendar(calendar, from, to).flatMap((row) => {
@@ -98,10 +98,11 @@ export async function runEodhdFundamentals(db: pg.Pool | null, api: Fundamentals
   const last = db ? await states(db) : new Map<string, RefreshState>();
   const due = subjects.filter((row) => dueForRefresh(expected.get(row.ticker) ?? last.get(row.ticker)?.lastExpectedReportDate ?? null, last.get(row.ticker), today));
   const picked = due.slice(0, options.maxSymbols ?? 25);
-  let facts = 0, eps = 0, refreshed = 0, stoppedEarly = false;
+  let facts = 0, eps = 0, attempted = 0, refreshed = 0, stoppedEarly = false;
   const failed: string[] = [...unresolved];
   const repo = db ? new PostgresCollectorRepository(db) : null;
   for (const row of picked) {
+    attempted++;
     try {
       const payload = await api.fundamentals(row.vendorSymbol, options.filter);
       const parsed = parseEodhdFundamentals(payload, row.ticker, today);
@@ -133,19 +134,19 @@ export async function runEodhdFundamentals(db: pg.Pool | null, api: Fundamentals
       eps += parsed.earnings.length;
       refreshed++;
     } catch (error) {
+      if (error && typeof error === "object" && "code" in error && typeof error.code === "string" && /^[0-9A-Z]{5}$/.test(error.code)) throw error;
       failed.push(row.ticker);
       const reason = error instanceof EodhdHttpError ? `HTTP ${error.status}` : error instanceof Error ? error.name : "error";
-      process.stderr.write(`${JSON.stringify({ event: "eodhd_fundamentals_symbol_failed", ticker: row.ticker, reason })}\n`);
-      if (error instanceof EodhdHttpError && [401, 402, 403].includes(error.status)) {
-        stoppedEarly = true;
-        break;
-      }
+      process.stderr.write(`WARN ${row.ticker}: ${reason}\n`);
+      if (error instanceof EodhdHttpError && [401, 402, 403].includes(error.status)) { stoppedEarly = true; break; }
     }
   }
-  return { calendarRows: observations.length, due: due.length, refreshed, facts, eps,
+  return { calendarRows: observations.length, due: due.length, attempted, refreshed, facts, eps,
     failures: failed.length, failedSymbols: failed.join(","), stoppedEarly,
     calls: Object.values(api.getCallCosts()).reduce((n, cost) => n + cost, 0) };
 }
+
+export const fundamentalsRunFailed = (result: { stoppedEarly: boolean; attempted: number; refreshed: number }) => result.stoppedEarly || result.attempted > 0 && result.refreshed === 0;
 
 export function parseArgs(args: string[]) {
   const options: RunOptions & { fixtureDir?: string } = { dryRun: false, maxSymbols: 25 };
@@ -182,7 +183,7 @@ async function main() {
   try {
     const result = await runEodhdFundamentals(db, api, options);
     process.stdout.write(`eodhd-fundamentals: ${JSON.stringify(result)}${options.dryRun ? " (dry run)" : ""}\n`);
-    if (result.failures) process.exitCode = 1;
+    if (fundamentalsRunFailed(result)) process.exitCode = 1;
     return result;
   } finally { await db?.end(); }
 }

@@ -113,10 +113,11 @@ describe("M5 lockout is a failed run and is not retried", () => {
     expect(result.stoppedReason).toBe("HTTP 429");
     expect(result.exitCode).toBe(1);
   });
-  it("combines stop reason and failure ratio", () => {
+  it("fails a stopped run or an all-ticker failure", () => {
     expect(collectExitCode("HTTP 429", 1, 35)).toBe(1);
     expect(collectExitCode(null, 1, 35)).toBe(0);
-    expect(collectExitCode(null, 4, 35)).toBe(1);
+    expect(collectExitCode(null, 4, 35)).toBe(0);
+    expect(collectExitCode(null, 35, 35)).toBe(1);
   });
   it("does not start a second pod after a failed collect run", () => {
     expect(cronjob("invest-buddy-collect")).toMatch(/backoffLimit: 0\b/);
