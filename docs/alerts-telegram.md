@@ -53,7 +53,7 @@ The watchdog (`src/jobs/watchdog.ts`, CronJobs `invest-buddy-watchdog` and `inve
 - Fails closed: without the token or the owner chat id nothing is sent, a JSON line `alert_notifier_unconfigured` is logged, and the job exits non-zero.
 - Rules: a missed job, stale health dates, a full database volume, an expiring certificate. A job with no `job_runs` row at all is skipped until it has run once, so the first enable does not flood the chat.
 - One alert per problem per 23 hours (`alert_state`). The window is 23 hours, not 24, so a daily run a few minutes later than the day before is not skipped.
-- No AI ceiling rule: `scanner/run-extract.mjs` and `scanner/run-judge.mjs` do not write `job_runs`, so an exit 5 stop is not visible to the watchdog.
+- No separate AI ceiling rule: extract and judge write their outcomes to `job_runs`, and an exit 5 stop records a failed run for the watchdog.
 
 ## Wording
 

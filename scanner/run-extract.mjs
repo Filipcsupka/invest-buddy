@@ -21,6 +21,7 @@ import { reserveBudget, finishBudget, dailyTokenCeiling, dailyTokens } from "./a
 import { readGate, consumeGate, gateTradingDay } from "./gate-db.mjs";
 import { attachClaudeUsage, attachCliUsage, cutoffError, cutoffLine, CUTOFF_EXIT_CODE } from "./anthropic-cutoff.mjs";
 import { createUsageMonitor, earlyStopLine } from "./claude-usage.mjs";
+import { runScannerJob, stopJob } from "./job-run.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const OUT = process.env.SCAN_OUT_DIR || join(here, "out");
@@ -144,12 +145,12 @@ export function unknownUsageTokens(env = process.env) {
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
   let token = opts.gateFromDb || opts.reviewCalendar ? getToken() : null;
-  if (opts.gateFromDb && !token) { console.error("no INGEST_TOKEN; aborting"); process.exit(2); }
+  if (opts.gateFromDb && !token) { console.error("no INGEST_TOKEN; aborting"); stopJob(2); }
   let wanted = opts.only;
   const gate = opts.symbolsFile ? JSON.parse(readFileSync(opts.symbolsFile, "utf8")) : opts.gateFromDb ? await readGate(opts.baseUrl, token, "extract") : null;
   if (gate) wanted = gate.symbols;
   if (opts.reviewCalendar) {
-    if (!token) { console.error("no INGEST_TOKEN; aborting"); process.exit(2); }
+    if (!token) { console.error("no INGEST_TOKEN; aborting"); stopJob(2); }
     wanted = await reviewDue(opts.baseUrl, token, 30, 6);
     writeFileSync(opts.reviewCalendar, JSON.stringify({ symbols: wanted }) + "\n");
     console.error(`fixed review: ${wanted.length} symbols due`);
@@ -158,7 +159,7 @@ async function main() {
   if (gate && !Array.isArray(wanted)) usage("symbols file must contain a symbols array");
   if (Array.isArray(wanted) && !wanted.length) { console.error("nothing changed; 0 model calls"); if (opts.gateFromDb && !opts.dryRun && !gate.consumed) await consumeGate(opts.baseUrl, token, "extract", gate.asOf, gate.revision); return; }
   if (!token && !(opts.bundleDir && opts.dryRun)) token = getToken();
-  if (!token && !(opts.bundleDir && opts.dryRun)) { console.error("no INGEST_TOKEN; aborting"); process.exit(2); }
+  if (!token && !(opts.bundleDir && opts.dryRun)) { console.error("no INGEST_TOKEN; aborting"); stopJob(2); }
   const universe = opts.bundleDir && opts.dryRun
     ? JSON.parse(readFileSync(join(here, "universe.json"), "utf8")).instruments
     : await loadRuntimeUniverse(opts.baseUrl, token);
@@ -267,25 +268,29 @@ async function main() {
   });
   if (monitor) await monitor.end();
   if (!process.env.SCAN_KEEP_WORK) rmSync(work, { recursive: true, force: true });
-  if (cutoff) { log(cutoffLine(cutoff, tickers.length)); process.exit(CUTOFF_EXIT_CODE); }
-  if (ceilingStop) { log(`DAILY TOKEN CEILING: ${ceilingStop.used}/${ceilingStop.ceiling} tokens after ${tickers.length} tickers; remaining work pending`); process.exit(CUTOFF_EXIT_CODE); }
-  if (softStop && deferredSymbols.length) { log(earlyStopLine(softStop)); process.exit(CUTOFF_EXIT_CODE); }
+  if (cutoff) { log(cutoffLine(cutoff, tickers.length)); stopJob(CUTOFF_EXIT_CODE, { failures: 1 }); }
+  if (ceilingStop) { log(`DAILY TOKEN CEILING: ${ceilingStop.used}/${ceilingStop.ceiling} tokens after ${tickers.length} tickers; remaining work pending`); stopJob(CUTOFF_EXIT_CODE, { failures: 1 }); }
+  if (softStop && deferredSymbols.length) { log(earlyStopLine(softStop)); stopJob(CUTOFF_EXIT_CODE, { failures: 1 }); }
   const payload = {
     schemaVersion: 2, runId, asOf, generatedAt: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"), runner: { name: opts.agent, model, dataMode: opts.bundleDir ? "sample" : "real" }, tickers,
     macro: { sectorRotationIntoGrowth: null, dataTailwind: null, notes: "Macro not extracted in this script-first run; values unknown.", evidence: [], events: [] },
   };
   const errs = validatePayload(payload);
-  if (errs.length) { log(`assembled payload invalid: ${errs.join("; ")}`); process.exit(1); }
+  if (errs.length) { log(`assembled payload invalid: ${errs.join("; ")}`); stopJob(1, { failures: errs.length }); }
   const payloadFile = join(OUT, `extract-payload-${asOf}-${opts.agent}-${runId.slice(0, 8)}.json`);
   writeFileSync(payloadFile, JSON.stringify({ ...payload, _droppedClaims: droppedAll }, null, 2) + "\n");
   log(`payload written ${payloadFile} (${tickers.length} tickers)`);
   const logTotals = () => log(`totals: ${calls} model calls, ${inputChars} input chars, tokens in ${totals.inputTokens ?? "?"} out ${totals.outputTokens ?? "?"} cache read ${totals.cacheReadTokens ?? "?"} cache created ${totals.cacheCreationTokens ?? "?"}, turns ${totals.turns ?? "?"}${totalCost ? `, cost $${totalCost.toFixed(4)}` : ""}; ok ${tickers.length}, skipped ${skippedSymbols.length}, failed ${failed.length}`);
   if (!opts.dryRun) {
-    if (!tickers.length) { logTotals(); log("no valid tickers; not posting"); if (opts.gateFromDb && failed.every((failure) => unknown.includes(failure.symbol))) await consumeGate(opts.baseUrl, token, "extract", gate.asOf, gate.revision); process.exit(failed.length && !skippedSymbols.length ? 1 : 0); }
-    if (postFailed.length) { logTotals(); log(`not stored: ${postFailed.join(", ")}`); process.exit(3); }
+    if (!tickers.length) { logTotals(); log("no valid tickers; not posting"); if (opts.gateFromDb && failed.every((failure) => unknown.includes(failure.symbol))) await consumeGate(opts.baseUrl, token, "extract", gate.asOf, gate.revision); stopJob(failed.length && !skippedSymbols.length ? 1 : 0, { failures: failed.length }); }
+    if (postFailed.length) { logTotals(); log(`not stored: ${postFailed.join(", ")}`); stopJob(3, { failures: postFailed.length }); }
   } else log("dry run: nothing posted, nothing recorded");
   logTotals();
-  if (failed.length && !tickers.length && !skippedSymbols.length) process.exit(1);
+  if (failed.length && !tickers.length && !skippedSymbols.length) stopJob(1, { failures: failed.length });
   if (opts.gateFromDb && !opts.dryRun && failed.every((failure) => unknown.includes(failure.symbol))) await consumeGate(opts.baseUrl, token, "extract", gate.asOf, gate.revision);
+  return { succeeded: tickers.length, skipped: skippedSymbols.length, failures: failed.length };
 }
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main().catch((e) => { console.error(`fatal: ${e.stack || e.message}`); process.exit(1); });
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  const options = parseArgs(process.argv.slice(2));
+  void runScannerJob("extract", options, main);
+}

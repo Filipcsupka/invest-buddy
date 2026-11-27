@@ -1,5 +1,6 @@
 import pg from "pg";
 import { EodhdClient, type ExchangeSymbol } from "../data-providers/eodhd/client";
+import { logEodhdCalls } from "../db/asset-bars";
 import { runLoggedJob } from "./job-log";
 
 // MI was absent from exchanges-list on 2026-11-06; keep the runtime check for vendor changes.
@@ -47,7 +48,7 @@ export async function syncExchange(db: Query, exchange: string, rows: ExchangeSy
   }
 }
 
-export async function syncSymbols(db: pg.Pool, eodhd: Client, today: string) {
+async function collectSymbols(db: pg.Pool, eodhd: Client, today: string) {
   const available = new Set((await eodhd.exchangesList()).map((row) => row.Code));
   let exchanges = 0;
   let symbols = 0;
@@ -65,6 +66,14 @@ export async function syncSymbols(db: pg.Pool, eodhd: Client, today: string) {
     exchanges++;
   }
   return { exchanges, symbols, skipped: skipped.join(","), skippedCount: skipped.length, calls: Object.values(eodhd.getCallCosts()).reduce((a, b) => a + b, 0) };
+}
+
+export async function syncSymbols(db: pg.Pool, eodhd: Client, today: string) {
+  try { return await collectSymbols(db, eodhd, today); }
+  finally {
+    const calls = Object.values(eodhd.getCallCosts()).reduce((sum, cost) => sum + cost, 0);
+    if (calls > 0) await logEodhdCalls(db, "symbols-sync", calls);
+  }
 }
 
 async function main() {

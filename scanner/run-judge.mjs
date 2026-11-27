@@ -30,6 +30,7 @@ let consumedGateDate = null;
 const consumeGate = async (...args) => { await consumeGateRaw(...args); consumedGateDate = args[3]; };
 import { attachClaudeUsage, attachCliUsage, cutoffError, cutoffLine, CUTOFF_EXIT_CODE } from "./anthropic-cutoff.mjs";
 import { createUsageMonitor, earlyStopLine } from "./claude-usage.mjs";
+import { runScannerJob, stopJob } from "./job-run.mjs";
 import { figureValuesIn, sameFigureValues, sameProtectedTokens } from "./figure-tokens.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -369,11 +370,11 @@ async function main() {
   const logFile = join(OUT, `judge-${asOf}-${runId.slice(0, 8)}.log`);
   const log = (m) => { const line = `${new Date().toISOString()} ${m}`; console.error(line); appendFileSync(logFile, line + "\n"); };
   log(`judge ${runId} asOf=${asOf} model=${o.model} mode=${o.agentMode ? `agent(max ${o.maxTurns} turns)` : "single call, no tools"} maxSymbols=${o.maxSymbols} dryRun=${o.dryRun} force=${o.force} offline=${Boolean(o.inputFile)}`);
-  if (!gate && !o.force) { log("--gate-from-db or --symbols-file is required; use --force for a manual scheduled review"); process.exit(2); }
-  if (gate && !Array.isArray(gate.symbols)) { log("symbols file must contain a symbols array"); process.exit(2); }
+  if (!gate && !o.force) { log("--gate-from-db or --symbols-file is required; use --force for a manual scheduled review"); stopJob(2); }
+  if (gate && !Array.isArray(gate.symbols)) { log("symbols file must contain a symbols array"); stopJob(2); }
   if (gate && !gate.symbols.length) { log("nothing changed; 0 model calls"); if (o.gateFromDb && !o.dryRun && !gate.consumed) await consumeGate(o.baseUrl, token, "judge", gate.asOf, gate.revision, []); return; }
   if (!token && !offline) token = getToken();
-  if (!token && !offline) { log("no INGEST_TOKEN; aborting"); process.exit(2); }
+  if (!token && !offline) { log("no INGEST_TOKEN; aborting"); stopJob(2); }
   const record = Boolean(token) && !o.dryRun;
   if (!offline && process.env.EODHD_PRIVATE_USE !== "on") throw new Error("judge requires EODHD_PRIVATE_USE=on in an owner-private environment");
 
@@ -489,8 +490,8 @@ async function main() {
     if (why === "no idea in the output") log(`WARN ${sym} omitted from final model output; no idea produced after ${validationAttempts.get(sym) ?? 0} validation attempts`);
   }
   if (!process.env.SCAN_KEEP_WORK) rmSync(work, { recursive: true, force: true });
-  if (cutoff) { log(cutoffLine(cutoff, 0)); process.exit(CUTOFF_EXIT_CODE); }
-  if (softStop) { log(earlyStopLine(softStop)); process.exit(CUTOFF_EXIT_CODE); }
+  if (cutoff) { log(cutoffLine(cutoff, 0)); stopJob(CUTOFF_EXIT_CODE, { failures: 1 }); }
+  if (softStop) { log(earlyStopLine(softStop)); stopJob(CUTOFF_EXIT_CODE, { failures: 1 }); }
   const secs = Math.round((Date.now() - t0) / 1000);
   const totals = `${calls} model call(s), ${text.length} input chars, tokens in ${spent.inputTokens ?? "?"} out ${spent.outputTokens ?? "?"} cache read ${spent.cacheReadTokens ?? "?"} cache created ${spent.cacheCreationTokens ?? "?"}, turns ${spent.turns ?? "?"}${cost ? `, cost $${cost.toFixed(4)}` : ""}, ${secs}s${skipped.size ? `; skipped ${[...skipped.keys()].join(", ")}` : ""}`;
   const runBase = { asOf, runId, agent: o.agent, model, inputHash: hash, usage: spent, costUsd: cost || null, ruleConfigVersion: input.ruleConfigVersion };
@@ -498,7 +499,7 @@ async function main() {
   if (!result && !o.gateFromDb) {
     log(`FAILED ${error}; ${totals}`);
     if (record) await postRun(o, token, { run: { ...runBase, status: "failed", error: String(error).slice(0, 2000), ideaCount: 0 }, ideas: [] }).catch((e) => log(`could not record run: ${e.message}`));
-    process.exit(1);
+    stopJob(1, { failures: 1 });
   }
   // Gate pages with no valid ideas still record their outcome before advancing.
   const status = result ? "ok" : "failed";
@@ -519,7 +520,7 @@ async function main() {
     if (skipped.size || missingSignals.length) log(`WARN skipped ${[...skipped.keys(), ...missingSignals].join(", ")}; reasons recorded in the judge run`);
     if (o.gateFromDb && hardSkipped.length) return { hadHardError: true };
     if (o.gateFromDb && !result) return { hadHardError: true };
-  } catch (e) { log(`POST failed: ${e.message}; ${totals}`); process.exit(3); }
+  } catch (e) { log(`POST failed: ${e.message}; ${totals}`); stopJob(3, { failures: 1 }); }
 }
 /** With --gate-from-db one run advances pending gates in pages, oldest first, until the queue or budget stops it. */
 export async function runPendingGates(run = main, argv = process.argv.slice(2), peek = null) {
@@ -528,11 +529,14 @@ export async function runPendingGates(run = main, argv = process.argv.slice(2), 
   for (let i = 0; i < MAX_GATES_PER_RUN; i++) {
     consumedGateDate = null;
     const outcome = await run();
-    if (!drain || outcome?.hadHardError || process.exitCode || !consumedGateDate) return;
+    if (!drain || outcome?.hadHardError || process.exitCode || !consumedGateDate) return outcome;
     // Only another gate that is still open is worth a run; a 404 or a consumed gate means the queue is empty.
     const open = await next().catch(() => null);
-    if (!open || open.consumed || (open.asOf === consumedGateDate && open.symbols.length === 0)) return;
+    if (!open || open.consumed || (open.asOf === consumedGateDate && open.symbols.length === 0)) return outcome;
   }
 }
 const MAX_GATES_PER_RUN = 40;
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) runPendingGates().catch((e) => { console.error(`fatal: ${e.stack || e.message}`); process.exit(1); });
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  const options = parseArgs(process.argv.slice(2));
+  void runScannerJob("judge", options, runPendingGates);
+}

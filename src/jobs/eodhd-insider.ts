@@ -3,6 +3,7 @@ import pg from "pg";
 import { EodhdClient, EodhdHttpError, type Form4Filing, type Form4Page } from "../data-providers/eodhd/client";
 import { loadUniverse } from "../db/universe";
 import { PostgresCollectorRepository } from "../db/collectors";
+import { logEodhdCalls } from "../db/asset-bars";
 import { runLoggedJob } from "./job-log";
 
 const DAY = 86_400_000;
@@ -81,7 +82,7 @@ export function parseEodhdInsider(filing: Form4Filing, today: string) {
   });
 }
 
-export async function runEodhdInsider(db: Pick<pg.Pool, "query"> | null, api: InsiderClient | null,
+async function collectEodhdInsider(db: Pick<pg.Pool, "query"> | null, api: InsiderClient | null,
   options: { dryRun?: boolean; subjects?: InsiderSubject[]; today?: string; maxSymbols?: number; fixture?: boolean } = {}) {
   const today = options.today ?? new Date().toISOString().slice(0, 10);
   const subjects = options.subjects ?? (db ? await loadInsiderSubjects(db, today) : []);
@@ -145,6 +146,17 @@ export async function runEodhdInsider(db: Pick<pg.Pool, "query"> | null, api: In
   }
   return { universe: subjects.length, due: due.length, planned: picked.length,
     estimatedCalls: picked.length * 10, refreshed, rows, failures, incomplete, notFound, calls: api.getCallCosts()["sec-filings/form4"] ?? 0 };
+}
+
+export async function runEodhdInsider(db: Pick<pg.Pool, "query"> | null, api: InsiderClient | null,
+  options: { dryRun?: boolean; subjects?: InsiderSubject[]; today?: string; maxSymbols?: number; fixture?: boolean } = {}) {
+  try { return await collectEodhdInsider(db, api, options); }
+  finally {
+    if (db && api && !options.dryRun) {
+      const calls = Object.values(api.getCallCosts()).reduce((sum, cost) => sum + cost, 0);
+      if (calls > 0) await logEodhdCalls(db, "eodhd-insider", calls);
+    }
+  }
 }
 
 export function parseArgs(args: string[]) {

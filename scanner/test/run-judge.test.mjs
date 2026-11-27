@@ -380,12 +380,13 @@ test("the single call has no tools and the requested model", async () => {
 });
 
 function mockWeb({ skipDay = false, skipHash = false, inputOverride = null } = {}) {
-  const seen = { posts: [], gets: [], auth: [], budgets: [] };
+  const seen = { posts: [], gets: [], auth: [], budgets: [], jobRuns: [] };
   const server = http.createServer((req, res) => {
     let body = ""; req.on("data", (c) => { body += c; });
     req.on("end", () => {
       seen.auth.push(req.headers.authorization);
       const send = (o, status = 200) => { res.writeHead(status, { "content-type": "application/json" }); res.end(JSON.stringify(o)); };
+      if (req.method === "POST" && req.url === "/api/ingest/job-runs") { seen.jobRuns.push(JSON.parse(body)); return send({ recorded: true }); }
       if (req.method === "POST" && req.url === "/api/ingest/ideas") { seen.posts.push(JSON.parse(body)); return send({ recorded: true, stored: 1 }); }
       if (req.method === "GET" && req.url === "/api/ingest/ai-budget") return send({ tokensPerDayUtcByKind: {} });
       if (req.method === "POST" && req.url === "/api/ingest/ai-budget") { seen.budgets.push(JSON.parse(body)); return send({ allowed: true }); }
@@ -428,6 +429,9 @@ test("end to end: one call for the changed signals, fixed decisions kept, tokens
     assert.equal(post.run.ruleConfigVersion, "2026-10-06.1");
     assert.deepEqual(post.run.usage, { inputTokens: 11, outputTokens: 22, cacheReadTokens: 33, cacheCreationTokens: 44, turns: 1 });
     assert.equal(post.run.costUsd, 0.0123);
+    assert.deepEqual(web.seen.jobRuns.map((entry) => entry.action), ["start", "finish"]);
+    assert.equal(web.seen.jobRuns[1].status, "ok");
+    assert.equal(web.seen.jobRuns[0].runId, web.seen.jobRuns[1].runId);
     assert.ok(web.seen.auth.every((a) => a === "Bearer test-token"));
     assert.match(r.err, /1 model call\(s\).*tokens in 11 out 22 cache read 33 cache created 44, turns 1, cost \$0\.0123/);
   } finally { await web.close(); }
@@ -594,6 +598,9 @@ test("a rate limit is not retried", async () => {
     assert.equal(s.calls().length, 1);
     assert.match(r.err, /ANTHROPIC CUTOFF: rate limit resets unknown after 0 tickers/);
     assert.equal(web.seen.posts.length, 0);
+    assert.deepEqual(web.seen.jobRuns.map((entry) => entry.action), ["start", "finish"]);
+    assert.equal(web.seen.jobRuns[1].status, "failed");
+    assert.equal(web.seen.jobRuns[1].counts.exitCode, 5);
   } finally { await web.close(); }
 });
 

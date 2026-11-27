@@ -95,7 +95,7 @@ ETF bars are stored split adjusted. A close that moves by 1.4 times or more agai
 
 `ETF_EODHD_MAX_CALLS` or `--max-calls` caps each collector run (default 10,000); `--limit` bounds a history chunk. `EODHD_ACCOUNT_DAILY_BUDGET` (default 70,000) is an account-wide guard: each run reads today's `eodhd_call_log` total and stops before the logged total would pass it. A vendor ISIN mismatch or non-ETF fundamentals response is recorded on `etf_tracked` without overwriting detail. HTTP 401, 402, 403 or 429 stops further requests. `npm run markets:bars -- --class all` leaves ETF rows out.
 
-Call budget, sized with read-only SQL on 2026-11-14: 2,474 in-scope vendor symbols (US 1,290, XETRA 1,139, LSE 20, PA 15, AS 6, SW 4). `eodhd_call_log` does not hold every job. Not logged there: `eodhd-universe-seed` (Sunday, `--max-calls 19000`, 13,452 estimated on 2026-11-07), stock `eodhd-prices` (about 450 a weekday), stock fundamentals (51 to 251 a day, up to about 2,300 on a catch-up day) and the catalyst job (about 80). Logged jobs other than ETF use about 700 calls a day, plus 800 for market cap and 250 for index components on their days.
+The ETF account guard reads `eodhd_call_log`, which includes attempted calls from stock prices, stock fundamentals, insider, catalyst, symbols sync and universe seed. The scanner ETF enrichment job has no database connection, so its calls remain outside this total. The table below sizes ETF work.
 
 | Job | Today | After the pending drain (about 7,000 funds) | Cap |
 | --- | ---: | ---: | ---: |

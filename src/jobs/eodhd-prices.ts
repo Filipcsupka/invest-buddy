@@ -7,6 +7,7 @@ import { MemoryPriceRepository, PostgresPriceRepository } from "../db/prices";
 import { loadUniverse } from "../db/universe";
 import { loadVendorSymbols } from "../data/security-master";
 import { insertCorporateActions } from "../db/corporate-actions";
+import { logEodhdCalls } from "../db/asset-bars";
 import type { CorporateAction } from "../data/corporate-actions";
 import { EodhdClient, EodhdHttpError, type BulkLastDayBar, type BulkSplit, type EodBar, type Split } from "../data-providers/eodhd/client";
 import { runLoggedJob } from "./job-log";
@@ -155,6 +156,15 @@ export async function runEodhdPrices(client: EodhdPricesClient, repository: Pric
   return { ...run, callCost: Object.values(client.getCallCosts()).reduce((sum, cost) => sum + cost, 0), insufficientHistory };
 }
 
+export async function runEodhdPricesWithCallLog(db: Pick<pg.Pool, "query">, client: EodhdPricesClient, repository: PriceRepository,
+  symbols: PriceSymbol[], options: EodhdPriceOptions): Promise<EodhdPriceResult> {
+  try { return await runEodhdPrices(client, repository, symbols, options); }
+  finally {
+    const calls = Object.values(client.getCallCosts()).reduce((sum, cost) => sum + cost, 0);
+    if (!options.dryRun && calls > 0) await logEodhdCalls(db, "eodhd-prices", calls);
+  }
+}
+
 export interface EodhdPriceArgs { mode: PriceMode; dryRun: boolean; fixture: boolean; only?: string[] }
 export function parseEodhdPriceArgs(args: string[]): EodhdPriceArgs {
   const out: EodhdPriceArgs = { mode: "daily", dryRun: false, fixture: false };
@@ -191,12 +201,13 @@ async function main() {
   if (!process.env.DATABASE_URL || !process.env.EODHD_API_KEY) throw new Error("DATABASE_URL and EODHD_API_KEY are required; no request was made");
   const db = new pg.Pool({ connectionString: process.env.DATABASE_URL });
   try {
+    const api = new EodhdClient();
     const tracked = (await loadUniverse(db, undefined, { collect: true })).map((item) => item.symbol);
     const universe = withBenchmarks(tracked, await loadRegions(db, new Date().toISOString().slice(0, 10), tracked));
     const unknown = args.only?.filter((ticker) => !universe.includes(ticker)) ?? [];
     if (unknown.length) throw new Error(`Unknown ticker(s): ${unknown.join(", ")}`);
     const { symbols, unmapped } = await loadEodhdPriceSymbols(db, args.only ?? universe);
-    const result = await runEodhdPrices(new EodhdClient(), new PostgresPriceRepository(db), symbols, { ...args, unmapped, recordActions: (actions) => insertCorporateActions(db, actions).then(() => undefined) });
+    const result = await runEodhdPricesWithCallLog(db, api, new PostgresPriceRepository(db), symbols, { ...args, unmapped, recordActions: (actions) => insertCorporateActions(db, actions).then(() => undefined) });
     process.stdout.write(`${JSON.stringify({ mode: args.mode, requested: result.requested, succeeded: result.succeeded, failed: result.failed, barsWritten: result.barsWritten, barsRevised: result.barsRevised, insufficientHistory: result.insufficientHistory, estimatedCalls: result.callCost, dryRun: args.dryRun })}\n`);
     for (const failure of result.failures) process.stderr.write(`WARN ${failure.ticker}: ${failure.reason}\n`);
     if (result.requested > 0 && result.succeeded === 0) process.exitCode = 1;

@@ -10,6 +10,7 @@ import { fxConversion, normalizeCurrency, UNIVERSE_CURRENCIES, UNIVERSE_EXCHANGE
 import { barsFromHistory, splitActions } from "./eodhd-prices";
 import { storeClassification } from "./eodhd-fundamentals";
 import { runLoggedJob } from "./job-log";
+import { logEodhdCalls } from "../db/asset-bars";
 
 export interface SeedListing { vendorSymbol: string; code: string; exchange: string; name: string; currency: string; type: string }
 /** Instrument key: US names keep the bare code like every existing US instrument; other listings use the vendor symbol. */
@@ -114,6 +115,15 @@ export async function runUniverseSeed(client: SeedClient, store: SeedStore, list
     dryRun: Boolean(options.dryRun) };
 }
 
+export async function runUniverseSeedWithCallLog(db: Pick<pg.Pool, "query">, client: SeedClient, store: SeedStore,
+  listings: SeedListing[], options: SeedOptions) {
+  try { return await runUniverseSeed(client, store, listings, options); }
+  finally {
+    const calls = total(client.getCallCosts());
+    if (!options.dryRun && calls > 0) await logEodhdCalls(db, "eodhd-universe-seed", calls);
+  }
+}
+
 export class PgSeedStore implements SeedStore {
   constructor(private readonly db: pg.Pool) {}
   async fxRates(asOf: string): Promise<ReadonlyMap<string, FxObservation>> {
@@ -169,6 +179,7 @@ async function main() {
   const exchanges = options.exchanges ?? UNIVERSE_EXCHANGES.filter((row) => row !== "US");
   const db = new pg.Pool({ connectionString: process.env.DATABASE_URL });
   try {
+    const api = new EodhdClient({ maxRetries: 0 });
     const result = await db.query<{ vendor_symbol: string; code: string; exchange: string; name: string; currency: string; type: string }>(
       `SELECT vendor_symbol,code,exchange,name,currency,type FROM symbols WHERE NOT delisted AND exchange=ANY($1::text[])
        AND currency IS NOT NULL AND type IS NOT NULL
@@ -176,7 +187,7 @@ async function main() {
        ORDER BY exchange,vendor_symbol`, [exchanges]);
     const listings = result.rows.map((row) => ({ vendorSymbol: row.vendor_symbol, code: row.code, exchange: row.exchange,
       name: row.name, currency: row.currency, type: row.type }));
-    const counts = await runUniverseSeed(new EodhdClient({ maxRetries: 0 }), new PgSeedStore(db), listings, options);
+    const counts = await runUniverseSeedWithCallLog(db, api, new PgSeedStore(db), listings, options);
     if (counts.stoppedReason?.startsWith("vendor_http_") || counts.failures > 0 && counts.saved === 0) process.exitCode = 1;
     return counts;
   } finally { await db.end(); }

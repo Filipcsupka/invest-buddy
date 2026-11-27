@@ -57,6 +57,37 @@ test("a quiet gate exits before token lookup or model call", () => {
   assert.match(run.stderr, /nothing changed; 0 model calls/);
 });
 
+test("a live quiet gate records one completed extract run", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "extract-job-run-"));
+  const file = join(dir, "gate.json"); writeFileSync(file, JSON.stringify({ symbols: [] }));
+  const events = [];
+  const server = http.createServer((req, res) => {
+    let body = "";
+    req.on("data", (chunk) => { body += chunk; });
+    req.on("end", () => {
+      if (req.url === "/api/ingest/job-runs" && req.method === "POST") events.push({ auth: req.headers.authorization, ...JSON.parse(body) });
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ recorded: true }));
+    });
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const result = await new Promise((resolve) => {
+      const child = spawn(process.execPath, [new URL("../run-extract.mjs", import.meta.url).pathname, "--symbols-file", file, "--base-url", base],
+        { env: { ...process.env, INGEST_TOKEN: "test", SCAN_OUT_DIR: dir } });
+      let stderr = "";
+      child.stderr.on("data", (chunk) => { stderr += chunk; });
+      child.on("close", (code) => resolve({ code, stderr }));
+    });
+    assert.equal(result.code, 0, result.stderr);
+    assert.deepEqual(events.map((event) => event.action), ["start", "finish"]);
+    assert.equal(events[0].runId, events[1].runId);
+    assert.equal(events[1].status, "ok");
+    assert.ok(events.every((event) => event.auth === "Bearer test"));
+  } finally { await new Promise((resolve) => server.close(resolve)); }
+});
+
 test("daily ceiling stops before a second model call with exit 5", () => {
   const dir = mkdtempSync(join(tmpdir(), "extract-ceiling-"));
   const bundles = join(dir, "bundles"); mkdirSync(bundles);
