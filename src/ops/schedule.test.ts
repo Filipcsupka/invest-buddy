@@ -12,6 +12,7 @@ const manifest = files.flatMap((file) => readFileSync(join(base, file), "utf8").
   suspended: /^\s+suspend: true/m.test(doc),
   deadlineMinutes: Number(/activeDeadlineSeconds: (\d+)/.exec(doc)?.[1]) / 60,
   jobFiles: [...doc.matchAll(/dist\/jobs\/([a-z0-9-]+)\.js/g)].map((m) => m[1]),
+  scannerFiles: [...doc.matchAll(/\/app\/scanner\/run-([a-z0-9-]+)\.mjs/g)].map((m) => m[1]),
   args: /args: \[(.*)\]/.exec(doc)?.[1] ?? "",
 }));
 
@@ -29,8 +30,13 @@ describe("expected job schedule", () => {
       expect(job.enabled).toBe(!m!.suspended);
       expect(job.graceMinutes).toBeGreaterThanOrEqual(m!.deadlineMinutes);
       if (job.runJob) {
-        expect(m!.jobFiles).toEqual([job.jobFile ?? job.runJob]);
-        expect(m!.args).toBe("");
+        if (m!.scannerFiles.length) {
+          expect(m!.scannerFiles).toEqual([job.runJob]);
+          expect(m!.args).toContain("--gate-from-db");
+        } else {
+          expect(m!.jobFiles).toEqual([job.jobFile ?? job.runJob]);
+          expect(m!.args).toBe("");
+        }
       } else {
         expect(job.note, "an untracked job says why").toBeTruthy();
       }

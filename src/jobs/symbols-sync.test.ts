@@ -23,7 +23,7 @@ describe("symbols sync", () => {
 
   it("skips exchange codes absent from the exchange list", async () => {
     const requested: string[] = [];
-    const db = { connect: async () => ({ query: async () => ({ rows: [] }), release: () => undefined }) } as unknown as pg.Pool;
+    const db = { query: async () => ({ rows: [] }), connect: async () => ({ query: async () => ({ rows: [] }), release: () => undefined }) } as unknown as pg.Pool;
     const eodhd = {
       exchangesList: async () => exchanges,
       exchangeSymbolList: async (exchange: string) => { requested.push(exchange); return symbols; },

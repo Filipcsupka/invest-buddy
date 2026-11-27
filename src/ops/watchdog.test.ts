@@ -43,10 +43,11 @@ describe("missed jobs", () => {
     expect(missedJobs(d("2026-10-14T03:00:00Z"), good, allKnown()).map((f) => f.key)).not.toContain("job-missed:daily");
   });
 
-  it("ignores suspended jobs and jobs not tracked in job_runs", () => {
+  it("tracks scanner jobs and ignores suspended jobs", () => {
     const keys = missedJobs(NOW, new Map(), allKnown()).map((f) => f.key);
     expect(keys).not.toContain("job-missed:weekly"); // suspended
-    expect(keys).not.toContain("job-missed:extract"); // not in job_runs
+    expect(keys).toContain("job-missed:extract");
+    expect(keys).toContain("job-missed:judge");
     expect(keys).toContain("job-missed:collect");
   });
 

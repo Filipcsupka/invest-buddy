@@ -11,6 +11,7 @@ import { earningsCatalyst, newsCatalyst, newsStoryKey, type EodhdNewsEvidence } 
 import type { EstimateObservation } from "../data/estimate-revisions";
 import { loadEodhdPriceSymbols } from "./eodhd-prices";
 import { runLoggedJob } from "./job-log";
+import { logEodhdCalls } from "../db/asset-bars";
 
 const SOURCE = "eodhd";
 const MAX_NEWS_SYMBOLS = 20;
@@ -74,7 +75,7 @@ function articleUrl(link: string, ticker: string): string | null {
   } catch { return null; }
 }
 
-export async function runEodhdCatalyst(db: pg.Pool | null, api: CatalystClient, options: CatalystOptions = {}) {
+async function collectEodhdCatalyst(db: pg.Pool | null, api: CatalystClient, options: CatalystOptions = {}) {
   const now = options.now ?? new Date();
   const today = now.toISOString().slice(0, 10);
   const loaded = options.subjects ? { subjects: options.subjects, unresolved: [] as string[] }
@@ -152,6 +153,14 @@ export async function runEodhdCatalyst(db: pg.Pool | null, api: CatalystClient, 
     baseCalls: api.getCallCosts().news ?? 0 };
   process.stderr.write(`${JSON.stringify({ event: "eodhd_catalyst_result", ...result })}\n`);
   return result;
+}
+
+export async function runEodhdCatalyst(db: pg.Pool | null, api: CatalystClient, options: CatalystOptions = {}) {
+  try { return await collectEodhdCatalyst(db, api, options); }
+  finally {
+    const calls = Object.values(api.getCallCosts()).reduce((sum, cost) => sum + cost, 0);
+    if (db && !options.dryRun && calls > 0) await logEodhdCalls(db, "eodhd-catalyst", calls);
+  }
 }
 
 export const catalystRunFailed = (result: { stoppedEarly: boolean; newsRequests: number; succeeded: number }) => result.stoppedEarly || result.newsRequests > 0 && result.succeeded === 0;

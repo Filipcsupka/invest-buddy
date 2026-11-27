@@ -5,6 +5,7 @@ import { EodhdClient, EodhdHttpError, type EarningsCalendar, type Fundamentals }
 import { parseEodhdCalendar, parseEodhdFundamentals } from "../data-providers/eodhd/fundamentals";
 import { insertFundamentals } from "../collectors/sources/companyfacts";
 import { insertEpsHistory } from "../db/eps-history";
+import { logEodhdCalls } from "../db/asset-bars";
 import { PostgresCollectorRepository } from "../db/collectors";
 import { document } from "../collectors/types";
 import { EPS_FACT_KEY } from "../data/eps";
@@ -70,7 +71,7 @@ export async function storeClassification(db: Pick<pg.Pool, "query">, vendorSymb
     WHERE vendor_symbol=$1`, [vendorSymbol, value.sector || null, value.industry || null, today]);
 }
 
-export async function runEodhdFundamentals(db: pg.Pool | null, api: FundamentalsClient, options: RunOptions = {}) {
+async function collectEodhdFundamentals(db: pg.Pool | null, api: FundamentalsClient, options: RunOptions = {}) {
   const now = options.now ?? new Date();
   const today = now.toISOString().slice(0, 10);
   const from = shift(today, -14), to = shift(today, 90);
@@ -144,6 +145,14 @@ export async function runEodhdFundamentals(db: pg.Pool | null, api: Fundamentals
   return { calendarRows: observations.length, due: due.length, attempted, refreshed, facts, eps,
     failures: failed.length, failedSymbols: failed.join(","), stoppedEarly,
     calls: Object.values(api.getCallCosts()).reduce((n, cost) => n + cost, 0) };
+}
+
+export async function runEodhdFundamentals(db: pg.Pool | null, api: FundamentalsClient, options: RunOptions = {}) {
+  try { return await collectEodhdFundamentals(db, api, options); }
+  finally {
+    const calls = Object.values(api.getCallCosts()).reduce((sum, cost) => sum + cost, 0);
+    if (db && !options.dryRun && calls > 0) await logEodhdCalls(db, "eodhd-fundamentals", calls);
+  }
 }
 
 export const fundamentalsRunFailed = (result: { stoppedEarly: boolean; attempted: number; refreshed: number }) => result.stoppedEarly || result.attempted > 0 && result.refreshed === 0;

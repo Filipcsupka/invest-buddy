@@ -40,8 +40,9 @@ test("an empty database gate exits extract and judge with zero model calls", asy
       assert.equal(result.code, 0, result.stderr);
       assert.match(result.stderr, /nothing changed; 0 model calls/);
     }
-    assert.equal(requests.filter((request) => request.startsWith("POST ")).length, 2);
-    assert.ok(requests.every((request) => request.includes("/api/ingest/gate")));
+    assert.equal(requests.filter((request) => request === "POST /api/ingest/gate").length, 2);
+    assert.equal(requests.filter((request) => request === "POST /api/ingest/job-runs").length, 4);
+    assert.ok(requests.every((request) => request.includes("/api/ingest/gate") || request.includes("/api/ingest/job-runs")));
   } finally { await new Promise((resolve) => server.close(resolve)); }
 });
 
